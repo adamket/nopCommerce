@@ -1,0 +1,11 @@
+﻿{
+  "Group": "Misc",
+  "FriendlyName": "NopCms",
+  "SystemName": "Misc.NopCms",
+  "Version": "4.80.4",
+  "SupportedVersions": [ "4.80" ],
+  "Author": "Adam Ketterhagen, Aperture Labs",
+  "DisplayOrder": 1,
+  "FileName": "Apt.Nop.Plugin.Misc.NopCms.dll",
+  "Description": "This plugin provides enhanced CMS capabilities for nopCommerce"
+}

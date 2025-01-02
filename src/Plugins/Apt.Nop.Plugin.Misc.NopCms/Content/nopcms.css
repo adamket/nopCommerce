@@ -1,0 +1,20 @@
+.edit-topic-link {
+  position: absolute;
+  z-index: 99999999 !important;
+  display: none;
+  text-decoration: none;
+  padding: 5px;
+  background-color: #1c96c5;
+  color: white;
+  margin-left: 5px;
+}
+
+.topic-outline:hover {
+  outline: 2px black dashed;
+  z-index: 10;
+}
+
+  .topic-outline:hover .edit-topic-link {
+    display: block;
+    overflow: visible;
+  }
