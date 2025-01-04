@@ -37,6 +37,11 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Views\Topic\TopicDetails.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Views\_ViewImports.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -48,6 +53,7 @@
     <Folder Include="Content\" />
     <Folder Include="Data\" />
     <Folder Include="Controllers\" />
+    <Folder Include="Extensions\" />
   </ItemGroup>
 
 

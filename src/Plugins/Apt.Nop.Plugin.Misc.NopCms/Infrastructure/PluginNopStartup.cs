@@ -1,5 +1,7 @@
-﻿using Apt.Nop.Plugin.Misc.NopCms.Services;
+﻿using Apt.Nop.Plugin.Misc.NopCms.Filters;
+using Apt.Nop.Plugin.Misc.NopCms.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +27,11 @@ public class PluginNopStartup : INopStartup
             options.ViewLocationExpanders.Add(new ViewLocationExpander());
         });
 
-     
+        services.Configure<MvcOptions>(options =>
+        {
+            options.Filters.Add<TopicFilter>();
+        });
+
         services.AddScoped<NopCmsHelper>();
     }
 

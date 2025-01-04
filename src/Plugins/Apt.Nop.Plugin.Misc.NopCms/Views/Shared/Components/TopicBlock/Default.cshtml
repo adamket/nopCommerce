@@ -8,16 +8,14 @@
 
 
 @{
-   NopHtml.AddCssFileParts("~/plugins/Misc.NopCms/Content/nopcms.css");
-   NopHtml.AddScriptParts(ResourceLocation.Footer, "~/plugins/Misc.NopCms/Content/nopcms.js");
-
+   
     var userCanManageContent = await permissionService.AuthorizeAsync(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE);
     if (userCanManageContent)
     {
         NopHtml.AddPageCssClassParts("html-content-manager");
+        NopHtml.AddScriptParts(ResourceLocation.Footer, "~/plugins/Misc.NopCms/Content/nopcms.js");
+        NopHtml.AddCssFileParts("~/plugins/Misc.NopCms/Content/nopcms.css");
     }
-
-
 }
 
 @if (Model.IsPasswordProtected)

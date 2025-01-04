@@ -1,20 +1,54 @@
-.edit-topic-link {
+.html-content-manager .edit-topic-link {
   position: absolute;
   z-index: 99999999 !important;
   display: none;
   text-decoration: none;
   padding: 5px;
-  background-color: #1c96c5;
+  background-color: #1366d6;
   color: white;
   margin-left: 5px;
+  margin-top: 5px;
+  opacity: 0;
+  text-decoration: none !important;
+  animation: slideFromRight 0.25s ease-out;
+  min-width: 150px;
+  text-align: center;
+  border-radius: 5px;
+  font-family: verdana;
+  transition: background-color 250ms linear;
 }
 
-.topic-outline:hover {
+.html-content-manager .topic-outline:hover {
   outline: 2px black dashed;
   z-index: 10;
 }
 
-  .topic-outline:hover .edit-topic-link {
+  .html-content-manager .topic-outline:hover .edit-topic-link {
     display: block;
     overflow: visible;
+    opacity: 1;
   }
+
+    .html-content-manager .topic-outline:hover .edit-topic-link:hover {
+      background-color: #0F52B0;
+    }
+
+
+@keyframes slideFromRight {
+  0% {
+    display: none;
+    opacity: 0;
+    transform: translateX(30px);
+  }
+
+  1% {
+    display: block;
+    opacity: 0;
+  }
+
+  100% {
+    display: block;
+    transform: translateX(0px);
+    opacity: 1;
+  }
+}
