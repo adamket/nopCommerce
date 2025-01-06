@@ -93,7 +93,7 @@ else
 
         @if (userCanManageContent)
         {
-            <a href="/admin/topic/edit/@Model.Id" target="_blank" class="edit-topic-link">@T("nopcms.edittopic")</a>
+            <a href="/admin/topic/edit/@Model.Id" target="_blank" class="edit-topic-link"><div class="edit-icon"></div></a>
         }
         
         @if (!string.IsNullOrEmpty(Model.Title))

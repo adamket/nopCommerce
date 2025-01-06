@@ -116,7 +116,7 @@
     <div class="@(userCanManageContent ? "topic-outline" : "")">
         @if (userCanManageContent)
         {
-            <a href="/admin/topic/edit/@Model.Id" target="_blank" class="edit-topic-link">@T("nopcms.edittopic")</a>
+            <a href="/admin/topic/edit/@Model.Id" target="_blank" class="edit-topic-link"><div class="edit-icon"></div></a>
         }
         <div class="page-title" id="ph-title">
             <h1>@Model.Title</h1>

@@ -50,7 +50,7 @@
 
 
   <ItemGroup>
-    <Folder Include="Content\" />
+    <Folder Include="Content\Icons\" />
     <Folder Include="Data\" />
     <Folder Include="Controllers\" />
     <Folder Include="Extensions\" />
@@ -59,6 +59,9 @@
 
 
   <ItemGroup>
+    <None Update="Content\Icons\edit-icon.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Content\nopcms.css">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

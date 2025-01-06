@@ -11,7 +11,6 @@
   opacity: 0;
   text-decoration: none !important;
   animation: slideFromRight 0.25s ease-out;
-  min-width: 150px;
   text-align: center;
   border-radius: 5px;
   font-family: verdana;
@@ -24,7 +23,7 @@
 }
 
   .html-content-manager .topic-outline:hover .edit-topic-link {
-    display: block;
+    display: flex;
     overflow: visible;
     opacity: 1;
   }
@@ -42,13 +41,24 @@
   }
 
   1% {
-    display: block;
+    display: flex;
+
     opacity: 0;
   }
 
   100% {
-    display: block;
+    display: flex;
     transform: translateX(0px);
     opacity: 1;
   }
+}
+
+
+.edit-icon{
+    background-image: url('Icons/edit-icon.svg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    display:inline-block;
+    height:25px;
+    width:25px;
 }
