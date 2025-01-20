@@ -33,6 +33,7 @@ public class PluginNopStartup : INopStartup
         });
 
         services.AddScoped<NopCmsHelper>();
+        services.AddScoped<TopicEntryService>();
     }
 
     /// <summary>

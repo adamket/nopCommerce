@@ -1,0 +1,10 @@
+@using Apt.Nop.Plugin.Misc.NopCms.Models;
+@model TopicEntrySearchModel
+
+@{
+    const string hideVersioningBlockAttributeName = "TopicDetailsPage.HideVersioningBlock";
+    var customer = await workContext.GetCurrentCustomerAsync();
+    var hideVersioningBlock = await genericAttributeService.GetAttributeAsync<bool>(customer, hideVersioningBlockAttributeName, defaultValue: true);
+}
+
+<nop-card asp-name="topic-versions" asp-icon="fas fa-magnifying-glass-plus" asp-title="Versioning" asp-hide-block-attribute-name="@hideVersioningBlockAttributeName" asp-hide="@hideVersioningBlock" asp-advanced="true">@await Html.PartialAsync("~/Plugins/Misc.NopCms/Views/Admin/Widget/_CreateOrUpdate.Versioning.cshtml", Model)</nop-card>

@@ -1,0 +1,76 @@
+@using Apt.Nop.Plugin.Misc.NopCms.Models;
+
+@model TopicEntrySearchModel
+
+<div class="card-body">
+    @if (Model.TopicId > 0)
+    {
+        @await Html.PartialAsync("Table", new DataTablesModel
+        {
+            Name = "topic-versions-grid",
+            UrlRead = new DataUrl("TopicVersionList", "NopCms", new RouteValueDictionary { [nameof(TopicEntrySearchModel.TopicId)] = Model.TopicId }),
+            Length = 20,
+            LengthMenu = "20,50,100",
+            ColumnCollection = new List<ColumnProperty>
+            {
+                new ColumnProperty(nameof(TopicEntryModel.Title))
+                {
+                    Title = "Topic",
+                    Width = "150"
+                },
+                new ColumnProperty(nameof(TopicEntryModel.CreatedOn))
+                {
+                    Title = "Created on",
+                    Width = "150"
+                },
+                // new ColumnProperty(nameof(TopicEntryModel.Id))
+                // {
+                //     Title = "Id",
+                //     Width = "150"
+                // }
+        
+                // ,
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.AttributeName))
+                // {
+                //     Title = T("Admin.Catalog.Products.SpecificationAttributes.Fields.SpecificationAttribute").Text,
+                //     Width = "200"
+                // },
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.ValueRaw))
+                // {
+                //     Title = T("Admin.Catalog.Products.SpecificationAttributes.Fields.Value").Text,
+                //     Width = "200",
+                //     Encode = false
+                // },
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.AllowFiltering))
+                // {
+                //     Title = T("Admin.Catalog.Products.SpecificationAttributes.Fields.AllowFiltering").Text,
+                //     Width = "150",
+                //     ClassName = NopColumnClassDefaults.CenterAll,
+                //     Render = new RenderBoolean()
+                // },
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.ShowOnProductPage))
+                // {
+                //     Title = T("Admin.Catalog.Products.SpecificationAttributes.Fields.ShowOnProductPage").Text,
+                //     Width = "150",
+                //     ClassName = NopColumnClassDefaults.CenterAll,
+                //     Render = new RenderBoolean()
+                // },
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.DisplayOrder))
+                // {
+                //     Title = T("Admin.Catalog.Products.SpecificationAttributes.Fields.DisplayOrder").Text,
+                //     Width = "150",
+                //     ClassName =  NopColumnClassDefaults.CenterAll
+                // }
+        
+                // ,
+                // new ColumnProperty(nameof(ProductSpecificationAttributeModel.Id))
+                // {
+                //     Title = T("Admin.Common.Edit").Text,
+                //     Width = "100",
+                //     ClassName =  NopColumnClassDefaults.Button,
+                //     Render = new RenderButtonEdit(new DataUrl("~/Admin/Product/ProductSpecAttributeAddOrEdit?productId=" + Model.ProductSpecificationAttributeSearchModel.ProductId + "&specificationId=", true))
+                // }
+        }
+    })
+ }
+</div> 
