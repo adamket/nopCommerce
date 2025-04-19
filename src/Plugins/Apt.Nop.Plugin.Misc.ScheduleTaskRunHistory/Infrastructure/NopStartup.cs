@@ -1,14 +1,10 @@
-﻿using Apt.Nop.Plugin.Misc.NopCms.Filters;
-using Apt.Nop.Plugin.Misc.NopCms.Services;
+﻿using Apt.Nop.Plugin.Misc.ScheduleTaskRunHistory.Services;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Infrastructure;
-using Nop.Web.Framework.Infrastructure.Extensions;
 
-namespace Apt.Nop.Plugin.Misc.NopCms.Infrastructure;
+namespace Apt.Nop.Plugin.Misc.ScheduleTaskRunHistory.Infrastructure;
 
 public class PluginNopStartup : INopStartup
 {
@@ -19,18 +15,18 @@ public class PluginNopStartup : INopStartup
     /// <param name="configuration">Configuration of the application</param>
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<RazorViewEngineOptions>(options =>
-        {
-            options.ViewLocationExpanders.Add(new ViewLocationExpander());
-        });
+        //services.Configure<RazorViewEngineOptions>(options =>
+        //{
+        //    options.ViewLocationExpanders.Add(new ViewLocationExpander());
+        //});
 
-        services.Configure<MvcOptions>(options =>
-        {
-            options.Filters.Add<TopicFilter>();
-        });
+        //services.Configure<MvcOptions>(options =>
+        //{
+        //    options.Filters.Add<TopicFilter>();
+        //});
 
-        services.AddScoped<NopCmsHelper>();
-        services.AddScoped<TopicEntryService>();
+        services.AddScoped<ScheduleTaskRunRecordService>();
+        //services.AddScoped<TopicEntryService>();
     }
 
     /// <summary>

@@ -84,7 +84,7 @@ public class CustomAdminTopicController : TopicController
                 ViewBag.ShowTour = true;
         }
 
-        return View("~/areas/admin/views/topic/edit.cshtml", model);
+        return View("~/plugins/misc.nopcms/views/admin/topic/edit.cshtml", model);
     }
 
     [HttpPost("admin/topic/custom-edit")]
@@ -122,9 +122,9 @@ public class CustomAdminTopicController : TopicController
                 string.Format(await _localizationService.GetResourceAsync("ActivityLog.EditTopic"), topic.Title ?? topic.SystemName), topic);
 
             if (!continueEditing)
-                return RedirectToAction("List");
+                return RedirectToAction("List", "Topic");
 
-            return RedirectToAction("Edit", new { id = topic.Id });
+            return RedirectToAction("Edit", "CustomAdminTopic", new { id = topic.Id });
         }
 
         //prepare model

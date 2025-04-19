@@ -1,6 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.NopCms.Domain;
+using Nop.Data.Mapping;
 
-namespace Nop.Data.Mapping;
+namespace Apt.Nop.Plugin.Misc.NopCms.Data;
 
 /// <summary>
 /// Plugin table naming compatibility
