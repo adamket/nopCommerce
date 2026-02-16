@@ -1,0 +1,11 @@
+{
+  "Group": "Misc",
+  "FriendlyName": "One Time Passcode",
+  "SystemName": "Aperture.OneTimePasscode",
+  "Version": "4.90.2",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "Aperture Labs",
+  "DisplayOrder": 1,
+  "FileName": "Aperture.Nop.Plugin.Misc.OneTimePasscode.dll",
+  "Description": "One time passcode"
+}
