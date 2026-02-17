@@ -58,13 +58,10 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             : IAsyncActionFilter
         {
      
-
-
             #region Utilities
 
-            public async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
+            private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
-
                 if (!pageCacheSettings.Enabled)
                 {
                     return;
@@ -92,53 +89,51 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 var containsQueryParameter =
                     filterContext.HttpContext.Request.Query.Any(); //TODO why did I do this again?
 
-                if (containsCategoryId
-                    && !containsCouponCodes
-                    && !containsQueryParameter)
-                {
-                    var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
-                    var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                    var cacheKey =
-                        new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
+                if (!containsCategoryId
+                    || containsCouponCodes
+                    || containsQueryParameter) { return; }
+
+                var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
+                var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
+                var cacheKey =
+                    new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
                             rolesStr))
                         { CacheTime = int.MaxValue };
-                    var cachedModel = await
-                        staticCacheManager.GetAsync<ActionResultCacheItem<CategoryModel>>(cacheKey, async () => null);
-                    if (cachedModel != null)
+                var cachedModel = await
+                    staticCacheManager.GetAsync<ActionResultCacheItem<CategoryModel>>(cacheKey, async () => null);
+                if (cachedModel != null)
+                {
+                    var lastShoppingUrl = await genericAttributeService.GetAttributeAsync<string>(currentCustomer,
+                        NopCustomerDefaults.LastContinueShoppingPageAttribute, currentStore.Id);
+
+                    var thisUrl = webHelper.GetThisPageUrl(false);
+                    if (thisUrl != lastShoppingUrl)
                     {
-                        var lastShoppingUrl = await genericAttributeService.GetAttributeAsync<string>(currentCustomer,
-                            NopCustomerDefaults.LastContinueShoppingPageAttribute, currentStore.Id);
-
-                        var thisUrl = webHelper.GetThisPageUrl(false);
-                        if (thisUrl != lastShoppingUrl)
-                        {
-                            await genericAttributeService.SaveAttributeAsync(currentCustomer,
-                                NopCustomerDefaults.LastContinueShoppingPageAttribute,
-                                webHelper.GetThisPageUrl(false),
-                                currentStore.Id);
-                        }
-
-                        var result = cachedModel.GetResult<ViewResult>();
-
-                        //display "edit" (manage) link
-                        if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                            await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
-                        {
-                            nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
-                                new { id = catId, area = AreaNames.ADMIN }));
-                        }
-
-                        filterContext.Result = result;
-                        return;
+                        await genericAttributeService.SaveAttributeAsync(currentCustomer,
+                            NopCustomerDefaults.LastContinueShoppingPageAttribute,
+                            webHelper.GetThisPageUrl(false),
+                            currentStore.Id);
                     }
+
+                    var result = cachedModel.GetResult<ViewResult>();
+
+                    if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
+                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
+                    {
+                        //display "edit" (manage) link
+                        nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
+                            new { id = catId, area = AreaNames.ADMIN }));
+                    }
+
+                    filterContext.Result = result;
+                    return;
                 }
 
                 return;
             }
 
-            public async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
+            private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
             {
-
                 var currentCustomer = await workContext.GetCurrentCustomerAsync();
                 var currentStore = await storeContext.GetCurrentStoreAsync();
 
@@ -161,12 +156,9 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr))
                 {
                     CacheTime = pageCacheSettings.CategoryPageCacheLengthMinutes,
-                   // Prefixes = { AdfConstants.CacheKeys.CategoryPagePrefix + categoryPageResult.Model.Id }
                 };
 
                 await staticCacheManager.SetAsync(cacheKey, categoryPageResult);
-
-
             }
 
 
@@ -183,7 +175,6 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                         await this.CustomOnActionExecuted(resultContext);
 
                     }
-
                 }
                 finally
                 {

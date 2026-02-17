@@ -22,10 +22,9 @@ public class PageCacheController(
     ILocalizationService localizationService, ICustomerService customerService)
     : BaseAdminController
 {
- 
-
     #region Methods
 
+    [HttpGet("admin/apt/page-cache/configure")]
     public async Task<IActionResult> Configure()
     {
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
@@ -38,7 +37,7 @@ public class PageCacheController(
            ProductDetailsPageCacheLengthMinutes = settings.ProductDetailsPageCacheLengthMinutes,
            Enabled = settings.Enabled,
            AvailableCustomerRoles = customerRoles.Select(q=> new SelectListItem(q.Name,q.Id.ToString())).ToList(),
-           PageModifyingCustomerRoleIds = settings.PageModifyingCustomerRoleIds,
+           PageModifyingCustomerRoleIds = settings.PageModifyingCustomerRoleIds ?? new List<int>(),
            ActiveStoreScopeConfiguration = storeScope
         };
 
@@ -52,7 +51,7 @@ public class PageCacheController(
         return View("~/Plugins/Aperture.Misc.PageCache/Views/Configure.cshtml", model);
     }
 
-    [HttpPost]
+    [HttpPost("admin/apt/page-cache/configure")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Configure(ConfigurationModel model)
     {
@@ -67,7 +66,7 @@ public class PageCacheController(
         settings.CategoryPageCacheLengthMinutes = model.CategoryPageCacheLengthMinutes;
         settings.ProductDetailsPageCacheLengthMinutes = model.ProductDetailsPageCacheLengthMinutes;
         settings.Enabled = model.Enabled;
-        settings.PageModifyingCustomerRoleIds = model.PageModifyingCustomerRoleIds.ToList();
+        settings.PageModifyingCustomerRoleIds = model.PageModifyingCustomerRoleIds?.ToList() ?? new List<int>();
 
         /* We do not clear cache after each setting update.
          * This behavior can increase performance because cached settings will not be cleared

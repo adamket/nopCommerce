@@ -4,7 +4,8 @@
   "SystemName": "Aperture.Nop.Plugin.Misc.PageCache",
   "Version": "1.0",
   "SupportedVersions": [ "4.90" ],
-  "Author": "Adam Ketterhagen",
+  "Author": "Aperture Labs",
   "DisplayOrder": 1,
-  "FileName": "Aperture.Nop.Plugin.Misc.PageCache.dll"
+  "FileName": "Aperture.Nop.Plugin.Misc.PageCache.dll",
+  "Description": "Page Cache improves storefront performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times."
 }

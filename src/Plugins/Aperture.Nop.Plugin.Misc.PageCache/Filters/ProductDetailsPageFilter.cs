@@ -35,12 +35,6 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
 
         #endregion
 
-        #region Properties
-
-
-        #endregion
-
-
         /// <summary>
         /// Represents a filter that confirms access to closed store
         /// </summary>
@@ -108,7 +102,6 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
 
                 var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
 
-                //save as recently viewed
                 await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
 
                 var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(_customerService, _pageCacheSettings);

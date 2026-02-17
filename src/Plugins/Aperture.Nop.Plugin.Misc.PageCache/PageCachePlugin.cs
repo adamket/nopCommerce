@@ -38,7 +38,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
     /// </summary>
     public override string GetConfigurationPageUrl()
     {
-        return $"{_webHelper.GetStoreLocation()}Admin/PageCache/Configure";
+        return $"{_webHelper.GetStoreLocation()}admin/apt/page-cache/configure";
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
                 "Number of minutes product detail pages should remain cached before being regenerated.",
 
             ["Aperture.Plugins.Misc.PageCache.Fields.Enabled"] =
-                "Enable page cache",
+                "Enabled",
 
             ["Aperture.Plugins.Misc.PageCache.Fields.Enabled.Hint"] =
                 "When enabled, eligible storefront pages will be served from cache for faster performance.",
