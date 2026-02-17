@@ -78,8 +78,14 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
 
+                var isPdpAction = filterContext.IsAction("Product", "ProductDetails");
+                if (!isPdpAction)
+                {
+                    return;
+                }
+                
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
-                ;
+                
                 var containsUpdateCartItemId = filterContext.ActionArguments.ContainsKey("updatecartitemid")
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
@@ -158,7 +164,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT,
                     pdpResult.Model.Id, store.Id, rolesStr))
                 {
-                    CacheTime = int.MaxValue,
+                    CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
                    // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
                 };
 

@@ -1,26 +1,113 @@
-﻿@model Aperture.Nop.Plugin.Misc.PageCache.PageCacheSettings
-
-@using (Html.BeginForm("Configure", "PageCache", new { area = "Admin" }, FormMethod.Post, new { @class = "form-horizontal" }))
-{
-    @Html.AntiForgeryToken()
-
-    <div class="form-group row">
-        <label class="col-sm-3 col-form-label">Category page cache length (minutes)</label>
-        <div class="col-sm-9">
-            @Html.TextBoxFor(m => m.CategoryPageCacheLengthMinutes, new { @class = "form-control" })
-        </div>
-    </div>
-
-    <div class="form-group row">
-        <label class="col-sm-3 col-form-label">Product details page cache length (minutes)</label>
-        <div class="col-sm-9">
-            @Html.TextBoxFor(m => m.ProductDetailsPageCacheLengthMinutes, new { @class = "form-control" })
-        </div>
-    </div>
-
-    <div class="form-group row">
-        <div class="col-sm-9 offset-sm-3">
-            <button type="submit" class="btn btn-primary">Save</button>
-        </div>
-    </div>
+﻿@using Nop.Web.Areas.Admin.Components
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@model Aperture.Nop.Plugin.Misc.PageCache.Models.ConfigurationModel
+@{
+    Layout = "_ConfigurePlugin";
 }
+
+@await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
+
+<form asp-controller="PageCache" asp-action="Configure" method="post">
+    <div class="cards-group">
+        <div class="card card-default">
+            <div class="card-body">
+                <p>@T("Plugins.Misc.PageCache.Instructions")</p>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="CategoryPageCacheLengthMinutes_OverrideForStore" asp-input="CategoryPageCacheLengthMinutes" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="CategoryPageCacheLengthMinutes" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="CategoryPageCacheLengthMinutes" />
+                        <span asp-validation-for="CategoryPageCacheLengthMinutes"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="ProductDetailsPageCacheLengthMinutes_OverrideForStore" asp-input="ProductDetailsPageCacheLengthMinutes" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="ProductDetailsPageCacheLengthMinutes" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="ProductDetailsPageCacheLengthMinutes" />
+                        <span asp-validation-for="ProductDetailsPageCacheLengthMinutes"></span>
+                    </div>
+                </div>
+                
+                
+                
+        @*                  <div class="form-group row">
+                                            <div class="col-md-4">
+                                                <nop-label asp-for="SelectedCustomerRoleIds" />
+                                            </div>
+                                            <div class="col-md-8">
+                                                <nop-select asp-for="SelectedCustomerRoleIds" asp-items="Model.AvailableCustomerRoles" asp-multiple="true" />
+                                                <script>
+                                                    $(function() {
+                                                        var rolesIdsInput =
+                                                            $('#@Html.IdFor(model => model.SelectedCustomerRoleIds)').select2({
+                                                                closeOnSelect: false,
+                                                                @if (!Model.AvailableCustomerRoles.Any())
+                                                                {
+                                                                    <text>d
+                                                                    disabled: true,
+                                                                    placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
+                                                                    </text>
+                                                                }
+                                                            });
+                                                    });
+                                                </script>
+                                            </div>
+                                        </div> *@
+
+
+
+                <!-- Customer roles multi-select (uses the site's standard ACL pattern) -->
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="PageModifyingCustomerRoleIds_OverrideForStore" asp-input="PageModifyingCustomerRoleIds" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="PageModifyingCustomerRoleIds" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-select asp-for="PageModifyingCustomerRoleIds" asp-items="Model.AvailableCustomerRoles" asp-multiple="true" />
+                       @*  <span class="form-text text-muted">Select one or more customer roles whose presence on a page should mark that page as modifying (affect cache).</span> *@
+                       
+
+                        <script>
+                            $(function () {
+                                var rolesIdsInput = $('#@Html.IdFor(model => model.PageModifyingCustomerRoleIds)').select2({
+                                    closeOnSelect: false,
+                                    @if (!Model.AvailableCustomerRoles?.Any() ?? true)
+                                    {
+                                        <text>
+                                            disabled: true,
+                                            placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
+                                        </text>
+                                    }
+                                });
+                            });
+                        </script>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="Enabled_OverrideForStore" asp-input="Enabled" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="Enabled" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="Enabled" />
+                        <span asp-validation-for="Enabled"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-9 offset-md-3">
+                        <button type="submit" name="save" class="btn btn-primary">@T("Admin.Common.Save")</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>

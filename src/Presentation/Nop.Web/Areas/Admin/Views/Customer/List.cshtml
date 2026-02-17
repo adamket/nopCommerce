@@ -236,8 +236,8 @@
                                             <div class="col-md-4">
                                                 <nop-label asp-for="SelectedCustomerRoleIds" />
                                             </div>
-                                            <div class="col-md-8">                                               
-                                                    <nop-select asp-for="SelectedCustomerRoleIds" asp-items="Model.AvailableCustomerRoles" asp-multiple="true" />                                                                                                                                              
+                                            <div class="col-md-8">
+                                                <nop-select asp-for="SelectedCustomerRoleIds" asp-items="Model.AvailableCustomerRoles" asp-multiple="true" />
                                                 <script>
                                                     $(function() {
                                                         var rolesIdsInput =
@@ -245,16 +245,16 @@
                                                                 closeOnSelect: false,
                                                                 @if (!Model.AvailableCustomerRoles.Any())
                                                                 {
-                                                                <text>
-                                                                disabled: true,
-                                                                placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
-                                                                </text>
+                                                                    <text>
+                                                                    disabled: true,
+                                                                    placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
+                                                                    </text>
                                                                 }
                                                             });
                                                     });
                                                 </script>
                                             </div>
-                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -282,24 +282,24 @@
                                     Length = Model.PageSize,
                                     LengthMenu = Model.AvailablePageSizes,
                                     Filters = new List<FilterParameter>
-                                    {
-                                        new FilterParameter(nameof(Model.SelectedCustomerRoleIds)),
-                                        new FilterParameter(nameof(Model.SearchEmail)),
-                                        new FilterParameter(nameof(Model.SearchUsername)),
-                                        new FilterParameter(nameof(Model.SearchFirstName)),
-                                        new FilterParameter(nameof(Model.SearchLastName)),
-                                        new FilterParameter(nameof(Model.SearchDayOfBirth)),
-                                        new FilterParameter(nameof(Model.SearchMonthOfBirth)),
-                                        new FilterParameter(nameof(Model.SearchCompany)),
-                                        new FilterParameter(nameof(Model.SearchRegistrationDateFrom)),
-                                        new FilterParameter(nameof(Model.SearchRegistrationDateTo)),
-                                        new FilterParameter(nameof(Model.SearchLastActivityFrom)),
-                                        new FilterParameter(nameof(Model.SearchLastActivityTo)),
-                                        new FilterParameter(nameof(Model.SearchPhone)),
-                                        new FilterParameter(nameof(Model.SearchZipPostalCode)),
-                                        new FilterParameter(nameof(Model.SearchIpAddress)),
-                                        new FilterParameter(nameof(Model.SearchIsActive)),
-                                    }
+                                                        {
+                                                        new FilterParameter(nameof(Model.SelectedCustomerRoleIds)),
+                                                        new FilterParameter(nameof(Model.SearchEmail)),
+                                                        new FilterParameter(nameof(Model.SearchUsername)),
+                                                        new FilterParameter(nameof(Model.SearchFirstName)),
+                                                        new FilterParameter(nameof(Model.SearchLastName)),
+                                                        new FilterParameter(nameof(Model.SearchDayOfBirth)),
+                                                        new FilterParameter(nameof(Model.SearchMonthOfBirth)),
+                                                        new FilterParameter(nameof(Model.SearchCompany)),
+                                                        new FilterParameter(nameof(Model.SearchRegistrationDateFrom)),
+                                                        new FilterParameter(nameof(Model.SearchRegistrationDateTo)),
+                                                        new FilterParameter(nameof(Model.SearchLastActivityFrom)),
+                                                        new FilterParameter(nameof(Model.SearchLastActivityTo)),
+                                                        new FilterParameter(nameof(Model.SearchPhone)),
+                                                        new FilterParameter(nameof(Model.SearchZipPostalCode)),
+                                                        new FilterParameter(nameof(Model.SearchIpAddress)),
+                                                        new FilterParameter(nameof(Model.SearchIsActive)),
+                                                        }
                                 };
 
                                 gridModel.ColumnCollection.Add(new ColumnProperty(nameof(CustomerModel.Id))
@@ -379,7 +379,7 @@
                 </div>
             </div>
         </div>
-        </section>
+    </section>
 </form>
 
 @*export selected (XML). We don't use GET approach because it's limited to 2K-4K chars and won't work for large number of entities*@

@@ -20,6 +20,7 @@ public class PluginNopStartup : INopStartup
         services.Configure<MvcOptions>(options =>
         {
             options.Filters.Add<ProductDetailsActionAttribute>();
+            options.Filters.Add<CategoryActionAttribute>();
         });
     }
 
