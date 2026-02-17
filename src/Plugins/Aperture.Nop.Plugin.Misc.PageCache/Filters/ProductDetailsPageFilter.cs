@@ -77,15 +77,19 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
 
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
+                if (!pageCacheSettings.Enabled)
+                {
+                    return;
+                }
 
                 var isPdpAction = filterContext.IsAction("Product", "ProductDetails");
                 if (!isPdpAction)
                 {
                     return;
                 }
-                
+
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
-                
+
                 var containsUpdateCartItemId = filterContext.ActionArguments.ContainsKey("updatecartitemid")
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
@@ -97,32 +101,32 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
                                         filterContext.ActionArguments["productId"] != null;
 
-                if (containsProductId
-                    && !containsUpdateCartItemId
-                    && !containsCouponCodes)
+                if (!containsProductId
+                    || containsUpdateCartItemId
+                    || containsCouponCodes)
+                { return; }
+
+                var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
+
+                //save as recently viewed
+                await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
+
+                var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(_customerService, _pageCacheSettings);
+                var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
+                var cachedModel = await staticCacheManager.GetAsync<ActionResultCacheItem<ProductDetailsModel>>(cacheKey, async () => null);
+                if (cachedModel != null)
                 {
-                    var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
+                    var result = cachedModel.GetResult<ViewResult>();
 
-                    //save as recently viewed
-                    await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
-
-                    var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(_customerService, _pageCacheSettings);
-                    var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
-                    var cachedModel = await staticCacheManager.GetAsync<ActionResultCacheItem<ProductDetailsModel>>(cacheKey, async () => null);
-                    if (cachedModel != null)
+                    //display "edit" (manage) link
+                    if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
+                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.PRODUCTS_CREATE_EDIT_DELETE))
                     {
-                        var result = cachedModel.GetResult<ViewResult>();
-
-                        //display "edit" (manage) link
-                        if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                            await permissionService.AuthorizeAsync(StandardPermission.Catalog.PRODUCTS_CREATE_EDIT_DELETE))
-                        {
-                            nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Product",
-                                new { id = prodId, area = AreaNames.ADMIN }));
-                        }
-                        filterContext.Result = result;
-                        return;
+                        nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Product",
+                            new { id = prodId, area = AreaNames.ADMIN }));
                     }
+                    filterContext.Result = result;
+                    return;
                 }
 
                 return;
@@ -165,7 +169,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                     pdpResult.Model.Id, store.Id, rolesStr))
                 {
                     CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
-                   // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
+                    // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
                 };
 
                 await staticCacheManager.SetAsync(cacheKey, pdpResult);
@@ -194,7 +198,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             }
 
 
-           
+
         }
         #endregion
     }

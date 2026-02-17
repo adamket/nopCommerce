@@ -65,6 +65,11 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             public async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
 
+                if (!pageCacheSettings.Enabled)
+                {
+                    return;
+                }
+
                 var isCategoryPageAction = filterContext.IsAction("Catalog", "Category");
                 if (!isCategoryPageAction)
                 {
@@ -85,7 +90,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                         out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any();
+                    filterContext.HttpContext.Request.Query.Any(); //TODO why did I do this again?
 
                 if (containsCategoryId
                     && !containsCouponCodes
@@ -94,7 +99,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                     var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
                     var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
                     var cacheKey =
-                        new CacheKey(string.Format(PageCacheConstants.CATEGORY_CACHE_KEY_FORMAT, catId, currentStore.Id,
+                        new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
                             rolesStr))
                         { CacheTime = int.MaxValue };
                     var cachedModel = await
@@ -153,7 +158,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 var categoryPageResult = new ActionResultCacheItem<CategoryModel>(filterContext.Result);
 
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey = new CacheKey(string.Format(PageCacheConstants.CATEGORY_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr))
+                var cacheKey = new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr))
                 {
                     CacheTime = pageCacheSettings.CategoryPageCacheLengthMinutes,
                    // Prefixes = { AdfConstants.CacheKeys.CategoryPagePrefix + categoryPageResult.Model.Id }
