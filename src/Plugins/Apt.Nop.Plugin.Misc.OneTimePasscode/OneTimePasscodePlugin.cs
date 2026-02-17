@@ -1,11 +1,10 @@
-﻿using System.Threading.Tasks;
-using Nop.Core;
+﻿using Nop.Core;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Plugins;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
 
 /// <summary>
 /// Represents the Page Cache plugin

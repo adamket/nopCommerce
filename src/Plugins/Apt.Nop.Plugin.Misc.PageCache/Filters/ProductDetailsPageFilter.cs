@@ -1,5 +1,6 @@
-﻿using Aperture.Nop.Plugin.Misc.PageCache.Extensions;
-using Aperture.Nop.Plugin.Misc.PageCache.Types;
+﻿using Apt.Nop.Plugin.Misc.PageCache;
+using Apt.Nop.Plugin.Misc.PageCache.Extensions;
+using Apt.Nop.Plugin.Misc.PageCache.Types;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
@@ -15,7 +16,7 @@ using Nop.Web.Framework;
 using Nop.Web.Framework.UI;
 using Nop.Web.Models.Catalog;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
+namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 {
     /// <summary>
     /// Represents a filter attribute that confirms access to a closed store
@@ -72,15 +73,11 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
                 if (!pageCacheSettings.Enabled)
-                {
                     return;
-                }
 
                 var isPdpAction = filterContext.IsAction("Product", "ProductDetails");
                 if (!isPdpAction)
-                {
                     return;
-                }
 
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
 
@@ -136,20 +133,15 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
 
                 var model = filterContext.Result.GetModel<ProductDetailsModel>();
                 if (model == null)  
-                { return; } 
-                  
+return;                   
                 var customer = await workContext.GetCurrentCustomerAsync();
                  
                 var appliedDiscountCodes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
                 if (appliedDiscountCodes.Any())
-                {
                     return;
-                }
 
                 if (webHelper.QueryString<string>("updatecartitemid") != null)
-                {
                     return;
-                }
 
 
                 //cache  result
@@ -176,11 +168,11 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
             {
                 try
                 {
-                    await this.CustomOnActionExecuting(filterContext);
+                    await CustomOnActionExecuting(filterContext);
                     if (filterContext.Result == null)
                     {
                         var resultContext = await next();
-                        await this.CustomOnActionExecuted(resultContext);
+                        await CustomOnActionExecuted(resultContext);
 
                     }
 

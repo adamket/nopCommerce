@@ -1,6 +1,6 @@
 ﻿using Nop.Core.Configuration;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.PageCache;
 
 /// <summary>
 /// Settings for the Page Cache plugin

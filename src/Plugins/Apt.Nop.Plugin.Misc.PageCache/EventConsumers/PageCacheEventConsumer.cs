@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Apt.Nop.Plugin.Misc.PageCache;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Events;
 using Nop.Services.Events;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache.EventConsumers;
+namespace Apt.Nop.Plugin.Misc.PageCache.EventConsumers;
 public class PageCacheEventConsumer : IConsumer<EntityUpdatedEvent<Product>>, IConsumer<EntityUpdatedEvent<Category>>
 {
     private readonly IStaticCacheManager _cacheManager;

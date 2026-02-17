@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Aperture.Nop.Plugin.Misc.PageCache.Models;
+using Apt.Nop.Plugin.Misc.PageCache;
+using Apt.Nop.Plugin.Misc.PageCache.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
@@ -10,7 +11,7 @@ using Nop.Services.Messages;
 using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework.Controllers;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache.Controllers.Admin;
+namespace Apt.Nop.Plugin.Misc.PageCache.Controllers.Admin;
 
 /// <summary>
 /// Admin controller for plugin configuration

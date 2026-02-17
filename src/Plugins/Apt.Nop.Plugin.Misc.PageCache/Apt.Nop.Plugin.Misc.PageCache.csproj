@@ -5,7 +5,7 @@
     <Copyright>Copyright © Aperture Labs</Copyright>
     <Company>Aperture Labs</Company>
     <Authors>Aperture Labs</Authors>
-    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Aperture.Misc.PageCache</OutputPath>
+    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Apt.Misc.PageCache</OutputPath>
     <OutDir>$(OutputPath)</OutDir>
     <!--Set this parameter to true to get the dlls copied from the NuGet cache to the output of your project.
     You need to set this parameter to true if your plugin has a nuget package 

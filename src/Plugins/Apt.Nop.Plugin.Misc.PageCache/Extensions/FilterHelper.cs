@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Nop.Core;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
+namespace Apt.Nop.Plugin.Misc.PageCache.Extensions
 {
     public static partial class FilterHelper
     {
@@ -20,11 +20,9 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
                 var controllerName = kvp.Key;
                 var actionName = kvp.Value;
 
-                var isAction = IsAction(context, controllerName, actionName, isAdmin, webHelper);
+                var isAction = context.IsAction(controllerName, actionName, isAdmin, webHelper);
                 if (isAction)
-                {
                     return true;
-                }
             }
 
             return false;
@@ -64,9 +62,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
         public static bool IsAjaxRequest(this FilterContext context)
         {
             if (context.HttpContext.Request == null)
-            {
                 return false;
-            }
 
             var isAjaxRequest = context.HttpContext.Request?.Headers["X-Requested-With"].ToString() == "XMLHttpRequest";
             return isAjaxRequest;
@@ -80,14 +76,14 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
 
         public static int GetEntityId(this ActionExecutingContext context)
         {
-            int id = Convert.ToInt32(context.HttpContext.GetRouteData().Values["id"]);
+            var id = Convert.ToInt32(context.HttpContext.GetRouteData().Values["id"]);
             return id;
         }
 
 
         public static string GetValueFromActionParameters(this ActionExecutingContext filterContext, string key)
         {
-            string value = filterContext.ActionArguments.ContainsKey(key)
+            var value = filterContext.ActionArguments.ContainsKey(key)
                   ? filterContext.ActionArguments[key].ToString()
                   : filterContext.HttpContext.Request.Form.Keys.Contains(key)
                       ? filterContext.HttpContext.Request.Form[key].ToString()
@@ -99,9 +95,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
         public static string GetViewName(this IActionResult actionResult)
         {
             if (actionResult is ViewResult @base)
-            {
                 return @base.ViewName;
-            }
 
             return string.Empty;
         }
@@ -115,9 +109,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
         public static void SetView(this ResultExecutingContext filterContext, string viewPath)
         {
             if (filterContext.Result is ViewResult @base)
-            {
                 @base.ViewName = viewPath;
-            }
         }
 
         public static T ModelFromActionResult<T>(IActionResult actionResult)
@@ -135,7 +127,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
             }
             else
             {
-                return default(T);
+                return default;
             }
 
             T typedModel;
@@ -145,14 +137,14 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
             }
             catch
             {
-                return default(T);
+                return default;
             }
 
             return typedModel;
         }
 
 
-        public static T ModelFromActionParameter<T>(Object o)
+        public static T ModelFromActionParameter<T>(object o)
         {
             T typedModel;
             try
@@ -161,7 +153,7 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Extensions
             }
             catch
             {
-                return default(T);
+                return default;
             }
             return typedModel;
         }

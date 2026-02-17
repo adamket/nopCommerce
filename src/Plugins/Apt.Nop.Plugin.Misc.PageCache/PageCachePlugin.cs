@@ -5,7 +5,7 @@ using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Plugins;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.PageCache;
 
 /// <summary>
 /// Represents the Page Cache plugin

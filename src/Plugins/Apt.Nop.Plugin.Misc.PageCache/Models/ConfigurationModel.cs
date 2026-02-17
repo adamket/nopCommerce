@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Mvc.ModelBinding;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache.Models;
+namespace Apt.Nop.Plugin.Misc.PageCache.Models;
 public class ConfigurationModel
 {
     [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes")]

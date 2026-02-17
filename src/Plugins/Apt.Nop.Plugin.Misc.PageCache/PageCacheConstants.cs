@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Aperture.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.PageCache;
 public static class PageCacheConstants
 {
     public const string PDP_CACHE_KEY_PREFIX = "apt.product-details-cache-page-{0}"; //productid
