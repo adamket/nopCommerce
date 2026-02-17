@@ -59,7 +59,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
         await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
         {
             ["Plugins.Misc.PageCache.Instructions"] =
-                "Page Cache improves storefront performance by storing fully rendered pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times.",
+                "Page Cache improves storefront performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times.",
 
             ["Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes"] =
                 "Category page cache duration (minutes)",

@@ -94,16 +94,16 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
 
-                var containsCouponCodes =
-                    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
+                //var containsCouponCodes =
+                //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
+                //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
                                         filterContext.ActionArguments["productId"] != null;
 
                 if (!containsProductId
                     || containsUpdateCartItemId
-                    || containsCouponCodes)
+                   /* || containsCouponCodes*/)
                 { return; }
 
                 var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
@@ -142,16 +142,16 @@ namespace Aperture.Nop.Plugin.Misc.PageCache.Filters
                 //}
 
                 var model = filterContext.Result.GetModel<ProductDetailsModel>();
-                if (model == null)
-                { return; }
-
+                if (model == null)  
+                { return; } 
+                  
                 var customer = await workContext.GetCurrentCustomerAsync();
-
-                //var validDiscounts = await discountService.GetActiveDiscountsByCustomerAsync(customer);
-                //if (validDiscounts.Any())
-                //{
-                //    return;
-                //}
+                 
+                var appliedDiscountCodes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
+                if (appliedDiscountCodes.Any())
+                {
+                    return;
+                }
 
                 if (webHelper.QueryString<string>("updatecartitemid") != null)
                 {

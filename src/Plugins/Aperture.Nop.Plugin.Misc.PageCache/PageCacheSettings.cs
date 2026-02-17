@@ -17,5 +17,8 @@ public class PageCacheSettings : ISettings
     /// </summary>
     public int ProductDetailsPageCacheLengthMinutes { get; set; }
     public List<int> PageModifyingCustomerRoleIds { get; set; }
+
+    public bool BypassCacheIfProductDiscountsApplied { get; set; }
+
     public bool Enabled { get; set; }
 }
