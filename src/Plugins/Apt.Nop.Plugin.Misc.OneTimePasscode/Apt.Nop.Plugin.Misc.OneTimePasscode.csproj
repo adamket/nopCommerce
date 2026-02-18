@@ -9,7 +9,7 @@
     <!--<PackageProjectUrl>https://www.nopcommerce.com/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/nopSolutions/nopCommerce</RepositoryUrl>-->
     <RepositoryType>Git</RepositoryType>
-    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Aperture.Misc.OneTimePasscode</OutputPath>
+    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Apt.Misc.OneTimePasscode</OutputPath>
     <OutDir>$(OutputPath)</OutDir>
     <!--Set this parameter to true to get the dlls copied from the NuGet cache to the output of your project.
     You need to set this parameter to true if your plugin has a nuget package 

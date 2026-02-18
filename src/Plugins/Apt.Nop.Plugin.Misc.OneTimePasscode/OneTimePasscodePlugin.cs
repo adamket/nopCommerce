@@ -9,7 +9,7 @@ namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
 /// <summary>
 /// Represents the Page Cache plugin
 /// </summary>
-public class PageCachePlugin : BasePlugin, IMiscPlugin
+public class OneTimePasscodePlugin : BasePlugin, IMiscPlugin
 {
     #region Fields
 
@@ -21,7 +21,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
 
     #region Ctor
 
-    public PageCachePlugin(IWebHelper webHelper, ISettingService settingService, ILocalizationService localizationService)
+    public OneTimePasscodePlugin(IWebHelper webHelper, ISettingService settingService, ILocalizationService localizationService)
     {
         _webHelper = webHelper;
         _settingService = settingService;

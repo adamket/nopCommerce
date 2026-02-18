@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Infrastructure;
@@ -18,6 +19,7 @@ public class PluginNopStartup : INopStartup
     /// <param name="configuration">Configuration of the application</param>
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddScoped<ITwilioService, TwilioService>();
         //services.AddTransient<AzureThumbService>();
         //services.AddTransient<ThumbService>();
         //services.AddTransient<IThumbService>(provider =>

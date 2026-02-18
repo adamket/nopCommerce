@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-using Apt.Nop.Plugin.Misc.PageCache;
-using Apt.Nop.Plugin.Misc.PageCache.Models;
+﻿using Apt.Nop.Plugin.Misc.PageCache.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
@@ -8,14 +6,13 @@ using Nop.Services.Configuration;
 using Nop.Services.Customers;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
-using Nop.Web.Framework.Controllers;
+using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.PageCache.Controllers.Admin;
 
-/// <summary>
-/// Admin controller for plugin configuration
-/// </summary>
+
 public class PageCacheController(
     ISettingService settingService,
     INotificationService notificationService,
@@ -26,6 +23,7 @@ public class PageCacheController(
     #region Methods
 
     [HttpGet("admin/apt/page-cache/configure")]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> Configure()
     {
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
@@ -53,6 +51,7 @@ public class PageCacheController(
     }
 
     [HttpPost("admin/apt/page-cache/configure")]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Configure(ConfigurationModel model)
     {
