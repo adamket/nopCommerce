@@ -72,12 +72,10 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
-                if (!pageCacheSettings.Enabled)
+                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                {
                     return;
-
-                var isPdpAction = filterContext.IsAction("Product", "ProductDetails");
-                if (!isPdpAction)
-                    return;
+                }
 
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
 
@@ -125,13 +123,18 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
             private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
             {
+                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                {
+                    return;
+                }
+
                 var store = await storeContext.GetCurrentStoreAsync();
 
                 var model = filterContext.Result.GetModel<ProductDetailsModel>();
-                if (model == null)  
-return;                   
+                if (model == null)
+                    return;
                 var customer = await workContext.GetCurrentCustomerAsync();
-                 
+
                 var appliedDiscountCodes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
                 if (appliedDiscountCodes.Any())
                     return;

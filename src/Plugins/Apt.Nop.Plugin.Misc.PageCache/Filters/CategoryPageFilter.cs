@@ -58,17 +58,15 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
             IGenericAttributeService genericAttributeService)
             : IAsyncActionFilter
         {
-     
+
             #region Utilities
 
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
-                if (!pageCacheSettings.Enabled)
+                if (!filterContext.AllowFilter("Catalog", "Category", pageCacheSettings))
+                {
                     return;
-
-                var isCategoryPageAction = filterContext.IsAction("Catalog", "Category");
-                if (!isCategoryPageAction)
-                    return;
+                }
 
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
 
@@ -88,14 +86,15 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
                 if (!containsCategoryId
                     || containsCouponCodes
-                    || containsQueryParameter) { return; }
+                    || containsQueryParameter)
+                { return; }
 
                 var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
                 var cacheKey =
                     new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
                             rolesStr))
-                        { CacheTime = int.MaxValue };
+                    { CacheTime = int.MaxValue };
                 var cachedModel = await
                     staticCacheManager.GetAsync<ActionResultCacheItem<CategoryModel>>(cacheKey, async () => null);
                 if (cachedModel != null)
@@ -131,6 +130,11 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
             private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
             {
+                if (!filterContext.AllowFilter("Catalog", "Category", pageCacheSettings))
+                {
+                    return;
+                }
+
                 var currentCustomer = await workContext.GetCurrentCustomerAsync();
                 var currentStore = await storeContext.GetCurrentStoreAsync();
 
@@ -142,7 +146,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
                 var model = filterContext.Result.GetModel<CategoryModel>();
                 if (model == null)
-return; 
+                    return;
                 //cache  result
                 var categoryPageResult = new ActionResultCacheItem<CategoryModel>(filterContext.Result);
 
