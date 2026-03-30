@@ -73,6 +73,12 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
             ["Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes.Hint"] =
                 "Number of minutes product detail pages should remain cached before being regenerated.",
 
+            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes"] =
+                "Manufacturer page cache duration (minutes)",
+
+            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes.Hint"] =
+                "Number of minutes manufacturer pages should remain cached before being regenerated.",
+
             ["Aperture.Plugins.Misc.PageCache.Fields.Enabled"] =
                 "Enabled",
 

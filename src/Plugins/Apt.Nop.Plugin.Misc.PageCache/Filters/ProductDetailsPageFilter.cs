@@ -55,29 +55,15 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
             IDiscountService discountService)
             : IAsyncActionFilter
         {
-            #region Fields
-
-            private readonly PageCacheSettings _pageCacheSettings = pageCacheSettings;
-            private readonly ICustomerService _customerService = customerService;
-            private readonly IProductService _productService = productService;
-            private readonly ILogger _logger = logger;
-
-            #endregion
-
-            #region Ctor
-
-            #endregion
 
             #region Utilities
 
             private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
             {
-                if (!pageCacheSettings.Enabled)
+                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                {
                     return;
-
-                var isPdpAction = filterContext.IsAction("Product", "ProductDetails");
-                if (!isPdpAction)
-                    return;
+                }
 
                 var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
 
@@ -85,23 +71,23 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
 
-                //var containsCouponCodes =
-                //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
-                //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
+                var containsCouponCodes =
+                    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
+                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
                                         filterContext.ActionArguments["productId"] != null;
 
                 if (!containsProductId
                     || containsUpdateCartItemId
-                   /* || containsCouponCodes*/)
+                    || containsCouponCodes)
                 { return; }
 
                 var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
 
                 await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
 
-                var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(_customerService, _pageCacheSettings);
+                var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(customerService, pageCacheSettings);
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
                 var cachedModel = await staticCacheManager.GetAsync<ActionResultCacheItem<ProductDetailsModel>>(cacheKey, async () => null);
                 if (cachedModel != null)
@@ -122,16 +108,20 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 return;
             }
 
-
             private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
             {
+                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                {
+                    return;
+                }
+
                 var store = await storeContext.GetCurrentStoreAsync();
 
                 var model = filterContext.Result.GetModel<ProductDetailsModel>();
-                if (model == null)  
-return;                   
+                if (model == null)
+                    return;
                 var customer = await workContext.GetCurrentCustomerAsync();
-                 
+
                 var appliedDiscountCodes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
                 if (appliedDiscountCodes.Any())
                     return;
@@ -177,9 +167,6 @@ return;
                 {
                 }
             }
-
-
-
         }
         #endregion
     }

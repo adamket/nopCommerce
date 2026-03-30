@@ -3,7 +3,7 @@
   "FriendlyName": "Page Cache",
   "SystemName": "Apt.Nop.Plugin.Misc.PageCache",
   "Version": "1.0",
-  "SupportedVersions": [ "4.80" ],
+  "SupportedVersions": [ "4.70" ],
   "Author": "Aperture Labs",
   "DisplayOrder": 1,
   "FileName": "Apt.Nop.Plugin.Misc.PageCache.dll",
