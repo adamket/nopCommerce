@@ -21,6 +21,7 @@ public class PluginNopStartup : INopStartup
         {
             options.Filters.Add<ProductDetailsActionAttribute>();
             options.Filters.Add<CategoryActionAttribute>();
+            options.Filters.Add<ManufacturerActionAttribute>();
         });
     }
 

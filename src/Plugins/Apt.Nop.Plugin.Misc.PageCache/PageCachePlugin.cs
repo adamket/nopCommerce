@@ -51,7 +51,8 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
         var settings = new PageCacheSettings
         {
             CategoryPageCacheLengthMinutes = 60,
-            ProductDetailsPageCacheLengthMinutes = 60
+            ProductDetailsPageCacheLengthMinutes = 60,
+            ManufacturerPageCacheLengthMinutes = 60,
         };
         await _settingService.SaveSettingAsync(settings);
 
@@ -66,6 +67,12 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
 
             ["Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes.Hint"] =
                 "Number of minutes category pages should remain cached before being regenerated.",
+
+            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes"] =
+                "Manufacturer page cache duration (minutes)",
+
+            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes.Hint"] =
+                "Number of minutes manufacturer pages should remain cached before being regenerated.",
 
             ["Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes"] =
                 "Product page cache duration (minutes)",

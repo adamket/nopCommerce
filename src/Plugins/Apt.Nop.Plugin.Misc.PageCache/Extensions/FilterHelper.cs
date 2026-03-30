@@ -2,19 +2,30 @@
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Nop.Core;
+using Nop.Core.Infrastructure;
 
 namespace Apt.Nop.Plugin.Misc.PageCache.Extensions
 {
     public static partial class FilterHelper
     {
+
+
+        public static bool AllowFilter(this FilterContext filterContext, string controllerName, string actionName, PageCacheSettings pageCacheSettings = null)
+        {
+            pageCacheSettings ??= EngineContext.Current.Resolve<PageCacheSettings>();
+            if (!pageCacheSettings.Enabled)
+                return false;
+
+            var isAction = filterContext.IsAction(controllerName, actionName);
+            if (!isAction)
+                return false;
+
+            return true;
+        }
+
+
         public static bool IsAction(this FilterContext context, IList<KeyValuePair<string, string>> controllerAndActionPairs, bool isAdmin = false, IWebHelper webHelper = null)
         {
-            //webHelper ??= EngineContext.Current.Resolve<IWebHelper>();
-            //if (isAdmin && !webHelper.IsAdminArea())
-            //{
-            //    return false;
-            //}
-
             foreach (var kvp in controllerAndActionPairs)
             {
                 var controllerName = kvp.Key;
@@ -30,13 +41,6 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Extensions
 
         public static bool IsAction(this FilterContext context, string controllerName, string actionName, bool isAdmin = false, IWebHelper webHelper = null)
         {
-            //webHelper ??= EngineContext.Current.Resolve<IWebHelper>();
-
-            //if (isAdmin && !webHelper.IsAdminArea())
-            //{
-            //    return false;
-            //}
-
             var contextControllerName = (string)context.RouteData.Values["controller"];
             var contextActionName = (string)context.RouteData.Values["action"];
             var allowFilterToExecute = contextControllerName.Equals(controllerName, StringComparison.CurrentCultureIgnoreCase) && contextActionName.Equals(actionName, StringComparison.CurrentCultureIgnoreCase);
@@ -46,12 +50,6 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Extensions
 
         public static bool IsController(this FilterContext context, string controllerName, bool isAdmin = false, IWebHelper webHelper = null)
         {
-            //webHelper ??= EngineContext.Current.Resolve<IWebHelper>();
-            //if (isAdmin && !webHelper.IsAdminArea())
-            //{
-            //    return false;
-            //}
-
             var contextControllerName = (string)context.RouteData.Values["controller"];
 
             var allowFilterToExecute =

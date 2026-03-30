@@ -15,6 +15,9 @@ public class ConfigurationModel
     [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes")]
     public int ProductDetailsPageCacheLengthMinutes { get; set; }
     
+    public int ManufacturerPageCacheLengthMinutes { get; set; }
+
+
     [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.Enabled")]
     public bool Enabled { get; set; }
 
@@ -23,9 +26,12 @@ public class ConfigurationModel
 
 
 
+
+
     public bool CategoryPageCacheLengthMinutes_OverrideForStore { get; set; }
     public bool ProductDetailsPageCacheLengthMinutes_OverrideForStore { get; set; }
     public bool PageModifyingCustomerRoleIds_OverrideForStore { get; set; }
+    public bool ManufacturerPageCacheLengthMinutes_OverrideForStore { get; set; }
     public bool Enabled_OverrideForStore { get; set; }
 
     public IList<SelectListItem> AvailableCustomerRoles { get; set; }
