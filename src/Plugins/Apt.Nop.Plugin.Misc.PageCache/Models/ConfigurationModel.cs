@@ -14,7 +14,8 @@ public class ConfigurationModel
 
     [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes")]
     public int ProductDetailsPageCacheLengthMinutes { get; set; }
-    
+
+    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes")]
     public int ManufacturerPageCacheLengthMinutes { get; set; }
 
 
