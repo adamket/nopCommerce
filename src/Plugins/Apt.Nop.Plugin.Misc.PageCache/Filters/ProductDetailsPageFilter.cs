@@ -126,10 +126,6 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
             private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
             {
                 var store = await storeContext.GetCurrentStoreAsync();
-                //if (store.Id == _pageCacheSettings.VcaStoreId)
-                //{
-                //    return;
-                //}
 
                 var model = filterContext.Result.GetModel<ProductDetailsModel>();
                 if (model == null)  

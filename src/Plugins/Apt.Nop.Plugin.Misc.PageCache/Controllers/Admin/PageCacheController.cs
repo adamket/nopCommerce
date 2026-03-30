@@ -47,7 +47,7 @@ public class PageCacheController(
             model.Enabled_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.Enabled, storeScope);
         }
 
-        return View("~/Plugins/Aperture.Misc.PageCache/Views/Configure.cshtml", model);
+        return View("~/Plugins/Apt.Misc.PageCache/Views/Configure.cshtml", model);
     }
 
     [HttpPost("admin/apt/page-cache/configure")]
