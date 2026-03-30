@@ -82,7 +82,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                         out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any(); //TODO why did I do this again?
+                    filterContext.HttpContext.Request.Query.Any(); //pagination, filtering, etc. 
 
                 if (!containsCategoryId
                     || containsCouponCodes
