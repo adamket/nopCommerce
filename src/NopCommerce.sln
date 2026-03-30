@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.0.32002.185
+VisualStudioVersion = 17.14.36930.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Libraries", "Libraries", "{E4ACA93B-D3DE-4557-B069-F1DB42925A4B}"
 EndProject
@@ -70,6 +70,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nop.Plugin.Misc.OmnibusDirective", "Plugins\Nop.Plugin.Misc.OmnibusDirective\Nop.Plugin.Misc.OmnibusDirective.csproj", "{DA33F57C-2E56-4D63-B0D9-D87069D786B8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nop.Plugin.Widgets.AccessiBe", "Plugins\Nop.Plugin.Widgets.AccessiBe\Nop.Plugin.Widgets.AccessiBe.csproj", "{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.PageCache", "Plugins\Apt.Nop.Plugin.Misc.PageCache\Apt.Nop.Plugin.Misc.PageCache.csproj", "{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -419,6 +421,18 @@ Global
 		{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71}.Release|x86.ActiveCfg = Release|Any CPU
 		{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71}.Release|x86.Build.0 = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Debug|x86.Build.0 = Debug|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|x86.ActiveCfg = Release|Any CPU
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -454,6 +468,7 @@ Global
 		{D476A0EF-77AD-42C7-9288-69D417816FC7} = {7881B112-7843-4542-B1F7-F99553FB9BB7}
 		{DA33F57C-2E56-4D63-B0D9-D87069D786B8} = {7881B112-7843-4542-B1F7-F99553FB9BB7}
 		{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71} = {7881B112-7843-4542-B1F7-F99553FB9BB7}
+		{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3} = {7881B112-7843-4542-B1F7-F99553FB9BB7}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EE72A8B2-332A-4175-9319-6726D36E9D25}
