@@ -37,141 +37,63 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
         /// <summary>
         /// Represents a filter that confirms access to closed store
         /// </summary>
-        private class ManufacturerFilter(
-            BoosterSettings pageCacheSettings,
-            IStaticCacheManager staticCacheManager,
-            IRecentlyViewedProductsService recentlyViewedProductsService,
-            IStoreContext storeContext,
-            IWorkContext workContext,
-            IPermissionService permissionService,
-            INopHtmlHelper nopHtmlHelper,
-            IUrlHelperFactory urlHelperFactory,
-            IWebHelper webHelper,
-            IGenericAttributeService genericAttributeService)
-            : IAsyncActionFilter
+        internal sealed class ManufacturerFilter(
+                BoosterSettings settings,
+                IStaticCacheManager cacheManager,
+                IStoreContext storeContext,
+                IWorkContext workContext,
+                IPermissionService permissionService,
+                INopHtmlHelper nopHtmlHelper,
+                IUrlHelperFactory urlHelperFactory,
+                IWebHelper webHelper,
+                IGenericAttributeService genericAttributeService)
+                : BrowsePageFilter<ManufacturerModel>(
+                    settings, cacheManager, storeContext, workContext,
+                    permissionService, nopHtmlHelper, urlHelperFactory,
+                    webHelper, genericAttributeService)
         {
+            protected override string Controller => "Catalog";
+            protected override string Action => "Manufacturer";
 
-            #region Utilities
+            protected override string CacheKeyFormat => BoosterConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT;
+            protected override int CacheLengthMinutes => settings.ManufacturerPageCacheLengthMinutes;
 
-            private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
+            protected override bool TryGetId(ActionExecutingContext ctx, out int id)
             {
-                if (!filterContext.AllowFilter("Catalog", "Manufacturer", pageCacheSettings))
+                if (ctx.ActionArguments.TryGetValue("manufacturerId", out var val) && val != null)
                 {
-                    return;
+                    id = Convert.ToInt32(val);
+                    return true;
                 }
-
-                var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
-
-                var currentCustomer = await workContext.GetCurrentCustomerAsync();
-                var currentStore = await storeContext.GetCurrentStoreAsync();
-
-                var containsManufacturerId = filterContext.ActionArguments.ContainsKey("ManufacturerId") &&
-                                         filterContext.ActionArguments["ManufacturerId"] != null;
-
-                var containsCouponCodes =
-                    filterContext.HttpContext.Request.Query.TryGetValue(
-                        NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes); //paging, filtering, etc
-
-                var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any(); 
-
-                if (!containsManufacturerId
-                    || containsCouponCodes
-                    || containsQueryParameter)
-                { return; }
-
-                var catId = Convert.ToInt32(filterContext.ActionArguments["ManufacturerId"]);
-                var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey =
-                    new CacheKey(string.Format(BoosterConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
-                            rolesStr));
-                var cachedModel = await
-                    staticCacheManager.GetAsync<ActionResultCacheItem<ManufacturerModel>>(cacheKey, async () => null);
-                if (cachedModel != null)
-                {
-                    var lastShoppingUrl = await genericAttributeService.GetAttributeAsync<string>(currentCustomer,
-                        NopCustomerDefaults.LastContinueShoppingPageAttribute, currentStore.Id);
-
-                    var thisUrl = webHelper.GetThisPageUrl(false);
-                    if (thisUrl != lastShoppingUrl)
-                    {
-                        await genericAttributeService.SaveAttributeAsync(currentCustomer,
-                            NopCustomerDefaults.LastContinueShoppingPageAttribute,
-                            webHelper.GetThisPageUrl(false),
-                            currentStore.Id);
-                    }
-
-                    var result = cachedModel.GetResult<ViewResult>();
-
-                    if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.MANUFACTURER_CREATE_EDIT_DELETE))
-                    {
-                        //display "edit" (manage) link
-                        nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Manufacturer",
-                            new { id = catId, area = AreaNames.ADMIN }));
-                    }
-
-                    filterContext.Result = result;
-                    return;
-                }
-
-                return;
+                id = 0;
+                return false;
             }
 
-            private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
+            protected override bool ShouldSkip(ActionExecutingContext ctx)
             {
-                if (!filterContext.AllowFilter("Catalog", "Manufacturer", pageCacheSettings))
-                {
-                    return;
-                }
+                if (ctx.HttpContext.Request.Query.Any())
+                    return true;
 
-                var currentCustomer = await workContext.GetCurrentCustomerAsync();
-                var currentStore = await storeContext.GetCurrentStoreAsync();
-
-                var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any();
-
-                if (containsQueryParameter)
-                    return;
-
-                var model = filterContext.Result.GetModel<ManufacturerModel>();
-                if (model == null)
-                    return;
-                //cache  result
-                var manufacturerPageResult = new ActionResultCacheItem<ManufacturerModel>(filterContext.Result);
-
-                var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey = new CacheKey(string.Format(BoosterConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, manufacturerPageResult.Model.Id, currentStore.Id, rolesStr),
-                    [BoosterConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT + manufacturerPageResult.Model.Id])
-                {
-                    CacheTime = pageCacheSettings.ManufacturerPageCacheLengthMinutes,
-                };
-
-                await staticCacheManager.SetAsync(cacheKey, manufacturerPageResult);
+                return ctx.HttpContext.Request.Query.TryGetValue(
+                           NopDiscountDefaults.DiscountCouponQueryParameter,
+                           out var codes)
+                       && !StringValues.IsNullOrEmpty(codes);
             }
 
-
-            public async Task OnActionExecutionAsync(
-                ActionExecutingContext filterContext,
-                ActionExecutionDelegate next)
+            protected override async Task AddEditLinkAsync(IUrlHelper urlHelper, int id)
             {
-                try
+                if (!await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) ||
+                    !await permissionService.AuthorizeAsync(StandardPermission.Catalog.MANUFACTURER_CREATE_EDIT_DELETE))
                 {
-                    await CustomOnActionExecuting(filterContext);
-                    if (filterContext.Result == null)
-                    {
-                        var resultContext = await next();
-                        await CustomOnActionExecuted(resultContext);
-                    }
+                    return;
+                }
 
-                }
-                finally
-                {
-                }
+                nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Manufacturer",
+                    new { id, area = AreaNames.ADMIN }));
+
             }
+
+            protected override int GetModelId(ManufacturerModel model) => model.Id;
         }
-
-        #endregion
     }
 }

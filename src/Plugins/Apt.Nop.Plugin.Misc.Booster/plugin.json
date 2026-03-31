@@ -3,7 +3,7 @@
   "FriendlyName": "Booster",
   "SystemName": "Apt.Nop.Plugin.Misc.Booster",
   "Version": "1.0",
-  "SupportedVersions": [ "4.70" ],
+  "SupportedVersions": [ "4.80" ],
   "Author": "Aperture Labs",
   "DisplayOrder": 1,
   "FileName": "Apt.Nop.Plugin.Misc.Booster.dll",

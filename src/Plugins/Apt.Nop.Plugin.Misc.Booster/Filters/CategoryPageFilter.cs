@@ -40,146 +40,55 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
 
         #endregion
 
-
-        /// <summary>
-        /// Represents a filter that confirms access to closed store
-        /// </summary>
-        private class CategoryFilter(
-            BoosterSettings pageCacheSettings,
-            IStaticCacheManager staticCacheManager,
-            IRecentlyViewedProductsService recentlyViewedProductsService,
+        internal sealed class CategoryFilter(BoosterSettings settings,
+            IStaticCacheManager cacheManager,
             IStoreContext storeContext,
             IWorkContext workContext,
             IPermissionService permissionService,
             INopHtmlHelper nopHtmlHelper,
             IUrlHelperFactory urlHelperFactory,
             IWebHelper webHelper,
-            IGenericAttributeService genericAttributeService)
-            : IAsyncActionFilter
+            IGenericAttributeService genericAttributeService) : BrowsePageFilter<CategoryModel>(settings, cacheManager, storeContext, workContext, permissionService, nopHtmlHelper, urlHelperFactory, webHelper, genericAttributeService)
         {
+            protected override string Controller => "Catalog";
+            protected override string Action => "Category";
+            protected override string CacheKeyFormat => BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT;
+            protected override int CacheLengthMinutes => settings.CategoryPageCacheLengthMinutes;
 
-            #region Utilities
-
-            private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
+            protected override bool TryGetId(ActionExecutingContext ctx, out int id)
             {
-                if (!filterContext.AllowFilter("Catalog", "Category", pageCacheSettings))
+                if (ctx.ActionArguments.TryGetValue("categoryId", out var val) && val != null)
                 {
-                    return;
+                    id = Convert.ToInt32(val);
+                    return true;
                 }
-
-                var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
-
-                var currentCustomer = await workContext.GetCurrentCustomerAsync();
-                var currentStore = await storeContext.GetCurrentStoreAsync();
-
-                var containsCategoryId = filterContext.ActionArguments.ContainsKey("categoryId") &&
-                                         filterContext.ActionArguments["categoryId"] != null;
-
-                var containsCouponCodes =
-                    filterContext.HttpContext.Request.Query.TryGetValue(
-                        NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
-
-                var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any(); //pagination, filtering, etc. 
-
-                if (!containsCategoryId
-                    || containsCouponCodes
-                    || containsQueryParameter)
-                { return; }
-
-                var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
-                var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey =
-                    new CacheKey(string.Format(BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
-                            rolesStr))
-                    { CacheTime = int.MaxValue };
-                var cachedModel = await
-                    staticCacheManager.GetAsync<ActionResultCacheItem<CategoryModel>>(cacheKey, async () => null);
-                if (cachedModel != null)
-                {
-                    var lastShoppingUrl = await genericAttributeService.GetAttributeAsync<string>(currentCustomer,
-                        NopCustomerDefaults.LastContinueShoppingPageAttribute, currentStore.Id);
-
-                    var thisUrl = webHelper.GetThisPageUrl(false);
-                    if (thisUrl != lastShoppingUrl)
-                    {
-                        await genericAttributeService.SaveAttributeAsync(currentCustomer,
-                            NopCustomerDefaults.LastContinueShoppingPageAttribute,
-                            webHelper.GetThisPageUrl(false),
-                            currentStore.Id);
-                    }
-
-                    var result = cachedModel.GetResult<ViewResult>();
-
-                    if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
-                    {
-                        //display "edit" (manage) link
-                        nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
-                            new { id = catId, area = AreaNames.ADMIN }));
-                    }
-
-                    filterContext.Result = result;
-                    return;
-                }
-
-                return;
+                id = 0;
+                return false;
             }
 
-            private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
+            protected override bool ShouldSkip(ActionExecutingContext ctx) =>
+                ctx.HttpContext.Request.Query.Any() ||
+                ctx.HttpContext.Request.Query.TryGetValue(
+                    NopDiscountDefaults.DiscountCouponQueryParameter, out var c)
+                && !StringValues.IsNullOrEmpty(c);
+
+            protected override async Task AddEditLinkAsync(IUrlHelper urlHelper, int id)
             {
-                if (!filterContext.AllowFilter("Catalog", "Category", pageCacheSettings))
+                if (!await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) ||
+                    !await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
                 {
                     return;
                 }
 
-                var currentCustomer = await workContext.GetCurrentCustomerAsync();
-                var currentStore = await storeContext.GetCurrentStoreAsync();
+                nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
+                    new { id, area = AreaNames.ADMIN }));
 
-                var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any();
-
-                if (containsQueryParameter)
-                    return;
-
-                var model = filterContext.Result.GetModel<CategoryModel>();
-                if (model == null)
-                    return;
-                //cache  result
-                var categoryPageResult = new ActionResultCacheItem<CategoryModel>(filterContext.Result);
-
-                var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey = new CacheKey(string.Format(BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr),
-                    [BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT + categoryPageResult.Model.Id])
-                {
-                    CacheTime = pageCacheSettings.CategoryPageCacheLengthMinutes,
-                };
-
-                await staticCacheManager.SetAsync(cacheKey, categoryPageResult);
             }
 
-
-            public async Task OnActionExecutionAsync(
-                ActionExecutingContext filterContext,
-                ActionExecutionDelegate next)
-            {
-                try
-                {
-                    await CustomOnActionExecuting(filterContext);
-                    if (filterContext.Result == null)
-                    {
-                        var resultContext = await next();
-                        await CustomOnActionExecuted(resultContext);
-
-                    }
-                }
-                finally
-                {
-                }
-            }
+            protected override int GetModelId(CategoryModel model) => model.Id;
         }
 
-        #endregion
+
+
     }
 }
