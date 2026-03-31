@@ -71,16 +71,16 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
 
-                var containsCouponCodes =
-                    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
+                //var containsCouponCodes =
+                //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
+                //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
                                         filterContext.ActionArguments["productId"] != null;
 
                 if (!containsProductId
                     || containsUpdateCartItemId
-                    || containsCouponCodes)
+                   /* || containsCouponCodes*/)
                 { return; }
 
                 var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
