@@ -74,10 +74,15 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
 
             protected override async Task AddEditLinkAsync(IUrlHelper urlHelper, int id)
             {
-                if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                    await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
-                    nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
-                        new { id, area = AreaNames.ADMIN }));
+                if (!await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) ||
+                    !await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
+                {
+                    return;
+                }
+
+                nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Category",
+                    new { id, area = AreaNames.ADMIN }));
+
             }
 
             protected override int GetModelId(CategoryModel model) => model.Id;
