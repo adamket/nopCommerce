@@ -107,7 +107,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                     var result = cachedModel.GetResult<ViewResult>();
 
                     if (await permissionService.AuthorizeAsync(StandardPermissionProvider.AccessAdminPanel) &&
-                        await permissionService.AuthorizeAsync(StandardPermissionProvider.ManageCategories))
+                        await permissionService.AuthorizeAsync(StandardPermissionProvider.ManageManufacturers))
                     {
                         //display "edit" (manage) link
                         nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Manufacturer",
