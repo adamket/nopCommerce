@@ -1,8 +1,8 @@
-﻿using Apt.Nop.Plugin.Misc.PageCache.Extensions;
+﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Types
+namespace Apt.Nop.Plugin.Misc.Booster.Types
 {
     public class ActionResultCacheItem<U>
     {

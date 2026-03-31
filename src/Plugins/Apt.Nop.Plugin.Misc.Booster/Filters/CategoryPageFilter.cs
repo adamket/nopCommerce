@@ -1,6 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.PageCache;
-using Apt.Nop.Plugin.Misc.PageCache.Extensions;
-using Apt.Nop.Plugin.Misc.PageCache.Types;
+﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
+using Apt.Nop.Plugin.Misc.Booster.Types;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
@@ -16,7 +15,7 @@ using Nop.Web.Framework;
 using Nop.Web.Framework.UI;
 using Nop.Web.Models.Catalog;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Filters
+namespace Apt.Nop.Plugin.Misc.Booster.Filters
 {
     /// <summary>
     /// Represents a filter attribute that confirms access to a closed store
@@ -46,7 +45,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
         /// Represents a filter that confirms access to closed store
         /// </summary>
         private class CategoryFilter(
-            PageCacheSettings pageCacheSettings,
+            BoosterSettings pageCacheSettings,
             IStaticCacheManager staticCacheManager,
             IRecentlyViewedProductsService recentlyViewedProductsService,
             IStoreContext storeContext,
@@ -92,7 +91,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var catId = Convert.ToInt32(filterContext.ActionArguments["categoryId"]);
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
                 var cacheKey =
-                    new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
+                    new CacheKey(string.Format(BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
                             rolesStr))
                     { CacheTime = int.MaxValue };
                 var cachedModel = await
@@ -151,8 +150,8 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var categoryPageResult = new ActionResultCacheItem<CategoryModel>(filterContext.Result);
 
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey = new CacheKey(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr), 
-                    [string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_PREFIX, categoryPageResult.Model.Id)])
+                var cacheKey = new CacheKey(string.Format(BoosterConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT, categoryPageResult.Model.Id, currentStore.Id, rolesStr), 
+                    [string.Format(BoosterConstants.CATEGORY_PAGE_CACHE_KEY_PREFIX, categoryPageResult.Model.Id)])
                 {
                     CacheTime = pageCacheSettings.CategoryPageCacheLengthMinutes,
                 };

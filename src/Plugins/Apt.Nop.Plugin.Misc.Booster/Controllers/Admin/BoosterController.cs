@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.PageCache.Models;
+﻿using Apt.Nop.Plugin.Misc.Booster.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
@@ -8,12 +8,11 @@ using Nop.Services.Localization;
 using Nop.Services.Messages;
 using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
-using Nop.Web.Framework.Mvc.Filters;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Controllers.Admin;
+namespace Apt.Nop.Plugin.Misc.Booster.Controllers.Admin;
 
 
-public class PageCacheController(
+public class BoosterController(
     IPermissionService permissionService,
     ISettingService settingService,
     INotificationService notificationService,
@@ -32,7 +31,7 @@ public class PageCacheController(
         }
 
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
-        var settings = await settingService.LoadSettingAsync<PageCacheSettings>(storeScope);
+        var settings = await settingService.LoadSettingAsync<BoosterSettings>(storeScope);
         var customerRoles = await customerService.GetAllCustomerRolesAsync(true);
 
         var model = new ConfigurationModel
@@ -69,7 +68,7 @@ public class PageCacheController(
 
         //load settings for a chosen store scope
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
-        var settings = await settingService.LoadSettingAsync<PageCacheSettings>(storeScope);
+        var settings = await settingService.LoadSettingAsync<BoosterSettings>(storeScope);
 
         //save settings
         settings.CategoryPageCacheLengthMinutes = model.CategoryPageCacheLengthMinutes;

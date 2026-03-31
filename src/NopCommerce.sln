@@ -67,7 +67,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nop.Plugin.Misc.Omnisend", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nop.Plugin.Payments.AmazonPay", "Plugins\Nop.Plugin.Payments.AmazonPay\Nop.Plugin.Payments.AmazonPay.csproj", "{6C596948-C94E-40A8-81AE-F96D75E7624B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.PageCache", "..\..\nop47\src\Plugins\Apt.Nop.Plugin.Misc.PageCache\Apt.Nop.Plugin.Misc.PageCache.csproj", "{123F9674-6096-5F5F-968D-B2B465AEDCB5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.Booster", "Plugins\Apt.Nop.Plugin.Misc.Booster\Apt.Nop.Plugin.Misc.Booster.csproj", "{123F9674-6096-5F5F-968D-B2B465AEDCB5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

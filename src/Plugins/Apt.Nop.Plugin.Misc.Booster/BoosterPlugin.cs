@@ -1,16 +1,15 @@
-﻿using System.Threading.Tasks;
-using Nop.Core;
+﻿using Nop.Core;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Plugins;
 
-namespace Apt.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.Booster;
 
 /// <summary>
 /// Represents the Page Cache plugin
 /// </summary>
-public class PageCachePlugin : BasePlugin, IMiscPlugin
+public class BoosterPlugin : BasePlugin, IMiscPlugin
 {
     #region Fields
 
@@ -22,7 +21,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
 
     #region Ctor
 
-    public PageCachePlugin(IWebHelper webHelper, ISettingService settingService, ILocalizationService localizationService)
+    public BoosterPlugin(IWebHelper webHelper, ISettingService settingService, ILocalizationService localizationService)
     {
         _webHelper = webHelper;
         _settingService = settingService;
@@ -48,7 +47,7 @@ public class PageCachePlugin : BasePlugin, IMiscPlugin
     {
 
         //settings
-        var settings = new PageCacheSettings
+        var settings = new BoosterSettings
         {
             CategoryPageCacheLengthMinutes = 60,
             ProductDetailsPageCacheLengthMinutes = 60
