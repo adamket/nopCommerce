@@ -1,14 +1,10 @@
-﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
-using Apt.Nop.Plugin.Misc.Booster.Types;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
-using Nop.Services.Discounts;
-using Nop.Services.Logging;
 using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.UI;
@@ -32,155 +28,80 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
 
         }
 
-        #endregion
 
-        /// <summary>
-        /// Represents a filter that confirms access to closed store
-        /// </summary>
-        private class ProductDetailsFilter(
-            BoosterSettings pageCacheSettings,
-            IStaticCacheManager staticCacheManager,
-            IRecentlyViewedProductsService recentlyViewedProductsService,
-            IStoreContext storeContext,
-            IWorkContext workContext,
-            IPermissionService permissionService,
-            INopHtmlHelper nopHtmlHelper,
-            IUrlHelperFactory urlHelperFactory,
-            IWebHelper webHelper,
-            ICustomerService customerService,
-            IProductService productService,
-            ILogger logger,
-            IDiscountService discountService)
-            : IAsyncActionFilter
+        internal sealed class ProductDetailsFilter(
+           BoosterSettings settings,
+           IStaticCacheManager cacheManager,
+           IStoreContext storeContext,
+           IWorkContext workContext,
+           IPermissionService permissionService,
+           INopHtmlHelper nopHtmlHelper,
+           IUrlHelperFactory urlHelperFactory,
+           IWebHelper webHelper,
+           ICustomerService customerService,
+           IRecentlyViewedProductsService recentlyViewedProductsService)
+           : BasePageFilter<ProductDetailsModel>(
+               settings, cacheManager, storeContext, workContext,
+               permissionService, nopHtmlHelper, urlHelperFactory, webHelper)
         {
-            #region Fields
+            protected override string Controller => "Product";
+            protected override string Action => "ProductDetails";
 
-            private readonly BoosterSettings _pageCacheSettings = pageCacheSettings;
-            private readonly ICustomerService _customerService = customerService;
-            private readonly IProductService _productService = productService;
-            private readonly ILogger _logger = logger;
+            protected override string CacheKeyFormat => BoosterConstants.PDP_CACHE_KEY_FORMAT;
+            protected override int CacheLengthMinutes => settings.ProductDetailsPageCacheLengthMinutes;
 
-            #endregion
-
-            #region Ctor
-
-            #endregion
-
-            #region Utilities
-
-            private async Task CustomOnActionExecuting(ActionExecutingContext filterContext)
+            protected override bool TryGetId(ActionExecutingContext ctx, out int id)
             {
-                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                if (ctx.ActionArguments.TryGetValue("productId", out var val) && val != null)
                 {
-                    return;
+                    id = Convert.ToInt32(val);
+                    return true;
                 }
-
-                var urlHelper = urlHelperFactory.GetUrlHelper(filterContext);
-
-                var containsUpdateCartItemId = filterContext.ActionArguments.ContainsKey("updatecartitemid")
-                                               && Convert.ToInt32(
-                                                   filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
-
-                //var containsCouponCodes =
-                //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
-                //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
-
-                var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
-                                        filterContext.ActionArguments["productId"] != null;
-
-                if (!containsProductId
-                    || containsUpdateCartItemId
-                   /* || containsCouponCodes*/)
-                { return; }
-
-                var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
-
-                await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
-
-                var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(_customerService, _pageCacheSettings);
-                var cacheKey = new CacheKey(string.Format(BoosterConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
-                var cachedModel = await staticCacheManager.GetAsync<ActionResultCacheItem<ProductDetailsModel>>(cacheKey, async () => null);
-                if (cachedModel != null)
-                {
-                    var result = cachedModel.GetResult<ViewResult>();
-
-                    //display "edit" (manage) link
-                    if (await permissionService.AuthorizeAsync(StandardPermissionProvider.AccessAdminPanel) &&
-                        await permissionService.AuthorizeAsync(StandardPermissionProvider.ManageProducts))
-                    {
-                        nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Product",
-                            new { id = prodId, area = AreaNames.ADMIN }));
-                    }
-                    filterContext.Result = result;
-                    return;
-                }
-
-                return;
+                id = 0;
+                return false;
             }
 
-
-            private async Task CustomOnActionExecuted(ActionExecutedContext filterContext)
+            protected override bool ShouldSkip(ActionExecutingContext ctx)
             {
-                if (!filterContext.AllowFilter("Product", "ProductDetails", pageCacheSettings))
+                return ctx.ActionArguments.TryGetValue("updatecartitemid", out var v)
+                       && Convert.ToInt32(v ?? "0") > 0;
+            }
+
+            protected override async Task OnCacheHitAsync(ActionExecutingContext ctx, int id)
+            {
+                await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(id);
+            }
+
+            protected override async Task AddEditLinkAsync(IUrlHelper urlHelper, int id)
+            {
+                if (!await permissionService.AuthorizeAsync(StandardPermissionProvider.AccessAdminPanel) ||
+                    !await permissionService.AuthorizeAsync(StandardPermissionProvider.ManageProducts))
                 {
                     return;
                 }
 
-                var store = await storeContext.GetCurrentStoreAsync();
+                nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Product",
+                    new { id, area = AreaNames.ADMIN }));
 
-                var model = filterContext.Result.GetModel<ProductDetailsModel>();
-                if (model == null)
-                    return;
+            }
+
+            protected override async Task<bool> CanCacheAsync(ActionExecutedContext ctx)
+            {
                 var customer = await workContext.GetCurrentCustomerAsync();
-
-                var appliedDiscountCodes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
-                if (appliedDiscountCodes.Any())
-                    return;
+                var codes = await customerService.ParseAppliedDiscountCouponCodesAsync(customer);
+                if (codes.Any())
+                { return false; }
 
                 if (webHelper.QueryString<string>("updatecartitemid") != null)
-                    return;
+                    return false;
 
-
-                //cache  result
-                var pdpResult = new ActionResultCacheItem<ProductDetailsModel>(filterContext.Result);
-
-                var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync();
-
-                var cacheKey = new CacheKey(string.Format(BoosterConstants.PDP_CACHE_KEY_FORMAT,
-                    pdpResult.Model.Id, store.Id, rolesStr), [string.Format(BoosterConstants.PDP_CACHE_KEY_PREFIX, pdpResult.Model.Id)])
-                {
-                    CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
-                    // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
-                };
-
-                await staticCacheManager.SetAsync(cacheKey, pdpResult);
-
+                return true;
             }
 
-
-            public async Task OnActionExecutionAsync(
-                ActionExecutingContext filterContext,
-                ActionExecutionDelegate next)
-            {
-                try
-                {
-                    await CustomOnActionExecuting(filterContext);
-                    if (filterContext.Result == null)
-                    {
-                        var resultContext = await next();
-                        await CustomOnActionExecuted(resultContext);
-
-                    }
-
-                }
-                finally
-                {
-                }
-            }
-
-
-
+            protected override int GetModelId(ProductDetailsModel model) => model.Id;
         }
+
         #endregion
+
     }
 }
