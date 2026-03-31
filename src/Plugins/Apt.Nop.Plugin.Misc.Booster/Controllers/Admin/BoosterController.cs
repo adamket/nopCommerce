@@ -40,6 +40,7 @@ public class BoosterController(
            CategoryPageCacheLengthMinutes = settings.CategoryPageCacheLengthMinutes,
            ProductDetailsPageCacheLengthMinutes = settings.ProductDetailsPageCacheLengthMinutes,
            Enabled = settings.Enabled,
+          
            AvailableCustomerRoles = customerRoles.Select(q=> new SelectListItem(q.Name,q.Id.ToString())).ToList(),
            PageModifyingCustomerRoleIds = settings.PageModifyingCustomerRoleIds ?? new List<int>(),
            ActiveStoreScopeConfiguration = storeScope
@@ -60,7 +61,7 @@ public class BoosterController(
         return View("~/Plugins/Apt.Misc.Booster/Views/Configure.cshtml", model);
     }
 
-    [HttpPost("admin/apt/page-cache/configure")]
+    [HttpPost("admin/plugin/booster/configure")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Configure(ConfigurationModel model)
     {
@@ -80,6 +81,7 @@ public class BoosterController(
         settings.ManufacturerPageCacheLengthMinutes = model.ManufacturerPageCacheLengthMinutes;
         settings.CategoryPageCacheLengthMinutes = model.CategoryPageCacheLengthMinutes;
         settings.ProductDetailsPageCacheLengthMinutes = model.ProductDetailsPageCacheLengthMinutes;
+        
         settings.Enabled = model.Enabled;
         settings.PageModifyingCustomerRoleIds = model.PageModifyingCustomerRoleIds?.ToList() ?? new List<int>();
 
@@ -90,6 +92,7 @@ public class BoosterController(
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.ManufacturerPageCacheLengthMinutes, model.ManufacturerPageCacheLengthMinutes_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.CategoryPageCacheLengthMinutes, model.CategoryPageCacheLengthMinutes_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.ProductDetailsPageCacheLengthMinutes, model.ProductDetailsPageCacheLengthMinutes_OverrideForStore, storeScope, false);
+        
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.Enabled, model.Enabled_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.PageModifyingCustomerRoleIds, model.PageModifyingCustomerRoleIds_OverrideForStore, storeScope, false);
 
