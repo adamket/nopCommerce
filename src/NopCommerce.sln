@@ -81,9 +81,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nop.Plugin.Misc.RFQ", "Plug
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.OneTimePasscode", "Plugins\Apt.Nop.Plugin.Misc.OneTimePasscode\Apt.Nop.Plugin.Misc.OneTimePasscode.csproj", "{36921681-5342-4101-9164-8D7CA47B0F9D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.PageCache", "Plugins\Apt.Nop.Plugin.Misc.PageCache\Apt.Nop.Plugin.Misc.PageCache.csproj", "{878E9697-74AF-D12C-17C2-EE7C61F006A5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.Booster", "Plugins\Apt.Nop.Plugin.Misc.Booster\Apt.Nop.Plugin.Misc.Booster.csproj", "{878E9697-74AF-D12C-17C2-EE7C61F006A5}"
 EndProject
-Global  
+Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|Mixed Platforms = Debug|Mixed Platforms
