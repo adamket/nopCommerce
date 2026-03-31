@@ -1,0 +1,11 @@
+﻿{
+  "Group": "Misc",
+  "FriendlyName": "Page Cache",
+  "SystemName": "Apt.Nop.Plugin.Misc.PageCache",
+  "Version": "1.0",
+  "SupportedVersions": [ "4.70" ],
+  "Author": "Aperture Labs",
+  "DisplayOrder": 1,
+  "FileName": "Apt.Nop.Plugin.Misc.PageCache.dll",
+  "Description": "Page Cache improves storefront performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times."
+}
