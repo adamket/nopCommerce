@@ -11,7 +11,7 @@ using Nop.Services.Events;
 
 namespace Apt.Nop.Plugin.Misc.PageCache.EventConsumers;
 public class PageCacheEventConsumer(IStaticCacheManager cacheManager)
-    : IConsumer<EntityUpdatedEvent<Product>>, IConsumer<EntityUpdatedEvent<Category>>
+    : IConsumer<EntityUpdatedEvent<Product>>, IConsumer<EntityUpdatedEvent<Category>> , IConsumer<EntityUpdatedEvent<Manufacturer>>
 {
     public async Task HandleEventAsync(EntityUpdatedEvent<Product> eventMessage)
     {
@@ -22,6 +22,12 @@ public class PageCacheEventConsumer(IStaticCacheManager cacheManager)
     public async Task HandleEventAsync(EntityUpdatedEvent<Category> eventMessage)
     {
         await cacheManager.RemoveByPrefixAsync(string.Format(PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_PREFIX,
+            eventMessage.Entity.Id));
+    }
+
+    public async Task HandleEventAsync(EntityUpdatedEvent<Manufacturer> eventMessage)
+    {
+        await cacheManager.RemoveByPrefixAsync(string.Format(PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_PREFIX,
             eventMessage.Entity.Id));
     }
 }

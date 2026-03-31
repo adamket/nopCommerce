@@ -141,8 +141,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT,
                     pdpResult.Model.Id, store.Id, rolesStr))
                 {
-                    CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
-                    // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
+                    CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes
                 };
 
                 await staticCacheManager.SetAsync(cacheKey, pdpResult);
