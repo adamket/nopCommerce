@@ -144,7 +144,8 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var manufacturerPageResult = new ActionResultCacheItem<ManufacturerModel>(filterContext.Result);
 
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
-                var cacheKey = new CacheKey(string.Format(PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, manufacturerPageResult.Model.Id, currentStore.Id, rolesStr))
+                var cacheKey = new CacheKey(string.Format(PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, manufacturerPageResult.Model.Id, currentStore.Id, rolesStr),
+                    [PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT + manufacturerPageResult.Model.Id])
                 {
                     CacheTime = pageCacheSettings.ManufacturerPageCacheLengthMinutes,
                 };

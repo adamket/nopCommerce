@@ -71,16 +71,16 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
 
-                var containsCouponCodes =
-                    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
+                //var containsCouponCodes =
+                //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
+                //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
 
                 var containsProductId = filterContext.ActionArguments.ContainsKey("productId") &&
                                         filterContext.ActionArguments["productId"] != null;
 
                 if (!containsProductId
                     || containsUpdateCartItemId
-                    || containsCouponCodes)
+                /*    || containsCouponCodes*/)
                 { return; }
 
                 var prodId = Convert.ToInt32(filterContext.ActionArguments["productId"]);
@@ -137,10 +137,9 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
 
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT,
-                    pdpResult.Model.Id, store.Id, rolesStr))
+                    pdpResult.Model.Id, store.Id, rolesStr), [PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT + pdpResult.Model.Id])
                 {
                     CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
-                    // Prefixes = { AdfConstants.CacheKeys.ProductDetailsPrefix + pdpResult.Model.Id }
                 };
 
                 await staticCacheManager.SetAsync(cacheKey, pdpResult);
