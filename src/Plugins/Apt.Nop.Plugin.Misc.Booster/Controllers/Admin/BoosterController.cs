@@ -55,7 +55,7 @@ public class BoosterController(
         return View("~/Plugins/Apt.Misc.Booster/Views/Configure.cshtml", model);
     }
 
-    [HttpPost("admin/plguin/booster/configure")]
+    [HttpPost("admin/plugin/booster/configure")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Configure(ConfigurationModel model)
