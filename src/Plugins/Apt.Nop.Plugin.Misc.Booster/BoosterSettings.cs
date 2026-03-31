@@ -1,11 +1,11 @@
 ﻿using Nop.Core.Configuration;
 
-namespace Apt.Nop.Plugin.Misc.PageCache;
+namespace Apt.Nop.Plugin.Misc.Booster;
 
 /// <summary>
 /// Settings for the Page Cache plugin
 /// </summary>
-public class PageCacheSettings : ISettings
+public class BoosterSettings : ISettings
 {
     public int CategoryPageCacheLengthMinutes { get; set; }
     public int ProductDetailsPageCacheLengthMinutes { get; set; }

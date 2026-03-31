@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.PageCache.Models;
+﻿using Apt.Nop.Plugin.Misc.Booster.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
@@ -10,10 +10,10 @@ using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Controllers.Admin;
+namespace Apt.Nop.Plugin.Misc.Booster.Controllers.Admin;
 
 
-public class PageCacheController(
+public class BoosterController(
     ISettingService settingService,
     INotificationService notificationService,
     IStoreContext storeContext,
@@ -22,12 +22,12 @@ public class PageCacheController(
 {
     #region Methods
 
-    [HttpGet("admin/apt/page-cache/configure")]
+    [HttpGet("admin/plugin/booster/configure")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> Configure()
     {
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
-        var settings = await settingService.LoadSettingAsync<PageCacheSettings>(storeScope);
+        var settings = await settingService.LoadSettingAsync<BoosterSettings>(storeScope);
         var customerRoles = await customerService.GetAllCustomerRolesAsync(true);
 
         var model = new ConfigurationModel
@@ -50,10 +50,10 @@ public class PageCacheController(
             model.PageModifyingCustomerRoleIds_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.PageModifyingCustomerRoleIds, storeScope);
         }
 
-        return View("~/Plugins/Apt.Misc.PageCache/Views/Configure.cshtml", model);
+        return View("~/Plugins/Apt.Misc.Booster/Views/Configure.cshtml", model);
     }
 
-    [HttpPost("admin/apt/page-cache/configure")]
+    [HttpPost("admin/plguin/booster/configure")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Configure(ConfigurationModel model)
@@ -63,7 +63,7 @@ public class PageCacheController(
 
         //load settings for a chosen store scope
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
-        var settings = await settingService.LoadSettingAsync<PageCacheSettings>(storeScope);
+        var settings = await settingService.LoadSettingAsync<BoosterSettings>(storeScope);
 
         //save settings
         settings.CategoryPageCacheLengthMinutes = model.CategoryPageCacheLengthMinutes;

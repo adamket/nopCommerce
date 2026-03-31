@@ -1,6 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.PageCache;
-using Apt.Nop.Plugin.Misc.PageCache.Extensions;
-using Apt.Nop.Plugin.Misc.PageCache.Types;
+﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
+using Apt.Nop.Plugin.Misc.Booster.Types;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
@@ -16,7 +15,7 @@ using Nop.Web.Framework;
 using Nop.Web.Framework.UI;
 using Nop.Web.Models.Catalog;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Filters
+namespace Apt.Nop.Plugin.Misc.Booster.Filters
 {
     /// <summary>
     /// Represents a filter attribute that confirms access to a closed store
@@ -40,7 +39,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
         /// Represents a filter that confirms access to closed store
         /// </summary>
         private class ProductDetailsFilter(
-            PageCacheSettings pageCacheSettings,
+            BoosterSettings pageCacheSettings,
             IStaticCacheManager staticCacheManager,
             IRecentlyViewedProductsService recentlyViewedProductsService,
             IStoreContext storeContext,
@@ -89,7 +88,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 await recentlyViewedProductsService.AddProductToRecentlyViewedListAsync(prodId);
 
                 var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync(customerService, pageCacheSettings);
-                var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
+                var cacheKey = new CacheKey(string.Format(BoosterConstants.PDP_CACHE_KEY_FORMAT, prodId, (await storeContext.GetCurrentStoreAsync()).Id, rolesStr));
                 var cachedModel = await staticCacheManager.GetAsync<ActionResultCacheItem<ProductDetailsModel>>(cacheKey, async () => null);
                 if (cachedModel != null)
                 {
@@ -138,7 +137,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var rolesStr = await (await workContext.GetCurrentCustomerAsync()).GetCustomerRoleIdsStrDescAsync();
 
 
-                var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT,
+                var cacheKey = new CacheKey(string.Format(BoosterConstants.PDP_CACHE_KEY_FORMAT,
                     pdpResult.Model.Id, store.Id, rolesStr))
                 {
                     CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes
