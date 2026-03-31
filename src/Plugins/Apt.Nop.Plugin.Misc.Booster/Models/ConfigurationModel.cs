@@ -4,20 +4,20 @@ using Nop.Web.Framework.Mvc.ModelBinding;
 namespace Apt.Nop.Plugin.Misc.Booster.Models;
 public class ConfigurationModel
 {
-    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes")]
+    [NopResourceDisplayName("Aperture.Plugins.Misc.Booster.Fields.CategoryPageCacheLengthMinutes")]
     public int CategoryPageCacheLengthMinutes { get; set; }
 
-    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes")]
+    [NopResourceDisplayName("Aperture.Plugins.Misc.Booster.Fields.ProductDetailsPageCacheLengthMinutes")]
     public int ProductDetailsPageCacheLengthMinutes { get; set; }
 
-    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes")]
+    [NopResourceDisplayName("Aperture.Plugins.Misc.Booster.Fields.ManufacturerPageCacheLengthMinutes")]
     public int ManufacturerPageCacheLengthMinutes { get; set; }
 
 
-    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.Enabled")]
+    [NopResourceDisplayName("Aperture.Plugins.Misc.Booster.Fields.Enabled")]
     public bool Enabled { get; set; }
 
-    [NopResourceDisplayName("Aperture.Plugins.Misc.PageCache.Fields.PageModifyingCustomerRoleIds")]
+    [NopResourceDisplayName("Aperture.Plugins.Misc.Booster.Fields.PageModifyingCustomerRoleIds")]
     public IList<int> PageModifyingCustomerRoleIds { get; set; }
 
 

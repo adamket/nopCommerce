@@ -37,7 +37,7 @@ public class BoosterPlugin : BasePlugin, IMiscPlugin
     /// </summary>
     public override string GetConfigurationPageUrl()
     {
-        return $"{_webHelper.GetStoreLocation()}admin/apt/page-cache/configure";
+        return $"{_webHelper.GetStoreLocation()}admin/plugin/booster/configure";
     }
 
     /// <summary>
@@ -57,37 +57,37 @@ public class BoosterPlugin : BasePlugin, IMiscPlugin
         //locales
         await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
         {
-            ["Plugins.Misc.PageCache.Instructions"] =
+            ["Plugins.Misc.Booster.Instructions"] =
                 "Page Cache improves storefront product and category page performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times.",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.CategoryPageCacheLengthMinutes"] =
                 "Category page cache duration (minutes)",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.CategoryPageCacheLengthMinutes.Hint"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.CategoryPageCacheLengthMinutes.Hint"] =
                 "Number of minutes category pages should remain cached before being regenerated.",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.ProductDetailsPageCacheLengthMinutes"] =
                 "Product page cache duration (minutes)",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.ProductDetailsPageCacheLengthMinutes.Hint"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.ProductDetailsPageCacheLengthMinutes.Hint"] =
                 "Number of minutes product detail pages should remain cached before being regenerated.",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.ManufacturerPageCacheLengthMinutes"] =
                 "Manufacturer page cache duration (minutes)",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.ManufacturerPageCacheLengthMinutes.Hint"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.ManufacturerPageCacheLengthMinutes.Hint"] =
                 "Number of minutes manufacturer pages should remain cached before being regenerated.",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.Enabled"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.Enabled"] =
                 "Enabled",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.Enabled.Hint"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.Enabled.Hint"] =
                 "When enabled, eligible storefront pages will be served from cache for faster performance.",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.PageModifyingCustomerRoleIds"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.PageModifyingCustomerRoleIds"] =
                 "Separate cache by customer roles",
 
-            ["Aperture.Plugins.Misc.PageCache.Fields.PageModifyingCustomerRoleIds.Hint"] =
+            ["Aperture.Plugins.Misc.Booster.Fields.PageModifyingCustomerRoleIds.Hint"] =
                 "Pages will be cached separately for customers in these roles."
         });
 
