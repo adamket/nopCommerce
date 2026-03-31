@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.Routing;
 using Nop.Core;
 using Nop.Core.Infrastructure;
 
-namespace Apt.Nop.Plugin.Misc.PageCache.Extensions
+namespace Apt.Nop.Plugin.Misc.Booster.Extensions
 {
     public static partial class FilterHelper
     {
-        public static bool AllowFilter(this FilterContext filterContext, string controllerName, string actionName, PageCacheSettings pageCacheSettings = null)
+        public static bool AllowFilter(this FilterContext filterContext, string controllerName, string actionName, BoosterSettings pageCacheSettings = null)
         {
-            pageCacheSettings ??= EngineContext.Current.Resolve<PageCacheSettings>();
+            pageCacheSettings ??= EngineContext.Current.Resolve<BoosterSettings>();
             if (!pageCacheSettings.Enabled)
                 return false;
 

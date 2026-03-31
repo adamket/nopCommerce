@@ -71,7 +71,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nop.Plugin.Misc.OmnibusDire
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nop.Plugin.Widgets.AccessiBe", "Plugins\Nop.Plugin.Widgets.AccessiBe\Nop.Plugin.Widgets.AccessiBe.csproj", "{3BF04BB3-4BCB-0F3A-8230-EC1F27135D71}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.PageCache", "Plugins\Apt.Nop.Plugin.Misc.PageCache\Apt.Nop.Plugin.Misc.PageCache.csproj", "{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.Booster", "Plugins\Apt.Nop.Plugin.Misc.Booster\Apt.Nop.Plugin.Misc.Booster.csproj", "{0A74D724-EF08-01AB-F1A4-7EB4BCFEB5F3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

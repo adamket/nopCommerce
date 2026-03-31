@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Apt.Nop.Plugin.Misc.PageCache;
-public static class PageCacheConstants
+﻿namespace Apt.Nop.Plugin.Misc.Booster;
+public static class BoosterConstants
 {
     public const string PDP_CACHE_KEY_PREFIX = "apt.product-details-cache-page-{0}"; //productid
     public const string PDP_CACHE_KEY_FORMAT = PDP_CACHE_KEY_PREFIX + "-{1}-{2}"; //  {1} - storeId, {2} - customer roles
