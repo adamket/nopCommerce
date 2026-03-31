@@ -4,7 +4,7 @@ using Nop.Core.Events;
 using Nop.Services.Events;
 
 namespace Apt.Nop.Plugin.Misc.Booster.EventConsumers;
-public class PageCacheEventConsumer(IStaticCacheManager cacheManager)
+public class BoosterEventConsumer(IStaticCacheManager cacheManager)
     : IConsumer<EntityUpdatedEvent<Product>>, IConsumer<EntityUpdatedEvent<Category>> , IConsumer<EntityUpdatedEvent<Manufacturer>>
 {
     public async Task HandleEventAsync(EntityUpdatedEvent<Product> eventMessage)

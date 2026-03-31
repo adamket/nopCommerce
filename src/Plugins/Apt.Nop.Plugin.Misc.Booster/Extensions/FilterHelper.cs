@@ -10,10 +10,10 @@ namespace Apt.Nop.Plugin.Misc.Booster.Extensions
     {
 
 
-        public static bool AllowFilter(this FilterContext filterContext, string controllerName, string actionName, BoosterSettings pageCacheSettings = null)
+        public static bool AllowFilter(this FilterContext filterContext, string controllerName, string actionName, BoosterSettings settings = null)
         {
-            pageCacheSettings ??= EngineContext.Current.Resolve<BoosterSettings>();
-            if (!pageCacheSettings.Enabled)
+            settings ??= EngineContext.Current.Resolve<BoosterSettings>();
+            if (!settings.Enabled)
                 return false;
 
             var isAction = filterContext.IsAction(controllerName, actionName);
