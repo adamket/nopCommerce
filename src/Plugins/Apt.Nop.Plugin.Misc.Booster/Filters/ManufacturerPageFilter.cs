@@ -106,7 +106,7 @@ namespace Apt.Nop.Plugin.Misc.Booster.Filters
                     var result = cachedModel.GetResult<ViewResult>();
 
                     if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
+                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.MANUFACTURER_CREATE_EDIT_DELETE))
                     {
                         //display "edit" (manage) link
                         nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Manufacturer",
