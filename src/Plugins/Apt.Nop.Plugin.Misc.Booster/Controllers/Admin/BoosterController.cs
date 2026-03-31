@@ -35,6 +35,7 @@ public class BoosterController(
             ManufacturerPageCacheLengthMinutes = settings.ManufacturerPageCacheLengthMinutes,
             CategoryPageCacheLengthMinutes = settings.CategoryPageCacheLengthMinutes,
             ProductDetailsPageCacheLengthMinutes = settings.ProductDetailsPageCacheLengthMinutes,
+            
             Enabled = settings.Enabled,
             AvailableCustomerRoles = customerRoles.Select(q => new SelectListItem(q.Name, q.Id.ToString())).ToList(),
             PageModifyingCustomerRoleIds = settings.PageModifyingCustomerRoleIds ?? new List<int>(),
@@ -46,6 +47,7 @@ public class BoosterController(
             model.ManufacturerPageCacheLengthMinutes_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.ManufacturerPageCacheLengthMinutes, storeScope);
             model.CategoryPageCacheLengthMinutes_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.CategoryPageCacheLengthMinutes, storeScope);
             model.ProductDetailsPageCacheLengthMinutes_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.ProductDetailsPageCacheLengthMinutes, storeScope);
+            
             model.Enabled_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.Enabled, storeScope);
             model.PageModifyingCustomerRoleIds_OverrideForStore = await settingService.SettingExistsAsync(settings, x => x.PageModifyingCustomerRoleIds, storeScope);
         }
@@ -66,11 +68,13 @@ public class BoosterController(
         var settings = await settingService.LoadSettingAsync<BoosterSettings>(storeScope);
 
         //save settings
+        settings.ManufacturerPageCacheLengthMinutes = model.ManufacturerPageCacheLengthMinutes;
         settings.CategoryPageCacheLengthMinutes = model.CategoryPageCacheLengthMinutes;
         settings.ProductDetailsPageCacheLengthMinutes = model.ProductDetailsPageCacheLengthMinutes;
+        
         settings.Enabled = model.Enabled;
         settings.PageModifyingCustomerRoleIds = model.PageModifyingCustomerRoleIds?.ToList() ?? new List<int>();
-        settings.ManufacturerPageCacheLengthMinutes = model.ManufacturerPageCacheLengthMinutes;
+        
 
         /* We do not clear cache after each setting update.
          * This behavior can increase performance because cached settings will not be cleared
@@ -78,6 +82,7 @@ public class BoosterController(
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.ManufacturerPageCacheLengthMinutes, model.ManufacturerPageCacheLengthMinutes_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.CategoryPageCacheLengthMinutes, model.CategoryPageCacheLengthMinutes_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.ProductDetailsPageCacheLengthMinutes, model.ProductDetailsPageCacheLengthMinutes_OverrideForStore, storeScope, false);
+      
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.Enabled, model.Enabled_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(settings, x => x.PageModifyingCustomerRoleIds, model.PageModifyingCustomerRoleIds_OverrideForStore, storeScope, false);
        

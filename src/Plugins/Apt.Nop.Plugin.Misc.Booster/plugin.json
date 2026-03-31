@@ -1,11 +1,11 @@
 ﻿{
   "Group": "Misc",
-  "FriendlyName": "Page Cache",
-  "SystemName": "Apt.Nop.Plugin.Misc.PageCache",
+  "FriendlyName": "Booster",
+  "SystemName": "Apt.Nop.Plugin.Misc.Booster",
   "Version": "1.0",
   "SupportedVersions": [ "4.90" ],
   "Author": "Aperture Labs",
   "DisplayOrder": 1,
-  "FileName": "Apt.Nop.Plugin.Misc.PageCache.dll",
-  "Description": "Page Cache improves storefront performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times."
+  "FileName": "Apt.Nop.Plugin.Misc.Booster.dll",
+  "Description": "Booster improves storefront performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times."
 }

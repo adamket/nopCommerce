@@ -59,7 +59,7 @@ public class BoosterPlugin : BasePlugin, IMiscPlugin
         await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
         {
             ["Plugins.Misc.Booster.Instructions"] =
-                "Page Cache improves storefront product and category page performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times.",
+                "Booster improves storefront product and category page performance by storing fully cached pages for a configurable duration. Cached pages are served instantly to customers, reducing server load and improving response times.",
 
             ["Aperture.Plugins.Misc.Booster.Fields.CategoryPageCacheLengthMinutes"] =
                 "Category page cache duration (minutes)",
