@@ -6,7 +6,7 @@
     <Company>Aperture Labs</Company>
     <Authors>Aperture Labs</Authors>
 
-    <OutputPath>..\..\Presentation\Nop.Web\Plugins\Apt.Misc.PageCache\</OutputPath>
+    <OutputPath>..\..\Presentation\Nop.Web\Plugins\Apt.Misc.Booster\</OutputPath>
     <OutDir>$(OutputPath)</OutDir>
 
     <!--
