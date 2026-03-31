@@ -7,11 +7,11 @@
 
 @await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
 
-<form asp-controller="PageCache" asp-action="Configure" method="post">
+<form asp-controller="Booster" asp-action="Configure" method="post">
     <div class="cards-group">
         <div class="card card-default">
             <div class="card-body">
-                <p>@T("Plugins.Misc.PageCache.Instructions")</p>
+                <p>@T("Plugins.Misc.Booster.Instructions")</p>
                 <div class="form-group row">
                     <div class="col-md-3">
                         <nop-override-store-checkbox asp-for="Enabled_OverrideForStore" asp-input="Enabled" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
@@ -23,6 +23,16 @@
                     </div>
                 </div>
 
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="ManufacturerPageCacheLengthMinutes_OverrideForStore" asp-input="ManufacturerPageCacheLengthMinutes" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="ManufacturerPageCacheLengthMinutes" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="ManufacturerPageCacheLengthMinutes" />
+                        <span asp-validation-for="ManufacturerPageCacheLengthMinutes"></span>
+                    </div>
+                </div>
 
                 <div class="form-group row">
                     <div class="col-md-3">
@@ -45,7 +55,7 @@
                         <span asp-validation-for="ProductDetailsPageCacheLengthMinutes"></span>
                     </div>
                 </div>
-                
+
                 <!-- Customer roles multi-select (uses the site's standard ACL pattern) -->
                 <div class="form-group row">
                     <div class="col-md-3">
@@ -54,8 +64,8 @@
                     </div>
                     <div class="col-md-9">
                         <nop-select asp-for="PageModifyingCustomerRoleIds" asp-items="Model.AvailableCustomerRoles" asp-multiple="true" />
-                       @*  <span class="form-text text-muted">Select one or more customer roles whose presence on a page should mark that page as modifying (affect cache).</span> *@
-                       
+                        @*  <span class="form-text text-muted">Select one or more customer roles whose presence on a page should mark that page as modifying (affect cache).</span> *@
+
 
                         <script>
                             $(function () {
@@ -63,10 +73,10 @@
                                     closeOnSelect: false,
                                     @if (!Model.AvailableCustomerRoles?.Any() ?? true)
                                     {
-                                        <text>
-                                            disabled: true,
-                                            placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
-                                        </text>
+                                            <text>
+                                                disabled: true,
+                                                placeholder: '@T("Admin.Configuration.ACL.NoCustomerRolesAvailable")',
+                                            </text>
                                     }
                                 });
                             });
