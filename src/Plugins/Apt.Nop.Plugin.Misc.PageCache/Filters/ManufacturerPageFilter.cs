@@ -72,10 +72,10 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var containsCouponCodes =
                     filterContext.HttpContext.Request.Query.TryGetValue(
                         NopDiscountDefaults.DiscountCouponQueryParameter,
-                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
+                        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes); //paging, filtering, etc
 
                 var containsQueryParameter =
-                    filterContext.HttpContext.Request.Query.Any(); //TODO why did I do this again?
+                    filterContext.HttpContext.Request.Query.Any(); 
 
                 if (!containsManufacturerId
                     || containsCouponCodes
@@ -86,8 +86,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
                 var cacheKey =
                     new CacheKey(string.Format(PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, catId, currentStore.Id,
-                            rolesStr))
-                    { CacheTime = int.MaxValue };
+                            rolesStr));
                 var cachedModel = await
                     staticCacheManager.GetAsync<ActionResultCacheItem<ManufacturerModel>>(cacheKey, async () => null);
                 if (cachedModel != null)
@@ -107,7 +106,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                     var result = cachedModel.GetResult<ViewResult>();
 
                     if (await permissionService.AuthorizeAsync(StandardPermission.Security.ACCESS_ADMIN_PANEL) &&
-                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.CATEGORIES_CREATE_EDIT_DELETE))
+                        await permissionService.AuthorizeAsync(StandardPermission.Catalog.MANUFACTURER_CREATE_EDIT_DELETE))
                     {
                         //display "edit" (manage) link
                         nopHtmlHelper.AddEditPageUrl(urlHelper.Action("Edit", "Manufacturer",
@@ -145,7 +144,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
                 var rolesStr = await currentCustomer.GetCustomerRoleIdsStrDescAsync();
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT, manufacturerPageResult.Model.Id, currentStore.Id, rolesStr),
-                    [PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT + manufacturerPageResult.Model.Id])
+                    [PageCacheConstants.MANUFACTURER_PAGE_CACHE_KEY_FORMAT + manufacturerPageResult.Model.Id])
                 {
                     CacheTime = pageCacheSettings.ManufacturerPageCacheLengthMinutes,
                 };

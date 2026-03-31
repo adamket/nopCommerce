@@ -71,6 +71,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
                                                && Convert.ToInt32(
                                                    filterContext.ActionArguments["updatecartitemid"] ?? "0") > 0;
 
+                //as long as we don't cache if customer has coupon code, it doesn't matter if it contains coupon codes
                 //var containsCouponCodes =
                 //    filterContext.HttpContext.Request.Query.TryGetValue(NopDiscountDefaults.DiscountCouponQueryParameter,
                 //        out var couponCodes) && !StringValues.IsNullOrEmpty(couponCodes);
@@ -137,7 +138,7 @@ namespace Apt.Nop.Plugin.Misc.PageCache.Filters
 
 
                 var cacheKey = new CacheKey(string.Format(PageCacheConstants.PDP_CACHE_KEY_FORMAT,
-                    pdpResult.Model.Id, store.Id, rolesStr), [PageCacheConstants.CATEGORY_PAGE_CACHE_KEY_FORMAT + pdpResult.Model.Id])
+                    pdpResult.Model.Id, store.Id, rolesStr), [PageCacheConstants.PDP_CACHE_KEY_FORMAT + pdpResult.Model.Id])
                 {
                     CacheTime = pageCacheSettings.ProductDetailsPageCacheLengthMinutes,
                 };
