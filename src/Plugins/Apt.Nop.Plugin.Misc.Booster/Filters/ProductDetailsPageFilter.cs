@@ -1,15 +1,10 @@
-﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
-using Apt.Nop.Plugin.Misc.Booster.Types;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.Extensions.Primitives;
 using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
-using Nop.Services.Discounts;
-using Nop.Services.Logging;
 using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.UI;

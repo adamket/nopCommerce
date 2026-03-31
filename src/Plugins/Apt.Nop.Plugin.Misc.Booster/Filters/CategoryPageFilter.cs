@@ -1,14 +1,9 @@
-﻿using Apt.Nop.Plugin.Misc.Booster.Extensions;
-using Apt.Nop.Plugin.Misc.Booster.Types;
-using DocumentFormat.OpenXml.Wordprocessing;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Primitives;
 using Nop.Core;
 using Nop.Core.Caching;
-using Nop.Core.Domain.Customers;
-using Nop.Services.Catalog;
 using Nop.Services.Common;
 using Nop.Services.Discounts;
 using Nop.Services.Security;
