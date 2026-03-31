@@ -50,7 +50,8 @@ public class BoosterPlugin : BasePlugin, IMiscPlugin
         var settings = new BoosterSettings
         {
             CategoryPageCacheLengthMinutes = 60,
-            ProductDetailsPageCacheLengthMinutes = 60
+            ProductDetailsPageCacheLengthMinutes = 60,
+            ManufacturerPageCacheLengthMinutes = 60
         };
         await _settingService.SaveSettingAsync(settings);
 
