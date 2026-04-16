@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Nop.Core.Configuration;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
-public class OneTimePasscodeSettings : ISettings
+public class OtpSettings : ISettings
 {
     public string TwilioAccountSid {get;set;}
     public string TwilioAuthToken { get; set; }

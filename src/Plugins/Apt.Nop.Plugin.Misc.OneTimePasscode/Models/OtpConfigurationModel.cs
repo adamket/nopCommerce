@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
-public class OneTimePasscodeModel
+public class OtpConfigurationModel
 {
     public string TwilioAccountSid { get; set; } 
     public string TwilioAuthToken { get; set; } 

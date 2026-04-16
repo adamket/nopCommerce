@@ -20,17 +20,8 @@ public class PluginNopStartup : INopStartup
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<ITwilioService, TwilioService>();
-        //services.AddTransient<AzureThumbService>();
-        //services.AddTransient<ThumbService>();
-        //services.AddTransient<IThumbService>(provider =>
-        //{
-        //    var settings = provider.GetRequiredService<AzureBlobSettings>();
-
-        //    if (settings.Enabled && !string.IsNullOrEmpty(settings.ConnectionString) && !string.IsNullOrEmpty(settings.EndPoint))
-        //        return provider.GetRequiredService<AzureThumbService>();
-
-        //    return provider.GetRequiredService<ThumbService>();
-        //});
+        services.AddScoped<ICustomWorkflowMessageService, CustomWorkflowMessageService>();
+        services.AddScoped<ICustomGenericAttributeService, CustomGenericAttributeService>();
     }
 
     /// <summary>

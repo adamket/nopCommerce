@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
 
-public class TwilioService(IHttpClientFactory httpClientFactory, OneTimePasscodeSettings settings)
+public class TwilioService(IHttpClientFactory httpClientFactory, OtpSettings settings)
     : ITwilioService
 {
  
