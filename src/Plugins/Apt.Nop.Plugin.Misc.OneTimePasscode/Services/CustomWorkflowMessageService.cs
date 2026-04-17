@@ -58,7 +58,7 @@ public class CustomWorkflowMessageService(
             var tokens = new List<Token>();
             await _messageTokenProvider.AddStoreTokensAsync(tokens, store, emailAccount, languageId);
             await _messageTokenProvider.AddCustomerTokensAsync(tokens, customer);
-            tokens.Add(new Token("OtpLogin.Otp", rawOtp));
+            tokens.Add(new Token("Otp.Code", rawOtp));
 
             //event notification
             await _eventPublisher.MessageTokensAddedAsync(messageTemplate, tokens);

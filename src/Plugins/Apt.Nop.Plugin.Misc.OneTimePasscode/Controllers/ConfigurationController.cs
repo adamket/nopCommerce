@@ -57,15 +57,18 @@ public class ConfigurationController : BasePluginController
     {
         var model = new OtpConfigurationModel();
 
-        // load settings for active store scope (0 = all stores)
         var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
         var settings = await _settingService.LoadSettingAsync<OtpSettings>(storeScope);
 
         model.TwilioAccountSid = settings.TwilioAccountSid;
         model.TwilioAuthToken = settings.TwilioAuthToken;
         model.TwilioFromNumber = settings.TwilioFromNumber;
+        model.OtpGenerationIntervalSeconds = settings.OtpGenerationIntervalSeconds;
+        model.OtpValidationIntervalSeconds = settings.OtpValidationIntervalSeconds;
+        model.OtpExpiresAfterMinutes = settings.OtpExpiresAfterMinutes;
 
-        return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configure.cshtml", model);
+
+        return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configuration/Configure.cshtml", model);
     }
 
     [HttpPost("/admin/apt/otp/configure")]
@@ -81,22 +84,19 @@ public class ConfigurationController : BasePluginController
         settings.TwilioAccountSid = model.TwilioAccountSid ?? string.Empty;
         settings.TwilioAuthToken = model.TwilioAuthToken ?? string.Empty;
         settings.TwilioFromNumber = model.TwilioFromNumber ?? string.Empty;
+        settings.OtpGenerationIntervalSeconds = model.OtpGenerationIntervalSeconds;
+        settings.OtpValidationIntervalSeconds = model.OtpValidationIntervalSeconds;
+        settings.OtpExpiresAfterMinutes = model.OtpExpiresAfterMinutes;
 
-        // save settings for the store scope
         await _settingService.SaveSettingAsync(settings);
 
-        // clear settings cache
         await _settingService.ClearCacheAsync();
 
-        // notify admin
         var savedMessage = await _localizationService.GetResourceAsync("Admin.Plugins.Saved");
         _notificationService.SuccessNotification(savedMessage);
 
 
         await _twilioService.SendSmsAsync(settings.TwilioFromNumber, "8777804236", $"Your one time passcode is {Guid.NewGuid()}");
-
-
-
         return await Configure();
     }
 

@@ -1,28 +1,39 @@
+﻿
 
-
-
-
-<div class="otp-container">
-    <p class="otp-label">@T("apt.otp.modal.prompt")@* Enter the 6-digit code sent to your device *@</p>
-
-    <div class="full-width text-center">
-        <div class="otp-validation-wrap">
-            <div class="otp-validation-flag" data-otp-validation role="alert" aria-live="polite">
-                
-            </div>
-            <div class="otp-fields">
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 1" data-index="0" data-enter-clicks="verify-otp">
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 2" data-index="1" data-enter-clicks="verify-otp">
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 3" data-index="2" data-enter-clicks="verify-otp">
-                <span class="otp-sep" aria-hidden="true">�</span>
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 4" data-index="3" data-enter-clicks="verify-otp">
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 5" data-index="4" data-enter-clicks="verify-otp">
-                <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 6" data-index="5" data-enter-clicks="verify-otp">
-            </div>
-            <p class="otp-status" id="otpStatus"></p>
-        </div>
+<div class="otp-step-2">
+    <div class="mt-body-title">
+        <div>@T("apt.otp.modal.prompt", Model.Email)</div>
+        <div class="mt-10px">Wrong email?  <a href="javascript:;" data-otp-back class="underline">Change it here</a>.</div>
     </div>
-    <div>
-        <button class="button-1" data-otp-submit id="verify-otp">Submit</button>
+    <div class="mt-body-container otp-container">
+
+        <div class="full-width text-center otp-entry-row bg-soft-gray">
+
+            <div class="otp-validation-wrap">
+                <div class="otp-validation-flag" data-otp-validation role="alert" aria-live="polite">
+                </div>
+
+                <div class="otp-fields">
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 1" data-index="0" data-enter-clicks="verify-otp">
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 2" data-index="1" data-enter-clicks="verify-otp">
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 3" data-index="2" data-enter-clicks="verify-otp">
+                    <span class="otp-sep" aria-hidden="true">–</span>
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 4" data-index="3" data-enter-clicks="verify-otp">
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 5" data-index="4" data-enter-clicks="verify-otp">
+                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 6" data-index="5" data-enter-clicks="verify-otp">
+                </div>
+            </div>
+            <button class="button-1 otp-login-btn" data-otp-submit id="verify-otp">
+                Login
+            </button>
+
+        </div>
+
+    </div>
+
+    <div class="mt-body-footer">
+        <button class="otp-back-btn btn-muted" type="button" data-otp-back>
+            Resend code
+        </button>
     </div>
 </div>
