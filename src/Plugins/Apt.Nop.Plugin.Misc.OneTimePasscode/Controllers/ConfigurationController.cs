@@ -96,7 +96,7 @@ public class ConfigurationController : BasePluginController
         _notificationService.SuccessNotification(savedMessage);
 
 
-        await _twilioService.SendSmsAsync(settings.TwilioFromNumber, "8777804236", $"Your one time passcode is {Guid.NewGuid()}");
+      //  await _twilioService.SendSmsAsync(settings.TwilioFromNumber, "8777804236", $"Your one time passcode is {Guid.NewGuid()}");
         return await Configure();
     }
 

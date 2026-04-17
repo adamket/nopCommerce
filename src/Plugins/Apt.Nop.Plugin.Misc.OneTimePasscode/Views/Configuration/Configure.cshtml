@@ -1,14 +1,14 @@
 ﻿@using Apt.Nop.Plugin.Misc.OneTimePasscode.Models
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using Nop.Web.Areas.Admin.Components
-@model OneTimePasscodeConfigurationModel
+@model OtpConfigurationModel
 @{
     Layout = "_ConfigurePlugin";
 }
 
 @await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
 
-<form asp-controller="OneTimePasscode" asp-action="Configure" method="post" class="form-horizontal">
+<form asp-controller="Configuration" asp-action="Configure" method="post" class="form-horizontal">
     <div class="cards-group">
         <div class="card card-default">
             <div class="card-body">

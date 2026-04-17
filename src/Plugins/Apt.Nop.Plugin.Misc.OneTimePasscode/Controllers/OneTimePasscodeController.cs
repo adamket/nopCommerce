@@ -76,7 +76,7 @@ public class OneTimePasscodeController : BasePublicController
 
     #region Methods
     [HttpPost("apt/request-otp")]
-    public virtual async Task<IActionResult> RequestLoginOtp(string email)
+    public virtual async Task<IActionResult> RequestLoginOtp(string email, bool generateOtp = true)
     {
         if (!CommonHelper.IsValidEmail(email))
         {
@@ -99,15 +99,24 @@ public class OneTimePasscodeController : BasePublicController
             });
         }
 
-        var (existingOtp, otpCreatedUpdatedOn) = await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(customer,
-            OtpConstants.OtpLoginCode_GA_KEY);
-
-        if (!string.IsNullOrEmpty(existingOtp) && otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds) > DateTime.UtcNow)
+        if (!generateOtp)
         {
-            return this.OtpJsonError($"Please wait at least {_otpSettings.OtpGenerationIntervalSeconds} seconds before requesting another passcode.", new
-            {
-                prematureOtpRequest = true
-            });
+            return this.OtpJsonSuccess(new { markup });
+        }
+
+        var (existingOtp, otpCreatedUpdatedOn) =
+            await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(customer,
+                OtpConstants.OtpLoginCode_GA_KEY);
+
+        if (!string.IsNullOrEmpty(existingOtp)
+            && otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds) > DateTime.UtcNow)
+        {
+            var availableAt = otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds);
+            var secondsLeft = (int)Math.Ceiling((availableAt - DateTime.UtcNow).TotalSeconds);
+
+            return this.OtpJsonError(
+                $"Please wait at least {_otpSettings.OtpGenerationIntervalSeconds} seconds before requesting another passcode.",
+                new { prematureOtpRequest = true, canResendInSeconds = Math.Max(0, secondsLeft) });
         }
 
         var loginOtpCode = GeneratePasswordRecoverToken(6);
@@ -124,18 +133,23 @@ public class OneTimePasscodeController : BasePublicController
         var store = await _storeContext.GetCurrentStoreAsync();
         var language = await _workContext.GetWorkingLanguageAsync();
 
-        var emailIds = await _workflowMessageService.SendOtpPasscodeNotificationAsync(customer, loginOtpCode, store.Id, language.Id);
+        var emailIds =
+            await _workflowMessageService.SendOtpPasscodeNotificationAsync(customer, loginOtpCode, store.Id,
+                language.Id);
         if (!emailIds.Any())
         {
-            await _logger.ErrorAsync("An error occurred attempting to send an OTP email.", null, await _workContext.GetCurrentCustomerAsync());
+            await _logger.ErrorAsync("An error occurred attempting to send an OTP email.", null,
+                await _workContext.GetCurrentCustomerAsync());
             return this.OtpJsonError("An error occurred and no email was sent");
         }
 
         await _customerActivityService.InsertActivityAsync(customer, OtpConstants.OtpLoginActivitySystemName,
             await _localizationService.GetResourceAsync("ActivityLog.PublicStore.OtpRequest"));
+
         return this.OtpJsonSuccess(new
         {
-            markup
+            markup,
+            canResendInSeconds = _otpSettings.OtpGenerationIntervalSeconds
         });
 
     }
@@ -162,7 +176,7 @@ public class OneTimePasscodeController : BasePublicController
 
         if (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < DateTime.UtcNow)
         {
-            return this.OtpJsonError("This code has expired. Please request a new one to continue.");
+            return this.OtpJsonError("This code has expired. Please resend a new one to continue.");
         }
 
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(customer,
