@@ -1,31 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Extensions;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
-using DocumentFormat.OpenXml.EMMA;
-using FluentMigrator.Runner.Processors.Firebird;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Events;
 using Nop.Services.Authentication;
-using Nop.Services.Configuration;
 using Nop.Services.Customers;
 using Nop.Services.Localization;
 using Nop.Services.Logging;
 using Nop.Services.Messages;
 using Nop.Services.Orders;
-using Nop.Services.Security;
-using Nop.Services.Stores;
 using Nop.Web.Controllers;
-using Nop.Web.Framework;
-using Nop.Web.Framework.Controllers;
-using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Controllers;
 [AutoValidateAntiforgeryToken]
@@ -84,7 +71,7 @@ public class OneTimePasscodeController : BasePublicController
         }
 
         var markup = await this.RenderPartialViewToStringAsync(
-           "~/plugins/apt.misc.onetimepasscode/views/_Otp.input.cshtml",
+           $"~/{OtpConstants.PathToPlugin}/views/_Otp.input.cshtml",
             new OtpLoginModel
             {
                 Email = MaskEmail(email)

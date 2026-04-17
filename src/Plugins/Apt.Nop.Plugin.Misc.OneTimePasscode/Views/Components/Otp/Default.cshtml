@@ -1,0 +1,20 @@
+@{
+    NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.modal-tools.js");
+    NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.otp.js");
+    NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.otp-input.js");
+    NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.shared.js");
+    NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.modal-tools.css");
+    NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.otp.css");
+}
+
+@await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
+
+<script asp-location="Footer">
+    apt.otp.init();
+    apt.otpInput.init({
+        selector: ".otp-field",
+        pasteCallback: function(){
+            document.getElementById("verify-otp").click();
+        }
+    });
+</script>

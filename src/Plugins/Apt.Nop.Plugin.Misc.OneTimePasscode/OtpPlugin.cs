@@ -1,7 +1,9 @@
-﻿using Nop.Core;
+﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Components;
+using Nop.Core;
 using Nop.Core.Domain.Logging;
 using Nop.Core.Domain.Messages;
 using Nop.Data;
+using Nop.Services.Cms;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
@@ -11,21 +13,15 @@ using Nop.Services.Plugins;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
 
-/// <summary>
-/// Represents the One Time Passcode plugin
-/// </summary>
-public class OtpPlugin : BasePlugin, IMiscPlugin
+public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
 {
     #region Fields
-
     private readonly IWebHelper _webHelper;
     private readonly ISettingService _settingService;
     private readonly ILocalizationService _localizationService;
     private readonly IMessageTemplateService _messageTemplateService;
     private readonly ICustomerActivityService _customerActivityService;
     private readonly IRepository<ActivityLogType> _activityLogTypeRepository; 
-
-
     #endregion
 
     #region Ctor
@@ -49,20 +45,14 @@ public class OtpPlugin : BasePlugin, IMiscPlugin
 
     #region Methods
 
-    /// <summary>
-    /// Gets a configuration page URL
-    /// </summary>
+
     public override string GetConfigurationPageUrl()
     {
         return $"{_webHelper.GetStoreLocation()}admin/apt/otp/configure";
     }
 
-    /// <summary>
-    /// Install the plugin
-    /// </summary>
     public override async Task InstallAsync()
     {
-        // message template for OTP
         var otpTemplate = (await _messageTemplateService.GetMessageTemplatesByNameAsync(OtpConstants.MessageTemplateSystemName)).FirstOrDefault();
         if (otpTemplate == null)
         {
@@ -78,7 +68,6 @@ public class OtpPlugin : BasePlugin, IMiscPlugin
             await _messageTemplateService.InsertMessageTemplateAsync(otpTemplate);
         }
 
-        // activity type for OTP login
         var activityType =
             _activityLogTypeRepository.Table.FirstOrDefault(q =>
                 q.SystemKeyword == OtpConstants.OtpLoginActivitySystemName);
@@ -91,22 +80,14 @@ public class OtpPlugin : BasePlugin, IMiscPlugin
                 Name = "Customer login with one-time passcode",
                 Enabled = true
             };
-
              await _activityLogTypeRepository.InsertAsync(activityType);
         }
 
-
-
         //apt.opt.modal.prompt
         //apt.opt.modal.title
-
-
         await base.InstallAsync();
     }
 
-    /// <summary>
-    /// Uninstall the plugin
-    /// </summary>
     public override async Task UninstallAsync()
     {
         // remove message template
@@ -127,4 +108,15 @@ public class OtpPlugin : BasePlugin, IMiscPlugin
     }
 
     #endregion
+
+    public bool HideInWidgetList => false;
+    public async Task<IList<string>> GetWidgetZonesAsync()
+    {
+        return new List<string> { "login_bottom" };
+    }
+
+    public Type GetWidgetViewComponent(string widgetZone)
+    {
+        return typeof(OtpViewComponent);
+    }
 }

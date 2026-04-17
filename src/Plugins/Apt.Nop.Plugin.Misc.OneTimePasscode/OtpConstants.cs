@@ -13,4 +13,5 @@ public static class OtpConstants
     public const string MessageTemplateSystemName = "OtpRequested.CustomerNotificaton";
     public const string OtpLoginActivitySystemName = "Apt.OneTimePasscode.Customer.LoginWithOtp";
 
+    public const string PathToPlugin = "~/Plugins/Apt.Misc.OneTimePasscode";
 }
