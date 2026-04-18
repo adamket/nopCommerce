@@ -5,6 +5,7 @@ using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Customers;
+using Nop.Core.Domain.Logging;
 using Nop.Core.Events;
 using Nop.Services.Authentication;
 using Nop.Services.Customers;
@@ -68,7 +69,7 @@ public class OneTimePasscodeController : BasePublicController
         if (!CommonHelper.IsValidEmail(email))
         {
             
-            return Json(new { errorMessage = "Please enter a valid email address." });
+            return Json(new { errorMessage = await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.invalid-email")/*"Please enter a valid email address."*/ });
         }
 
         var markup = await this.RenderPartialViewToStringAsync(
@@ -89,7 +90,7 @@ public class OneTimePasscodeController : BasePublicController
                 });
             }
 
-            return this.OtpJsonError("No account found associated with this email address");
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.customer-not-found")/*"No account found associated with this email address*/);
         }
 
         if (!generateOtp)
@@ -107,8 +108,11 @@ public class OneTimePasscodeController : BasePublicController
             var availableAt = otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds);
             var secondsLeft = (int)Math.Ceiling((availableAt - DateTime.UtcNow).TotalSeconds);
 
-            return this.OtpJsonError(
-                $"Please wait at least {_otpSettings.OtpGenerationIntervalSeconds} seconds before requesting another passcode.",
+            var message = StringExtensions.SafeFormat(
+                await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.requested-generation-too-soon"), _otpSettings.OtpGenerationIntervalSeconds);
+          
+            return this.OtpJsonError(message,
+                //$"Please wait at least {_otpSettings.OtpGenerationIntervalSeconds} seconds before requesting another passcode.",
                 new { prematureOtpRequest = true, canResendInSeconds = Math.Max(0, secondsLeft) });
         }
 
@@ -131,13 +135,13 @@ public class OneTimePasscodeController : BasePublicController
                 language.Id);
         if (!emailIds.Any())
         {
-            await _logger.ErrorAsync("An error occurred attempting to send an OTP email.", null,
+            await _logger.InsertLogAsync(LogLevel.Error, "A one time passcode was requested, but no email sent.", "Please verify the logs directly prior, and that your message templates are properly configured.",
                 await _workContext.GetCurrentCustomerAsync());
-            return this.OtpJsonError("An error occurred and no email was sent");
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.no-email-sent")/*"An error occurred and no email was sent"*/);
         }
 
         await _customerActivityService.InsertActivityAsync(customer, OtpConstants.OtpLoginActivitySystemName,
-            await _localizationService.GetResourceAsync("ActivityLog.PublicStore.OtpRequest"));
+            await _localizationService.GetResourceAsync("apt.plugins.misc.otp.activity-log.public-store.otp-requested"));
 
         return this.OtpJsonSuccess(new
         {
@@ -153,7 +157,7 @@ public class OneTimePasscodeController : BasePublicController
         var customer = await _customerService.GetCustomerByEmailAsync(model.Email.Trim());
         if (customer == null || !customer.Active || customer.Deleted)
         {
-            return this.OtpJsonError("Incorrect code");
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.incorrect-code"));//incorrect code
         }
 
         var (storedOtp, otpCreatedUpdatedOn) = await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(customer,
@@ -164,12 +168,15 @@ public class OneTimePasscodeController : BasePublicController
 
         if (recentlyAttemptedDate.HasValue && recentlyAttemptedDate.Value.AddSeconds(_otpSettings.OtpValidationIntervalSeconds) > DateTime.UtcNow)
         {
-            return this.OtpJsonError($"Please wait at least {_otpSettings.OtpValidationIntervalSeconds} seconds in between attempts");
+            return this.OtpJsonError(StringExtensions.SafeFormat(
+                await _localizationService.GetResourceAsync(
+                    "apt.plugins.misc.otp.errors.requested-validation-too-soon"),
+                _otpSettings.OtpValidationIntervalSeconds)); /*$"Please wait at least {_otpSettings.OtpValidationIntervalSeconds} seconds in between attempts"*/
         }
 
         if (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < DateTime.UtcNow)
         {
-            return this.OtpJsonError("This code has expired. Please resend a new one to continue.");
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.otp-expired")/*"This code has expired. Please resend a new one to continue."*/);
         }
 
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(customer,
@@ -177,14 +184,12 @@ public class OneTimePasscodeController : BasePublicController
 
         var otpBytes = Encoding.UTF8.GetBytes(model.Otp);
         var saltBytes = customer.CustomerGuid.ToByteArray();
-
         var saltedBytes = CombineBytes(otpBytes, saltBytes);
-
         var loginOtpCodeHash = HashHelper.CreateHash(saltedBytes, "SHA256");
 
         if (storedOtp == null || storedOtp != loginOtpCodeHash?.Trim())
         {
-            return this.OtpJsonError("Incorrect code");
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.incorrect-code"));
         }
 
         await _shoppingCartService.MigrateShoppingCartAsync(await _workContext.GetCurrentCustomerAsync(), customer, true);
@@ -193,11 +198,12 @@ public class OneTimePasscodeController : BasePublicController
         await _eventPublisher.PublishAsync(new CustomerLoggedinEvent(customer));
         await _genericAttributeService.SaveAttributeAsync(customer, OtpConstants.OtpLoginCode_GA_KEY, (string)null);
         await _customerActivityService.InsertActivityAsync(customer, OtpConstants.OtpLoginActivitySystemName,
-            await _localizationService.GetResourceAsync("ActivityLog.PublicStore.OtpLogin"));
+            await _localizationService.GetResourceAsync("apt.plugins.misc.otp.activity-log.public-store.otp-login"));
 
         await _customerService.UpdateCustomerAsync(customer);
 
-        _notificationService.SuccessNotification($"Logged-in as {model.Email}.");
+        _notificationService.SuccessNotification(StringExtensions.SafeFormat(
+            await _localizationService.GetResourceAsync("apt.plugins.misc.otp.notification.logged-in"), model.Email)/*$"Logged-in as {model.Email}."*/);
 
         return this.OtpJsonSuccess();
     }
