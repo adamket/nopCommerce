@@ -88,6 +88,7 @@
 
       if (response.success) {
         if (resend) {
+          apt.otpInput.resetCode(document.querySelector(settings.selectors.step2Container));
           if (response.canResendInSeconds) {
             btn.loading(false);
             setCountdown(btn, response.canResendInSeconds);
@@ -124,7 +125,7 @@
       return;
     }
 
-    var otp = apt.otpInput.getCode(document.querySelector(settings.selectors.wrapperElement));
+    var otp = apt.otpInput.getCode(document.querySelector(settings.selectors.step2Container));
 
     if (otp.length < 6) {
       apt.otp.showOtpValidation("Please ensure all values are entered.", settings.selectors.step2Container);

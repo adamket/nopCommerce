@@ -71,7 +71,7 @@ public class OneTimePasscodeController : BasePublicController
         }
 
         var markup = await this.RenderPartialViewToStringAsync(
-           $"~/{OtpConstants.PathToPlugin}/views/_Otp.input.cshtml",
+           $"{OtpConstants.PathToPlugin}/views/_Otp.Validate.cshtml",
             new OtpLoginModel
             {
                 Email = MaskEmail(email)

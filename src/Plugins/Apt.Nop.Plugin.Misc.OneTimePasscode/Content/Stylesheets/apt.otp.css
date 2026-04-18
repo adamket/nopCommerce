@@ -323,6 +323,25 @@
   }
 }
 
+
+
+/* Initial state */
+.otp-entry-animate {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+  /* Animated in */
+  .otp-entry-animate.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+
+
+
+
 @media (max-width: 380px) {
   .otp-fields {
     gap: 4px;

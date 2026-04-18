@@ -26,6 +26,16 @@
     return str;
   };
 
+  otpInput.resetCode = function (wrapper) {
+    const boxes = wrapper.querySelectorAll(otpFieldSelector);
+
+    boxes.forEach((el, i) => {
+      el.value = '';
+      el.classList.remove('filled', 'error');
+    });
+
+    boxes[0]?.focus();
+  };
 
   otpInput.focus = function (ix) {
 

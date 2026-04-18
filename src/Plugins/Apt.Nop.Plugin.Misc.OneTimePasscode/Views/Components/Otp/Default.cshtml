@@ -10,6 +10,23 @@
 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
 
 <script asp-location="Footer">
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var loginBtn = document.querySelector(".login-button");
+
+      loginBtn.insertAdjacentHTML(
+        'afterend',
+        "<div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#otp'>Login with one-time code</button></div>"
+      );
+
+      var newEl = loginBtn.nextElementSibling;
+
+      // Trigger animation on next frame
+      requestAnimationFrame(() => {
+        newEl.classList.add("is-visible");
+      });
+    });
+
     apt.otp.init();
     apt.otpInput.init({
         selector: ".otp-field",

@@ -10,6 +10,7 @@
         </div>
         <div class="mt-body">
             <div class="otp-step-1">
+                @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Request.cshtml")
             </div>
             <div class="otp-step-2" style="display:none"></div>
         </div>
