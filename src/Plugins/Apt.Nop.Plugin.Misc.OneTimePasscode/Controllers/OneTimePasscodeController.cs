@@ -67,6 +67,7 @@ public class OneTimePasscodeController : BasePublicController
     {
         if (!CommonHelper.IsValidEmail(email))
         {
+            
             return Json(new { errorMessage = "Please enter a valid email address." });
         }
 
@@ -80,10 +81,15 @@ public class OneTimePasscodeController : BasePublicController
         var customer = await _customerService.GetCustomerByEmailAsync(email.Trim());
         if (customer == null || !customer.Active || customer.Deleted)
         {
-            return this.OtpJsonSuccess(new
+            if (_otpSettings.AlwaysForwardToOtpInput)
             {
-                markup
-            });
+                return this.OtpJsonSuccess(new
+                {
+                    markup
+                });
+            }
+
+            return this.OtpJsonError("No account found associated with this email address");
         }
 
         if (!generateOtp)

@@ -1,6 +1,6 @@
 ﻿<div class="mt-body-title">
-    <div>@T("apt.otp.modal.prompt", Model.Email)</div>
-    <div class="mt-10px">Wrong email?  <a href="javascript:;" data-otp-back class="underline">Change it here</a>.</div>
+    <div>@T("apt.plugins.misc.otp.modal.prompt", Model.Email)</div>
+    <div class="mt-10px">@T("apt.plugins.misc.otp.modal.wrong-email.prompt")<a href="javascript:;" data-otp-back class="underline">@T("apt.plugins.misc.otp.modal.change-email.prompt")</a>.</div>
 </div>
 <div class="mt-body-container otp-container">
 
@@ -20,13 +20,15 @@
             </div>
         </div>
         <button class="button-1 otp-login-btn" data-otp-submit id="verify-otp">
-            Login
+            @T("apt.plugins.misc.otp.modal.login-button.text")
         </button>
     </div>
 </div>
 
 <div class="mt-body-footer">
     <button class="btn-muted" type="button" data-otp-send data-otp-resend>
-        Resend code
+        @T("apt.plugins.misc.otp.modal.resend-code-button.text")
     </button>
+
+    
 </div>

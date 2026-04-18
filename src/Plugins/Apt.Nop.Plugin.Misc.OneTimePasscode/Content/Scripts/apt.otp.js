@@ -5,6 +5,9 @@
   var settings = {
     sendUrl: "/apt/request-otp",
     verifyUrl: "/apt/otp-login",
+    localeStrings: {
+      resendTryAgainMessage: "Can resend again in"
+    },
     selectors: {
       emailInput: "[data-otp-email]",
       sendButton: "[data-otp-send]",
@@ -182,8 +185,8 @@
 
     runCountdown(sendAgainSeconds,
       (s) => {
-        btn.innerHTML =
-          `Can resend again in ${s}s`;
+        btn.innerHTML = String.format(settings.localeStrings.resendTryAgainMessage, s);
+         /* `${settings.localeStrings.resendTryAgainMessage} ${s}s`;*/
       },
       () => {
         btn.innerHTML =

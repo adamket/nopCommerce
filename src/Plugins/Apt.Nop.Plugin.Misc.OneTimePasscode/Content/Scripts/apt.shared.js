@@ -91,3 +91,11 @@ function runCountdown(durationSeconds, callback, done) {
 
   tick();
 }
+
+if (!String.format) {
+  String.format = function (str, ...args) {
+    return str.replace(/\{(\d+)\}/g, (match, index) => {
+      return args[index] !== undefined ? args[index] : match;
+    });
+  };
+}

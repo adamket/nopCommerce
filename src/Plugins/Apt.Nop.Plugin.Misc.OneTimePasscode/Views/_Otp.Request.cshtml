@@ -1,5 +1,5 @@
 <div class="mt-body-title">
-    Enter your email below and submit to receive a one-time passcode to log into your account.
+    @T("apt.plugins.misc.otp.modal.email.prompt")
 </div>
 <div class="otp-email-entry-row mt-body-container bg-soft-gray">
     <div class="otp-validation-wrap">
@@ -8,8 +8,8 @@
         <input type="text" class="otp-email-field" data-enter-clicks="send-otp" data-otp-email id="otp-email" placeholder="example@@email.com" />
 
     </div>
-    <button class="button-1" data-otp-send id="send-otp" data-otp-generate="true">Submit</button>
+    <button class="button-1" data-otp-send id="send-otp" data-otp-generate="true">@T("apt.plugins.misc.otp.modal.email.submit.text")</button>
 </div>
 <div class="mt-body-footer">
-    <button class="btn-muted" data-otp-send data-otp-generate="false">Already have a code?</button>
+    <button class="btn-muted" data-otp-send data-otp-generate="false">@T("apt.plugins.misc.otp.modal.forego-code-generation.text")</button>
 </div>

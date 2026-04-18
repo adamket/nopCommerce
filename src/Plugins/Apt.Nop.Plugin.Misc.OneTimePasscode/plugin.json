@@ -7,5 +7,5 @@
   "Author": "Aperture Labs",
   "DisplayOrder": 1,
   "FileName": "Apt.Nop.Plugin.Misc.OneTimePasscode.dll",
-  "Description": "OTP login"
+  "Description": "Enable secure, passwordless login using one-time passcodes (OTP) sent via email. This plugin allows customers to quickly authenticate without remembering passwords, improving user experience and ensuring account security. Configurable validation and resend intervals give you full control over the login flow."
 }
