@@ -5,18 +5,23 @@
     NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.shared.js");
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.modal-tools.css");
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.otp.css");
+    var buttonText = T("apt.plugins.misc.otp.open-modal-button").Text;
 }
 
 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
 
+
+
 <script asp-location="Footer">
+
 
     document.addEventListener("DOMContentLoaded", function () {
       var loginBtn = document.querySelector(".login-button");
 
+     
       loginBtn.insertAdjacentHTML(
         'afterend',
-        "<div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#otp'>Login with one-time code</button></div>"
+        "<div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#otp'>@buttonText</button></div>"
       );
 
       var newEl = loginBtn.nextElementSibling;

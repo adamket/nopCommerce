@@ -17,4 +17,6 @@ public class OtpSettings : ISettings
 
     public int OtpExpiresAfterMinutes { get; set; }
 
+    public bool AlwaysForwardToOtpInput { get; set; }
+
 }

@@ -21,7 +21,7 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
     private readonly ILocalizationService _localizationService;
     private readonly IMessageTemplateService _messageTemplateService;
     private readonly ICustomerActivityService _customerActivityService;
-    private readonly IRepository<ActivityLogType> _activityLogTypeRepository; 
+    private readonly IRepository<ActivityLogType> _activityLogTypeRepository;
     #endregion
 
     #region Ctor
@@ -53,6 +53,17 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
 
     public override async Task InstallAsync()
     {
+
+        //settings
+        var settings = new OtpSettings()
+        {
+          OtpGenerationIntervalSeconds = 30,
+          OtpValidationIntervalSeconds = 5,
+          AlwaysForwardToOtpInput = true,
+          OtpExpiresAfterMinutes = 5
+        };
+        await _settingService.SaveSettingAsync(settings);
+
         var otpTemplate = (await _messageTemplateService.GetMessageTemplatesByNameAsync(OtpConstants.MessageTemplateSystemName)).FirstOrDefault();
         if (otpTemplate == null)
         {
@@ -63,7 +74,7 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
                 Body = "Your one-time passcode is: %Otp.Code%",
                 IsActive = true,
                 DelayBeforeSend = null
-            };      
+            };
 
             await _messageTemplateService.InsertMessageTemplateAsync(otpTemplate);
         }
@@ -71,7 +82,7 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         var activityType =
             _activityLogTypeRepository.Table.FirstOrDefault(q =>
                 q.SystemKeyword == OtpConstants.OtpLoginActivitySystemName);
-         
+
         if (activityType == null)
         {
             activityType = new ActivityLogType
@@ -80,22 +91,36 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
                 Name = "Customer login with one-time passcode",
                 Enabled = true
             };
-             await _activityLogTypeRepository.InsertAsync(activityType);
+            await _activityLogTypeRepository.InsertAsync(activityType);
         }
 
-        //apt.opt.modal.prompt
-        //apt.opt.modal.title
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpValidationIntervalSeconds", "OTP validation interval (seconds)");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpValidationIntervalSeconds.Hint", "The number of seconds a user must wait between passcode validation attempts.");
+
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpGenerationIntervalSeconds", "OTP resend interval (seconds)");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpGenerationIntervalSeconds.Hint", "The number of seconds a user must wait before requesting a new one-time passcode.");
+
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpExpiresAfterMinutes", "OTP expiration time (minutes)");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.OtpExpiresAfterMinutes.Hint", "The number of minutes before a generated passcode expires.");
+
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.AlwaysForwardToOtpInput", "Always forward to passcode entry");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("Apt.Plugins.Misc.Otp.Settings.AlwaysForwardToOtpInput.Hint", "If enabled, users will be directed to passcode entry even if customer does not exist.");
+
+        await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.prompt", "Enter the 6-digit code sent to your email.");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.title", "One-time passcode login");
+        await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.open-modal-button", "Login with one-time code");
         await base.InstallAsync();
     }
 
     public override async Task UninstallAsync()
     {
-        // remove message template
-        //var otpTemplates = await _messageTemplateService.GetMessageTemplatesByNameAsync(OtpConstants.MessageTemplateSystemName);
-        //if (otpTemplates != null)
-        //{
-        //    await _messageTemplateService.Del(otpTemplate);
-        //}
+        //remove message template
+        var otpTemplates = await _messageTemplateService.GetMessageTemplatesByNameAsync(OtpConstants.MessageTemplateSystemName);
+        foreach (var template in otpTemplates)
+        {
+            await _messageTemplateService.DeleteMessageTemplateAsync(template);
+        }
+
 
         // remove activity type
         //var activityType = await _customerActivityService.GetActivityTypeBySystemKeywordAsync(OtpConstants.OtpLoginActivitySystemName);

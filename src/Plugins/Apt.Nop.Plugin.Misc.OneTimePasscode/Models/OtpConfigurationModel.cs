@@ -19,4 +19,7 @@ public class OtpConfigurationModel
     [Range(1, int.MaxValue)]
     [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpExpiresAfterMinutes")]
     public int OtpExpiresAfterMinutes { get; set; }
+
+    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.AlwaysForwardToOtpInput")]
+    public bool AlwaysForwardToOtpInput { get; set; }
 }

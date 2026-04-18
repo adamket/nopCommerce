@@ -66,6 +66,7 @@ public class ConfigurationController : BasePluginController
         model.OtpGenerationIntervalSeconds = settings.OtpGenerationIntervalSeconds;
         model.OtpValidationIntervalSeconds = settings.OtpValidationIntervalSeconds;
         model.OtpExpiresAfterMinutes = settings.OtpExpiresAfterMinutes;
+        model.AlwaysForwardToOtpInput = settings.AlwaysForwardToOtpInput;
 
 
         return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configuration/Configure.cshtml", model);
@@ -87,6 +88,7 @@ public class ConfigurationController : BasePluginController
         settings.OtpGenerationIntervalSeconds = model.OtpGenerationIntervalSeconds;
         settings.OtpValidationIntervalSeconds = model.OtpValidationIntervalSeconds;
         settings.OtpExpiresAfterMinutes = model.OtpExpiresAfterMinutes;
+        settings.AlwaysForwardToOtpInput = model.AlwaysForwardToOtpInput;
 
         await _settingService.SaveSettingAsync(settings);
 
