@@ -62,9 +62,9 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         //settings
         var settings = new OtpSettings()
         {
-          OtpGenerationIntervalSeconds = 30,
+          OtpRequestIntervalSeconds = 30,
           OtpValidationIntervalSeconds = 5,
-          AlwaysForwardToOtpInput = true,
+          PreventUserEnumeration = true,
           OtpExpiresAfterMinutes = 5
         };
         await _settingService.SaveSettingAsync(settings);
@@ -124,8 +124,8 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes", "OTP expiration time (minutes)");
         //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes.Hint", "The number of minutes before a generated passcode expires.");
 
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput", "Always forward to passcode entry");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput.Hint", "If enabled, users will be directed to passcode entry even if customer with matching email does not exist.");
+        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.PreventUserEnumeration", "Always forward to passcode entry");
+        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.PreventUserEnumeration.Hint", "If enabled, users will be directed to passcode entry even if customer with matching email does not exist.");
 
         //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.page.open-modal-button.text", "Login with one-time code");
         //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.prompt", "Enter the 6-digit code sent to your email.");

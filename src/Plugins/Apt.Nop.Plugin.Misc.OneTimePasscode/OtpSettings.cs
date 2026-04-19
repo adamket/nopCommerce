@@ -13,10 +13,10 @@ public class OtpSettings : ISettings
     public string TwilioFromNumber { get; set; }
 
     public int OtpValidationIntervalSeconds { get; set; }
-    public int OtpGenerationIntervalSeconds { get; set; }
+    public int OtpRequestIntervalSeconds { get; set; }
 
     public int OtpExpiresAfterMinutes { get; set; }
 
-    public bool AlwaysForwardToOtpInput { get; set; }
+    public bool PreventUserEnumeration { get; set; }
 
 }

@@ -2,6 +2,7 @@
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Extensions;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
+using DocumentFormat.OpenXml.EMMA;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Customers;
@@ -35,6 +36,7 @@ public class OneTimePasscodeController : BasePublicController
     private readonly ICustomWorkflowMessageService _workflowMessageService;
     private readonly IShoppingCartService _shoppingCartService;
     private readonly ILogger _logger;
+    private readonly IQueuedEmailService _queuedEmailService;
     #endregion
 
     #region Ctor
@@ -42,7 +44,7 @@ public class OneTimePasscodeController : BasePublicController
     public OneTimePasscodeController(
         IStoreContext storeContext,
         INotificationService notificationService,
-        ILocalizationService localizationService, ITwilioService twilioService, ICustomGenericAttributeService genericAttributeService, IWorkContext workContext, ICustomerService customerService, ICustomerActivityService customerActivityService, ICustomWorkflowMessageService workflowMessageService, ILogger logger, IShoppingCartService shoppingCartService, IAuthenticationService authenticationService, IEventPublisher eventPublisher, OtpSettings otpSettings)
+        ILocalizationService localizationService, ITwilioService twilioService, ICustomGenericAttributeService genericAttributeService, IWorkContext workContext, ICustomerService customerService, ICustomerActivityService customerActivityService, ICustomWorkflowMessageService workflowMessageService, ILogger logger, IShoppingCartService shoppingCartService, IAuthenticationService authenticationService, IEventPublisher eventPublisher, OtpSettings otpSettings, IQueuedEmailService queuedEmailService)
     {
         _storeContext = storeContext;
         _notificationService = notificationService;
@@ -58,6 +60,7 @@ public class OneTimePasscodeController : BasePublicController
         _authenticationService = authenticationService;
         _eventPublisher = eventPublisher;
         _otpSettings = otpSettings;
+        _queuedEmailService = queuedEmailService;
     }
 
     #endregion
@@ -79,6 +82,7 @@ public class OneTimePasscodeController : BasePublicController
                 CodeExpiryMinutes = _otpSettings.OtpExpiresAfterMinutes
             });
 
+        //forward straight to code input without generating or emailing code (when user already has valid code but page refreshed)
         if (!generateOtp)
         {
             return this.OtpJsonSuccess(new { markup });
@@ -93,31 +97,25 @@ public class OneTimePasscodeController : BasePublicController
             return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.customer-inactive"));
         }
 
+        var lastResendCustomer = targetCustomer ?? currentCustomer;
+        var lastResendOn = await _genericAttributeService.GetAttributeAsync<DateTime?>(lastResendCustomer, OtpConstants.GenericAttributeKeys.OtpLastResentOn);
+        if (lastResendOn.HasValue)
+        {
+            if (lastResendOn.Value.AddSeconds(_otpSettings.OtpRequestIntervalSeconds) > utcNow)
+            {
+                return await GetEarlyOtpRequestErrorResult(lastResendOn.Value);
+            }
+        }
+
         if (targetCustomer == null)
         {
-            var (currentUserNextRegenAttemptAllowedOn, gaCreatedDateTime) =
-                await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<DateTime?>(currentCustomer,
-                    OtpConstants.OtpCurrentCustomerNextRegenAttemptAllowedOn_GA_KEY);
-
-            if (currentUserNextRegenAttemptAllowedOn == null || currentUserNextRegenAttemptAllowedOn.Value < utcNow)
+            if (_otpSettings.PreventUserEnumeration)
             {
-                currentUserNextRegenAttemptAllowedOn =
-                    DateTime.UtcNow.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds);
-
-                await _genericAttributeService.SaveAttributeAsync(currentCustomer,
-                    OtpConstants.OtpCurrentCustomerNextRegenAttemptAllowedOn_GA_KEY,
-                    currentUserNextRegenAttemptAllowedOn);
-            }
-            else if (currentUserNextRegenAttemptAllowedOn.Value > utcNow)
-            {
-                return await GetEarlyOtpRequestErrorResult(gaCreatedDateTime.Value);
-            }
-
-            if (_otpSettings.AlwaysForwardToOtpInput)
-            {
+                await _genericAttributeService.SaveAttributeAsync<DateTime?>(lastResendCustomer, OtpConstants.GenericAttributeKeys.OtpLastResentOn, utcNow);
                 return this.OtpJsonSuccess(new
                 {
-                    markup
+                    markup,
+                    canResendInSeconds = _otpSettings.OtpRequestIntervalSeconds
                 });
             }
 
@@ -126,12 +124,35 @@ public class OneTimePasscodeController : BasePublicController
 
         var (existingOtp, otpCreatedUpdatedOn) =
             await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(targetCustomer,
-                OtpConstants.OtpLoginCode_GA_KEY);
+                OtpConstants.GenericAttributeKeys.LoginCode);
 
+        //TODO UPDATE MSG TEMPLATE
+        //double validate premature request
         if (!string.IsNullOrEmpty(existingOtp)
-            && otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds) > utcNow)
+            && otpCreatedUpdatedOn.Value.AddSeconds(_otpSettings.OtpRequestIntervalSeconds) > utcNow)
         {
             return await GetEarlyOtpRequestErrorResult(otpCreatedUpdatedOn.Value);
+        }
+
+        await _genericAttributeService.SaveAttributeAsync<DateTime?>(targetCustomer, OtpConstants.GenericAttributeKeys.OtpLastResentOn, utcNow);
+
+        var isCurrentTokenExpired = otpCreatedUpdatedOn.HasValue && (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < utcNow);
+        if (!isCurrentTokenExpired)
+        {
+            var emailIdsToRequeue =
+                await _genericAttributeService.GetAttributeAsync<List<int>>(targetCustomer, OtpConstants.GenericAttributeKeys
+                    .QueuedEmailIds);
+
+            if (emailIdsToRequeue != null && emailIdsToRequeue.Any())
+            {
+                var queuedEmails = await _queuedEmailService.GetQueuedEmailsByIdsAsync(emailIdsToRequeue.ToArray());
+                await _queuedEmailService.RequeueQueuedEmailsAsync(queuedEmails);
+                return this.OtpJsonSuccess(new
+                {
+                    markup,
+                    canResendInSeconds = _otpSettings.OtpRequestIntervalSeconds
+                });
+            }
         }
 
         var loginOtpCode = GeneratePasswordRecoverToken(6);
@@ -143,22 +164,23 @@ public class OneTimePasscodeController : BasePublicController
         var hash = HashHelper.CreateHash(saltedBytes, "SHA256");
 
         await _genericAttributeService.SaveAttributeAsync(targetCustomer,
-            OtpConstants.OtpLoginCode_GA_KEY, hash);
-        await _genericAttributeService.SaveAttributeAsync(currentCustomer,
-            OtpConstants.OtpCurrentCustomerNextRegenAttemptAllowedOn_GA_KEY, utcNow);
+            OtpConstants.GenericAttributeKeys.LoginCode, hash);
 
         var store = await _storeContext.GetCurrentStoreAsync();
         var language = await _workContext.GetWorkingLanguageAsync();
 
-        var emailIds =
+        var queuedEmailIds =
             await _workflowMessageService.SendOtpPasscodeNotificationAsync(targetCustomer, loginOtpCode, store.Id,
                 language.Id);
-        if (!emailIds.Any())
+        if (!queuedEmailIds.Any())
         {
-            await _logger.InsertLogAsync(LogLevel.Error, "A one time passcode was requested, but no email sent.", "Please verify the logs directly prior, and that your message templates are properly configured.",
+            await _logger.InsertLogAsync(LogLevel.Error, "A one time passcode was requested, but email was unable to be sent.", "Please verify the logs directly prior, and that your message templates are properly configured.",
                 await _workContext.GetCurrentCustomerAsync());
             return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.no-email-sent"));
         }
+
+        await _genericAttributeService.SaveAttributeAsync(targetCustomer,
+            OtpConstants.GenericAttributeKeys.QueuedEmailIds, queuedEmailIds);
 
         await _customerActivityService.InsertActivityAsync(targetCustomer, OtpConstants.OtpLoginActivitySystemName,
             await _localizationService.GetResourceAsync("apt.plugins.misc.otp.activity-log.public-store.otp-requested"));
@@ -166,7 +188,7 @@ public class OneTimePasscodeController : BasePublicController
         return this.OtpJsonSuccess(new
         {
             markup,
-            canResendInSeconds = _otpSettings.OtpGenerationIntervalSeconds
+            canResendInSeconds = _otpSettings.OtpRequestIntervalSeconds
         });
 
     }
@@ -184,34 +206,25 @@ public class OneTimePasscodeController : BasePublicController
 
         var utcNow = DateTime.UtcNow;
 
-        if (targetCustomer == null)
-        {
-            var recentlyAttemptedDateCurrentCustomer = await _genericAttributeService.GetAttributeAsync<DateTime?>(currentCustomer, OtpConstants.OtpLoginLastAttempted_GA_KEY);
-            if (recentlyAttemptedDateCurrentCustomer.HasValue &&
-                recentlyAttemptedDateCurrentCustomer.Value.AddSeconds(_otpSettings.OtpValidationIntervalSeconds) >
-                utcNow)
-            {
-                return await GetEarlyOtpValidationErrorResult();
-            }
-
-            await _genericAttributeService.SaveAttributeAsync<DateTime?>(currentCustomer,
-                OtpConstants.OtpLoginLastAttempted_GA_KEY, utcNow);
-
-            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.incorrect-code"));
-        }
-
-        var (storedOtp, otpCreatedUpdatedOn) = await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(targetCustomer,
-            OtpConstants.OtpLoginCode_GA_KEY);
-
-        var recentlyAttemptedDateTargetCustomer = await _genericAttributeService.GetAttributeAsync<DateTime?>(targetCustomer,
-            OtpConstants.OtpLoginLastAttempted_GA_KEY);
-
-
-        if (recentlyAttemptedDateTargetCustomer.HasValue && recentlyAttemptedDateTargetCustomer.Value.AddSeconds(_otpSettings.OtpValidationIntervalSeconds) > utcNow)
+        var lastAttemptCustomer = targetCustomer ?? currentCustomer;
+        var lastAttemptedOtpValidation = await _genericAttributeService.GetAttributeAsync<DateTime?>(lastAttemptCustomer, OtpConstants.GenericAttributeKeys.LoginLastAttempted);
+        if (lastAttemptedOtpValidation.HasValue &&
+            lastAttemptedOtpValidation.Value.AddSeconds(_otpSettings.OtpValidationIntervalSeconds) >
+            utcNow)
         {
             return await GetEarlyOtpValidationErrorResult();
         }
 
+        await _genericAttributeService.SaveAttributeAsync<DateTime?>(lastAttemptCustomer,
+            OtpConstants.GenericAttributeKeys.LoginLastAttempted, utcNow);
+
+        if (targetCustomer == null)
+        {
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.incorrect-code"));
+        }
+
+        var (storedOtp, otpCreatedUpdatedOn) = await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(targetCustomer,
+            OtpConstants.GenericAttributeKeys.LoginCode);
 
         if (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < utcNow)
         {
@@ -219,7 +232,7 @@ public class OneTimePasscodeController : BasePublicController
         }
 
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(targetCustomer,
-            OtpConstants.OtpLoginLastAttempted_GA_KEY, utcNow);
+            OtpConstants.GenericAttributeKeys.LoginLastAttempted, utcNow);
   
         var otpBytes = Encoding.UTF8.GetBytes(model.Otp);
         var saltBytes = targetCustomer.CustomerGuid.ToByteArray();
@@ -235,7 +248,10 @@ public class OneTimePasscodeController : BasePublicController
         await _authenticationService.SignInAsync(targetCustomer, false);
         await _workContext.SetCurrentCustomerAsync(targetCustomer);
         await _eventPublisher.PublishAsync(new CustomerLoggedinEvent(targetCustomer));
-        await _genericAttributeService.SaveAttributeAsync(targetCustomer, OtpConstants.OtpLoginCode_GA_KEY, (string)null);
+
+        //delete attributes
+        await _genericAttributeService.SaveAttributeAsync(targetCustomer, OtpConstants.GenericAttributeKeys.LoginCode, (string)null);
+        await _genericAttributeService.SaveAttributeAsync(targetCustomer, OtpConstants.GenericAttributeKeys.QueuedEmailIds, (string)null);
         await _customerActivityService.InsertActivityAsync(targetCustomer, OtpConstants.OtpLoginActivitySystemName,
             await _localizationService.GetResourceAsync("apt.plugins.misc.otp.activity-log.public-store.otp-login"));
 
@@ -244,7 +260,12 @@ public class OneTimePasscodeController : BasePublicController
         _notificationService.SuccessNotification(StringExtensions.SafeFormat(
             await _localizationService.GetResourceAsync("apt.plugins.misc.otp.notification.logged-in"), model.Email));
 
-        return this.OtpJsonSuccess();
+        var redirectUrl = !string.IsNullOrEmpty(model.RedirectUrlPath) ? $"/{model.RedirectUrlPath.TrimStart('/')}" : "/";
+
+        return this.OtpJsonSuccess(new
+        {
+            redirectUrl
+        });
     }
 
 
@@ -258,11 +279,11 @@ public class OneTimePasscodeController : BasePublicController
 
     private async Task<IActionResult> GetEarlyOtpRequestErrorResult(DateTime otpCreatedUpdatedOn)
     {
-        var availableAt = otpCreatedUpdatedOn.AddSeconds(_otpSettings.OtpGenerationIntervalSeconds);
+        var availableAt = otpCreatedUpdatedOn.AddSeconds(_otpSettings.OtpRequestIntervalSeconds);
         var secondsLeft = (int)Math.Ceiling((availableAt - DateTime.UtcNow).TotalSeconds);
 
         var message = StringExtensions.SafeFormat(
-            await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.requested-generation-too-soon"), _otpSettings.OtpGenerationIntervalSeconds);
+            await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.requested-generation-too-soon"), _otpSettings.OtpRequestIntervalSeconds);
 
         return this.OtpJsonError(message,
             new { prematureOtpRequest = true, canResendInSeconds = Math.Max(0, secondsLeft) });

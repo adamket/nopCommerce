@@ -60,7 +60,8 @@
   justify-content: center;
   gap: 16px;
   padding-bottom: 30px;
-  padding-top:30px;
+  padding-top: 30px;
+  background: #f3f4f6;
 }
 
 .otp-login-btn {

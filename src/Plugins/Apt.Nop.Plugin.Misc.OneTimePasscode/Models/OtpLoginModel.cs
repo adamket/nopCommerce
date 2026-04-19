@@ -10,4 +10,6 @@ public class OtpLoginModel
     public string Email { get; set; }
     public string Otp { get; set; }
     public int CodeExpiryMinutes { get; set; }
+
+    public string RedirectUrlPath { get; set; }
 }

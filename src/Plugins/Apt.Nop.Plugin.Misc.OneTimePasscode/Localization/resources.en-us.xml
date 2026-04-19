@@ -8,11 +8,11 @@
             <Value>The number of seconds a user must wait between passcode validation attempts.</Value>
         </LocaleResource>
 
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds">
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpRequestIntervalSeconds">
             <Value>OTP resend interval (seconds)</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds.Hint">
-            <Value>The number of seconds a user must wait before requesting a new one-time passcode.</Value>
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpRequestIntervalSeconds.Hint">
+            <Value>The number of seconds a user must wait before requesting a new one-time passcode email.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes">
@@ -22,11 +22,11 @@
             <Value>The number of minutes before a generated passcode expires.</Value>
         </LocaleResource>
 
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput">
-            <Value>Always forward to passcode entry</Value>
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.PreventUserEnumeration">
+            <Value>Prevent user enumeration</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput.Hint">
-            <Value>If enabled, users will be directed to passcode entry even if customer with matching email does not exist.</Value>
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.PreventUserEnumeration.Hint">
+            <Value>If enabled, to prevent against user enumeration, users will be directed to passcode entry even if customer with matching email does not exist.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.page.open-modal-button.text">
@@ -95,5 +95,7 @@
         <LocaleResource Name="apt.plugins.misc.otp.errors.general">
             <Value>An error occurred. Please try again or contact support.</Value>
         </LocaleResource>
+        
+        
     </LocaleResources>
 </Language>

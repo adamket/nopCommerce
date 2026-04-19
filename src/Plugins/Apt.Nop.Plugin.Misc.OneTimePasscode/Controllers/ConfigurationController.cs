@@ -63,10 +63,10 @@ public class ConfigurationController : BasePluginController
         model.TwilioAccountSid = settings.TwilioAccountSid;
         model.TwilioAuthToken = settings.TwilioAuthToken;
         model.TwilioFromNumber = settings.TwilioFromNumber;
-        model.OtpGenerationIntervalSeconds = settings.OtpGenerationIntervalSeconds;
+        model.OtpRequestIntervalSeconds = settings.OtpRequestIntervalSeconds;
         model.OtpValidationIntervalSeconds = settings.OtpValidationIntervalSeconds;
         model.OtpExpiresAfterMinutes = settings.OtpExpiresAfterMinutes;
-        model.AlwaysForwardToOtpInput = settings.AlwaysForwardToOtpInput;
+        model.PreventUserEnumeration = settings.PreventUserEnumeration;
 
 
         return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configuration/Configure.cshtml", model);
@@ -85,10 +85,10 @@ public class ConfigurationController : BasePluginController
         settings.TwilioAccountSid = model.TwilioAccountSid ?? string.Empty;
         settings.TwilioAuthToken = model.TwilioAuthToken ?? string.Empty;
         settings.TwilioFromNumber = model.TwilioFromNumber ?? string.Empty;
-        settings.OtpGenerationIntervalSeconds = model.OtpGenerationIntervalSeconds;
+        settings.OtpRequestIntervalSeconds = model.OtpRequestIntervalSeconds;
         settings.OtpValidationIntervalSeconds = model.OtpValidationIntervalSeconds;
         settings.OtpExpiresAfterMinutes = model.OtpExpiresAfterMinutes;
-        settings.AlwaysForwardToOtpInput = model.AlwaysForwardToOtpInput;
+        settings.PreventUserEnumeration = model.PreventUserEnumeration;
 
         await _settingService.SaveSettingAsync(settings);
 

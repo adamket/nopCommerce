@@ -13,13 +13,14 @@ public class OtpConfigurationModel
     public int OtpValidationIntervalSeconds { get; set; }
 
     [Range(1, int.MaxValue)]
-    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpGenerationIntervalSeconds")]
-    public int OtpGenerationIntervalSeconds { get; set; }
+    //[NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpGenerationIntervalSeconds")]
+    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpRequestIntervalSeconds")]
+    public int OtpRequestIntervalSeconds { get; set; }
     
     [Range(1, int.MaxValue)]
     [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpExpiresAfterMinutes")]
     public int OtpExpiresAfterMinutes { get; set; }
 
-    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.AlwaysForwardToOtpInput")]
-    public bool AlwaysForwardToOtpInput { get; set; }
+    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.PreventUserEnumeration")]
+    public bool PreventUserEnumeration { get; set; }
 }

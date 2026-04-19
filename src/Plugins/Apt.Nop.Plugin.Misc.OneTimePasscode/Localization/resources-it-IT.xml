@@ -8,11 +8,11 @@
             <Value>Il numero di secondi che un utente deve attendere tra i tentativi di convalida del codice.</Value>
         </LocaleResource>
 
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds">
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpRequestIntervalSeconds">
             <Value>Intervallo di reinvio OTP (secondi)</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds.Hint">
-            <Value>Il numero di secondi che un utente deve attendere prima di richiedere un nuovo codice monouso.</Value>
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpRequestIntervalSeconds.Hint">
+            <Value>Il numero di secondi che un utente deve attendere prima di richiedere una nuova e-mail contenente un codice monouso.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes">
@@ -22,10 +22,10 @@
             <Value>Il numero di minuti prima che un codice generato scada.</Value>
         </LocaleResource>
 
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput">
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.PreventUserEnumeration">
             <Value>Reindirizza sempre all'inserimento del codice</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput.Hint">
+        <LocaleResource Name="apt.plugins.misc.otp.Settings.PreventUserEnumeration.Hint">
             <Value>Se abilitato, gli utenti verranno indirizzati all'inserimento del codice anche se non esiste un cliente con l'e-mail corrispondente.</Value>
         </LocaleResource>
 
