@@ -87,5 +87,12 @@
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
             <Value>Si è verificato un problema da parte nostra. Contatta il servizio clienti per assistenza.</Value>
         </LocaleResource>
+        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
+            <Value>È richiesto un indirizzo email.</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.errors.general">
+            <Value>Si è verificato un errore. Riprova o contatta l'assistenza.</Value>
+        </LocaleResource>
     </LocaleResources>
 </Language>

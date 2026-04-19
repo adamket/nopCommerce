@@ -33,7 +33,7 @@
             <Value>Mit Einmalcode anmelden</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.prompt">
-            <Value>Geben Sie den 6-stelligen Code ein, der an {0} gesendet wurde.</Value>
+            <Value>Ein 6-stelliger Code wurde zur Zustellung an {0} vorgesehen, falls das Konto in unserem System existiert. Bitte geben Sie ihn unten ein. Dieser Code läuft in {1} Minuten ab.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.title">
             <Value>Anmeldung mit Einmalcode</Value>
@@ -86,6 +86,13 @@
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
             <Value>Auf unserer Seite ist etwas schiefgelaufen. Bitte kontaktieren Sie den Kundendienst.</Value>
+        </LocaleResource>
+        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
+            <Value>Eine E-Mail-Adresse ist erforderlich.</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.errors.general">
+            <Value>Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support.</Value>
         </LocaleResource>
     </LocaleResources>
 </Language>

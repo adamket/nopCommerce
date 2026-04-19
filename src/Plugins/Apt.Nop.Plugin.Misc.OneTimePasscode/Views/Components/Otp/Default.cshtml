@@ -7,8 +7,9 @@
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.otp.css");
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.utils.css");
     var buttonText = T("apt.plugins.misc.otp.page.open-modal-button.text").Text;
-    var resendTryAgainErrorMessage = T("apt.plugins.misc.otp.page.open-modal-button.text").Text;
+    var resendTryAgainErrorMessage = T("apt.plugins.misc.otp.modal.resend-try-again-button.text").Text;
     var emailRequiredErrorMessage = T("apt.plugins.misc.otp.errors.missing-email").Text;
+    var generalErrorMessage = T("apt.plugins.misc.otp.errors.general").Text;
 
 }
 
@@ -33,7 +34,8 @@
     apt.otp.init({
         localeStrings:{
             resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
-            emailRequiredErrorMessage: "@emailRequiredErrorMessage"
+            emailRequiredErrorMessage: "@emailRequiredErrorMessage",
+            generalErrorMessage: "@generalErrorMessage"
         }
     });
     apt.otpInput.init({

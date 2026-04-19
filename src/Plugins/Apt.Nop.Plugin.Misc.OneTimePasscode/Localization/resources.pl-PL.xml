@@ -33,7 +33,7 @@
             <Value>Zaloguj się kodem jednorazowym</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.prompt">
-            <Value>Wprowadź 6-cyfrowy kod wysłany na adres {0}.</Value>
+            <Value>Kod 6-cyfrowy został przygotowany do wysłania na adres {0}, jeśli konto istnieje w naszym systemie. Wprowadź go poniżej. Kod wygasa za {1} minut.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.title">
             <Value>Logowanie kodem jednorazowym</Value>
@@ -87,6 +87,13 @@
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
             <Value>Wystąpił błąd po naszej stronie. Skontaktuj się z obsługą klienta.</Value>
+        </LocaleResource>
+        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
+            <Value>Adres e-mail jest wymagany.</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.errors.general">
+            <Value>Wystąpił błąd. Spróbuj ponownie lub skontaktuj się z pomocą techniczną.</Value>
         </LocaleResource>
     </LocaleResources>
 </Language>

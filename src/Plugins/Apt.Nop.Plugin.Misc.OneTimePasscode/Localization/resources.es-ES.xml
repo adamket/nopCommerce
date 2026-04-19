@@ -33,7 +33,7 @@
             <Value>Iniciar sesión con código de un solo uso</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.prompt">
-            <Value>Introduce el código de 6 dígitos enviado a {0}.</Value>
+            <Value>Se ha programado el envío de un código de 6 dígitos a {0} si la cuenta existe en nuestro sistema. Por favor, introdúzcalo a continuación. Este código caduca en {1} minutos.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.title">
             <Value>Inicio de sesión con código de un solo uso</Value>
@@ -86,6 +86,13 @@
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
             <Value>Algo ha salido mal por nuestra parte. Ponte en contacto con atención al cliente para obtener ayuda.</Value>
+        </LocaleResource>
+        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
+            <Value>Se requiere una dirección de correo electrónico.</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.errors.general">
+            <Value>Se produjo un error. Por favor, inténtelo de nuevo o contacte con soporte.</Value>
         </LocaleResource>
     </LocaleResources>
 </Language>

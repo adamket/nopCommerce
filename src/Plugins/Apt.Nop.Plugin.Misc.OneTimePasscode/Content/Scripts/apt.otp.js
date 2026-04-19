@@ -114,15 +114,13 @@
         return;
       } 
     } catch (e) {
-      //  setMessage("Unable to send the code right now.", true);
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, resend ? settings.selectors.step2Container : settings.selectors.step1Container);
     } finally {
       btn.loading(false);
     }
   };
 
   otp.verifyOtp = async function () {
-
-
     var btn = document.querySelector(settings.selectors.submitButton);
 
     if (btn.loading()) {

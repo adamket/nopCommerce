@@ -33,7 +33,7 @@
             <Value>Entrar com código de uso único</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.prompt">
-            <Value>Digite o código de 6 dígitos enviado para {0}.</Value>
+            <Value>Um código de 6 dígitos foi programado para ser enviado para {0}, caso a conta exista em nosso sistema. Por favor, insira-o abaixo. Este código expira em {1} minutos.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.title">
             <Value>Login com código de uso único</Value>
@@ -86,6 +86,13 @@
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
             <Value>Algo deu errado do nosso lado. Entre em contato com o atendimento ao cliente para obter ajuda.</Value>
+        </LocaleResource>
+        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
+            <Value>É necessário informar um endereço de e-mail.</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.errors.general">
+            <Value>Ocorreu um erro. Tente novamente ou entre em contato com o suporte.</Value>
         </LocaleResource>
     </LocaleResources>
 </Language>
