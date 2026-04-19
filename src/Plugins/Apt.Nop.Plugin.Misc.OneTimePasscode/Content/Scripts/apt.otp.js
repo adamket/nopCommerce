@@ -6,7 +6,8 @@
     sendUrl: "/apt/request-otp",
     verifyUrl: "/apt/otp-login",
     localeStrings: {
-      resendTryAgainMessage: "Can resend again in"
+      resendTryAgainErrorMessage: "Can resend again in {0}s",
+      emailRequiredErrorMessage: "Email is required.",
     },
     selectors: {
       emailInput: "[data-otp-email]",
@@ -65,8 +66,8 @@
 
   otp.sendOtp = async function (btn, resend, generateCode) {
 
-    if (!state.email) {
-      apt.otp.showOtpValidation("Please enter a valid email address.", settings.selectors.step1Container);
+    if (!state.email || !state.email.trim()) {
+      apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.step1Container);
       return;
     }
 
@@ -185,7 +186,7 @@
 
     runCountdown(sendAgainSeconds,
       (s) => {
-        btn.innerHTML = String.format(settings.localeStrings.resendTryAgainMessage, s);
+        btn.innerHTML = String.format(settings.localeStrings.resendTryAgainErrorMessage, s);
          /* `${settings.localeStrings.resendTryAgainMessage} ${s}s`;*/
       },
       () => {

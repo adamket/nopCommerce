@@ -5,14 +5,14 @@
     NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.shared.js");
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.modal-tools.css");
     NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.otp.css");
+    NopHtml.AppendCssFileParts(OtpConstants.PathToPlugin + "/content/stylesheets/apt.utils.css");
     var buttonText = T("apt.plugins.misc.otp.page.open-modal-button.text").Text;
-    var resendTryAgainText = T("apt.plugins.misc.otp.page.open-modal-button.text").Text;
+    var resendTryAgainErrorMessage = T("apt.plugins.misc.otp.page.open-modal-button.text").Text;
+    var emailRequiredErrorMessage = T("apt.plugins.misc.otp.errors.missing-email").Text;
 
 }
 
 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
-
-
 
 <script asp-location="Footer">
     document.addEventListener("DOMContentLoaded", function () {
@@ -20,12 +20,11 @@
 
       loginBtn.insertAdjacentHTML(
         'afterend',
-        "<div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#otp'>@buttonText</button></div>"
+        "<div class='apt-otp otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#apt-otp'>@buttonText</button></div>"
       );
 
       var newEl = loginBtn.nextElementSibling;
 
-      // Trigger animation on next frame
       requestAnimationFrame(() => {
         newEl.classList.add("is-visible");
       });
@@ -33,7 +32,8 @@
 
     apt.otp.init({
         localeStrings:{
-            resendTryAgainMessage: "@resendTryAgainText"
+            resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
+            emailRequiredErrorMessage: "@emailRequiredErrorMessage"
         }
     });
     apt.otpInput.init({

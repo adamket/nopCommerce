@@ -68,8 +68,7 @@ public class OneTimePasscodeController : BasePublicController
     {
         if (!CommonHelper.IsValidEmail(email))
         {
-            
-            return Json(new { errorMessage = await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.invalid-email")/*"Please enter a valid email address."*/ });
+            return Json(new { errorMessage = await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.invalid-email") });
         }
 
         var markup = await this.RenderPartialViewToStringAsync(
@@ -90,7 +89,7 @@ public class OneTimePasscodeController : BasePublicController
                 });
             }
 
-            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.customer-not-found")/*"No account found associated with this email address*/);
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.customer-not-found"));
         }
 
         if (!generateOtp)

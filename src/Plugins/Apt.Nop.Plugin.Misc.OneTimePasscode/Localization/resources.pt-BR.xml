@@ -2,130 +2,90 @@
 <Language>
     <LocaleResources>
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpValidationIntervalSeconds">
-            <Value>OTP validation interval (seconds)</Value>
+            <Value>Intervalo de validação do OTP (segundos)</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpValidationIntervalSeconds.Hint">
-            <Value>The number of seconds a user must wait between passcode validation attempts.</Value>
+            <Value>O número de segundos que o usuário deve aguardar entre as tentativas de validação do código.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds">
-            <Value>OTP resend interval (seconds)</Value>
+            <Value>Intervalo de reenvio do OTP (segundos)</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds.Hint">
-            <Value>The number of seconds a user must wait before requesting a new one-time passcode.</Value>
+            <Value>O número de segundos que o usuário deve aguardar antes de solicitar um novo código de uso único.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes">
-            <Value>OTP expiration time (minutes)</Value>
+            <Value>Tempo de expiração do OTP (minutos)</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes.Hint">
-            <Value>The number of minutes before a generated passcode expires.</Value>
+            <Value>O número de minutos antes que um código gerado expire.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput">
-            <Value>Always forward to passcode entry</Value>
+            <Value>Sempre encaminhar para a entrada do código</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.Settings.AlwaysForwardToOtpInput.Hint">
-            <Value>If enabled, users will be directed to passcode entry even if customer with matching email does not exist.</Value>
+            <Value>Se habilitado, os usuários serão direcionados para a entrada do código mesmo que não exista um cliente com o e-mail informado.</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.page.open-modal-button.text">
-            <Value>Login with one-time code</Value>
+            <Value>Entrar com código de uso único</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.prompt">
-            <Value>Enter the 6-digit code sent to {0}.</Value>
+            <Value>Digite o código de 6 dígitos enviado para {0}.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.title">
-            <Value>One-time passcode login</Value>
+            <Value>Login com código de uso único</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.resend-code-button.text">
-            <Value>Resend code</Value>
+            <Value>Reenviar código</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.wrong-email.prompt">
-            <Value>Wrong email?</Value>
+            <Value>E-mail errado?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.change-email.prompt">
-            <Value>Change it here</Value>
+            <Value>Altere aqui</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.prompt">
-            <Value>Enter your email below and submit to receive a one-time passcode to log into your account.</Value>
+            <Value>Digite seu e-mail abaixo e envie para receber um código de uso único para entrar na sua conta.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.forego-code-generation.text">
-            <Value>Already have a code?</Value>
+            <Value>Já tem um código?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.submit.text">
-            <Value>Submit</Value>
+            <Value>Enviar</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.login-button.text">
-            <Value>Login</Value>
+            <Value>Entrar</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.resend-try-again-button.text">
-            <Value>Can resend again in {0}s</Value>
+            <Value>Poderá reenviar novamente em {0}s</Value>
         </LocaleResource>
 
         <LocaleResource Name="apt.plugins.misc.otp.activity-log.public-store.otp-requested">
-            <Value>
-                One-time passcode requested.
-            </Value>
+            <Value>Código de uso único solicitado.</Value>
         </LocaleResource>
-
         <LocaleResource Name="apt.plugins.misc.otp.activity-log.public-store.otp-login">
-            <Value>
-                User logged in with one-time passcode.
-            </Value>
+            <Value>Usuário entrou com código de uso único.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.notification.logged-in">
-            <Value>
-                Logged-in as {0}.
-            </Value>
+            <Value>Conectado como {0}.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.requested-generation-too-soon">
-            <Value>
-                Please wait at least {0} seconds before requesting another passcode.
-            </Value>
+            <Value>Aguarde pelo menos {0} segundos antes de solicitar outro código.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.requested-validation-too-soon">
-            <Value>
-                Please wait at least {0} seconds in between attempts.
-            </Value>
+            <Value>Aguarde pelo menos {0} segundos entre as tentativas.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.otp-expired">
-            <Value>
-                This code has expired. Please resend a new one to continue.
-            </Value>
+            <Value>Este código expirou. Reenvie um novo para continuar.</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.errors.incorrect-code">
-            <Value>
-                Incorrect or invalid code.
-            </Value>
+            <Value>Código incorreto ou inválido.</Value>
         </LocaleResource>
-
         <LocaleResource Name="apt.plugins.misc.otp.errors.no-email-sent">
-            <Value>
-                Something went wrong on our end.  Please contact customer service for assistance.
-            </Value>
+            <Value>Algo deu errado do nosso lado. Entre em contato com o atendimento ao cliente para obter ajuda.</Value>
         </LocaleResource>
-        
-        <LocaleResource Name="plugins.misc.onetimepasscode.instructions">
-            <Value>
-                The One-Time Passcode (OTP) plugin provides an additional authentication method by allowing users to verify their identity using a temporary passcode sent to their email address instead of a traditional password.
-
-                By default,
-
-                Notes:
-                • Ensure your email account is properly configured so users can receive their passcodes.
-            </Value>
-        </LocaleResource>
-        
-    
-
-        <LocaleResource Name="apt.plugins.misc.otp.errors.missing-email">
-            <Value>
-               Email address is required.
-            </Value>
-        </LocaleResource>
-
-
-       
     </LocaleResources>
 </Language>
