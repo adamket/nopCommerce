@@ -103,8 +103,11 @@
         <LocaleResource Name="apt.plugins.misc.otp.errors.incomplete-code">
             <Value>Please ensure entire code is filled in.</Value>
         </LocaleResource>
+
+        <LocaleResource Name="apt.otp.modal.close">
+            <Value>Close modal</Value>
+        </LocaleResource>
         
-        
-        
+
     </LocaleResources>
 </Language>

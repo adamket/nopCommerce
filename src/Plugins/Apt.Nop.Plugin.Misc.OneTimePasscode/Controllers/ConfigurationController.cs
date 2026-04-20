@@ -1,17 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
+﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
 using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
 using Nop.Services.Security;
-using Nop.Services.Stores;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -67,7 +62,13 @@ public class ConfigurationController : BasePluginController
         model.OtpValidationIntervalSeconds = settings.OtpValidationIntervalSeconds;
         model.OtpExpiresAfterMinutes = settings.OtpExpiresAfterMinutes;
         model.PreventUserEnumeration = settings.PreventUserEnumeration;
+        model.CodeDigitCount = settings.CodeDigitCount;
 
+        model.AvailableCodeDigitCounts = new List<SelectListItem>();
+        for (var i = 2; i <= 6; ++i)
+        {
+            model.AvailableCodeDigitCounts.Add(new(i.ToString(), i.ToString()));
+        }
 
         return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configuration/Configure.cshtml", model);
     }
@@ -89,6 +90,7 @@ public class ConfigurationController : BasePluginController
         settings.OtpValidationIntervalSeconds = model.OtpValidationIntervalSeconds;
         settings.OtpExpiresAfterMinutes = model.OtpExpiresAfterMinutes;
         settings.PreventUserEnumeration = model.PreventUserEnumeration;
+        settings.CodeDigitCount = model.CodeDigitCount;
 
         await _settingService.SaveSettingAsync(settings);
 

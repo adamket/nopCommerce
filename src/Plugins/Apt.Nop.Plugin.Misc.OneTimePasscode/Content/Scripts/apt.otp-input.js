@@ -6,11 +6,13 @@
 
   var otpFieldSelector = null;
   var pasteCallback = null;
+  var digitCount = null;
 
   otpInput.init = function (data) {
 
     pasteCallback = data.pasteCallback ?? null;
     otpFieldSelector = data.selector || '.otp-field';
+    digitCount = data.digitCount || 6;
 
     $(apt.otp.parentSelector).on('keydown', otpFieldSelector, onKeyDown);
     $(apt.otp.parentSelector).on('paste', otpFieldSelector, onPaste);

@@ -64,7 +64,7 @@ $otp-transition-flag: 0.18s ease;
 
     .otp-validation-wrap {
         position: relative;
-        gap: 10px;
+        /*gap: 10px;*/
     }
 
     .otp-label {
@@ -190,7 +190,6 @@ $otp-transition-flag: 0.18s ease;
         min-width: 100%;
         max-width: min(90vw, 320px);
         padding: 8px 30px 8px 12px;
-        background: $otp-error-flag;
         color: $otp-bg-white;
         border-radius: 8px;
         box-shadow: $otp-shadow-flag;
@@ -212,7 +211,6 @@ $otp-transition-flag: 0.18s ease;
             height: 20px;
             border-radius: 50%;
             background-color: $otp-bg-white;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='1' width='4' height='9' rx='2' fill='%23dc3545'/%3E%3Ccircle cx='8' cy='13.5' r='2' fill='%23dc3545'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: center;
             background-size: 14px 14px;
@@ -222,11 +220,10 @@ $otp-transition-flag: 0.18s ease;
             content: "";
             position: absolute;
             top: 97%;
-            left: 8%;
+            left: 50%;
             transform: translateX(-50%);
             border-width: 7px 7px 0 7px;
             border-style: solid;
-            border-color: $otp-error-flag transparent transparent transparent;
         }
 
         &.is-visible {
@@ -237,7 +234,18 @@ $otp-transition-flag: 0.18s ease;
         }
     }
 
+    .otp-error-flag {
+        @extend .otp-validation-flag;
+        background: $otp-error-flag;
 
+        &::before {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='1' width='4' height='9' rx='2' fill='%23dc3545'/%3E%3Ccircle cx='8' cy='13.5' r='2' fill='%23dc3545'/%3E%3C/svg%3E");
+        }
+
+        &::after {
+            border-color: $otp-error-flag transparent transparent transparent;
+        }
+    }
 
     .otp-success-flag {
         @extend .otp-validation-flag;

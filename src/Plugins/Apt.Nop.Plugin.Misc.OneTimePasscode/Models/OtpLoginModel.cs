@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
 public class OtpLoginModel
 {
@@ -12,4 +7,6 @@ public class OtpLoginModel
     public int CodeExpiryMinutes { get; set; }
 
     public string RedirectUrlPath { get; set; }
+
+    public int CodeDigitCount { get; set; }
 }

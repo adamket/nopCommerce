@@ -40,7 +40,7 @@
 }
 .apt-otp .otp-validation-wrap {
   position: relative;
-  gap: 10px;
+  /*gap: 10px;*/
 }
 .apt-otp .otp-label {
   font-size: 14px;
@@ -134,7 +134,7 @@
 .apt-otp .spinner-arc {
   stroke-dasharray: 18 50;
 }
-.apt-otp .otp-validation-flag, .apt-otp .otp-success-flag {
+.apt-otp .otp-validation-flag, .apt-otp .otp-success-flag, .apt-otp .otp-error-flag {
   position: absolute;
   left: 0;
   top: 0;
@@ -143,7 +143,6 @@
   min-width: 100%;
   max-width: min(90vw, 320px);
   padding: 8px 30px 8px 12px;
-  background: #dc3545;
   color: #fff;
   border-radius: 8px;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
@@ -155,7 +154,7 @@
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
 }
-.apt-otp .otp-validation-flag::before, .apt-otp .otp-success-flag::before {
+.apt-otp .otp-validation-flag::before, .apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -165,26 +164,33 @@
   height: 20px;
   border-radius: 50%;
   background-color: #fff;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='1' width='4' height='9' rx='2' fill='%23dc3545'/%3E%3Ccircle cx='8' cy='13.5' r='2' fill='%23dc3545'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 14px 14px;
 }
-.apt-otp .otp-validation-flag::after, .apt-otp .otp-success-flag::after {
+.apt-otp .otp-validation-flag::after, .apt-otp .otp-success-flag::after, .apt-otp .otp-error-flag::after {
   content: "";
   position: absolute;
   top: 97%;
-  left: 8%;
+  left: 50%;
   transform: translateX(-50%);
   border-width: 7px 7px 0 7px;
   border-style: solid;
-  border-color: #dc3545 transparent transparent transparent;
 }
-.apt-otp .otp-validation-flag.is-visible, .apt-otp .is-visible.otp-success-flag {
+.apt-otp .otp-validation-flag.is-visible, .apt-otp .is-visible.otp-success-flag, .apt-otp .is-visible.otp-error-flag {
   opacity: 1;
   visibility: visible;
   transform: translateY(calc(-100% - 14px));
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s;
+}
+.apt-otp .otp-error-flag {
+  background: #dc3545;
+}
+.apt-otp .otp-error-flag::before {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='1' width='4' height='9' rx='2' fill='%23dc3545'/%3E%3Ccircle cx='8' cy='13.5' r='2' fill='%23dc3545'/%3E%3C/svg%3E");
+}
+.apt-otp .otp-error-flag::after {
+  border-color: #dc3545 transparent transparent transparent;
 }
 .apt-otp .otp-success-flag {
   background: #1d9e75;

@@ -79,7 +79,8 @@ public class OneTimePasscodeController : BasePublicController
             new OtpLoginModel
             {
                 Email = MaskEmail(email),
-                CodeExpiryMinutes = _otpSettings.OtpExpiresAfterMinutes
+                CodeExpiryMinutes = _otpSettings.OtpExpiresAfterMinutes,
+                CodeDigitCount = _otpSettings.CodeDigitCount is > 0 and <= 6 ? _otpSettings.CodeDigitCount : 6
             });
 
         //forward straight to code input without generating or emailing code (when user already has valid code but page refreshed)
@@ -155,7 +156,7 @@ public class OneTimePasscodeController : BasePublicController
             }
         }
 
-        var loginOtpCode = GeneratePasswordRecoverToken(6);
+        var loginOtpCode = GeneratePasswordRecoverToken(_otpSettings.CodeDigitCount);
 
         var otpBytes = Encoding.UTF8.GetBytes(loginOtpCode);
         var saltBytes = targetCustomer.CustomerGuid.ToByteArray();

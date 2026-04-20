@@ -64,8 +64,9 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         {
           OtpRequestIntervalSeconds = 30,
           OtpValidationIntervalSeconds = 5,
-          PreventUserEnumeration = true,
-          OtpExpiresAfterMinutes = 5
+          OtpExpiresAfterMinutes = 5,
+          CodeDigitCount = 6,
+          PreventUserEnumeration = true
         };
         await _settingService.SaveSettingAsync(settings);
 
@@ -115,37 +116,6 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
             }
         }
 
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpValidationIntervalSeconds", "OTP validation interval (seconds)");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpValidationIntervalSeconds.Hint", "The number of seconds a user must wait between passcode validation attempts.");
-
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds", "OTP resend interval (seconds)");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpGenerationIntervalSeconds.Hint", "The number of seconds a user must wait before requesting a new one-time passcode.");
-
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes", "OTP expiration time (minutes)");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.OtpExpiresAfterMinutes.Hint", "The number of minutes before a generated passcode expires.");
-
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.PreventUserEnumeration", "Always forward to passcode entry");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.Settings.PreventUserEnumeration.Hint", "If enabled, users will be directed to passcode entry even if customer with matching email does not exist.");
-
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.page.open-modal-button.text", "Login with one-time code");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.prompt", "Enter the 6-digit code sent to your email.");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.title", "One-time passcode login");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.resend-code-button.text", "Resend code");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.wrong-email.prompt", "Wrong email?");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.change-email.prompt", "Change it here");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.email.prompt", "Enter your email below and submit to receive a one-time passcode to log into your account.");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.forego-code-generation.text", "Already have a code?");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.email.submit.text", "Submit");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.login-button.text", "Login");
-        //await _localizationService.AddOrUpdateLocaleResourceAsync("apt.plugins.misc.otp.modal.resend-try-again-button.text", "Can resend again in {0}s");
-
-
-        //apt.plugins.misc.otp.activity-log.public-store.otp-requested
-        //apt.plugins.misc.otp.activity-log.public-store.otp-login
-        //apt.plugins.misc.otp.notification.logged-in
-        //apt.plugins.misc.otp.errors.requested-validation-too-soon
-        //apt.plugins.misc.otp.errors.otp-expired
-        //apt.plugins.misc.otp.errors.incorrect-code
         await base.InstallAsync();
     }
 

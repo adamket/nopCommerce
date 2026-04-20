@@ -1,34 +1,26 @@
-﻿document.addEventListener('keydown', function (e) {
-  if (e.target.matches('input[data-enter-clicks]') && e.key === 'Enter') {
-    e.preventDefault();
-    const buttonId = e.target.dataset.enterClicks;
+﻿(function (global, $) {
+  global.apt = global.apt || {};
+  var shared = global.apt.shared || {};
 
-    e.target.blur();
-    document.getElementById(buttonId)?.click();
-  }
-});
+  const LOADING_ATTR = 'data-loading';
+  const ORIGINAL_HTML_ATTR = 'data-original-html';
 
-const LOADING_ATTR = 'data-loading';
-const ORIGINAL_HTML_ATTR = 'data-original-html';
+  shared.loading = function (element, isLoading) {
+    if (isLoading === undefined) {
+      return element.hasAttribute(LOADING_ATTR);
+    }
 
-HTMLElement.prototype.loading = function (isLoading) {
-  var element = this;
-
-  if (isLoading === undefined) {
-    return element.hasAttribute(LOADING_ATTR);
-  }
-
-  if (isLoading) {
-    const { width, height } = this.getBoundingClientRect();
-    this.setAttribute(ORIGINAL_HTML_ATTR, this.innerHTML);
-    this.style.width = `${width}px`;
-    this.style.height = `${height}px`;
-    this.style.display = 'flex';
-    this.style.alignItems = 'center';
-    this.style.justifyContent = 'center';
-    this.setAttribute(LOADING_ATTR, '');
-    this.disabled = true;
-    this.innerHTML = `
+    if (isLoading) {
+      const { width, height } = element.getBoundingClientRect();
+      element.setAttribute(ORIGINAL_HTML_ATTR, element.innerHTML);
+      element.style.width = `${width}px`;
+      element.style.height = `${height}px`;
+      element.style.display = 'flex';
+      element.style.alignItems = 'center';
+      element.style.justifyContent = 'center';
+      element.setAttribute(LOADING_ATTR, '');
+      element.disabled = true;
+      element.innerHTML = `
   <svg
     class="spinner-svg"
     width="28"
@@ -58,44 +50,50 @@ HTMLElement.prototype.loading = function (isLoading) {
     />
   </svg>
 `;
-  } else {
-    const originalHTML = this.getAttribute(ORIGINAL_HTML_ATTR);
-    if (originalHTML !== null) this.innerHTML = originalHTML;
-    this.style.width = '';
-    this.style.height = '';
-    this.style.display = '';
-    this.style.alignItems = '';
-    this.style.justifyContent = '';
-    this.removeAttribute(LOADING_ATTR);
-    this.removeAttribute(ORIGINAL_HTML_ATTR);
-    this.disabled = false;
-  }
-
-  return this;
-}
-
-
-function runCountdown(durationSeconds, callback, done) {
-  const end = Date.now() + durationSeconds * 1000;
-
-  function tick() {
-    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-    callback(remaining);
-
-    if (remaining > 0) {
-      setTimeout(tick, 250);
-    } else if (done) {
-      done();
+    } else {
+      const originalHTML = element.getAttribute(ORIGINAL_HTML_ATTR);
+      if (originalHTML !== null) element.innerHTML = originalHTML;
+      element.style.width = '';
+      element.style.height = '';
+      element.style.display = '';
+      element.style.alignItems = '';
+      element.style.justifyContent = '';
+      element.removeAttribute(LOADING_ATTR);
+      element.removeAttribute(ORIGINAL_HTML_ATTR);
+      element.disabled = false;
     }
-  }
 
-  tick();
-}
+    return element;
+  };
 
-if (!String.format) {
-  String.format = function (str, ...args) {
-    return str.replace(/\{(\d+)\}/g, (match, index) => {
+  shared.runCountdown = function (durationSeconds, callback, done) {
+    const end = Date.now() + durationSeconds * 1000;
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      callback(remaining);
+      if (remaining > 0) {
+        setTimeout(tick, 250);
+      } else if (done) {
+        done();
+      }
+    }
+    tick();
+  };
+
+  shared.formatString = function (str, ...args) {
+    return str.replace(/\{(\d+)\}/g, function (match, index) {
       return args[index] !== undefined ? args[index] : match;
     });
   };
-}
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target.matches('input[data-enter-clicks]') && e.key === 'Enter') {
+      e.preventDefault();
+      const buttonId = e.target.dataset.enterClicks;
+      e.target.blur();
+      document.getElementById(buttonId)?.click();
+    }
+  });
+
+  global.apt.shared = shared;
+})(window, jQuery);

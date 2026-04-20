@@ -76,6 +76,16 @@
                 
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-label asp-for="CodeDigitCount" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-select asp-for="CodeDigitCount" asp-items="Model.AvailableCodeDigitCounts" />
+                        <span asp-validation-for="CodeDigitCount" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
                         <nop-label asp-for="PreventUserEnumeration" />
                     </div>
                     <div class="col-md-9">

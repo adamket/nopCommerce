@@ -79,18 +79,18 @@
       return;
     }
 
-    if (btn.loading() || btn.dataset.countdown) {
+    if (apt.shared.loading(btn) || btn.dataset.countdown) {
       return;
     }
 
-    btn.loading(true);
+    apt.shared.loading(btn, true);
 
     try {
       var response = await postJson(settings.sendUrl, { email: state.email, generateOtp: generateCode });
       if (!response.success) {
 
         if (resend && response.prematureOtpRequest && response.canResendInSeconds) {
-          btn.loading(false);
+          apt.shared.loading(btn, false);
           setCountdown(btn, response.canResendInSeconds);
         }
 
@@ -102,7 +102,7 @@
         if (resend) {
           apt.otpInput.resetCode(document.querySelector(settings.selectors.step2Container));
           if (response.canResendInSeconds) {
-            btn.loading(false);
+            apt.shared.loading(btn, false);
             setCountdown(btn, response.canResendInSeconds);
 
             apt.otp.showOtpSuccess(settings.localeStrings.resendSuccessMessage);
@@ -126,14 +126,14 @@
     } catch (e) {
       apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, resend ? settings.selectors.step2Container : settings.selectors.step1Container);
     } finally {
-      btn.loading(false);
+      apt.shared.loading(btn, false);
     }
   };
 
   otp.verifyOtp = async function () {
     var btn = document.querySelector(settings.selectors.submitButton);
 
-    if (btn.loading()) {
+    if (apt.shared.loading(btn)) {
       return;
     }
 
@@ -145,7 +145,7 @@
       return;
     }
 
-    btn.loading(true);
+    apt.shared.loading(btn, true);
 
     try {
       var response = await postJson(settings.verifyUrl, { otp: otp, email: state.email });
@@ -155,10 +155,10 @@
       }
 
       apt.otp.showOtpValidation(response.message || "Invalid code.", settings.selectors.step2Container);
-      btn.loading(false);
+      apt.shared.loading(btn, false);
 
     } catch (e) {
-      btn.loading(false);
+      apt.shared.loading(btn, false);
       apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.step2Container); 
     }
   };
@@ -174,14 +174,14 @@
 
   otp.showOtpValidation = function (message, containerSelector) {
     setTimeout(function () {
-      var flag = (containerSelector ? document.querySelector(containerSelector) : document).querySelector('.otp-validation-flag');
+      var flag = (containerSelector ? document.querySelector(containerSelector) : document).querySelector('.otp-error-flag');
       flag.textContent = message;
       flag.classList.add('is-visible');
     }, 0);
   }
 
   otp.hideOtpValidation = function () {
-    var flags = document.querySelectorAll('.otp-validation-flag, .otp-success-flag');
+    var flags = document.querySelectorAll('.otp-error-flag, .otp-success-flag');
 
     for (var i = 0; i < flags.length; ++i) {
       var flag = flags[i];
@@ -198,9 +198,9 @@
     var originalBtnContent = btn.innerHTML;
     btn.dataset.countdown = "true";
 
-    runCountdown(sendAgainSeconds,
+    apt.shared.runCountdown(sendAgainSeconds,
       (s) => {
-        btn.innerHTML = String.format(settings.localeStrings.resendTryAgainErrorMessage, s);
+        btn.innerHTML = apt.shared.formatString(settings.localeStrings.resendTryAgainErrorMessage, s);
       },
       () => {
         btn.innerHTML =

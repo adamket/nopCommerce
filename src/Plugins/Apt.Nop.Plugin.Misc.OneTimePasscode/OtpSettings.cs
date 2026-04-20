@@ -18,5 +18,6 @@ public class OtpSettings : ISettings
     public int OtpExpiresAfterMinutes { get; set; }
 
     public bool PreventUserEnumeration { get; set; }
+    public int CodeDigitCount { get; set; }
 
 }

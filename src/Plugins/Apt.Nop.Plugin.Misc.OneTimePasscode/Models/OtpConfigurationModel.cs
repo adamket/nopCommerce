@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Mvc.ModelBinding;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
@@ -23,4 +24,8 @@ public class OtpConfigurationModel
 
     [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.PreventUserEnumeration")]
     public bool PreventUserEnumeration { get; set; }
+
+    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.CodeDigitCount")]
+    public int CodeDigitCount { get; set; }
+    public IList<SelectListItem> AvailableCodeDigitCounts { get; set; } 
 }
