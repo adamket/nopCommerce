@@ -19,6 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Content\Stylesheets\apt.otp.min.css" />
     <None Remove="logo.png" />
     <None Remove="plugin.json" />
   </ItemGroup>

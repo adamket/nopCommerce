@@ -10,6 +10,7 @@
     var resendTryAgainErrorMessage = T("apt.plugins.misc.otp.modal.resend-try-again-button.text").Text;
     var emailRequiredErrorMessage = T("apt.plugins.misc.otp.errors.missing-email").Text;
     var generalErrorMessage = T("apt.plugins.misc.otp.errors.general").Text;
+    var resendSuccessMessgage = T("apt.plugins.misc.otp.resend.success.text").Text;
 
 }
 
@@ -21,13 +22,13 @@
 
       loginBtn.insertAdjacentHTML(
         'afterend',
-        "<div class='apt-otp otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#apt-otp'>@buttonText</button></div>"
+        "<div class='apt-otp'><div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#apt-otp-modal'>@buttonText</button></div></div>"
       );
 
       var newEl = loginBtn.nextElementSibling;
 
       requestAnimationFrame(() => {
-        newEl.classList.add("is-visible");
+        newEl.querySelector('.otp-entry-animate').classList.add("is-visible");
       });
     });
 
@@ -35,7 +36,8 @@
         localeStrings:{
             resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
             emailRequiredErrorMessage: "@emailRequiredErrorMessage",
-            generalErrorMessage: "@generalErrorMessage"
+            generalErrorMessage: "@generalErrorMessage",
+            resendSuccessMessage: "@resendSuccessMessgage"
         }
     });
     apt.otpInput.init({

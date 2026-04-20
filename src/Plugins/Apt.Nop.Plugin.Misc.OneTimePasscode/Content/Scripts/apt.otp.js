@@ -8,8 +8,11 @@
     localeStrings: {
       resendTryAgainErrorMessage: "Can resend again in {0}s",
       emailRequiredErrorMessage: "Email is required.",
+      resendSuccessMessage: "Sent!  Please allow a few minutes for the email to arrive."
     },
     selectors: {
+      parentElement: ".apt-otp",
+      otpStepContainer: ".otp-step-container",
       emailInput: "[data-otp-email]",
       sendButton: "[data-otp-send]",
       verifyButton: "[data-otp-verify]",
@@ -46,20 +49,19 @@
       state.email = $(this).val();
     });
 
-    $(document).on('mt-begin-open:#otp', function (e, modalEl) {
+    $(document).on('mt-begin-open:#otp', function (e) {
       var currentEmail = $(settings.selectors.standardLoginEmailInput).val();
       $(settings.selectors.emailInput).val(currentEmail);
       state.email = currentEmail;
-      //apt.otp.hideOtpValidation();
     });
 
     $(document).on('click', settings.selectors.backToStep1Button, function () {
 
-      var $modalBodyEl = $(".mt-body"); //make some modal.getContent function
-      $modalBodyEl.find('.otp-step-2').remove();
-      $modalBodyEl.find('.otp-step-1').show();
+      var $stepContainer = $(`${settings.selectors.parentElement} ${settings.selectors.otpStepContainer}`);
+      $stepContainer.find(settings.selectors.step2Container).remove();
+      $stepContainer.find(settings.selectors.step1Container).show();
 
-      $modalBodyEl.html($modalBodyEl.data('page-1'));
+      $stepContainer.html($stepContainer.data('page-1'));
     });
   };
 
@@ -68,6 +70,7 @@
 
     if (!state.email || !state.email.trim()) {
       apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.step1Container);
+      document.querySelector(settings.selectors.emailInput).focus();
       return;
     }
 
@@ -96,23 +99,26 @@
           if (response.canResendInSeconds) {
             btn.loading(false);
             setCountdown(btn, response.canResendInSeconds);
+
+            //TODO TODO TODO TODO TODO TODO TODO TODO SRescourse
+            apt.otp.showOtpSuccess("Sent!  Please allow up to x minutes for the email to arrive.");
           }
           return;
         }
 
-        var $modalBodyEl = $(".mt-body");
+        var $otpStepContainer = $(`${settings.selectors.parentElement} .otp-step-container`);
 
-        var $step2Container = $modalBodyEl.find('.otp-step-2');
+        var $step2Container = $otpStepContainer.find(settings.selectors.step2Container);
         if (!$step2Container.length) {
-          $modalBodyEl.append('<div class="otp-step-2"></div>')
+          $otpStepContainer.append('<div class="otp-step-2"></div>')
         }
 
-        $modalBodyEl.find(".otp-step-1").hide();
-        $modalBodyEl.find('.otp-step-2').empty().append(response.markup).show();
+        $otpStepContainer.find(settings.selectors.step1Container).hide();
+        $otpStepContainer.find(settings.selectors.step2Container).empty().append(response.markup).show();
         apt.otpInput.focus();
 
         return;
-      } 
+      }
     } catch (e) {
       apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, resend ? settings.selectors.step2Container : settings.selectors.step1Container);
     } finally {
@@ -130,7 +136,7 @@
     var otp = apt.otpInput.getCode(document.querySelector(settings.selectors.step2Container));
 
     if (otp.length < 6) {
-      apt.otp.showOtpValidation("Please ensure all values are entered.", settings.selectors.step2Container);
+      apt.otp.showOtpValidation("Please ensure all values are entered.", settings.selectors.step2Container); //TODO NEEDS SR
 
 
       return;
@@ -149,12 +155,19 @@
       btn.loading(false);
 
     } catch (e) {
-      setMessage("Unable to process the code right now.", true);
       btn.loading(false);
-      apt.otp.showOtpValidation("An error occurred.", settings.selectors.step2Container);
+      apt.otp.showOtpValidation(settings.selectors.generalErrorMessage, settings.selectors.step2Container); 
     }
   };
 
+
+  otp.showOtpSuccess = function (message, containerSelector) {
+    setTimeout(function () {
+      var flag = (containerSelector ? document.querySelector(containerSelector) : document).querySelector('.otp-success-flag');
+      flag.textContent = message;
+      flag.classList.add('is-visible');
+    }, 0);
+  }
 
   otp.showOtpValidation = function (message, containerSelector) {
     setTimeout(function () {
@@ -165,7 +178,7 @@
   }
 
   otp.hideOtpValidation = function () {
-    var flags = document.querySelectorAll('.otp-validation-flag');
+    var flags = document.querySelectorAll('.otp-validation-flag, .otp-success-flag');
 
     for (var i = 0; i < flags.length; ++i) {
       var flag = flags[i];
@@ -185,7 +198,6 @@
     runCountdown(sendAgainSeconds,
       (s) => {
         btn.innerHTML = String.format(settings.localeStrings.resendTryAgainErrorMessage, s);
-         /* `${settings.localeStrings.resendTryAgainMessage} ${s}s`;*/
       },
       () => {
         btn.innerHTML =
@@ -195,7 +207,6 @@
     );
     return;
   }
-
 
   function postJson(url, data) {
     return $.ajax({

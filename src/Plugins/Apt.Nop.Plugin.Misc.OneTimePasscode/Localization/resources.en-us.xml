@@ -95,7 +95,11 @@
         <LocaleResource Name="apt.plugins.misc.otp.errors.general">
             <Value>An error occurred. Please try again or contact support.</Value>
         </LocaleResource>
-        
+
+        <LocaleResource Name="apt.plugins.misc.otp.resend.success.text">
+            <Value>Sent!  Please allow a few minutes for the email to arrive.</Value>
+        </LocaleResource>
+
         
     </LocaleResources>
 </Language>

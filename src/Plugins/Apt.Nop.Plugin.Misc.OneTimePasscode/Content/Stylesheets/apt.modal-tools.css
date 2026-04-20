@@ -160,22 +160,6 @@
   overflow: initial !important;
 }
 
-.mt-overlay .button-1 {
-  min-width: 140px;
-  border: none;
-  background-color: var(--accent-blue-color);
-  padding: 10px 30px;
-  text-align: center;
-  font-size: 15px;
-  color: #fff;
-  text-transform: uppercase;
-}
-
-  .mt-overlay .button-1:focus,
-  .mt-overlay .button-1:hover {
-    background-color: var(--accent-blue-active-color);
-  }
-
 @media (prefers-reduced-motion: reduce) {
   .mt-overlay,
   .mt-window {
@@ -257,12 +241,6 @@
   .mt-body-footer {
     padding-bottom: 20px;
     padding-top: 15px;
-  }
-
-
-  .mt-body-container {
-    padding-left: 25px;
-    padding-right: 25px;
   }
 
 

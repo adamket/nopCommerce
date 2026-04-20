@@ -1,0 +1,9 @@
+﻿[
+  {
+    "outputFile": "Content/Stylesheets/apt.otp.css",
+    "inputFile": "Content/Stylesheets/apt.otp.scss",
+    "minify": { "enabled": false },
+    "includeInProject": true
+  }
+
+]

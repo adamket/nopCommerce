@@ -1,6 +1,6 @@
 
 
-<div data-mt-modal id="apt-otp" aria-labelledby="myModalTitle" data-mt-no-backdrop-close class="apt-otp">
+<div data-mt-modal id="apt-otp-modal" aria-labelledby="myModalTitle" data-mt-no-backdrop-close class="apt-otp">
     <div class="mt-window">
         <div class="mt-header">
             <h2 class="mt-title" id="myModalTitle">@T("apt.otp.modal.title")</h2>
@@ -8,7 +8,7 @@
                 <span class="sr-only">Close</span>
             </button>
         </div>
-        <div class="mt-body">
+        <div class="mt-body otp-step-container">
             <div class="otp-step-1">
                 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Request.cshtml")
             </div>
