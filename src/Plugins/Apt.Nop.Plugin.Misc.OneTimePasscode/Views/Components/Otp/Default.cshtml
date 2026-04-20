@@ -10,8 +10,8 @@
     var resendTryAgainErrorMessage = T("apt.plugins.misc.otp.modal.resend-try-again-button.text").Text;
     var emailRequiredErrorMessage = T("apt.plugins.misc.otp.errors.missing-email").Text;
     var generalErrorMessage = T("apt.plugins.misc.otp.errors.general").Text;
+    var incompleteCodeErrorMessage = T("apt.plugins.misc.otp.errors.incomplete-code").Text;
     var resendSuccessMessgage = T("apt.plugins.misc.otp.resend.success.text").Text;
-
 }
 
 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
@@ -37,7 +37,8 @@
             resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
             emailRequiredErrorMessage: "@emailRequiredErrorMessage",
             generalErrorMessage: "@generalErrorMessage",
-            resendSuccessMessage: "@resendSuccessMessgage"
+            resendSuccessMessage: "@resendSuccessMessgage",
+            incompleteCodeErrorMessage: "@incompleteCodeErrorMessage"
         }
     });
     apt.otpInput.init({

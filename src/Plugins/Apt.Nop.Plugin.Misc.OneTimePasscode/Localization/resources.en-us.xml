@@ -100,6 +100,11 @@
             <Value>Sent!  Please allow a few minutes for the email to arrive.</Value>
         </LocaleResource>
 
+        <LocaleResource Name="apt.plugins.misc.otp.errors.incomplete-code">
+            <Value>Please ensure entire code is filled in.</Value>
+        </LocaleResource>
+        
+        
         
     </LocaleResources>
 </Language>

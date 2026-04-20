@@ -5,7 +5,6 @@
   var otpInput = global.apt.otpInput || {};
 
   var otpFieldSelector = null;
-  var codeBoxes = [];
   var pasteCallback = null;
 
   otpInput.init = function (data) {
@@ -13,8 +12,8 @@
     pasteCallback = data.pasteCallback ?? null;
     otpFieldSelector = data.selector || '.otp-field';
 
-    $(document).on('keydown', otpFieldSelector, onKeyDown);
-    $(document).on('paste', otpFieldSelector, onPaste);
+    $(apt.otp.parentSelector).on('keydown', otpFieldSelector, onKeyDown);
+    $(apt.otp.parentSelector).on('paste', otpFieldSelector, onPaste);
 
   };
 
@@ -44,12 +43,21 @@
         ix = 0;
       }
 
-      $(otpFieldSelector)[ix].focus();
+      $(apt.otp.parentSelector).find(otpFieldSelector)[ix].focus();
     }, 0);
   }
 
+  otpInput.focusFirstEmpty = function (wrapper) {
+    setTimeout(function () {
+      var fields = [...(wrapper || document.querySelector(apt.otp.parentSelector))
+        .querySelectorAll(otpFieldSelector)];
+      var firstEmpty = fields.find(function (el) { return !el.value; });
+      (firstEmpty || fields[fields.length - 1])?.focus();
+    }, 0);
+  };
+
   function onKeyDown(e) {
-    const codeBoxes = [...document.querySelectorAll(otpFieldSelector)];
+    const codeBoxes = [...document.querySelectorAll(`${apt.otp.parentSelector} ${otpFieldSelector}`)];
     const input = e.target;
     const i = codeBoxes.indexOf(input);
     const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -122,7 +130,7 @@
   function onPaste(e) {
     e.preventDefault();
 
-    const codeBoxes = [...document.querySelectorAll(otpFieldSelector)];
+    const codeBoxes = [...document.querySelectorAll(`${apt.otp.parentSelector} ${otpFieldSelector}`)];
     const clipboardData = e.clipboardData || e.originalEvent?.clipboardData;
 
     if (!clipboardData) return;

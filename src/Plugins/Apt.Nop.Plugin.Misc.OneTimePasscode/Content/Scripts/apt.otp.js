@@ -1,17 +1,22 @@
 ﻿(function (global, $) {
   global.apt = global.apt || {};
 
-  var otp = apt.opt || {}
+  var otp = global.apt.otp || {};
+
+  otp.parentSelector = ".apt-otp";
+
   var settings = {
     sendUrl: "/apt/request-otp",
     verifyUrl: "/apt/otp-login",
     localeStrings: {
       resendTryAgainErrorMessage: "Can resend again in {0}s",
       emailRequiredErrorMessage: "Email is required.",
-      resendSuccessMessage: "Sent!  Please allow a few minutes for the email to arrive."
+      resendSuccessMessage: "Sent!  Please allow a few minutes for the email to arrive.",
+      generalErrorMessage: "An unexpected error occurred.  Please try again or contact support.",
+      incompleteCodeErrorMessage: "Please ensure entire code is filled in."
     },
     selectors: {
-      parentElement: ".apt-otp",
+      parentElement: otp.parentSelector,
       otpStepContainer: ".otp-step-container",
       emailInput: "[data-otp-email]",
       sendButton: "[data-otp-send]",
@@ -49,7 +54,7 @@
       state.email = $(this).val();
     });
 
-    $(document).on('mt-begin-open:#otp', function (e) {
+    $(document).on('mt-begin-open:#apt-otp-modal', function (e) {
       var currentEmail = $(settings.selectors.standardLoginEmailInput).val();
       $(settings.selectors.emailInput).val(currentEmail);
       state.email = currentEmail;
@@ -100,8 +105,7 @@
             btn.loading(false);
             setCountdown(btn, response.canResendInSeconds);
 
-            //TODO TODO TODO TODO TODO TODO TODO TODO SRescourse
-            apt.otp.showOtpSuccess("Sent!  Please allow up to x minutes for the email to arrive.");
+            apt.otp.showOtpSuccess(settings.localeStrings.resendSuccessMessage);
           }
           return;
         }
@@ -136,9 +140,8 @@
     var otp = apt.otpInput.getCode(document.querySelector(settings.selectors.step2Container));
 
     if (otp.length < 6) {
-      apt.otp.showOtpValidation("Please ensure all values are entered.", settings.selectors.step2Container); //TODO NEEDS SR
-
-
+      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container); //TODO NEEDS SR
+      apt.otpInput.focusFirstEmpty(document.querySelector(settings.selectors.step2Container));
       return;
     }
 
@@ -156,7 +159,7 @@
 
     } catch (e) {
       btn.loading(false);
-      apt.otp.showOtpValidation(settings.selectors.generalErrorMessage, settings.selectors.step2Container); 
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.step2Container); 
     }
   };
 
