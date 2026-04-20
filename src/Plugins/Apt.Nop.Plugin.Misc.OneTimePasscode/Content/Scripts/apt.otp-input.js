@@ -19,23 +19,23 @@
 
   };
 
-  otpInput.getCode = function (wrapper) {
+  otpInput.getCode = function (wrapperSelector) {
     let str = '';
     for (let i = 0; i <= 5; i++) {
-      str += wrapper.querySelector(otpFieldSelector + `[data-index='${i}']`)?.value ?? '';
+      str += document.querySelector(`${wrapperSelector} ${otpFieldSelector}[data-index='${i}']`)?.value ?? '';
     }
     return str;
   };
 
-  otpInput.resetCode = function (wrapper) {
-    const boxes = wrapper.querySelectorAll(otpFieldSelector);
+  otpInput.resetCode = function (wrapperSelector) {
+    const codeBoxes = getCodeBoxes(wrapperSelector);
 
-    boxes.forEach((el, i) => {
+    codeBoxes.forEach((el, i) => {
       el.value = '';
       el.classList.remove('filled', 'error');
     });
 
-    boxes[0]?.focus();
+    codeBoxes[0]?.focus();
   };
 
   otpInput.focus = function (ix) {
@@ -49,17 +49,25 @@
     }, 0);
   }
 
-  otpInput.focusFirstEmpty = function (wrapper) {
+  otpInput.isComplete = function (wrapperSelector) {
+    const codeBoxes = getCodeBoxes(wrapperSelector);
+    return codeBoxes.length > 0 && codeBoxes.every(function (el) { return el.value.trim() !== ''; });
+  };
+
+  otpInput.getCodeBoxCount = function (wrapperSelector) {
+    return getCodeBoxes(wrapperSelector).length;
+  };
+
+  otpInput.focusFirstEmpty = function (wrapperSelector) {
     setTimeout(function () {
-      var fields = [...(wrapper || document.querySelector(apt.otp.parentSelector))
-        .querySelectorAll(otpFieldSelector)];
-      var firstEmpty = fields.find(function (el) { return !el.value; });
-      (firstEmpty || fields[fields.length - 1])?.focus();
+      const codeBoxes = getCodeBoxes(wrapperSelector);
+      var firstEmpty = codeBoxes.find(function (el) { return !el.value; });
+      (firstEmpty || codeBoxes[codeBoxes.length - 1])?.focus();
     }, 0);
   };
 
   function onKeyDown(e) {
-    const codeBoxes = [...document.querySelectorAll(`${apt.otp.parentSelector} ${otpFieldSelector}`)];
+    const codeBoxes = getCodeBoxes();
     const input = e.target;
     const i = codeBoxes.indexOf(input);
     const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -132,7 +140,7 @@
   function onPaste(e) {
     e.preventDefault();
 
-    const codeBoxes = [...document.querySelectorAll(`${apt.otp.parentSelector} ${otpFieldSelector}`)];
+    const codeBoxes = getCodeBoxes();
     const clipboardData = e.clipboardData || e.originalEvent?.clipboardData;
 
     if (!clipboardData) return;
@@ -154,12 +162,18 @@
     const nextEmpty = codeBoxes.find((box) => !box.value);
     (nextEmpty || codeBoxes[codeBoxes.length - 1])?.focus();
 
-    if (digits.length >= 6) {
+    if (digits.length >= codeBoxes.length) {
       if (pasteCallback) {
         pasteCallback();
       }
     }
   }
+
+  function getCodeBoxes(wrapperSelector) {
+    return [...document.querySelectorAll(`${wrapperSelector || apt.otp.parentSelector} ${otpFieldSelector}`)];
+  }
+
+
 
   global.apt.otpInput = otpInput;
 })(window, jQuery);

@@ -37,6 +37,7 @@ public class OneTimePasscodeController : BasePublicController
     private readonly IShoppingCartService _shoppingCartService;
     private readonly ILogger _logger;
     private readonly IQueuedEmailService _queuedEmailService;
+    private const string _hashSeparator = "_";
     #endregion
 
     #region Ctor
@@ -74,13 +75,14 @@ public class OneTimePasscodeController : BasePublicController
             return Json(new { errorMessage = await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.invalid-email") });
         }
 
+        var codeDigitCount = _otpSettings.CodeDigitCount is >= 3 and <= 6 ? _otpSettings.CodeDigitCount : 6;
         var markup = await this.RenderPartialViewToStringAsync(
            $"{OtpConstants.PathToPlugin}/views/_Otp.Validate.cshtml",
             new OtpLoginModel
             {
                 Email = MaskEmail(email),
                 CodeExpiryMinutes = _otpSettings.OtpExpiresAfterMinutes,
-                CodeDigitCount = _otpSettings.CodeDigitCount is > 0 and <= 6 ? _otpSettings.CodeDigitCount : 6
+                CodeDigitCount = codeDigitCount
             });
 
         //forward straight to code input without generating or emailing code (when user already has valid code but page refreshed)
@@ -138,7 +140,9 @@ public class OneTimePasscodeController : BasePublicController
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(targetCustomer, OtpConstants.GenericAttributeKeys.OtpLastResentOn, utcNow);
 
         var isCurrentTokenExpired = otpCreatedUpdatedOn.HasValue && (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < utcNow);
-        if (!isCurrentTokenExpired)
+        var digitCount = int.TryParse(existingOtp?.Split(_hashSeparator).LastOrDefault(), out var result) ? result : codeDigitCount;
+
+        if (!isCurrentTokenExpired && digitCount == codeDigitCount) 
         {
             var emailIdsToRequeue =
                 await _genericAttributeService.GetAttributeAsync<List<int>>(targetCustomer, OtpConstants.GenericAttributeKeys
@@ -148,15 +152,17 @@ public class OneTimePasscodeController : BasePublicController
             {
                 var queuedEmails = await _queuedEmailService.GetQueuedEmailsByIdsAsync(emailIdsToRequeue.ToArray());
                 await _queuedEmailService.RequeueQueuedEmailsAsync(queuedEmails);
+
                 return this.OtpJsonSuccess(new
                 {
                     markup,
-                    canResendInSeconds = _otpSettings.OtpRequestIntervalSeconds
+                    canResendInSeconds = _otpSettings.OtpRequestIntervalSeconds,
+                    CodeDigitCount = digitCount
                 });
             }
         }
 
-        var loginOtpCode = GeneratePasswordRecoverToken(_otpSettings.CodeDigitCount);
+        var loginOtpCode = GeneratePasswordRecoverToken(codeDigitCount);
 
         var otpBytes = Encoding.UTF8.GetBytes(loginOtpCode);
         var saltBytes = targetCustomer.CustomerGuid.ToByteArray();
@@ -165,7 +171,7 @@ public class OneTimePasscodeController : BasePublicController
         var hash = HashHelper.CreateHash(saltedBytes, "SHA256");
 
         await _genericAttributeService.SaveAttributeAsync(targetCustomer,
-            OtpConstants.GenericAttributeKeys.LoginCode, hash);
+            OtpConstants.GenericAttributeKeys.LoginCode, $"{hash}{_hashSeparator}{_otpSettings.CodeDigitCount}");
 
         var store = await _storeContext.GetCurrentStoreAsync();
         var language = await _workContext.GetWorkingLanguageAsync();
@@ -234,7 +240,10 @@ public class OneTimePasscodeController : BasePublicController
 
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(targetCustomer,
             OtpConstants.GenericAttributeKeys.LoginLastAttempted, utcNow);
-  
+
+
+        storedOtp = storedOtp.Split(_hashSeparator).FirstOrDefault();
+
         var otpBytes = Encoding.UTF8.GetBytes(model.Otp);
         var saltBytes = targetCustomer.CustomerGuid.ToByteArray();
         var saltedBytes = CombineBytes(otpBytes, saltBytes);

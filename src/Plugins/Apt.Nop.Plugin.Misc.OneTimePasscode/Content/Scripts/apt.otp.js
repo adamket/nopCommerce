@@ -3,6 +3,7 @@
 
   var otp = global.apt.otp || {};
 
+  //only elements events / styles within this parent selector will be respected
   otp.parentSelector = ".apt-otp";
 
   var settings = {
@@ -100,7 +101,7 @@
 
       if (response.success) {
         if (resend) {
-          apt.otpInput.resetCode(document.querySelector(settings.selectors.step2Container));
+          apt.otpInput.resetCode();
           if (response.canResendInSeconds) {
             apt.shared.loading(btn, false);
             setCountdown(btn, response.canResendInSeconds);
@@ -124,6 +125,7 @@
         return;
       }
     } catch (e) {
+      console.error(e);
       apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, resend ? settings.selectors.step2Container : settings.selectors.step1Container);
     } finally {
       apt.shared.loading(btn, false);
@@ -137,11 +139,13 @@
       return;
     }
 
-    var otp = apt.otpInput.getCode(document.querySelector(settings.selectors.step2Container));
+    var otp = apt.otpInput.getCode(settings.selectors.step2Container);
 
-    if (otp.length < 6) {
-      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container); //TODO NEEDS SR
-      apt.otpInput.focusFirstEmpty(document.querySelector(settings.selectors.step2Container));
+    var inputsLength = apt.otpInput.getCodeBoxCount();
+    if (otp.length < inputsLength) {
+      apt.otpInput.focusFirstEmpty();
+      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container); 
+     
       return;
     }
 

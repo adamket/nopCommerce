@@ -107,7 +107,14 @@
         <LocaleResource Name="apt.otp.modal.close">
             <Value>Close modal</Value>
         </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.settings.codedigitcount">
+            <Value>Close modal</Value>
+        </LocaleResource>
+
+
         
+
 
     </LocaleResources>
 </Language>

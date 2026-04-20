@@ -64,7 +64,7 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         {
           OtpRequestIntervalSeconds = 30,
           OtpValidationIntervalSeconds = 5,
-          OtpExpiresAfterMinutes = 5,
+          OtpExpiresAfterMinutes = 15,
           CodeDigitCount = 6,
           PreventUserEnumeration = true
         };

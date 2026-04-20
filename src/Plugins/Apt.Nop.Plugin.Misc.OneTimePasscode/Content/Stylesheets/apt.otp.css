@@ -153,6 +153,7 @@
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+  will-change: transform, opacity;
 }
 .apt-otp .otp-validation-flag::before, .apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before {
   content: "";

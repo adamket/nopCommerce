@@ -200,6 +200,7 @@ $otp-transition-flag: 0.18s ease;
         visibility: hidden;
         pointer-events: none;
         transition: opacity $otp-transition-flag, transform $otp-transition-flag, visibility 0s linear 0.18s;
+        will-change: transform, opacity;
 
         &::before {
             content: "";
