@@ -78,6 +78,9 @@
     <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="Content\Stylesheets\apt.otp.scss">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Content\Stylesheets\apt.utils.css">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
