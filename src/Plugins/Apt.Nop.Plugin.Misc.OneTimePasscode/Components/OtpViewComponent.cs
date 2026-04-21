@@ -1,19 +1,24 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
+using Microsoft.AspNetCore.Mvc;
 using Nop.Web.Framework.Components;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Components;
 
 public partial class OtpViewComponent : NopViewComponent
 {
-
-    public OtpViewComponent()
+    private readonly OtpSettings _settings;
+    public OtpViewComponent(OtpSettings settings)
     {
-    
+        _settings = settings;
     }
 
     public async Task<IViewComponentResult> InvokeAsync()
     {
-        
-        return View($"{OtpConstants.PathToPlugin}/Views/Components/Otp/Default.cshtml");
+        var model = new OtpModel
+        {
+            ShowDefaultOtpLoginButton = _settings.ShowDefaultOtpLoginButton
+        };
+
+        return View(model);
     }
 }

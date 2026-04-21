@@ -7,7 +7,7 @@ using Nop.Services.Customers;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
 using Nop.Services.Security;
-using Nop.Web.Areas.Admin.Controllers;
+using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.Booster.Controllers.Admin;
@@ -18,7 +18,7 @@ public class BoosterController(
     INotificationService notificationService,
     IStoreContext storeContext,
     ILocalizationService localizationService, ICustomerService customerService)
-    : BaseAdminController
+    : BasePluginController
 {
     #region Methods
 

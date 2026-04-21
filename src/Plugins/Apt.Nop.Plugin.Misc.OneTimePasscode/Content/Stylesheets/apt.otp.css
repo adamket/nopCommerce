@@ -5,12 +5,63 @@
   gap: 16px;
 }
 
-.apt-otp .otp-field, .apt-otp .otp-email-field {
+.apt-otp .otp-email-field, .apt-otp .otp-fields .otp-field {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 8px 16px rgba(0, 0, 0, 0.1);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   border-width: 1.5px;
   background: #fff !important;
   outline: none;
+}
+
+.apt-otp .otp-success-flag, .apt-otp .otp-error-flag, .apt-otp .otp-validation-flag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translateY(calc(-100% - 10px));
+  z-index: 20;
+  min-width: 100%;
+  max-width: min(90vw, 320px);
+  padding: 8px 30px 8px 12px;
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+  will-change: transform, opacity;
+}
+.apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before, .apt-otp .otp-validation-flag::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+}
+.apt-otp .otp-success-flag::after, .apt-otp .otp-error-flag::after, .apt-otp .otp-validation-flag::after {
+  content: "";
+  position: absolute;
+  top: 97%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 7px 7px 0 7px;
+  border-style: solid;
+}
+.apt-otp .is-visible.otp-success-flag, .apt-otp .is-visible.otp-error-flag, .apt-otp .is-visible.otp-validation-flag {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(calc(-100% - 14px));
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s;
 }
 
 .apt-otp .button-1 {
@@ -42,21 +93,6 @@
   position: relative;
   /*gap: 10px;*/
 }
-.apt-otp .otp-label {
-  font-size: 14px;
-  line-height: 1.4;
-  color: #6b7280;
-  margin: 0 0 25px;
-  padding-left: 30px;
-  padding-right: 30px;
-}
-.apt-otp .otp-fields {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: auto;
-  gap: 8px;
-}
 .apt-otp .otp-entry-row {
   padding: 20px;
   background: #f3f4f6;
@@ -66,49 +102,20 @@
   padding-bottom: 30px;
   background: #f3f4f6;
 }
-.apt-otp .otp-login-btn {
-  white-space: nowrap;
-  flex: 0 0 auto;
-  max-width: 100px;
+.apt-otp .otp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 20px;
+  padding-right: 20px;
 }
-.apt-otp .otp-email-field {
-  max-width: 300px;
-  width: 300px;
-  line-height: 36px;
-  height: 36px;
-  font-size: 16px;
-}
-.apt-otp .otp-email-field:focus {
-  border-color: #374151 !important;
-  border-width: 1.5px !important;
-}
-.apt-otp .otp-field {
-  width: 50px !important;
-  height: 50px !important;
-  padding: 0 !important;
-  text-align: center;
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 50px;
-  color: #222;
-  border-radius: 8px !important;
-  caret-color: transparent;
-  box-sizing: border-box;
-}
-.apt-otp .otp-field:focus {
-  border-color: #374151 !important;
-  border-width: 2px;
-}
-.apt-otp .otp-field.filled {
-  background: #fff;
-  color: #222;
-}
-.apt-otp .otp-field.error {
-  border-color: #e24b4a;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 0 0 3px rgba(226, 75, 74, 0.12);
-}
-.apt-otp .otp-sep {
-  display: none;
+.apt-otp .otp-label {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #6b7280;
+  margin: 0 0 25px;
+  padding-left: 30px;
+  padding-right: 30px;
 }
 .apt-otp .otp-status {
   font-size: 13px;
@@ -123,6 +130,57 @@
 .apt-otp .otp-status.error {
   color: #e24b4a;
 }
+.apt-otp .otp-fields {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  gap: 8px;
+}
+.apt-otp .otp-fields .otp-field {
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 50px;
+  color: #222;
+  border-radius: 8px;
+  caret-color: transparent;
+  box-sizing: border-box;
+}
+.apt-otp .otp-fields .otp-field:focus {
+  border-color: #374151;
+  border-width: 2px;
+}
+.apt-otp .otp-fields .otp-field.filled {
+  background: #fff;
+  color: #222;
+}
+.apt-otp .otp-fields .otp-field.error {
+  border-color: #e24b4a;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 0 0 3px rgba(226, 75, 74, 0.12);
+}
+.apt-otp .otp-fields .otp-sep {
+  display: none;
+}
+.apt-otp .otp-email-field {
+  max-width: 300px;
+  width: 300px;
+  line-height: 36px;
+  height: 36px;
+  font-size: 16px;
+}
+.apt-otp .otp-email-field:focus {
+  border-color: #374151 !important;
+  border-width: 1.5px !important;
+}
+.apt-otp .otp-login-btn {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  max-width: 100px;
+}
 .apt-otp .spinner-svg {
   display: inline-block;
   vertical-align: middle;
@@ -133,56 +191,6 @@
 }
 .apt-otp .spinner-arc {
   stroke-dasharray: 18 50;
-}
-.apt-otp .otp-validation-flag, .apt-otp .otp-success-flag, .apt-otp .otp-error-flag {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform: translateY(calc(-100% - 10px));
-  z-index: 20;
-  min-width: 100%;
-  max-width: min(90vw, 320px);
-  padding: 8px 30px 8px 12px;
-  color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
-  font-size: 13px;
-  line-height: 1.35;
-  text-align: left;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
-  will-change: transform, opacity;
-}
-.apt-otp .otp-validation-flag::before, .apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: #fff;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 14px 14px;
-}
-.apt-otp .otp-validation-flag::after, .apt-otp .otp-success-flag::after, .apt-otp .otp-error-flag::after {
-  content: "";
-  position: absolute;
-  top: 97%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 7px 7px 0 7px;
-  border-style: solid;
-}
-.apt-otp .otp-validation-flag.is-visible, .apt-otp .is-visible.otp-success-flag, .apt-otp .is-visible.otp-error-flag {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(calc(-100% - 14px));
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s;
 }
 .apt-otp .otp-error-flag {
   background: #dc3545;
@@ -201,13 +209,6 @@
 }
 .apt-otp .otp-success-flag::after {
   border-color: #1d9e75 transparent transparent transparent;
-}
-.apt-otp .otp-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-left: 20px;
-  padding-right: 20px;
 }
 .apt-otp .otp-entry-animate {
   opacity: 0;
@@ -279,6 +280,21 @@
     width: 100%;
     max-width: 100%;
   }
+}
+.apt-otp .text-center {
+  text-align: center;
+}
+.apt-otp .underline {
+  text-decoration: underline;
+}
+.apt-otp .mt-10px {
+  margin-top: 10px;
+}
+.apt-otp .bg-soft-gray {
+  background: #f3f4f6;
+}
+.apt-otp .full-width {
+  width: 100%;
 }
 
 @keyframes otp-spin {

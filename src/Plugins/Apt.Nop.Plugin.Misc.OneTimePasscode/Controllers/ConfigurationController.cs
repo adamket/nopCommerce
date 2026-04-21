@@ -23,7 +23,7 @@ public class ConfigurationController : BasePluginController
     private readonly IStoreContext _storeContext;
     private readonly INotificationService _notificationService;
     private readonly ILocalizationService _localizationService;
-    private readonly ITwilioService _twilioService;
+   // private readonly ITwilioService _twilioService;
 
     #endregion
 
@@ -33,13 +33,13 @@ public class ConfigurationController : BasePluginController
         ISettingService settingService,
         IStoreContext storeContext,
         INotificationService notificationService,
-        ILocalizationService localizationService, ITwilioService twilioService)
+        ILocalizationService localizationService/*, ITwilioService twilioService*/)
     {
         _settingService = settingService;
         _storeContext = storeContext;
         _notificationService = notificationService;
         _localizationService = localizationService;
-        _twilioService = twilioService;
+       // _twilioService = twilioService;
     }
 
     #endregion
@@ -55,17 +55,18 @@ public class ConfigurationController : BasePluginController
         var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
         var settings = await _settingService.LoadSettingAsync<OtpSettings>(storeScope);
 
-        model.TwilioAccountSid = settings.TwilioAccountSid;
-        model.TwilioAuthToken = settings.TwilioAuthToken;
-        model.TwilioFromNumber = settings.TwilioFromNumber;
+        //model.TwilioAccountSid = settings.TwilioAccountSid;
+        //model.TwilioAuthToken = settings.TwilioAuthToken;
+        //model.TwilioFromNumber = settings.TwilioFromNumber;
         model.OtpRequestIntervalSeconds = settings.OtpRequestIntervalSeconds;
         model.OtpValidationIntervalSeconds = settings.OtpValidationIntervalSeconds;
         model.OtpExpiresAfterMinutes = settings.OtpExpiresAfterMinutes;
         model.PreventUserEnumeration = settings.PreventUserEnumeration;
         model.CodeDigitCount = settings.CodeDigitCount;
+        model.ShowDefaultOtpLoginButton = settings.ShowDefaultOtpLoginButton;
 
         model.AvailableCodeDigitCounts = new List<SelectListItem>();
-        for (var i = 2; i <= 6; ++i)
+        for (var i = 3; i <= 6; ++i)
         {
             model.AvailableCodeDigitCounts.Add(new(i.ToString(), i.ToString()));
         }
@@ -83,14 +84,15 @@ public class ConfigurationController : BasePluginController
         var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
         var settings = await _settingService.LoadSettingAsync<OtpSettings>(storeScope);
 
-        settings.TwilioAccountSid = model.TwilioAccountSid ?? string.Empty;
-        settings.TwilioAuthToken = model.TwilioAuthToken ?? string.Empty;
-        settings.TwilioFromNumber = model.TwilioFromNumber ?? string.Empty;
+        //settings.TwilioAccountSid = model.TwilioAccountSid ?? string.Empty;
+        //settings.TwilioAuthToken = model.TwilioAuthToken ?? string.Empty;
+        //settings.TwilioFromNumber = model.TwilioFromNumber ?? string.Empty;
         settings.OtpRequestIntervalSeconds = model.OtpRequestIntervalSeconds;
         settings.OtpValidationIntervalSeconds = model.OtpValidationIntervalSeconds;
         settings.OtpExpiresAfterMinutes = model.OtpExpiresAfterMinutes;
         settings.PreventUserEnumeration = model.PreventUserEnumeration;
         settings.CodeDigitCount = model.CodeDigitCount;
+        settings.ShowDefaultOtpLoginButton = model.ShowDefaultOtpLoginButton;
 
         await _settingService.SaveSettingAsync(settings);
 

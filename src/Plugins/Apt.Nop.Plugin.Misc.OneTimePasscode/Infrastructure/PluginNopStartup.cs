@@ -1,9 +1,9 @@
 ﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Infrastructure;
-using Nop.Services.Media;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Infrastructure;
 
@@ -22,6 +22,11 @@ public class PluginNopStartup : INopStartup
         services.AddScoped<ITwilioService, TwilioService>();
         services.AddScoped<ICustomWorkflowMessageService, CustomWorkflowMessageService>();
         services.AddScoped<ICustomGenericAttributeService, CustomGenericAttributeService>();
+
+        services.Configure<RazorViewEngineOptions>(options =>
+        {
+            options.ViewLocationExpanders.Add(new PluginViewLocationExpander());
+        });
     }
 
     /// <summary>

@@ -5,9 +5,9 @@ using Nop.Web.Framework.Mvc.ModelBinding;
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
 public class OtpConfigurationModel
 {
-    public string TwilioAccountSid { get; set; } 
-    public string TwilioAuthToken { get; set; } 
-    public string TwilioFromNumber { get; set; }
+    //public string TwilioAccountSid { get; set; } 
+    //public string TwilioAuthToken { get; set; } 
+    //public string TwilioFromNumber { get; set; }
 
     [Range(1, int.MaxValue)]
     [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.OtpValidationIntervalSeconds")]
@@ -27,5 +27,9 @@ public class OtpConfigurationModel
 
     [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.CodeDigitCount")]
     public int CodeDigitCount { get; set; }
+
+    [NopResourceDisplayName("Apt.Plugins.Misc.Otp.Settings.ShowDefaultOtpLoginButton")]
+    public bool ShowDefaultOtpLoginButton { get; set; }
+
     public IList<SelectListItem> AvailableCodeDigitCounts { get; set; } 
 }

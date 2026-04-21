@@ -1,9 +1,15 @@
+// =========================
+// Tokens
+// =========================
+
 $otp-bg-soft: #f3f4f6;
 $otp-bg-white: #fff;
+
 $otp-text-dark: #222;
 $otp-text-muted: #6b7280;
 $otp-text-subtle: #9ca3af;
 $otp-text-button: #374151;
+
 $otp-error: #e24b4a;
 $otp-error-flag: #dc3545;
 $otp-success: #1d9e75;
@@ -15,25 +21,147 @@ $otp-shadow-flag: 0 10px 20px rgba(0, 0, 0, 0.18);
 
 $otp-transition-fast: 0.15s ease;
 $otp-transition-flag: 0.18s ease;
+$otp-transition-entry: 220ms ease;
+$otp-transition-entry-transform: 220ms cubic-bezier(0.22, 1, 0.36, 1);
+
+$otp-space-2xs: 2px;
+$otp-space-xs: 4px;
+$otp-space-sm: 6px;
+$otp-space-md: 8px;
+$otp-space-lg: 10px;
+$otp-space-xl: 12px;
+$otp-space-2xl: 16px;
+$otp-space-3xl: 20px;
+$otp-space-4xl: 25px;
+$otp-space-5xl: 30px;
+
+$otp-radius-xs: 3px;
+$otp-radius-sm: 5px;
+$otp-radius-md: 6px;
+$otp-radius-lg: 8px;
+
+$otp-field-size-default: 50px;
+$otp-field-size-md: 45px;
+$otp-field-size-sm: 40px;
+$otp-field-size-xs: 35px;
+
+$otp-field-font-default: 20px;
+$otp-field-font-md: 18px;
+$otp-field-font-sm: 16px;
+$otp-field-font-xs: 14px;
+
+$otp-line-height-email: 36px;
+$otp-height-email: 36px;
+$otp-width-email: 300px;
+$otp-width-login-btn-max: 100px;
+$otp-width-button-min: 140px;
+
+$otp-breakpoint-md: 600px;
+$otp-breakpoint-sm: 380px;
+$otp-breakpoint-xs: 330px;
+
+$otp-flag-z-index: 20;
+$otp-flag-icon-size: 20px;
+$otp-flag-icon-bg-size: 14px 14px;
+$otp-flag-arrow-size: 7px;
+$otp-flag-hidden-offset: calc(-100% - 10px);
+$otp-flag-visible-offset: calc(-100% - 14px);
+
+// =========================
+// Shared abstractions
+// =========================
 
 %otp-centered-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: $otp-space-2xl;
 }
 
 %otp-input-shell {
     box-shadow: $otp-shadow-field;
     transition: border-color $otp-transition-fast, box-shadow $otp-transition-fast;
-    border-width:1.5px; 
+    border-width: 1.5px;
     background: $otp-bg-white !important;
     outline: none;
 }
 
+%otp-validation-flag-base {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translateY($otp-flag-hidden-offset);
+    z-index: $otp-flag-z-index;
+    min-width: 100%;
+    max-width: min(90vw, 320px);
+    padding: 8px 30px 8px 12px;
+    color: $otp-bg-white;
+    border-radius: $otp-radius-lg;
+    box-shadow: $otp-shadow-flag;
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity $otp-transition-flag, transform $otp-transition-flag, visibility 0s linear 0.18s;
+    will-change: transform, opacity;
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: $otp-space-lg;
+        transform: translateY(-50%);
+        width: $otp-flag-icon-size;
+        height: $otp-flag-icon-size;
+        border-radius: 50%;
+        background-color: $otp-bg-white;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: $otp-flag-icon-bg-size;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 97%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: $otp-flag-arrow-size $otp-flag-arrow-size 0 $otp-flag-arrow-size;
+        border-style: solid;
+    }
+
+    &.is-visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY($otp-flag-visible-offset);
+        transition: opacity $otp-transition-flag, transform $otp-transition-flag, visibility 0s linear 0s;
+    }
+}
+
+@mixin otp-field-size($size, $font-size, $line-height, $radius) {
+    width: $size !important;
+    height: $size !important;
+    font-size: $font-size;
+    line-height: $line-height;
+    border-radius: $radius !important;
+}
+
+@mixin otp-full-width-control {
+    width: 100%;
+    max-width: 100%;
+}
+
+// =========================
+// Component
+// =========================
+
 .apt-otp {
+    // Buttons
+
     .button-1 {
-        min-width: 140px;
+        min-width: $otp-width-button-min;
         border: none;
         background-color: var(--accent-blue-color);
         padding: 10px 30px;
@@ -61,94 +189,42 @@ $otp-transition-flag: 0.18s ease;
             background: #eee;
         }
     }
+    // Layout
 
     .otp-validation-wrap {
         position: relative;
         /*gap: 10px;*/
     }
 
-    .otp-label {
-        font-size: 14px;
-        line-height: 1.4;
-        color: $otp-text-muted;
-        margin: 0 0 25px;
-        padding-left: 30px;
-        padding-right: 30px;
-    }
-
-    .otp-fields {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: auto;
-        gap: 8px;
-    }
-
     .otp-entry-row {
         @extend %otp-centered-row;
-        padding: 20px;
+        padding: $otp-space-3xl;
         background: $otp-bg-soft;
     }
 
     .otp-email-entry-row {
         @extend %otp-centered-row;
-        padding-top: 30px;
-        padding-bottom: 30px;
+        padding-top: $otp-space-5xl;
+        padding-bottom: $otp-space-5xl;
         background: $otp-bg-soft;
     }
 
-    .otp-login-btn {
-        white-space: nowrap;
-        flex: 0 0 auto;
-        max-width: 100px;
+    .otp-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-left: $otp-space-3xl;
+        padding-right: $otp-space-3xl;
     }
+    // Labels and status
 
-    .otp-email-field {
-        @extend %otp-input-shell;
-        max-width: 300px;
-        width: 300px;
-        line-height: 36px;
-        height: 36px;
-        font-size: 16px;
-
-        &:focus {
-            border-color: $otp-focus !important;
-            border-width: 1.5px !important;
-        }
-    }
-
-    .otp-field {
-        @extend %otp-input-shell;
-        width: 50px !important;
-        height: 50px !important;
-        padding: 0 !important;
-        text-align: center;
-        font-size: 20px;
-        font-weight: 500;
-        line-height: 50px;
-        color: $otp-text-dark;
-        border-radius: 8px !important;
-        caret-color: transparent;
-        box-sizing: border-box;
-
-        &:focus {
-            border-color: $otp-focus !important;
-            border-width: 2px;
-        }
-
-        &.filled {
-            background: $otp-bg-white;
-            color: $otp-text-dark;
-        }
-
-        &.error {
-            border-color: $otp-error;
-            box-shadow: $otp-shadow-error;
-        }
-    }
-
-    .otp-sep {
-        display: none;
+    .otp-label {
+        font-size: 14px;
+        line-height: 1.4;
+        color: $otp-text-muted;
+        margin: 0 0 25px;
+        padding-left: $otp-space-5xl;
+        padding-right: $otp-space-5xl;
     }
 
     .otp-status {
@@ -166,6 +242,70 @@ $otp-transition-flag: 0.18s ease;
             color: $otp-error;
         }
     }
+    // Field group
+
+    .otp-fields {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: auto;
+        gap: $otp-space-md;
+
+        .otp-field {
+            @extend %otp-input-shell;
+            width: $otp-field-size-default;
+            height: $otp-field-size-default;
+            padding: 0;
+            text-align: center;
+            font-size: $otp-field-font-default;
+            font-weight: 500;
+            line-height: $otp-field-size-default;
+            color: $otp-text-dark;
+            border-radius: $otp-radius-lg;
+            caret-color: transparent;
+            box-sizing: border-box;
+
+            &:focus {
+                border-color: $otp-focus;
+                border-width: 2px;
+            }
+
+            &.filled {
+                background: $otp-bg-white;
+                color: $otp-text-dark;
+            }
+
+            &.error {
+                border-color: $otp-error;
+                box-shadow: $otp-shadow-error;
+            }
+        }
+
+        .otp-sep {
+            display: none;
+        }
+    }
+
+    .otp-email-field {
+        @extend %otp-input-shell;
+        max-width: $otp-width-email;
+        width: $otp-width-email;
+        line-height: $otp-line-height-email;
+        height: $otp-height-email;
+        font-size: 16px;
+
+        &:focus {
+            border-color: $otp-focus !important;
+            border-width: 1.5px !important;
+        }
+    }
+
+    .otp-login-btn {
+        white-space: nowrap;
+        flex: 0 0 auto;
+        max-width: $otp-width-login-btn-max;
+    }
+    // Spinner
 
     .spinner-svg {
         display: inline-block;
@@ -180,63 +320,14 @@ $otp-transition-flag: 0.18s ease;
     .spinner-arc {
         stroke-dasharray: 18 50;
     }
+    // Validation flags
 
     .otp-validation-flag {
-        position: absolute;
-        left: 0;
-        top: 0;
-        transform: translateY(calc(-100% - 10px));
-        z-index: 20;
-        min-width: 100%;
-        max-width: min(90vw, 320px);
-        padding: 8px 30px 8px 12px;
-        color: $otp-bg-white;
-        border-radius: 8px;
-        box-shadow: $otp-shadow-flag;
-        font-size: 13px;
-        line-height: 1.35;
-        text-align: left;
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transition: opacity $otp-transition-flag, transform $otp-transition-flag, visibility 0s linear 0.18s;
-        will-change: transform, opacity;
-
-        &::before {
-            content: "";
-            position: absolute;
-            top: 50%;
-            right: 10px;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: $otp-bg-white;
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 14px 14px;
-        }
-
-        &::after {
-            content: "";
-            position: absolute;
-            top: 97%;
-            left: 50%;
-            transform: translateX(-50%);
-            border-width: 7px 7px 0 7px;
-            border-style: solid;
-        }
-
-        &.is-visible {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(calc(-100% - 14px));
-            transition: opacity $otp-transition-flag, transform $otp-transition-flag, visibility 0s linear 0s;
-        }
+        @extend %otp-validation-flag-base;
     }
 
     .otp-error-flag {
-        @extend .otp-validation-flag;
+        @extend %otp-validation-flag-base;
         background: $otp-error-flag;
 
         &::before {
@@ -249,7 +340,7 @@ $otp-transition-flag: 0.18s ease;
     }
 
     .otp-success-flag {
-        @extend .otp-validation-flag;
+        @extend %otp-validation-flag-base;
         background: $otp-success;
 
         &::before {
@@ -260,15 +351,7 @@ $otp-transition-flag: 0.18s ease;
             border-color: $otp-success transparent transparent transparent;
         }
     }
-
-
-    .otp-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding-left: 20px;
-        padding-right: 20px;
-    }
+    // Motion
 
     .otp-entry-animate {
         opacity: 0;
@@ -277,28 +360,25 @@ $otp-transition-flag: 0.18s ease;
         &.is-visible {
             opacity: 1;
             transform: translateY(0);
-            transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+            transition: opacity $otp-transition-entry, transform $otp-transition-entry-transform;
         }
     }
+    // Responsive
 
-    @media (max-width: 600px) {
+    @media (max-width: $otp-breakpoint-md) {
         .otp-fields {
-            gap: 6px;
+            gap: $otp-space-sm;
         }
 
         .otp-field {
-            width: 45px !important;
-            height: 45px !important;
-            font-size: 18px;
-            line-height: 45px;
-            border-radius: 6px !important;
+            @include otp-field-size($otp-field-size-md, $otp-field-font-md, $otp-field-size-md, $otp-radius-md);
         }
 
         .otp-entry-row,
         .otp-email-entry-row {
             flex-direction: column;
             align-items: center;
-            gap: 20px;
+            gap: $otp-space-3xl;
             margin-bottom: 0;
             padding: 0;
             background-color: inherit;
@@ -311,49 +391,63 @@ $otp-transition-flag: 0.18s ease;
         .otp-email-field,
         .otp-login-btn,
         .otp-back-btn {
-            width: 100%;
-            max-width: 100%;
+            @include otp-full-width-control;
         }
     }
 
-    @media (max-width: 380px) {
+    @media (max-width: $otp-breakpoint-sm) {
         .otp-fields {
-            gap: 4px;
+            gap: $otp-space-xs;
         }
 
         .otp-field {
-            width: 40px !important;
-            height: 40px !important;
-            font-size: 16px;
-            line-height: 40px;
-            border-radius: 5px !important;
+            @include otp-field-size($otp-field-size-sm, $otp-field-font-sm, $otp-field-size-sm, $otp-radius-sm);
         }
 
         .otp-login-btn {
-            width: 100%;
-            max-width: 100%;
+            @include otp-full-width-control;
         }
     }
 
-    @media (max-width: 330px) {
+    @media (max-width: $otp-breakpoint-xs) {
         .otp-fields {
-            gap: 2px;
+            gap: $otp-space-2xs;
         }
 
         .otp-field {
-            width: 35px !important;
-            height: 35px !important;
-            font-size: 14px;
-            line-height: 30px;
-            border-radius: 3px !important;
+            @include otp-field-size($otp-field-size-xs, $otp-field-font-xs, 30px, $otp-radius-xs);
         }
 
         .otp-login-btn {
-            width: 100%;
-            max-width: 100%;
+            @include otp-full-width-control;
         }
+    }
+    // Local utilities
+
+    .text-center {
+        text-align: center;
+    }
+
+    .underline {
+        text-decoration: underline;
+    }
+
+    .mt-10px {
+        margin-top: 10px;
+    }
+
+    .bg-soft-gray {
+        background: $otp-bg-soft;
+    }
+
+    .full-width {
+        width: 100%;
     }
 }
+
+// =========================
+// Keyframes
+// =========================
 
 @keyframes otp-spin {
     to {

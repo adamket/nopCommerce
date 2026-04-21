@@ -81,9 +81,6 @@
     <None Update="Content\Stylesheets\apt.otp.scss">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Content\Stylesheets\apt.utils.css">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="Localization\resources-it-IT.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -108,7 +105,7 @@
     <None Update="Localization\resources.pt-BR.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Views\Components\Otp\Default.cshtml">
+    <None Update="Views\Shared\Components\Otp\Default.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\_Otp.Modal.cshtml">
@@ -120,9 +117,6 @@
     <None Update="Views\_Otp.Validate.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Views\Components\Otp\" />
   </ItemGroup>
 
 

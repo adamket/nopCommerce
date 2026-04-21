@@ -1,3 +1,5 @@
+@model Apt.Nop.Plugin.Misc.OneTimePasscode.Models.OtpModel
+
 @{
     NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.modal-tools.js");
     NopHtml.AppendScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/content/scripts/apt.otp.js");
@@ -16,35 +18,46 @@
 
 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Modal.cshtml")
 
+@if (Model.ShowDefaultOtpLoginButton)
+{
+    <script asp-location="Footer">
+
+        document.addEventListener("DOMContentLoaded", function () {
+              var loginBtn = document.querySelector(".login-button");
+
+              loginBtn.insertAdjacentHTML(
+                'afterend',
+                "<div class='apt-otp'><div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#apt-otp-modal'>@buttonText</button></div></div>"
+              );
+
+              var newEl = loginBtn.nextElementSibling;
+
+              requestAnimationFrame(() => {
+                newEl.querySelector('.otp-entry-animate').classList.add("is-visible");
+              });
+        });
+    </script>
+}
+
+
+
 <script asp-location="Footer">
     document.addEventListener("DOMContentLoaded", function () {
-      var loginBtn = document.querySelector(".login-button");
+        apt.otp.init({
+            localeStrings:{
+                resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
+                emailRequiredErrorMessage: "@emailRequiredErrorMessage",
+                generalErrorMessage: "@generalErrorMessage",
+                resendSuccessMessage: "@resendSuccessMessgage",
+                incompleteCodeErrorMessage: "@incompleteCodeErrorMessage"
+            }
+        });
 
-      loginBtn.insertAdjacentHTML(
-        'afterend',
-        "<div class='apt-otp'><div class='otp-entry-animate'><button class='button-1 mt-10px' data-mt-open='#apt-otp-modal'>@buttonText</button></div></div>"
-      );
-
-      var newEl = loginBtn.nextElementSibling;
-
-      requestAnimationFrame(() => {
-        newEl.querySelector('.otp-entry-animate').classList.add("is-visible");
-      });
-    });
-
-    apt.otp.init({
-        localeStrings:{
-            resendTryAgainErrorMessage: "@resendTryAgainErrorMessage",
-            emailRequiredErrorMessage: "@emailRequiredErrorMessage",
-            generalErrorMessage: "@generalErrorMessage",
-            resendSuccessMessage: "@resendSuccessMessgage",
-            incompleteCodeErrorMessage: "@incompleteCodeErrorMessage"
-        }
-    });
-    apt.otpInput.init({
-        selector: ".otp-field",
-        pasteCallback: function(){
-            document.getElementById("verify-otp").click();
-        }
+        apt.otpInput.init({
+            selector: ".otp-field",
+            pasteCallback: function(){
+                document.getElementById("verify-otp").click();
+            }
+        });
     });
 </script>

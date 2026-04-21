@@ -108,13 +108,22 @@
             <Value>Close modal</Value>
         </LocaleResource>
 
-        <LocaleResource Name="apt.plugins.misc.otp.settings.codedigitcount">
-            <Value>Close modal</Value>
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.CodeDigitCount">
+            <Value>Number of digits</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.CodeDigitCount.Hint">
+            <Value>The number of digits in a one-time passcode.</Value>
         </LocaleResource>
 
 
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ShowDefaultOtpLoginButton">
+            <Value>Show login button</Value>
+        </LocaleResource>
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ShowDefaultOtpLoginButton.Hint">
+            <Value>If selected, a one-time passcode login button will be displayed on the login page below the standard login button. Alternatively, any element can be given the attribute data-mt-open="#apt-otp-modal" on the login page to trigger the opening of the passcode modal manually.</Value>
+        </LocaleResource>
         
-
 
     </LocaleResources>
 </Language>

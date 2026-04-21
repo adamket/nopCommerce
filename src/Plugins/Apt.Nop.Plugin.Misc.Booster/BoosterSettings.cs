@@ -14,5 +14,7 @@ public class BoosterSettings : ISettings
 
     public bool BypassCacheIfProductDiscountsApplied { get; set; }
 
+    //public bool ClearProductCacheOnPurchase {get;set;}
+
     public bool Enabled { get; set; }
 }

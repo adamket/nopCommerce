@@ -66,7 +66,9 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
           OtpValidationIntervalSeconds = 5,
           OtpExpiresAfterMinutes = 15,
           CodeDigitCount = 6,
-          PreventUserEnumeration = true
+          PreventUserEnumeration = true,
+          ShowDefaultOtpLoginButton = true,
+          
         };
         await _settingService.SaveSettingAsync(settings);
 

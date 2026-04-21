@@ -72,7 +72,7 @@
   };
 
 
-  otp.sendOtp = async function (btn, resend, generateCode) {
+  otp.sendOtp = async function (btn, isResend, shouldGenerateCode) {
 
     if (!state.email || !state.email.trim()) {
       apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.step1Container);
@@ -87,20 +87,20 @@
     apt.shared.loading(btn, true);
 
     try {
-      var response = await postJson(settings.sendUrl, { email: state.email, generateOtp: generateCode });
+      var response = await postJson(settings.sendUrl, { email: state.email, generateOtp: shouldGenerateCode });
       if (!response.success) {
 
-        if (resend && response.prematureOtpRequest && response.canResendInSeconds) {
+        if (isResend && response.prematureOtpRequest && response.canResendInSeconds) {
           apt.shared.loading(btn, false);
           setCountdown(btn, response.canResendInSeconds);
         }
 
-        apt.otp.showOtpValidation(response.message || "Invalid email", resend ? settings.selectors.step2Container : settings.selectors.step1Container);
+        apt.otp.showOtpValidation(response.message, isResend ? settings.selectors.step2Container : settings.selectors.step1Container);
         return;
       }
 
       if (response.success) {
-        if (resend) {
+        if (isResend) {
           apt.otpInput.resetCode();
           if (response.canResendInSeconds) {
             apt.shared.loading(btn, false);
@@ -126,7 +126,7 @@
       }
     } catch (e) {
       console.error(e);
-      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, resend ? settings.selectors.step2Container : settings.selectors.step1Container);
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, isResend ? settings.selectors.step2Container : settings.selectors.step1Container);
     } finally {
       apt.shared.loading(btn, false);
     }
@@ -144,8 +144,8 @@
     var inputsLength = apt.otpInput.getCodeBoxCount();
     if (otp.length < inputsLength) {
       apt.otpInput.focusFirstEmpty();
-      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container); 
-     
+      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container);
+
       return;
     }
 
@@ -158,12 +158,13 @@
         return;
       }
 
-      apt.otp.showOtpValidation(response.message || "Invalid code.", settings.selectors.step2Container);
+      apt.otp.showOtpValidation(response.message, settings.selectors.step2Container);
       apt.shared.loading(btn, false);
 
     } catch (e) {
+      console.error(e);
       apt.shared.loading(btn, false);
-      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.step2Container); 
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.step2Container);
     }
   };
 

@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.Booster.Filters;
+using Apt.Nop.Plugin.Misc.Booster.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +18,8 @@ public class PluginNopStartup : INopStartup
     /// </summary>
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddScoped<IDebouncer, Debouncer>();
+
         services.Configure<MvcOptions>(options =>
         {
             options.Filters.Add<ProductDetailsActionAttribute>();
