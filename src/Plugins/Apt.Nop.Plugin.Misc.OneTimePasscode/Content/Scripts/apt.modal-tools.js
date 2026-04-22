@@ -78,24 +78,41 @@
     return null;
   }
 
+  function getModalSelectors(modalEl) {
+    const selectors = new Set();
+
+    const modalId = modalEl.id;
+    if (modalId) selectors.add("#" + modalId);
+
+    const dataId = modalEl.getAttribute("data-mt-id");
+    if (dataId) selectors.add('[data-mt-id="' + dataId + '"]');
+
+    if (modalEl._mtSelectorAliases) {
+      modalEl._mtSelectorAliases.forEach(selector => selectors.add(selector));
+    }
+
+    return Array.from(selectors);
+  }
+
   function shouldCloseOnBackdrop(modalEl) {
     return !modalEl.hasAttribute("data-mt-no-backdrop-close");
   }
 
   function emitModalEvent(prefix, modalEl) {
-    const selector = getModalSelector(modalEl);
-    if (!selector) return;
+    const selectors = getModalSelectors(modalEl);
+    if (!selectors.length) return;
 
-    const eventName = prefix + ":" + selector;
+    selectors.forEach(selector => {
+      const eventName = prefix + ":" + selector;
 
-    if (global.jQuery) {
-      global.jQuery(document).trigger(eventName, [modalEl]);
-      return;
-    }
-
-    document.dispatchEvent(new CustomEvent(eventName, {
-      detail: { modal: modalEl }
-    }));
+      if (global.jQuery) {
+        global.jQuery(document).trigger(eventName, [modalEl]);
+      } else {
+        document.dispatchEvent(new CustomEvent(eventName, {
+          detail: { modal: modalEl }
+        }));
+      }
+    });
   }
 
   function focusFirst(modalEl) {
@@ -184,9 +201,17 @@
     modalEl.removeEventListener("click", onOverlayClick);
   }
 
-  function bindOpenEvent(modalEl) {
-    const selector = getModalSelector(modalEl);
+  function bindOpenEvent(modalSelectorOrEl) {
+    const modalEl = resolveModal(modalSelectorOrEl);
+
+    const selector =
+      typeof modalSelectorOrEl === "string"
+        ? modalSelectorOrEl
+        : getModalSelector(modalEl);
+
     if (!selector) return;
+
+    rememberSelectorAlias(modalEl, selector);
 
     const eventName = "mt-open:" + selector;
     if (state.boundOpenEvents.has(eventName)) return;
@@ -204,15 +229,16 @@
     }
   }
 
-  function prepareModal(modalEl) {
+  function prepareModal(modalSelectorOrEl) {
+    const modalEl = resolveModal(modalSelectorOrEl);
     ensureModalRootClass(modalEl);
     ensureModalAccessibility(modalEl);
-    bindOpenEvent(modalEl);
+    bindOpenEvent(modalSelectorOrEl);
   }
 
   function autoBindOpenedEvents() {
     const modals = document.querySelectorAll("[data-mt-modal]");
-    modals.forEach(prepareModal);
+    modals.forEach(modalEl => prepareModal(modalEl));
   }
 
   ModalTools.showModal = function (modalSelectorOrEl, options) {
@@ -220,7 +246,7 @@
     if (isOpen(modalEl)) return;
 
     ensureInBody(modalEl);
-    prepareModal(modalEl);
+    prepareModal(modalSelectorOrEl);
 
     const opts = Object.assign(
       {
@@ -248,7 +274,6 @@
 
     emitModalEvent("mt-begin-open", modalEl);
 
-    // Ensure the browser sees the initial hidden state before opening.
     modalEl.classList.remove("is-open");
     void modalEl.offsetWidth;
 
@@ -310,6 +335,16 @@
     document.addEventListener("DOMContentLoaded", autoBindOpenedEvents);
   } else {
     autoBindOpenedEvents();
+  }
+
+  function rememberSelectorAlias(modalEl, selector) {
+    if (!selector || typeof selector !== "string") return;
+
+    if (!modalEl._mtSelectorAliases) {
+      modalEl._mtSelectorAliases = new Set();
+    }
+
+    modalEl._mtSelectorAliases.add(selector);
   }
 
   global.ModalTools = ModalTools;

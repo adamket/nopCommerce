@@ -68,7 +68,7 @@ public class OneTimePasscodeController : BasePublicController
 
     #region Methods
     [HttpPost("apt/request-otp")]
-    public virtual async Task<IActionResult> RequestLoginOtp(string email, bool generateOtp = true)
+    public virtual async Task<IActionResult> RequestLoginOtp(string email, bool bypassSend = false)
     {
         if (!CommonHelper.IsValidEmail(email))
         {
@@ -86,7 +86,7 @@ public class OneTimePasscodeController : BasePublicController
             });
 
         //forward straight to code input without generating or emailing code (when user already has valid code but page refreshed)
-        if (!generateOtp)
+        if (bypassSend)
         {
             return this.OtpJsonSuccess(new { markup });
         }

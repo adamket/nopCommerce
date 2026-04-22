@@ -9,7 +9,7 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 8px 16px rgba(0, 0, 0, 0.1);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   border-width: 1.5px;
-  background: #fff !important;
+  background: #fff;
   outline: none;
 }
 
@@ -91,7 +91,6 @@
 }
 .apt-otp .otp-validation-wrap {
   position: relative;
-  /*gap: 10px;*/
 }
 .apt-otp .otp-entry-row {
   padding: 20px;
@@ -116,19 +115,6 @@
   margin: 0 0 25px;
   padding-left: 30px;
   padding-right: 30px;
-}
-.apt-otp .otp-status {
-  font-size: 13px;
-  min-height: 18px;
-  margin: 0;
-  color: #9ca3af;
-  text-align: center;
-}
-.apt-otp .otp-status.success {
-  color: #1d9e75;
-}
-.apt-otp .otp-status.error {
-  color: #e24b4a;
 }
 .apt-otp .otp-fields {
   display: flex;
@@ -158,10 +144,6 @@
   background: #fff;
   color: #222;
 }
-.apt-otp .otp-fields .otp-field.error {
-  border-color: #e24b4a;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 0 0 3px rgba(226, 75, 74, 0.12);
-}
 .apt-otp .otp-fields .otp-sep {
   display: none;
 }
@@ -173,8 +155,8 @@
   font-size: 16px;
 }
 .apt-otp .otp-email-field:focus {
-  border-color: #374151 !important;
-  border-width: 1.5px !important;
+  border-color: #374151;
+  border-width: 1.5px;
 }
 .apt-otp .otp-login-btn {
   white-space: nowrap;
@@ -224,11 +206,11 @@
     gap: 6px;
   }
   .apt-otp .otp-field {
-    width: 45px !important;
-    height: 45px !important;
+    width: 45px;
+    height: 45px;
     font-size: 18px;
     line-height: 45px;
-    border-radius: 6px !important;
+    border-radius: 6px;
   }
   .apt-otp .otp-entry-row,
   .apt-otp .otp-email-entry-row {
@@ -254,11 +236,11 @@
     gap: 4px;
   }
   .apt-otp .otp-field {
-    width: 40px !important;
-    height: 40px !important;
+    width: 40px;
+    height: 40px;
     font-size: 16px;
     line-height: 40px;
-    border-radius: 5px !important;
+    border-radius: 5px;
   }
   .apt-otp .otp-login-btn {
     width: 100%;
@@ -270,11 +252,11 @@
     gap: 2px;
   }
   .apt-otp .otp-field {
-    width: 35px !important;
-    height: 35px !important;
+    width: 35px;
+    height: 35px;
     font-size: 14px;
     line-height: 30px;
-    border-radius: 3px !important;
+    border-radius: 3px;
   }
   .apt-otp .otp-login-btn {
     width: 100%;

@@ -1,7 +1,3 @@
-// =========================
-// Tokens
-// =========================
-
 $otp-bg-soft: #f3f4f6;
 $otp-bg-white: #fff;
 
@@ -10,7 +6,6 @@ $otp-text-muted: #6b7280;
 $otp-text-subtle: #9ca3af;
 $otp-text-button: #374151;
 
-$otp-error: #e24b4a;
 $otp-error-flag: #dc3545;
 $otp-success: #1d9e75;
 $otp-focus: #374151;
@@ -67,10 +62,6 @@ $otp-flag-arrow-size: 7px;
 $otp-flag-hidden-offset: calc(-100% - 10px);
 $otp-flag-visible-offset: calc(-100% - 14px);
 
-// =========================
-// Shared abstractions
-// =========================
-
 %otp-centered-row {
     display: flex;
     align-items: center;
@@ -82,7 +73,7 @@ $otp-flag-visible-offset: calc(-100% - 14px);
     box-shadow: $otp-shadow-field;
     transition: border-color $otp-transition-fast, box-shadow $otp-transition-fast;
     border-width: 1.5px;
-    background: $otp-bg-white !important;
+    background: $otp-bg-white;
     outline: none;
 }
 
@@ -141,11 +132,11 @@ $otp-flag-visible-offset: calc(-100% - 14px);
 }
 
 @mixin otp-field-size($size, $font-size, $line-height, $radius) {
-    width: $size !important;
-    height: $size !important;
+    width: $size;
+    height: $size;
     font-size: $font-size;
     line-height: $line-height;
-    border-radius: $radius !important;
+    border-radius: $radius;
 }
 
 @mixin otp-full-width-control {
@@ -153,12 +144,8 @@ $otp-flag-visible-offset: calc(-100% - 14px);
     max-width: 100%;
 }
 
-// =========================
-// Component
-// =========================
 
 .apt-otp {
-    // Buttons
 
     .button-1 {
         min-width: $otp-width-button-min;
@@ -189,11 +176,9 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             background: #eee;
         }
     }
-    // Layout
 
     .otp-validation-wrap {
         position: relative;
-        /*gap: 10px;*/
     }
 
     .otp-entry-row {
@@ -216,7 +201,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         padding-left: $otp-space-3xl;
         padding-right: $otp-space-3xl;
     }
-    // Labels and status
 
     .otp-label {
         font-size: 14px;
@@ -227,22 +211,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         padding-right: $otp-space-5xl;
     }
 
-    .otp-status {
-        font-size: 13px;
-        min-height: 18px;
-        margin: 0;
-        color: $otp-text-subtle;
-        text-align: center;
-
-        &.success {
-            color: $otp-success;
-        }
-
-        &.error {
-            color: $otp-error;
-        }
-    }
-    // Field group
 
     .otp-fields {
         display: flex;
@@ -275,10 +243,7 @@ $otp-flag-visible-offset: calc(-100% - 14px);
                 color: $otp-text-dark;
             }
 
-            &.error {
-                border-color: $otp-error;
-                box-shadow: $otp-shadow-error;
-            }
+         
         }
 
         .otp-sep {
@@ -295,8 +260,8 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         font-size: 16px;
 
         &:focus {
-            border-color: $otp-focus !important;
-            border-width: 1.5px !important;
+            border-color: $otp-focus;
+            border-width: 1.5px;
         }
     }
 
@@ -305,8 +270,8 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         flex: 0 0 auto;
         max-width: $otp-width-login-btn-max;
     }
-    // Spinner
 
+    // Spinner
     .spinner-svg {
         display: inline-block;
         vertical-align: middle;
@@ -320,8 +285,8 @@ $otp-flag-visible-offset: calc(-100% - 14px);
     .spinner-arc {
         stroke-dasharray: 18 50;
     }
-    // Validation flags
 
+    // Validation flags
     .otp-validation-flag {
         @extend %otp-validation-flag-base;
     }
@@ -351,7 +316,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             border-color: $otp-success transparent transparent transparent;
         }
     }
-    // Motion
 
     .otp-entry-animate {
         opacity: 0;
@@ -363,8 +327,8 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             transition: opacity $otp-transition-entry, transform $otp-transition-entry-transform;
         }
     }
-    // Responsive
 
+    // Responsive
     @media (max-width: $otp-breakpoint-md) {
         .otp-fields {
             gap: $otp-space-sm;
@@ -422,8 +386,9 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             @include otp-full-width-control;
         }
     }
-    // Local utilities
 
+
+    // Utilities
     .text-center {
         text-align: center;
     }
@@ -445,10 +410,7 @@ $otp-flag-visible-offset: calc(-100% - 14px);
     }
 }
 
-// =========================
 // Keyframes
-// =========================
-
 @keyframes otp-spin {
     to {
         transform: rotate(360deg);

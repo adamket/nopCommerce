@@ -62,13 +62,12 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
         //settings
         var settings = new OtpSettings()
         {
-          OtpRequestIntervalSeconds = 30,
-          OtpValidationIntervalSeconds = 5,
-          OtpExpiresAfterMinutes = 15,
-          CodeDigitCount = 6,
-          PreventUserEnumeration = true,
-          ShowDefaultOtpLoginButton = true,
-          
+            OtpRequestIntervalSeconds = 30,
+            OtpValidationIntervalSeconds = 5,
+            OtpExpiresAfterMinutes = 15,
+            CodeDigitCount = 6,
+            PreventUserEnumeration = true,
+            ShowDefaultOtpLoginButton = true
         };
         await _settingService.SaveSettingAsync(settings);
 
