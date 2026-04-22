@@ -286,10 +286,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         stroke-dasharray: 18 50;
     }
 
-    // Validation flags
-    .otp-validation-flag {
-        @extend %otp-validation-flag-base;
-    }
 
     .otp-error-flag {
         @extend %otp-validation-flag-base;

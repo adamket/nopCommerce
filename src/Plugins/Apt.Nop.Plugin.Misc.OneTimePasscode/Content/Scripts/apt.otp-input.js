@@ -11,7 +11,7 @@
   otpInput.init = function (data) {
 
     pasteCallback = data.pasteCallback ?? null;
-    otpFieldSelector = data.selector || '.otp-field';
+    otpFieldSelector = data.selector || '[otp-field]';
     digitCount = data.digitCount || 6;
 
     $(apt.otp.parentSelector).on('keydown', otpFieldSelector, onKeyDown);

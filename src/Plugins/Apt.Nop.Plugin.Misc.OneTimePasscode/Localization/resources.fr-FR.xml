@@ -50,7 +50,7 @@
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.prompt">
             <Value>Saisissez votre adresse e-mail ci-dessous et validez pour recevoir un code à usage unique afin de vous connecter à votre compte.</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.modal.forego-code-generation.text">
+        <LocaleResource Name="apt.plugins.misc.otp.modal.bypass-send.text">
             <Value>Vous avez déjà un code ?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.submit.text">

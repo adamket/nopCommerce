@@ -50,7 +50,7 @@
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.prompt">
             <Value>Introduce tu correo electrónico a continuación y envíalo para recibir un código de un solo uso para iniciar sesión en tu cuenta.</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.modal.forego-code-generation.text">
+        <LocaleResource Name="apt.plugins.misc.otp.modal.bypass-send.text">
             <Value>¿Ya tienes un código?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.submit.text">

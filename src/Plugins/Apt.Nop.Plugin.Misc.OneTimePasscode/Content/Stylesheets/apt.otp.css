@@ -13,7 +13,7 @@
   outline: none;
 }
 
-.apt-otp .otp-success-flag, .apt-otp .otp-error-flag, .apt-otp .otp-validation-flag {
+.apt-otp .otp-success-flag, .apt-otp .otp-error-flag {
   position: absolute;
   left: 0;
   top: 0;
@@ -34,7 +34,7 @@
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
   will-change: transform, opacity;
 }
-.apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before, .apt-otp .otp-validation-flag::before {
+.apt-otp .otp-success-flag::before, .apt-otp .otp-error-flag::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -48,7 +48,7 @@
   background-position: center;
   background-size: 14px 14px;
 }
-.apt-otp .otp-success-flag::after, .apt-otp .otp-error-flag::after, .apt-otp .otp-validation-flag::after {
+.apt-otp .otp-success-flag::after, .apt-otp .otp-error-flag::after {
   content: "";
   position: absolute;
   top: 97%;
@@ -57,7 +57,7 @@
   border-width: 7px 7px 0 7px;
   border-style: solid;
 }
-.apt-otp .is-visible.otp-success-flag, .apt-otp .is-visible.otp-error-flag, .apt-otp .is-visible.otp-validation-flag {
+.apt-otp .is-visible.otp-success-flag, .apt-otp .is-visible.otp-error-flag {
   opacity: 1;
   visibility: visible;
   transform: translateY(calc(-100% - 14px));

@@ -50,7 +50,7 @@
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.prompt">
             <Value>Enter your email below and submit to receive a one-time passcode to log into your account.</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.modal.forego-code-generation.text">
+        <LocaleResource Name="apt.plugins.misc.otp.modal.bypass-send.text">
             <Value>Already have a code?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.submit.text">
@@ -121,9 +121,13 @@
             <Value>Show login button</Value>
         </LocaleResource>
         <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ShowDefaultOtpLoginButton.Hint">
-            <Value>If selected, a one-time passcode login button will be displayed on the login page below the standard login button. Alternatively, any element can be given the attribute data-mt-open="#apt-otp-modal" on the login page to trigger the opening of the passcode modal manually.</Value>
+            <Value>If selected, a one-time passcode login button will be displayed on the login page below the standard login button. Alternatively, any element can be given the attribute otp-modal on the login page to trigger the opening of the passcode modal manually.</Value>
         </LocaleResource>
-        
+
+
+       
+
+
 
     </LocaleResources>
 </Language>

@@ -2,31 +2,32 @@
 
 <div class="mt-body-title">
     <div>@T("apt.plugins.misc.otp.modal.prompt", Model.Email, Model.CodeExpiryMinutes)</div>
-    <div class="mt-10px">@T("apt.plugins.misc.otp.modal.wrong-email.prompt") <a href="javascript:;" otp-back class="underline">@T("apt.plugins.misc.otp.modal.change-email.prompt")</a>.</div>
+    <div class="mt-10px">@T("apt.plugins.misc.otp.modal.wrong-email.prompt")
+        <a href="javascript:;" otp-back-btn class="underline">@T("apt.plugins.misc.otp.modal.change-email.prompt")</a>.</div>
 </div>
 <div class="mt-body-container">
 
     <div class="full-width text-center otp-entry-row">
 
         <div class="otp-validation-wrap">
-            <div class="otp-error-flag" role="alert" aria-live="polite" otp-error-flag></div>
-            <div class="otp-success-flag" role="alert" aria-live="polite" otp-success-flag></div>
+            <div otp-error-flag role="alert" aria-live="polite" class="otp-error-flag"></div>
+            <div otp-success-flag role="alert" aria-live="polite" class="otp-success-flag"></div>
             <div class="otp-fields">
                 @for (int i = 0; i < Model.CodeDigitCount; i++)
                 {
-                    <input class="otp-field" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit @(i + 1)" data-index="@i" data-enter-clicks="verify-otp" />
+                    <input class="otp-field" otp-field type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit @(i + 1)" data-index="@i" data-enter-clicks="verify-otp" />
                 }
 
             </div>
         </div>
-        <button class="button-1 otp-login-btn" otp-submit id="verify-otp">
+        <button class="button-1 otp-login-btn" otp-login-btn id="verify-otp">
             @T("apt.plugins.misc.otp.modal.login-button.text")
         </button>
     </div>
 </div>
 
 <div class="mt-body-footer">
-    <button class="btn-muted" type="button" otp-resend>
+    <button class="btn-muted" type="button" otp-resend-btn>
         @T("apt.plugins.misc.otp.modal.resend-code-button.text")
     </button>
 

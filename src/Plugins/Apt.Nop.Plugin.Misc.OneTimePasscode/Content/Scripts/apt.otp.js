@@ -3,11 +3,11 @@
 
   var otp = global.apt.otp || {};
 
-  otp.parentSelector = ".apt-otp";
+  otp.parentSelector = "[apt-otp]";
 
   var settings = {
     sendUrl: "/apt/request-otp",
-    verifyUrl: "/apt/otp-login",
+    verifyUrl: "/apt/validate-otp",
     localeStrings: {
       resendTryAgainErrorMessage: "Can resend again in {0}s",
       emailRequiredErrorMessage: "Email is required.",
@@ -18,21 +18,21 @@
     selectors: {
       //add [otp-modal]?
       //change otp-send / bypass send naming
-      standardLoginEmailInput: "#Email",
       parentElement: otp.parentSelector,
+      standardLoginEmailInput: "#Email",
+      modalWindow: "[otp-modal]",
       otpStepContainer: "[otp-step-container]",
-      emailInput: "[otp-email]",
-      sendButton: "[otp-send]",
-      resendButton: "[otp-resend]",
+      emailInput: "[otp-email-field]",
+      sendButton: "[otp-send-otp-btn]",
+      resendButton: "[otp-resend-btn]",
       errorFlag: "[otp-error-flag]",
       successFlag: "[otp-success-flag]",
-      verifyButton: "[otp-verify]",
-      messageContainer: "[otp-message]",
-      submitButton: "[otp-submit]",
-      backToStep1Button: "[otp-back]",
+      loginButton: "[otp-login-btn]",
+      backToStep1Button: "[otp-back-btn]",
       step1Container: "[otp-step-1]",
       step2Container: "[otp-step-2]",
-      showModalButton: "[otp-show-modal]"
+      showModalButton: "[otp-show-modal]",
+      bypassSendButton: "[otp-bypass-send-btn]"
     }
   };
 
@@ -41,12 +41,17 @@
   }
 
   otp.init = function (options) {
+
     settings = $.extend(true, {}, settings, options || {});
 
     $(document).on("click", `${settings.selectors.step1Container} ${settings.selectors.sendButton}`, function (e) {
       e.preventDefault();
-      var bypassSend = $(this).data('otp-bypass') === true;
-      otp.sendOtp(e.target, false, bypassSend);
+      otp.sendOtp(e.target, false, false);
+    });
+
+    $(document).on("click", `${settings.selectors.step1Container} ${settings.selectors.bypassSendButton}`, function (e) {
+      e.preventDefault();
+      otp.sendOtp(e.target, false, true);
     });
 
     $(document).on("click", `${settings.selectors.step2Container} ${settings.selectors.resendButton}`, function (e) {
@@ -54,21 +59,21 @@
       otp.sendOtp(e.target, true, false);
     });
 
-    $(document).on("click", `${settings.selectors.step2Container} ${settings.selectors.submitButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.step2Container} ${settings.selectors.loginButton}`, function (e) {
       e.preventDefault();
       otp.verifyOtp();
     });
 
-    $(document).on('input', settings.selectors.emailInput, function (e) {
+    $(document).on('input', `${settings.selectors.step1Container} ${settings.selectors.emailInput}`, function (e) {
       state.email = $(this).val();
     });
 
     $(document).on('click', settings.selectors.showModalButton, function (e) {
       e.preventDefault();
-      ModalTools.showModal('[otp-modal]');
+      ModalTools.showModal(settings.selectors.modalWindow);
     });
 
-    $(document).on('mt-begin-open:[otp-modal]', function (e) {
+    $(document).on('mt-begin-open:' + settings.selectors.modalWindow, function (e) {
       var currentEmail = $(settings.selectors.standardLoginEmailInput).val();
       $(settings.selectors.emailInput).val(currentEmail);
       state.email = currentEmail;
@@ -128,7 +133,7 @@
 
         var $step2Container = $otpStepContainer.find(settings.selectors.step2Container);
         if (!$step2Container.length) {
-          $otpStepContainer.append('<div class="otp-step-2" ' + settings.selectors.step2Container + '></div>')
+          $otpStepContainer.append(`<div ${settings.selectors.step2Container}></div>`)
         }
 
         $otpStepContainer.find(settings.selectors.step1Container).hide();
@@ -146,7 +151,7 @@
   };
 
   otp.verifyOtp = async function () {
-    var btn = document.querySelector(settings.selectors.submitButton);
+    var btn = document.querySelector(settings.selectors.loginButton);
 
     if (apt.shared.loading(btn)) {
       return;

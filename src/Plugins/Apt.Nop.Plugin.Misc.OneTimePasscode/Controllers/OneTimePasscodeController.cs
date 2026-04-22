@@ -200,7 +200,7 @@ public class OneTimePasscodeController : BasePublicController
 
     }
 
-    [HttpPost("apt/otp-login")]
+    [HttpPost("apt/validate-otp")]
     public virtual async Task<IActionResult> OtpLogin(OtpLoginModel model)
     {
         var currentCustomer = await _workContext.GetCurrentCustomerAsync();
@@ -233,14 +233,13 @@ public class OneTimePasscodeController : BasePublicController
         var (storedOtp, otpCreatedUpdatedOn) = await _genericAttributeService.GetAttributeWithCreateUpdateDateAsync<string>(targetCustomer,
             OtpConstants.GenericAttributeKeys.LoginCode);
 
-        if (otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < utcNow)
+        if (string.IsNullOrEmpty(storedOtp) || otpCreatedUpdatedOn.Value.AddMinutes(_otpSettings.OtpExpiresAfterMinutes) < utcNow)
         {
             return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.otp-expired"));
         }
 
         await _genericAttributeService.SaveAttributeAsync<DateTime?>(targetCustomer,
             OtpConstants.GenericAttributeKeys.LoginLastAttempted, utcNow);
-
 
         storedOtp = storedOtp.Split(_hashSeparator).FirstOrDefault();
 
@@ -249,7 +248,7 @@ public class OneTimePasscodeController : BasePublicController
         var saltedBytes = CombineBytes(otpBytes, saltBytes);
         var loginOtpCodeHash = HashHelper.CreateHash(saltedBytes, "SHA256");
 
-        if (storedOtp == null || storedOtp != loginOtpCodeHash?.Trim())
+        if (string.IsNullOrEmpty(storedOtp) || storedOtp != loginOtpCodeHash?.Trim())
         {
             return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.incorrect-code"));
         }
@@ -262,6 +261,7 @@ public class OneTimePasscodeController : BasePublicController
         //delete attributes
         await _genericAttributeService.SaveAttributeAsync(targetCustomer, OtpConstants.GenericAttributeKeys.LoginCode, (string)null);
         await _genericAttributeService.SaveAttributeAsync(targetCustomer, OtpConstants.GenericAttributeKeys.QueuedEmailIds, (string)null);
+
         await _customerActivityService.InsertActivityAsync(targetCustomer, OtpConstants.OtpLoginActivitySystemName,
             await _localizationService.GetResourceAsync("apt.plugins.misc.otp.activity-log.public-store.otp-login"));
 

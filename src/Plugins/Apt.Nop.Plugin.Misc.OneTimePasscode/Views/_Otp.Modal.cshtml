@@ -1,6 +1,4 @@
-
-
-<div otp-modal data-mt-no-backdrop-close id="apt-otp-modal" aria-labelledby="One-time passcode modal" class="apt-otp">
+<div class="apt-otp" apt-otp otp-modal data-mt-no-backdrop-close aria-labelledby="One-time passcode modal">
     <div class="mt-window">
         <div class="mt-header">
             <h2 class="mt-title" >@T("apt.otp.modal.title")</h2>
@@ -9,10 +7,10 @@
             </button>
         </div>
         <div class="mt-body" otp-step-container>
-            <div class="otp-step-1" otp-step-1>
+            <div otp-step-1>
                 @await Html.PartialAsync(OtpConstants.PathToPlugin + "/Views/_Otp.Request.cshtml")
             </div>
-            <div class="otp-step-2" otp-step-2 style="display:none"></div>
+            <div otp-step-2 style="display:none"></div>
         </div>
     </div>
 </div>

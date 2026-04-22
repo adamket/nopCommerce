@@ -50,7 +50,7 @@
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.prompt">
             <Value>Wprowadź poniżej swój adres e-mail i wyślij, aby otrzymać kod jednorazowy do logowania.</Value>
         </LocaleResource>
-        <LocaleResource Name="apt.plugins.misc.otp.modal.forego-code-generation.text">
+        <LocaleResource Name="apt.plugins.misc.otp.modal.bypass-send.text">
             <Value>Masz już kod?</Value>
         </LocaleResource>
         <LocaleResource Name="apt.plugins.misc.otp.modal.email.submit.text">
