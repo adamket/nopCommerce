@@ -12,6 +12,7 @@ using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.OneTimePasscode.Controllers;
+
 [Area(AreaNames.ADMIN)]
 [AuthorizeAdmin]
 [AutoValidateAntiforgeryToken]
@@ -23,7 +24,7 @@ public class ConfigurationController : BasePluginController
     private readonly IStoreContext _storeContext;
     private readonly INotificationService _notificationService;
     private readonly ILocalizationService _localizationService;
-   // private readonly ITwilioService _twilioService;
+    // private readonly ITwilioService _twilioService;
 
     #endregion
 
@@ -39,7 +40,7 @@ public class ConfigurationController : BasePluginController
         _storeContext = storeContext;
         _notificationService = notificationService;
         _localizationService = localizationService;
-       // _twilioService = twilioService;
+        // _twilioService = twilioService;
     }
 
     #endregion
@@ -64,6 +65,44 @@ public class ConfigurationController : BasePluginController
         model.PreventUserEnumeration = settings.PreventUserEnumeration;
         model.CodeDigitCount = settings.CodeDigitCount;
         model.ShowDefaultOtpLoginButton = settings.ShowDefaultOtpLoginButton;
+
+        model.PrimaryButtonColor = settings.PrimaryButtonColor;
+        model.PrimaryButtonHoverColor = settings.PrimaryButtonHoverColor;
+        model.PrimaryButtonTextColor = settings.PrimaryButtonTextColor;
+        model.SecondaryButtonColor = settings.SecondaryButtonColor;
+        model.SecondaryButtonHoverColor = settings.SecondaryButtonHoverColor;
+        model.SecondaryButtonTextColor = settings.SecondaryButtonTextColor;
+
+        if (storeScope > 0)
+        {
+            model.OtpValidationIntervalSeconds_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.OtpValidationIntervalSeconds, storeScope);
+            model.OtpRequestIntervalSeconds_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.OtpRequestIntervalSeconds, storeScope);
+            model.OtpExpiresAfterMinutes_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.OtpExpiresAfterMinutes, storeScope);
+            model.PreventUserEnumeration_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.PreventUserEnumeration, storeScope);
+            model.ShowDefaultOtpLoginButton_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.ShowDefaultOtpLoginButton, storeScope);
+            model.CodeDigitCount_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.CodeDigitCount, storeScope);
+
+            model.PrimaryButtonColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.PrimaryButtonColor, storeScope);
+            model.PrimaryButtonHoverColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.PrimaryButtonHoverColor, storeScope);
+            model.PrimaryButtonTextColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.PrimaryButtonTextColor, storeScope);
+            model.SecondaryButtonColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.SecondaryButtonColor, storeScope);
+            model.SecondaryButtonHoverColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.SecondaryButtonHoverColor, storeScope);
+            model.SecondaryButtonTextColor_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.SecondaryButtonTextColor, storeScope);
+        }
+
+        model.ActiveStoreScopeConfiguration = storeScope;
 
         model.AvailableCodeDigitCounts = new List<SelectListItem>();
         for (var i = 3; i <= 6; ++i)
@@ -94,15 +133,46 @@ public class ConfigurationController : BasePluginController
         settings.CodeDigitCount = model.CodeDigitCount;
         settings.ShowDefaultOtpLoginButton = model.ShowDefaultOtpLoginButton;
 
-        await _settingService.SaveSettingAsync(settings);
+        settings.PrimaryButtonColor = model.PrimaryButtonColor;
+        settings.PrimaryButtonHoverColor = model.PrimaryButtonHoverColor;
+        settings.PrimaryButtonTextColor = model.PrimaryButtonTextColor;
+        settings.SecondaryButtonColor = model.SecondaryButtonColor;
+        settings.SecondaryButtonHoverColor = model.SecondaryButtonHoverColor;
+        settings.SecondaryButtonTextColor = model.SecondaryButtonTextColor;
 
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.OtpRequestIntervalSeconds, model.OtpRequestIntervalSeconds_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.OtpValidationIntervalSeconds, model.OtpValidationIntervalSeconds_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.OtpExpiresAfterMinutes, model.OtpExpiresAfterMinutes_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.PreventUserEnumeration, model.PreventUserEnumeration_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.CodeDigitCount, model.CodeDigitCount_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.ShowDefaultOtpLoginButton, model.ShowDefaultOtpLoginButton_OverrideForStore, storeScope, false);
+
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.PrimaryButtonColor, model.PrimaryButtonColor_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.PrimaryButtonHoverColor, model.PrimaryButtonHoverColor_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.PrimaryButtonTextColor, model.PrimaryButtonTextColor_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.SecondaryButtonColor, model.SecondaryButtonColor_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.SecondaryButtonHoverColor, model.SecondaryButtonHoverColor_OverrideForStore, storeScope, false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.SecondaryButtonTextColor, model.SecondaryButtonTextColor_OverrideForStore, storeScope, false);
+
+        await _settingService.SaveSettingAsync(settings);
         await _settingService.ClearCacheAsync();
 
         var savedMessage = await _localizationService.GetResourceAsync("Admin.Plugins.Saved");
         _notificationService.SuccessNotification(savedMessage);
 
-
-      //  await _twilioService.SendSmsAsync(settings.TwilioFromNumber, "8777804236", $"Your one time passcode is {Guid.NewGuid()}");
+        // await _twilioService.SendSmsAsync(settings.TwilioFromNumber, "8777804236", $"Your one time passcode is {Guid.NewGuid()}");
         return await Configure();
     }
 

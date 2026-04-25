@@ -1,17 +1,29 @@
-<div class="mt-body-title">
-    @T("apt.plugins.misc.otp.modal.email.prompt")
-</div>
-<div class="mt-body-container">
-    <div class="otp-email-entry-row">
-        <div class="otp-validation-wrap">
-            <div otp-error-flag role="alert" aria-live="polite" class="otp-error-flag">
+<div class="mt-window">
+    <div class="mt-header">
+        <h2 class="mt-title">@T("apt.otp.modal.request-otp.title")</h2>
+        <button type="button" class="mt-close" data-mt-close aria-label="@T("apt.otp.modal.close")">
+            <span class="sr-only">Close</span>
+        </button>
+    </div>
+    <div class="mt-body">
+        <div>
+            <div class="mt-body-title">
+                @T("apt.plugins.misc.otp.modal.email.prompt")
             </div>
-            <input otp-email-field type="email" class="otp-email-field" data-enter-clicks="send-otp" id="otp-email" placeholder="example@@email.com" />
+            <div class="mt-body-container">
+                <div class="otp-email-entry-row">
+                    <div class="otp-validation-wrap">
+                        <div otp-error-flag role="alert" aria-live="polite" class="otp-error-flag">
+                        </div>
+                        <input otp-email-field type="email" class="otp-email-field" data-enter-clicks="send-otp" id="otp-email" placeholder="example@@email.com" />
+                    </div>
+                    <button class="button-1" otp-send-otp-btn id="send-otp">@T("apt.plugins.misc.otp.modal.email.submit.text")</button>
+                </div>
+            </div>
 
         </div>
-        <button class="button-1" otp-send-otp-btn id="send-otp">@T("apt.plugins.misc.otp.modal.email.submit.text")</button>
+        <div class="mt-footer">
+            <button class="btn-muted" otp-bypass-send-btn>@T("apt.plugins.misc.otp.modal.bypass-send.text")</button>
+        </div>
     </div>
-</div>
-<div class="mt-body-footer">
-    <button class="btn-muted" otp-bypass-send-btn>@T("apt.plugins.misc.otp.modal.bypass-send.text")</button>
 </div>

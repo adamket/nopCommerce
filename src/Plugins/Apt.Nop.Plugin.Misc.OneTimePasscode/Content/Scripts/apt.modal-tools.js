@@ -245,19 +245,32 @@
     const modalEl = resolveModal(modalSelectorOrEl);
     if (isOpen(modalEl)) return;
 
+    const isSwappingModals = state.openModals.size > 0;
+
+    if (isSwappingModals) {
+      document.documentElement.classList.add("mt-modal-swap");
+    }
+
     ensureInBody(modalEl);
     prepareModal(modalSelectorOrEl);
 
     const opts = Object.assign(
       {
         focus: true,
-        closeOthers: false,
+        closeOthers: true,
       },
       options || {}
     );
 
     if (opts.closeOthers) {
-      Array.from(state.openModals).forEach(m => ModalTools.hideModal(m));
+      Array.from(state.openModals).forEach(m => {
+        if (m !== modalEl) {
+          ModalTools.hideModal(m, {
+            suppressScrollUpdate: true,
+            restoreFocus: false
+          });
+        }
+      });
     }
 
     const modalId = getModalId(modalEl);
@@ -285,27 +298,47 @@
       }
 
       emitModalEvent("mt-opened", modalEl);
+
+      if (isSwappingModals) {
+        requestAnimationFrame(() => {
+          document.documentElement.classList.remove("mt-modal-swap");
+        });
+      }
     });
   };
 
-  ModalTools.hideModal = function (modalSelectorOrEl) {
+  ModalTools.hideModal = function (modalSelectorOrEl, options) {
     const modalEl = resolveModal(modalSelectorOrEl);
     if (!isOpen(modalEl)) return;
+
+    const opts = Object.assign(
+      {
+        suppressScrollUpdate: false,
+        restoreFocus: true
+      },
+      options || {}
+    );
 
     detachListeners(modalEl);
     modalEl.classList.remove("is-open");
     setAria(modalEl, false);
     state.openModals.delete(modalEl);
-    lockScrollIfNeeded();
+
+    if (!opts.suppressScrollUpdate) {
+      lockScrollIfNeeded();
+    }
 
     if (state.openModals.size === 0) {
       document.removeEventListener("keydown", onKeyDown);
     }
 
-    const modalId = getModalId(modalEl);
-    const last = modalId ? state.lastFocusedByModalId.get(modalId) : null;
-    if (last && typeof last.focus === "function") {
-      setTimeout(() => last.focus(), 0);
+    if (opts.restoreFocus) {
+      const modalId = getModalId(modalEl);
+      const last = modalId ? state.lastFocusedByModalId.get(modalId) : null;
+
+      if (last && typeof last.focus === "function") {
+        setTimeout(() => last.focus(), 0);
+      }
     }
   };
 

@@ -61,6 +61,11 @@ $otp-flag-icon-bg-size: 14px 14px;
 $otp-flag-arrow-size: 7px;
 $otp-flag-hidden-offset: calc(-100% - 10px);
 $otp-flag-visible-offset: calc(-100% - 14px);
+$accent-blue-color: #4ab2f1;
+$accent-blue-active-color: #248ece;
+
+
+
 
 %otp-centered-row {
     display: flex;
@@ -146,16 +151,27 @@ $otp-flag-visible-offset: calc(-100% - 14px);
 
 
 .apt-otp {
+    /* --otp-primary-button-bg: var(--accent-blue-color, #4ab2f1);
+    --otp-primary-button-hover-bg: var(--accent-blue-active-color, #248ece);
+    --otp-primary-button-text: #fff;
+    --otp-secondary-button-bg: #f3f4f6;
+    --otp-secondary-button-hover-bg: #eee;
+    --otp-secondary-button-text: #374151;
+    --otp-button-radius: 4px;*/
+
 
     .button-1 {
         min-width: $otp-width-button-min;
         border: none;
-        background-color: var(--accent-blue-color);
+        background-color: var(--otp-primary-button-bg);
         padding: 10px 30px;
         text-align: center;
         font-size: 15px;
         color: $otp-bg-white;
         text-transform: uppercase;
+        background-color: var(--otp-primary-button-bg);
+        color: var(--otp-primary-button-text);
+        border-radius: var(--otp-button-radius);
 
         &:hover,
         &:focus {
@@ -242,8 +258,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
                 background: $otp-bg-white;
                 color: $otp-text-dark;
             }
-
-         
         }
 
         .otp-sep {
@@ -270,7 +284,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
         flex: 0 0 auto;
         max-width: $otp-width-login-btn-max;
     }
-
     // Spinner
     .spinner-svg {
         display: inline-block;
@@ -323,7 +336,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             transition: opacity $otp-transition-entry, transform $otp-transition-entry-transform;
         }
     }
-
     // Responsive
     @media (max-width: $otp-breakpoint-md) {
         .otp-fields {
@@ -382,8 +394,6 @@ $otp-flag-visible-offset: calc(-100% - 14px);
             @include otp-full-width-control;
         }
     }
-
-
     // Utilities
     .text-center {
         text-align: center;

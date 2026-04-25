@@ -20,17 +20,16 @@
       //change otp-send / bypass send naming
       parentElement: otp.parentSelector,
       standardLoginEmailInput: "#Email",
-      modalWindow: "[otp-modal]",
-      otpStepContainer: "[otp-step-container]",
+      modalWrapper: "[otp-modal-windows]",
+      requestOtpModal: "[otp-request-modal]",
+      validateOtpModal: "[otp-validate-modal]",
       emailInput: "[otp-email-field]",
       sendButton: "[otp-send-otp-btn]",
       resendButton: "[otp-resend-btn]",
       errorFlag: "[otp-error-flag]",
       successFlag: "[otp-success-flag]",
       loginButton: "[otp-login-btn]",
-      backToStep1Button: "[otp-back-btn]",
-      step1Container: "[otp-step-1]",
-      step2Container: "[otp-step-2]",
+      backToOtpRequestButton: "[otp-back-btn]",
       showModalButton: "[otp-show-modal]",
       bypassSendButton: "[otp-bypass-send-btn]"
     }
@@ -44,56 +43,54 @@
 
     settings = $.extend(true, {}, settings, options || {});
 
-    $(document).on("click", `${settings.selectors.step1Container} ${settings.selectors.sendButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.requestOtpModal} ${settings.selectors.sendButton}`, function (e) {
       e.preventDefault();
       otp.sendOtp(e.target, false, false);
     });
 
-    $(document).on("click", `${settings.selectors.step1Container} ${settings.selectors.bypassSendButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.requestOtpModal} ${settings.selectors.bypassSendButton}`, function (e) {
       e.preventDefault();
       otp.sendOtp(e.target, false, true);
     });
 
-    $(document).on("click", `${settings.selectors.step2Container} ${settings.selectors.resendButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.resendButton}`, function (e) {
       e.preventDefault();
       otp.sendOtp(e.target, true, false);
     });
 
-    $(document).on("click", `${settings.selectors.step2Container} ${settings.selectors.loginButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.loginButton}`, function (e) {
       e.preventDefault();
       otp.verifyOtp();
     });
 
-    $(document).on('input', `${settings.selectors.step1Container} ${settings.selectors.emailInput}`, function (e) {
+    $(document).on('input', `${settings.selectors.requestOtpModal} ${settings.selectors.emailInput}`, function (e) {
       state.email = $(this).val();
     });
 
     $(document).on('click', settings.selectors.showModalButton, function (e) {
       e.preventDefault();
-      ModalTools.showModal(settings.selectors.modalWindow);
+      ModalTools.showModal(settings.selectors.requestOtpModal, {
+        closeOthers: true
+      });
     });
 
-    $(document).on('mt-begin-open:' + settings.selectors.modalWindow, function (e) {
+    $(document).on('mt-begin-open:' + settings.selectors.requestOtpModal, function (e) {
       var currentEmail = $(settings.selectors.standardLoginEmailInput).val();
       $(settings.selectors.emailInput).val(currentEmail);
       state.email = currentEmail;
     });
 
-    $(document).on('click', settings.selectors.backToStep1Button, function () {
-
-      var $stepContainer = $(`${settings.selectors.parentElement} ${settings.selectors.otpStepContainer}`);
-      $stepContainer.find(settings.selectors.step2Container).empty().hide();
-      $stepContainer.find(settings.selectors.step1Container).show();
-
-      $stepContainer.html($stepContainer.data('page-1'));
+    $(document).on('click', settings.selectors.backToOtpRequestButton, function () {
+      ModalTools.showModal(settings.selectors.requestOtpModal, {
+        closeOthers: true
+      });
     });
   };
-
 
   otp.sendOtp = async function (btn, isResend, bypassSend) {
 
     if (!state.email || !state.email.trim()) {
-      apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.step1Container);
+      apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.requestOtpModal);
       document.querySelector(settings.selectors.emailInput).focus();
       return;
     }
@@ -113,7 +110,7 @@
           setCountdown(btn, response.canResendInSeconds);
         }
 
-        apt.otp.showOtpValidation(response.message, isResend ? settings.selectors.step2Container : settings.selectors.step1Container);
+        apt.otp.showOtpValidation(response.message, isResend ? settings.selectors.validateOtpModal : settings.selectors.requestOtpModal);
         return;
       }
 
@@ -129,22 +126,23 @@
           return;
         }
 
-        var $otpStepContainer = $(`${settings.selectors.parentElement} ${settings.selectors.otpStepContainer}`);
-
-        var $step2Container = $otpStepContainer.find(settings.selectors.step2Container);
-        if (!$step2Container.length) {
-          $otpStepContainer.append(`<div ${settings.selectors.step2Container}></div>`)
+        var validateModal = document.querySelector(settings.selectors.validateOtpModal);
+        if (!validateModal) {
+          console.error("OTP validate modal container not found.");
+          return;
         }
 
-        $otpStepContainer.find(settings.selectors.step1Container).hide();
-        $otpStepContainer.find(settings.selectors.step2Container).empty().append(response.markup).show();
-        apt.otpInput.focus();
+        validateModal.innerHTML = response.markup;
+
+        ModalTools.showModal(settings.selectors.validateOtpModal, {
+          closeOthers: true
+        });
 
         return;
       }
     } catch (e) {
       console.error(e);
-      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, isResend ? settings.selectors.step2Container : settings.selectors.step1Container);
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, isResend ? settings.selectors.validateOtpModal : settings.selectors.requestOtpModal);
     } finally {
       apt.shared.loading(btn, false);
     }
@@ -157,12 +155,12 @@
       return;
     }
 
-    var otp = apt.otpInput.getCode(settings.selectors.step2Container);
+    var otp = apt.otpInput.getCode(settings.selectors.validateOtpModal);
 
     var inputsLength = apt.otpInput.getCodeBoxCount();
     if (otp.length < inputsLength) {
       apt.otpInput.focusFirstEmpty();
-      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.step2Container);
+      apt.otp.showOtpValidation(settings.localeStrings.incompleteCodeErrorMessage, settings.selectors.validateOtpModal);
 
       return;
     }
@@ -176,13 +174,13 @@
         return;
       }
 
-      apt.otp.showOtpValidation(response.message, settings.selectors.step2Container);
+      apt.otp.showOtpValidation(response.message, settings.selectors.validateOtpModal);
       apt.shared.loading(btn, false);
 
     } catch (e) {
       console.error(e);
       apt.shared.loading(btn, false);
-      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.step2Container);
+      apt.otp.showOtpValidation(settings.localeStrings.generalErrorMessage, settings.selectors.validateOtpModal);
     }
   };
 
@@ -216,7 +214,6 @@
     otp.hideOtpValidation();
   });
 
-
   function setCountdown(btn, sendAgainSeconds) {
     var originalBtnContent = btn.innerHTML;
     btn.dataset.countdown = "true";
@@ -241,7 +238,6 @@
       data: addAntiForgeryToken(data)
     });
   }
-
 
   global.apt.otp = otp;
 })(window, jQuery);

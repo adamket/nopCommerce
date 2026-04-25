@@ -16,7 +16,14 @@ public partial class OtpViewComponent : NopViewComponent
     {
         var model = new OtpModel
         {
-            ShowDefaultOtpLoginButton = _settings.ShowDefaultOtpLoginButton
+            ShowDefaultOtpLoginButton = _settings.ShowDefaultOtpLoginButton,
+            PrimaryButtonColor = _settings.PrimaryButtonColor,
+            SecondaryButtonColor = _settings.SecondaryButtonColor,
+            PrimaryButtonHoverColor = _settings.PrimaryButtonHoverColor,
+            SecondaryButtonHoverColor = _settings.SecondaryButtonHoverColor,
+            PrimaryButtonTextColor = _settings.PrimaryButtonTextColor,
+            SecondaryButtonTextColor = _settings.SecondaryButtonTextColor,
+            ButtonBorderRadiusPx = _settings.ButtonBorderRadiusPx
         };
 
         return View(model);

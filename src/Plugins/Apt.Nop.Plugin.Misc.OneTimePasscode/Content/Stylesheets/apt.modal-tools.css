@@ -8,7 +8,8 @@
   --mt-window-max-height-mobile: 95vh;
   --mt-window-radius: 14px;
   --mt-window-radius-mobile: 8px;
-  --mt-header-footer-padding: 20px 30px 15px;
+  --mt-header-padding: 20px 30px 15px;
+  --mt-footer-padding: 20px 30px 20px;
   --mt-header-footer-padding-mobile: 20px 25px;
   --mt-body-side-padding: 30px;
   --mt-body-side-padding-mobile: 25px;
@@ -128,12 +129,18 @@
   border-top: var(--mt-footer-border);
 }
 
-.mt-header,
+.mt-header {
+  display: flex;
+  align-items: center;
+  gap: var(--mt-gap);
+  padding: var(--mt-header-padding);
+}
+
 .mt-footer {
   display: flex;
   align-items: center;
   gap: var(--mt-gap);
-  padding: var(--mt-header-footer-padding);
+  padding: var(--mt-footer-padding);
 }
 
 .mt-header {
@@ -229,6 +236,15 @@
   padding-top: var(--mt-body-footer-padding-top);
   padding-bottom: var(--mt-body-footer-padding-bottom);
 }
+
+.mt-modal-swap .mt-overlay,
+.mt-modal-swap .mt-overlay::before {
+  transition: none !important;
+}
+
+  .mt-modal-swap .mt-overlay::before {
+    opacity: 1;
+  }
 
 @media (max-width: 600px) {
   .mt-overlay {

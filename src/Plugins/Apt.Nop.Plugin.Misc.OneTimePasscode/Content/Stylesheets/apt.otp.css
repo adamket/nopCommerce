@@ -64,15 +64,27 @@
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s;
 }
 
+.apt-otp {
+  /* --otp-primary-button-bg: var(--accent-blue-color, #4ab2f1);
+  --otp-primary-button-hover-bg: var(--accent-blue-active-color, #248ece);
+  --otp-primary-button-text: #fff;
+  --otp-secondary-button-bg: #f3f4f6;
+  --otp-secondary-button-hover-bg: #eee;
+  --otp-secondary-button-text: #374151;
+  --otp-button-radius: 4px;*/
+}
 .apt-otp .button-1 {
   min-width: 140px;
   border: none;
-  background-color: var(--accent-blue-color);
+  background-color: var(--otp-primary-button-bg);
   padding: 10px 30px;
   text-align: center;
   font-size: 15px;
   color: #fff;
   text-transform: uppercase;
+  background-color: var(--otp-primary-button-bg);
+  color: var(--otp-primary-button-text);
+  border-radius: var(--otp-button-radius);
 }
 .apt-otp .button-1:hover, .apt-otp .button-1:focus {
   background-color: var(--accent-blue-active-color);

@@ -3,49 +3,46 @@
 @using Nop.Web.Areas.Admin.Components
 @model OtpConfigurationModel
 @{
-    Layout = "_ConfigurePlugin";
+    Layout = "_AdminLayout";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, OtpConstants.PathToPlugin + "/Content/Libraries/coloris/coloris.js");
+    NopHtml.AddCssFileParts(OtpConstants.PathToPlugin + "/Content/Libraries/coloris/coloris.css");
 }
+
+
+<form asp-controller="Configuration" asp-action="Configure" method="post" class="form-horizontal">
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        Otp plugin configuration
+        <small>
+            <i class="fas fa-arrow-circle-left"></i>
+           
+           @*  <a asp-action="List">@T("Admin.Catalog.Products.BackToList")</a> *@
+        </small>
+    </h1>
+    <div class="float-right">
+      
+        <button type="submit" class="btn bg-primary" >
+            <i class="far fa-disk"></i>
+           Save
+        </button>
+       
+        @await Component.InvokeAsync(typeof(AdminWidgetViewComponent), new { widgetZone = AdminWidgetZones.ProductDetailsButtons, additionalData = Model })
+    </div>
+</div>
 
 @await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
 
-<form asp-controller="Configuration" asp-action="Configure" method="post" class="form-horizontal">
+
     <div class="cards-group">
         <div class="card card-default">
             <div class="card-body">
                 <p>@T("Plugins.Misc.OneTimePasscode.Instructions", "Configure Twilio credentials used to send one-time passcodes.")</p>
 
-@*                 <div class="form-group row">
-                    <div class="col-md-3">
-                        <nop-label asp-for="TwilioAccountSid" />
-                    </div>
-                    <div class="col-md-9">
-                        <nop-editor asp-for="TwilioAccountSid" />
-                        <span asp-validation-for="TwilioAccountSid" class="text-danger"></span>
-                    </div>
-                </div>
+                @* Twilio fields omitted *@
 
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-label asp-for="TwilioAuthToken" />
-                    </div>
-                    <div class="col-md-9">
-                        <nop-editor asp-for="TwilioAuthToken" type="password" />
-                        <span asp-validation-for="TwilioAuthToken" class="text-danger"></span>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <div class="col-md-3">
-                        <nop-label asp-for="TwilioFromNumber" />
-                    </div>
-                    <div class="col-md-9">
-                        <nop-editor asp-for="TwilioFromNumber" />
-                        <span asp-validation-for="TwilioFromNumber" class="text-danger"></span>
-                    </div>
-                </div> *@
-                
-                <div class="form-group row">
-                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="OtpValidationIntervalSeconds_OverrideForStore" asp-input="OtpValidationIntervalSeconds" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="OtpValidationIntervalSeconds" />
                     </div>
                     <div class="col-md-9">
@@ -53,9 +50,10 @@
                         <span asp-validation-for="OtpValidationIntervalSeconds" class="text-danger"></span>
                     </div>
                 </div>
-                
+
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="OtpRequestIntervalSeconds_OverrideForStore" asp-input="OtpRequestIntervalSeconds" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="OtpRequestIntervalSeconds" />
                     </div>
                     <div class="col-md-9">
@@ -63,9 +61,10 @@
                         <span asp-validation-for="OtpRequestIntervalSeconds" class="text-danger"></span>
                     </div>
                 </div>
-                
+
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="OtpExpiresAfterMinutes_OverrideForStore" asp-input="OtpExpiresAfterMinutes" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="OtpExpiresAfterMinutes" />
                     </div>
                     <div class="col-md-9">
@@ -73,9 +72,10 @@
                         <span asp-validation-for="OtpExpiresAfterMinutes" class="text-danger"></span>
                     </div>
                 </div>
-                
+
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="CodeDigitCount_OverrideForStore" asp-input="CodeDigitCount" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="CodeDigitCount" />
                     </div>
                     <div class="col-md-9">
@@ -86,6 +86,7 @@
 
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="PreventUserEnumeration_OverrideForStore" asp-input="PreventUserEnumeration" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="PreventUserEnumeration" />
                     </div>
                     <div class="col-md-9">
@@ -93,9 +94,10 @@
                         <span asp-validation-for="PreventUserEnumeration" class="text-danger"></span>
                     </div>
                 </div>
-                
+
                 <div class="form-group row">
                     <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="ShowDefaultOtpLoginButton_OverrideForStore" asp-input="ShowDefaultOtpLoginButton" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="ShowDefaultOtpLoginButton" />
                     </div>
                     <div class="col-md-9">
@@ -104,12 +106,263 @@
                     </div>
                 </div>
 
-                <div class="form-group row">
-                    <div class="col-md-9 offset-md-3">
-                        <button type="submit" name="save" class="btn btn-primary">@T("Admin.Common.Save")</button>
+                <!-- Button styling configuration -->
+                <div class="row mt-4">
+                    <!-- Primary button column -->
+                    <div class="col-md-6">
+                        <div class="btn-style-panel primary-btn-panel">
+                            <h4 class="btn-style-heading">@T("Apt.Plugins.Misc.Otp.Settings.PrimaryButtonGroup", "Primary button style")</h4>
+
+                            <!-- Primary background -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="PrimaryButtonColor_OverrideForStore" asp-input="PrimaryButtonColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.PrimaryButtonColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.PrimaryButtonColor"></span>
+
+                                        <input asp-for="PrimaryButtonColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="PrimaryButtonColor" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <!-- Primary hover -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="PrimaryButtonHoverColor_OverrideForStore" asp-input="PrimaryButtonHoverColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.PrimaryButtonHoverColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.PrimaryButtonHoverColor"></span>
+
+                                        <input asp-for="PrimaryButtonHoverColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="PrimaryButtonHoverColor" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <!-- Primary text -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="PrimaryButtonTextColor_OverrideForStore" asp-input="PrimaryButtonTextColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.PrimaryButtonTextColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.PrimaryButtonTextColor"></span>
+
+                                        <input asp-for="PrimaryButtonTextColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="PrimaryButtonTextColor" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Secondary button column -->
+                    <div class="col-md-6">
+                        <div class="btn-style-panel secondary-btn-panel">
+                            <h4 class="btn-style-heading">@T("Apt.Plugins.Misc.Otp.Settings.SecondaryButtonGroup", "Secondary button style")</h4>
+
+                            <!-- Secondary background -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="SecondaryButtonColor_OverrideForStore" asp-input="SecondaryButtonColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.SecondaryButtonColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.SecondaryButtonColor"></span>
+
+                                        <input asp-for="SecondaryButtonColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="SecondaryButtonColor" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <!-- Secondary hover -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="SecondaryButtonHoverColor_OverrideForStore" asp-input="SecondaryButtonHoverColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.SecondaryButtonHoverColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.SecondaryButtonHoverColor"></span>
+
+                                        <input asp-for="SecondaryButtonHoverColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="SecondaryButtonHoverColor" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <!-- Secondary text -->
+                            <div class="form-group">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <nop-override-store-checkbox asp-for="SecondaryButtonTextColor_OverrideForStore" asp-input="SecondaryButtonTextColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                                <label class="control-label d-block mb-1">
+                                    @T("Apt.Plugins.Misc.Otp.Settings.SecondaryButtonTextColor")
+                                </label>
+                                <div class="color-col">
+                                    <div class="color-row">
+                                        <span class="color-preview" style="background:@Model.SecondaryButtonTextColor"></span>
+
+                                        <input asp-for="SecondaryButtonTextColor"
+                                               class="form-control coloris"
+                                               data-coloris />
+                                    </div>
+                                    <span asp-validation-for="SecondaryButtonTextColor" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </form>
+
+<script asp-location="Footer">
+    document.addEventListener("DOMContentLoaded", function () {
+        Coloris({
+            alpha: false,
+            el: '.coloris',
+            theme: 'default',
+            themeMode: 'light',
+            format: 'hex',
+            formatToggle: false,
+            swatches: [
+                '#0d6efd',
+                '#6f42c1',
+                '#d63384',
+                '#dc3545',
+                '#fd7e14',
+                '#ffc107',
+                '#198754',
+                '#20c997',
+                '#4ab2f1',
+                '#6c757d',
+                '#212529',
+                '#ffffff'
+            ],
+            onChange: function (color, input) {
+                const preview = input.closest('.form-group')
+                    ?.querySelector('.color-preview');
+
+                if (preview) {
+                    preview.style.background = color;
+                }
+            }
+        });
+
+        const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{6})$/;
+
+        document.addEventListener('input', function (e) {
+            if (e.target.matches('.coloris')) {
+                const input = e.target;
+                const color = input.value;
+
+                if (!HEX_COLOR_REGEX.test(color)) return;
+
+                const preview = input.closest('.form-group')
+                    ?.querySelector('.color-preview');
+
+                if (preview) {
+                    preview.style.background = color;
+                }
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            const preview = e.target.closest('[data-color-preview], .color-preview');
+
+            if (!preview) {
+                return;
+            }
+
+            const group = preview.closest('.form-group');
+            const input = group?.querySelector('.coloris');
+
+            if (!input) {
+                return;
+            }
+
+            input.focus();
+            input.click();
+        });
+    });
+</script>
+
+<style>
+    .color-col button {
+        display: none;
+    }
+
+    .btn-style-panel {
+        border: 1px solid #e3e3e3;
+        border-radius: 4px;
+        padding: 15px 15px 10px 15px;
+        margin-bottom: 15px;
+        background-color: #f9fafb;
+    }
+
+    .primary-btn-panel {
+        border-left: 4px solid #0d6efd;
+    }
+
+    .secondary-btn-panel {
+        border-left: 4px solid #6c757d;
+    }
+
+    .btn-style-heading {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #495057;
+    }
+
+    .color-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .color-preview {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+    }
+
+    .coloris {
+        max-width: 200px;
+    }
+</style>
