@@ -342,7 +342,7 @@ $accent-blue-active-color: #248ece;
             gap: $otp-space-sm;
         }
 
-        .otp-field {
+        .otp-fields .otp-field {
             @include otp-field-size($otp-field-size-md, $otp-field-font-md, $otp-field-size-md, $otp-radius-md);
         }
 
@@ -372,7 +372,7 @@ $accent-blue-active-color: #248ece;
             gap: $otp-space-xs;
         }
 
-        .otp-field {
+        .otp-fields .otp-field {
             @include otp-field-size($otp-field-size-sm, $otp-field-font-sm, $otp-field-size-sm, $otp-radius-sm);
         }
 
@@ -386,7 +386,7 @@ $accent-blue-active-color: #248ece;
             gap: $otp-space-2xs;
         }
 
-        .otp-field {
+        .otp-fields .otp-field {
             @include otp-field-size($otp-field-size-xs, $otp-field-font-xs, 30px, $otp-radius-xs);
         }
 

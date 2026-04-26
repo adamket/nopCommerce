@@ -217,7 +217,7 @@
   .apt-otp .otp-fields {
     gap: 6px;
   }
-  .apt-otp .otp-field {
+  .apt-otp .otp-fields .otp-field {
     width: 45px;
     height: 45px;
     font-size: 18px;
@@ -247,7 +247,7 @@
   .apt-otp .otp-fields {
     gap: 4px;
   }
-  .apt-otp .otp-field {
+  .apt-otp .otp-fields .otp-field {
     width: 40px;
     height: 40px;
     font-size: 16px;
@@ -263,7 +263,7 @@
   .apt-otp .otp-fields {
     gap: 2px;
   }
-  .apt-otp .otp-field {
+  .apt-otp .otp-fields .otp-field {
     width: 35px;
     height: 35px;
     font-size: 14px;

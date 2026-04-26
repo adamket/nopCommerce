@@ -203,6 +203,11 @@ public class OneTimePasscodeController : BasePublicController
     [HttpPost("apt/validate-otp")]
     public virtual async Task<IActionResult> OtpLogin(OtpLoginModel model)
     {
+        if (!ModelState.IsValid)
+        {
+            return this.OtpJsonError(await _localizationService.GetResourceAsync("apt.plugins.misc.otp.errors.invalid-model"));
+        }
+
         var currentCustomer = await _workContext.GetCurrentCustomerAsync();
         var targetCustomer = await _customerService.GetCustomerByEmailAsync(model.Email.Trim());
 

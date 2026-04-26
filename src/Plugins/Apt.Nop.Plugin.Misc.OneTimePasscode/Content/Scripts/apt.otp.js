@@ -116,12 +116,10 @@
     }
 
     apt.shared.loading(btn, true);
-    var payload = { email: state.email, bypassSend: bypassSend };
+    const payload = { email: state.email, bypassSend: bypassSend };
     try {
 
-
-
-      var response = await postJson(settings.sendUrl, payload);
+      const response = await postJson(settings.sendUrl, payload);
       runCallback("onOtpRequested", response, payload);
 
       if (!response.success) {
@@ -189,8 +187,8 @@
     apt.shared.loading(btn, true);
 
     try {
-
-      var response = await postJson(settings.verifyUrl, { otp: otp, email: state.email });
+      const payload = { otp: otp, email: state.email };
+      const response = await postJson(settings.verifyUrl, payload);
       runCallback("onOtpValidated", response, payload);
 
       if (response.success) {
