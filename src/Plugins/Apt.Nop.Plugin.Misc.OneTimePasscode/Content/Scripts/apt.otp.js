@@ -2,6 +2,7 @@
   global.apt = global.apt || {};
 
   var otp = global.apt.otp || {};
+  var isInitialized = false;
 
   otp.parentSelector = "[apt-otp]";
 
@@ -16,8 +17,6 @@
       incompleteCodeErrorMessage: "Please ensure entire code is filled in."
     },
     selectors: {
-      //add [otp-modal]?
-      //change otp-send / bypass send naming
       parentElement: otp.parentSelector,
       standardLoginEmailInput: "#Email",
       modalWrapper: "[otp-modal-windows]",
@@ -31,7 +30,12 @@
       loginButton: "[otp-login-btn]",
       backToOtpRequestButton: "[otp-back-btn]",
       showModalButton: "[otp-show-modal]",
-      bypassSendButton: "[otp-bypass-send-btn]"
+      bypassSendButton: "[otp-bypass-send-btn]",
+
+    },
+    callbacks: {
+      onOtpRequested: null,
+      onOtpValidated: null
     }
   };
 
@@ -41,21 +45,28 @@
 
   otp.init = function (options) {
 
+
+
     settings = $.extend(true, {}, settings, options || {});
+
+    if (isInitialized) {
+      console.log("OTP js has already been initialized.");
+      return;
+    }
 
     $(document).on("click", `${settings.selectors.requestOtpModal} ${settings.selectors.sendButton}`, function (e) {
       e.preventDefault();
-      otp.sendOtp(e.target, false, false);
+      otp.requestOtp(e.target, false, false);
     });
 
     $(document).on("click", `${settings.selectors.requestOtpModal} ${settings.selectors.bypassSendButton}`, function (e) {
       e.preventDefault();
-      otp.sendOtp(e.target, false, true);
+      otp.requestOtp(e.target, false, true);
     });
 
     $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.resendButton}`, function (e) {
       e.preventDefault();
-      otp.sendOtp(e.target, true, false);
+      otp.requestOtp(e.target, true, false);
     });
 
     $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.loginButton}`, function (e) {
@@ -85,9 +96,14 @@
         closeOthers: true
       });
     });
+
+    isInitialized = true;
   };
 
-  otp.sendOtp = async function (btn, isResend, bypassSend) {
+  otp.requestOtp = async function (btn, isResend, bypassSend) {
+
+    var emailInput = document.querySelector(settings.selectors.emailInput);
+    state.email = emailInput?.value || state.email;
 
     if (!state.email || !state.email.trim()) {
       apt.otp.showOtpValidation(settings.localeStrings.emailRequiredErrorMessage, settings.selectors.requestOtpModal);
@@ -100,9 +116,14 @@
     }
 
     apt.shared.loading(btn, true);
-
+    var payload = { email: state.email, bypassSend: bypassSend };
     try {
-      var response = await postJson(settings.sendUrl, { email: state.email, bypassSend: bypassSend });
+
+
+
+      var response = await postJson(settings.sendUrl, payload);
+      runCallback("onOtpRequested", response, payload);
+
       if (!response.success) {
 
         if (isResend && response.prematureOtpRequest && response.canResendInSeconds) {
@@ -110,7 +131,7 @@
           setCountdown(btn, response.canResendInSeconds);
         }
 
-        apt.otp.showOtpValidation(response.message, isResend ? settings.selectors.validateOtpModal : settings.selectors.requestOtpModal);
+        apt.otp.showOtpValidation(response.message || settings.localeStrings.generalErrorMessage, isResend ? settings.selectors.validateOtpModal : settings.selectors.requestOtpModal);
         return;
       }
 
@@ -168,13 +189,16 @@
     apt.shared.loading(btn, true);
 
     try {
+
       var response = await postJson(settings.verifyUrl, { otp: otp, email: state.email });
+      runCallback("onOtpValidated", response, payload);
+
       if (response.success) {
         location.href = response.returnUrl || '/';
         return;
       }
 
-      apt.otp.showOtpValidation(response.message, settings.selectors.validateOtpModal);
+      apt.otp.showOtpValidation(response.message || settings.localeStrings.generalErrorMessage, settings.selectors.validateOtpModal);
       apt.shared.loading(btn, false);
 
     } catch (e) {
@@ -237,6 +261,17 @@
       type: "POST",
       data: addAntiForgeryToken(data)
     });
+  }
+
+  function runCallback(name, ...args) {
+    const cb = settings.callbacks?.[name];
+    if (typeof cb === "function") {
+      try {
+        cb(...args);
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }
 
   global.apt.otp = otp;

@@ -10,7 +10,8 @@
   --mt-window-radius-mobile: 8px;
   --mt-header-padding: 20px 30px 15px;
   --mt-footer-padding: 20px 30px 20px;
-  --mt-header-footer-padding-mobile: 20px 25px;
+  --mt-header-padding-mobile: 15px 25px;
+  --mt-footer-padding-mobile: 10px 25px 15px 25px;
   --mt-body-side-padding: 30px;
   --mt-body-side-padding-mobile: 25px;
   --mt-body-title-padding-bottom: 30px;
@@ -251,13 +252,15 @@
     padding: var(--mt-overlay-padding-mobile);
   }
 
-  .mt-header,
+
   .mt-footer {
-    padding: var(--mt-header-footer-padding-mobile);
+    padding: var(--mt-footer-padding-mobile);
   }
 
+
+
   .mt-header {
-    padding-bottom: 15px;
+    padding: var(--mt-header-padding-mobile);
   }
 
   .mt-window {
@@ -283,6 +286,7 @@
     padding-right: var(--mt-body-side-padding-mobile);
   }
 
+    .mt-footer button,
     .mt-body-footer button,
     .mt-body-container button {
       width: 100%;
