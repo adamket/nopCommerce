@@ -17,15 +17,18 @@ public class OtpSettings : ISettings
     public bool PreventUserEnumeration { get; set; }
     public int CodeDigitCount { get; set; }
     public bool ShowDefaultOtpLoginButton { get; set; }
-
-
     public string PrimaryButtonColor { get; set; }
     public string PrimaryButtonHoverColor { get; set; }
     public string PrimaryButtonTextColor { get; set; }
     public string SecondaryButtonColor { get; set; }
     public string SecondaryButtonHoverColor { get; set; }
     public string SecondaryButtonTextColor { get; set; }
-
     public int ButtonBorderRadiusPx { get; set; }
 
+    public int CssTypeId { get; set; }
+}
+
+public enum CssType {
+    FromSettings = 0,
+    Custom = 10
 }

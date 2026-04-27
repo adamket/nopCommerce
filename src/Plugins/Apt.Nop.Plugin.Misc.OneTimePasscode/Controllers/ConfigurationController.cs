@@ -1,8 +1,8 @@
 ﻿using Apt.Nop.Plugin.Misc.OneTimePasscode.Models;
-using Apt.Nop.Plugin.Misc.OneTimePasscode.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
+using Nop.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
@@ -34,7 +34,7 @@ public class ConfigurationController : BasePluginController
         ISettingService settingService,
         IStoreContext storeContext,
         INotificationService notificationService,
-        ILocalizationService localizationService/*, ITwilioService twilioService*/)
+        ILocalizationService localizationService /*, ITwilioService twilioService*/)
     {
         _settingService = settingService;
         _storeContext = storeContext;
@@ -51,11 +51,12 @@ public class ConfigurationController : BasePluginController
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> Configure()
     {
-        var model = new OtpConfigurationModel();
-
         var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
-        var settings = await _settingService.LoadSettingAsync<OtpSettings>(storeScope);
+        var model = new OtpConfigurationModel { ActiveStoreScopeConfiguration = storeScope };
 
+
+        var settings = await _settingService.LoadSettingAsync<OtpSettings>(storeScope);
+       
         //model.TwilioAccountSid = settings.TwilioAccountSid;
         //model.TwilioAuthToken = settings.TwilioAuthToken;
         //model.TwilioFromNumber = settings.TwilioFromNumber;
@@ -72,6 +73,7 @@ public class ConfigurationController : BasePluginController
         model.SecondaryButtonColor = settings.SecondaryButtonColor;
         model.SecondaryButtonHoverColor = settings.SecondaryButtonHoverColor;
         model.SecondaryButtonTextColor = settings.SecondaryButtonTextColor;
+        model.CssTypeId = settings.CssTypeId;
 
         if (storeScope > 0)
         {
@@ -87,6 +89,8 @@ public class ConfigurationController : BasePluginController
                 await _settingService.SettingExistsAsync(settings, x => x.ShowDefaultOtpLoginButton, storeScope);
             model.CodeDigitCount_OverrideForStore =
                 await _settingService.SettingExistsAsync(settings, x => x.CodeDigitCount, storeScope);
+            model.CssTypeId_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.CssTypeId, storeScope);
 
             model.PrimaryButtonColor_OverrideForStore =
                 await _settingService.SettingExistsAsync(settings, x => x.PrimaryButtonColor, storeScope);
@@ -102,13 +106,16 @@ public class ConfigurationController : BasePluginController
                 await _settingService.SettingExistsAsync(settings, x => x.SecondaryButtonTextColor, storeScope);
         }
 
-        model.ActiveStoreScopeConfiguration = storeScope;
+        PrepareButtonStyleGroupModels(model);
 
         model.AvailableCodeDigitCounts = new List<SelectListItem>();
         for (var i = 3; i <= 6; ++i)
         {
             model.AvailableCodeDigitCounts.Add(new(i.ToString(), i.ToString()));
         }
+
+        model.AvailableCssTypes = (await CssType.Custom.ToSelectListAsync()).ToList();
+
 
         return View("~/Plugins/Apt.Misc.OneTimePasscode/Views/Configuration/Configure.cshtml", model);
     }
@@ -139,11 +146,14 @@ public class ConfigurationController : BasePluginController
         settings.SecondaryButtonColor = model.SecondaryButtonColor;
         settings.SecondaryButtonHoverColor = model.SecondaryButtonHoverColor;
         settings.SecondaryButtonTextColor = model.SecondaryButtonTextColor;
+     
 
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.OtpRequestIntervalSeconds, model.OtpRequestIntervalSeconds_OverrideForStore, storeScope, false);
+            settings, x => x.OtpRequestIntervalSeconds, model.OtpRequestIntervalSeconds_OverrideForStore, storeScope,
+            false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.OtpValidationIntervalSeconds, model.OtpValidationIntervalSeconds_OverrideForStore, storeScope, false);
+            settings, x => x.OtpValidationIntervalSeconds, model.OtpValidationIntervalSeconds_OverrideForStore,
+            storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.OtpExpiresAfterMinutes, model.OtpExpiresAfterMinutes_OverrideForStore, storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
@@ -151,20 +161,24 @@ public class ConfigurationController : BasePluginController
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.CodeDigitCount, model.CodeDigitCount_OverrideForStore, storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.ShowDefaultOtpLoginButton, model.ShowDefaultOtpLoginButton_OverrideForStore, storeScope, false);
+            settings, x => x.ShowDefaultOtpLoginButton, model.ShowDefaultOtpLoginButton_OverrideForStore, storeScope,
+            false);
 
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.PrimaryButtonColor, model.PrimaryButtonColor_OverrideForStore, storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.PrimaryButtonHoverColor, model.PrimaryButtonHoverColor_OverrideForStore, storeScope, false);
+            settings, x => x.PrimaryButtonHoverColor, model.PrimaryButtonHoverColor_OverrideForStore, storeScope,
+            false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.PrimaryButtonTextColor, model.PrimaryButtonTextColor_OverrideForStore, storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.SecondaryButtonColor, model.SecondaryButtonColor_OverrideForStore, storeScope, false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.SecondaryButtonHoverColor, model.SecondaryButtonHoverColor_OverrideForStore, storeScope, false);
+            settings, x => x.SecondaryButtonHoverColor, model.SecondaryButtonHoverColor_OverrideForStore, storeScope,
+            false);
         await _settingService.SaveSettingOverridablePerStoreAsync(
-            settings, x => x.SecondaryButtonTextColor, model.SecondaryButtonTextColor_OverrideForStore, storeScope, false);
+            settings, x => x.SecondaryButtonTextColor, model.SecondaryButtonTextColor_OverrideForStore, storeScope,
+            false);
 
         await _settingService.SaveSettingAsync(settings);
         await _settingService.ClearCacheAsync();
@@ -176,5 +190,75 @@ public class ConfigurationController : BasePluginController
         return await Configure();
     }
 
+
+
+    public void PrepareButtonStyleGroupModels(OtpConfigurationModel model)
+    {
+        model.ButtonStyleGroups = new List<ButtonStyleGroupModel>
+        {
+            new()
+            {
+                TitleResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonGroup",
+                CssClass = "primary-btn-panel",
+                Fields =
+                    new List<StyleFieldModel>
+                    {
+                        new()
+                        {
+                            PropertyName = nameof(model.PrimaryButtonColor),
+                            OverridePropertyName = nameof(model.PrimaryButtonColor_OverrideForStore),
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonColor",
+                            Value = model.PrimaryButtonColor
+                        },
+                        new()
+                        {
+                            PropertyName = nameof(model.PrimaryButtonHoverColor),
+                            OverridePropertyName =
+                                nameof(model.PrimaryButtonHoverColor_OverrideForStore),
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonHoverColor",
+                            Value = model.PrimaryButtonHoverColor
+                        },
+                        new()
+                        {
+                            PropertyName = nameof(model.PrimaryButtonTextColor),
+                            OverridePropertyName =
+                                nameof(model.PrimaryButtonTextColor_OverrideForStore),
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonTextColor",
+                            Value = model.PrimaryButtonTextColor
+                        }
+                    }
+            },
+            new()
+            {
+                TitleResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonGroup",
+                CssClass = "primary-btn-panel",
+                Fields = new List<StyleFieldModel>
+                {
+                    new()
+                    {
+                        PropertyName = nameof(model.SecondaryButtonColor),
+                        OverridePropertyName = nameof(model.SecondaryButtonColor_OverrideForStore),
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonColor",
+                        Value = model.SecondaryButtonColor
+                    },
+                    new()
+                    {
+                        PropertyName = nameof(model.SecondaryButtonHoverColor),
+                        OverridePropertyName = nameof(model.SecondaryButtonHoverColor_OverrideForStore),
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonHoverColor",
+                        Value = model.SecondaryButtonHoverColor
+                    },
+                    new()
+                    {
+                        PropertyName = nameof(model.SecondaryButtonTextColor),
+                        OverridePropertyName = nameof(model.SecondaryButtonTextColor_OverrideForStore),
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonTextColor",
+                        Value = model.SecondaryButtonTextColor
+                    }
+                }
+            }
+        };
+
+    }
     #endregion
 }
