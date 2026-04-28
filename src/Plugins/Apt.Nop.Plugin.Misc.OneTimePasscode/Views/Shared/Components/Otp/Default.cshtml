@@ -57,17 +57,21 @@
     });
 </script>
 
-<style>
-    .apt-otp {
-        --otp-primary-button-bg: @Model.PrimaryButtonColor;
-        --otp-primary-button-hover-bg: @Model.PrimaryButtonHoverColor;
-        --otp-primary-button-text: @Model.PrimaryButtonTextColor;
-        --otp-secondary-button-bg: @Model.SecondaryButtonColor;
-        --otp-secondary-button-hover-bg: @Model.SecondaryButtonHoverColor;
-        --otp-secondary-button-text: @Model.SecondaryButtonTextColor;
-        --otp-button-radius: @(Model.ButtonBorderRadiusPx)px;
-    }
-</style>
+@if (Model.CssType == CssType.FromSettings)
+{
+
+    <style>
+        .apt-otp {
+            --otp-primary-button-bg: @Model.PrimaryButtonColor;
+            --otp-primary-button-hover-bg: @Model.PrimaryButtonHoverColor;
+            --otp-primary-button-text: @Model.PrimaryButtonTextColor;
+            --otp-secondary-button-bg: @Model.SecondaryButtonColor;
+            --otp-secondary-button-hover-bg: @Model.SecondaryButtonHoverColor;
+            --otp-secondary-button-text: @Model.SecondaryButtonTextColor;
+            --otp-button-radius: @(Model.ButtonBorderRadiusPx)px;
+        }
+    </style>
+}
 
 <div otp-modal-windows>
     <div otp-modal otp-request-modal class="apt-otp" apt-otp data-mt-no-backdrop-close aria-labelledby="One-time passcode modal">

@@ -187,12 +187,12 @@
     apt.shared.loading(btn, true);
 
     try {
-      const payload = { otp: otp, email: state.email };
+      const payload = { otp: otp, email: state.email, redirectUrlPath: apt.shared.getQueryParam('returnUrl') };
       const response = await postJson(settings.verifyUrl, payload);
       runCallback("onOtpValidated", response, payload);
 
       if (response.success) {
-        location.href = response.returnUrl || '/';
+        location.href = response.redirectUrl || '/';
         return;
       }
 

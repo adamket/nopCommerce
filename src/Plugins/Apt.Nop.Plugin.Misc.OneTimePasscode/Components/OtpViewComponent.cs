@@ -23,7 +23,8 @@ public partial class OtpViewComponent : NopViewComponent
             SecondaryButtonHoverColor = _settings.SecondaryButtonHoverColor,
             PrimaryButtonTextColor = _settings.PrimaryButtonTextColor,
             SecondaryButtonTextColor = _settings.SecondaryButtonTextColor,
-            ButtonBorderRadiusPx = _settings.ButtonBorderRadiusPx
+            ButtonBorderRadiusPx = _settings.ButtonBorderRadiusPx,
+            CssType = (CssType)_settings.CssTypeId
         };
 
         return View(model);

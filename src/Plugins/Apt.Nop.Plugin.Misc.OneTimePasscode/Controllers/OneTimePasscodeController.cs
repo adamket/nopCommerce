@@ -275,7 +275,8 @@ public class OneTimePasscodeController : BasePublicController
         _notificationService.SuccessNotification(StringExtensions.SafeFormat(
             await _localizationService.GetResourceAsync("apt.plugins.misc.otp.notification.logged-in"), model.Email));
 
-        var redirectUrl = !string.IsNullOrEmpty(model.RedirectUrlPath) ? $"/{model.RedirectUrlPath.TrimStart('/')}" : "/";
+        var redirectUrl = !string.IsNullOrEmpty(model.RedirectUrlPath) && Url.IsLocalUrl(model.RedirectUrlPath)? $"/{model.RedirectUrlPath.TrimStart('/')}" : "/";
+    
 
         return this.OtpJsonSuccess(new
         {

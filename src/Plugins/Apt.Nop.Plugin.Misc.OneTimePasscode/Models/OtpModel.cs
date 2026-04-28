@@ -11,4 +11,6 @@ public class OtpModel
     public string SecondaryButtonTextColor { get; set; }
 
     public int ButtonBorderRadiusPx { get; set; }
+
+    public CssType CssType { get; set; }
 }

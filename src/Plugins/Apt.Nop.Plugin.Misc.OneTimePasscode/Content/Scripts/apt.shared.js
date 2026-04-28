@@ -80,6 +80,15 @@
     tick();
   };
 
+  shared.getQueryParam = function(key, defaultValue = '/') {
+    const params = new URLSearchParams(window.location.search);
+
+    if (!params.has(key)) return defaultValue;
+
+    const value = params.get(key);
+    return value !== null ? decodeURIComponent(value).trim() : defaultValue;
+  }
+
   shared.formatString = function (str, ...args) {
     return str.replace(/\{(\d+)\}/g, function (match, index) {
       return args[index] !== undefined ? args[index] : match;

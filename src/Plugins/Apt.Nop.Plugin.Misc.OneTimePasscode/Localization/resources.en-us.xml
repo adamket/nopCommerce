@@ -125,10 +125,47 @@
         </LocaleResource>
 
 
-       
-        <!--apt.otp.modal.validate-otp.title-->
-        <!--apt.otp.modal.request-otp.title-->
+
+        
+
+        <LocaleResource Name="apt.plugins.misc.otp.settings.csstypeid">
+            <Value>CSS type</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="apt.plugins.misc.otp.settings.csstypeid.hint">
+            <Value>Determines how styles for the OTP plugin are applied. Select "From settings" to configure and manage CSS using the options provided on this page. Select "Custom" to disable these settings and instead define all styles manually within your plugin’s CSS/SCSS files.</Value>
+        </LocaleResource>
+        
+
+        <LocaleResource Name="apt.otp.modal.request-otp.title">
+            <Value>Request one-time passcode</Value>
+        </LocaleResource>
 
 
+        <LocaleResource Name="apt.otp.modal.validate-otp.title">
+            <Value>Login with one-time passcode</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ButtonColor">
+            <Value>Background color</Value>
+        </LocaleResource>
+
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ButtonHoverColor">
+            <Value>Background hover color</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.ButtonTextColor">
+            <Value>Text color</Value>
+        </LocaleResource>
+
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.PrimaryButtonGroup">
+            <Value>Primary button styles</Value>
+        </LocaleResource>
+
+        <LocaleResource Name="Apt.Plugins.Misc.Otp.Settings.SecondaryButtonGroup">
+            <Value>Secondary button styles</Value>
+        </LocaleResource>
     </LocaleResources>
 </Language>

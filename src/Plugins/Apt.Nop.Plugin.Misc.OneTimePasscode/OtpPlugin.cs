@@ -67,7 +67,14 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
             OtpExpiresAfterMinutes = 15,
             CodeDigitCount = 6,
             PreventUserEnumeration = true,
-            ShowDefaultOtpLoginButton = true
+            ShowDefaultOtpLoginButton = true,
+            CssTypeId = (int)CssType.FromSettings,
+            PrimaryButtonColor = "#4ab2f1",
+            SecondaryButtonColor = "#f3f4f6",
+            PrimaryButtonHoverColor = "#248ece",
+            SecondaryButtonHoverColor = "#eeeeee",
+            PrimaryButtonTextColor = "#ffffff",
+            SecondaryButtonTextColor = "#374151"
         };
         await _settingService.SaveSettingAsync(settings);
 

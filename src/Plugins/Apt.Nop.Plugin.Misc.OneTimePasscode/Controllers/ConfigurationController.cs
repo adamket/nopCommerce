@@ -146,6 +146,7 @@ public class ConfigurationController : BasePluginController
         settings.SecondaryButtonColor = model.SecondaryButtonColor;
         settings.SecondaryButtonHoverColor = model.SecondaryButtonHoverColor;
         settings.SecondaryButtonTextColor = model.SecondaryButtonTextColor;
+        settings.CssTypeId = model.CssTypeId;
      
 
         await _settingService.SaveSettingOverridablePerStoreAsync(
@@ -179,6 +180,10 @@ public class ConfigurationController : BasePluginController
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings, x => x.SecondaryButtonTextColor, model.SecondaryButtonTextColor_OverrideForStore, storeScope,
             false);
+        await _settingService.SaveSettingOverridablePerStoreAsync(
+            settings, x => x.CssTypeId, model.CssTypeId_OverrideForStore, storeScope,
+            false);
+
 
         await _settingService.SaveSettingAsync(settings);
         await _settingService.ClearCacheAsync();
@@ -207,7 +212,7 @@ public class ConfigurationController : BasePluginController
                         {
                             PropertyName = nameof(model.PrimaryButtonColor),
                             OverridePropertyName = nameof(model.PrimaryButtonColor_OverrideForStore),
-                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonColor",
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonColor",
                             Value = model.PrimaryButtonColor
                         },
                         new()
@@ -215,7 +220,7 @@ public class ConfigurationController : BasePluginController
                             PropertyName = nameof(model.PrimaryButtonHoverColor),
                             OverridePropertyName =
                                 nameof(model.PrimaryButtonHoverColor_OverrideForStore),
-                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonHoverColor",
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonHoverColor",
                             Value = model.PrimaryButtonHoverColor
                         },
                         new()
@@ -223,7 +228,7 @@ public class ConfigurationController : BasePluginController
                             PropertyName = nameof(model.PrimaryButtonTextColor),
                             OverridePropertyName =
                                 nameof(model.PrimaryButtonTextColor_OverrideForStore),
-                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.PrimaryButtonTextColor",
+                            LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonTextColor",
                             Value = model.PrimaryButtonTextColor
                         }
                     }
@@ -238,21 +243,21 @@ public class ConfigurationController : BasePluginController
                     {
                         PropertyName = nameof(model.SecondaryButtonColor),
                         OverridePropertyName = nameof(model.SecondaryButtonColor_OverrideForStore),
-                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonColor",
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonColor",
                         Value = model.SecondaryButtonColor
                     },
                     new()
                     {
                         PropertyName = nameof(model.SecondaryButtonHoverColor),
                         OverridePropertyName = nameof(model.SecondaryButtonHoverColor_OverrideForStore),
-                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonHoverColor",
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonHoverColor",
                         Value = model.SecondaryButtonHoverColor
                     },
                     new()
                     {
                         PropertyName = nameof(model.SecondaryButtonTextColor),
                         OverridePropertyName = nameof(model.SecondaryButtonTextColor_OverrideForStore),
-                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.SecondaryButtonTextColor",
+                        LabelResourceKey = "Apt.Plugins.Misc.Otp.Settings.ButtonTextColor",
                         Value = model.SecondaryButtonTextColor
                     }
                 }
