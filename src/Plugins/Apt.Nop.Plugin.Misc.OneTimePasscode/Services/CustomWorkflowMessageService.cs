@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Nop.Core;
+﻿using Nop.Core;
 using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Messages;
@@ -59,6 +54,7 @@ public class CustomWorkflowMessageService(
             await _messageTokenProvider.AddStoreTokensAsync(tokens, store, emailAccount, languageId);
             await _messageTokenProvider.AddCustomerTokensAsync(tokens, customer);
             tokens.Add(new Token("Otp.Code", rawOtp));
+           // tokens.Add(new Token("Otp.ExpiresInMinutes", rawOtp));
 
             //event notification
             await _eventPublisher.MessageTokensAddedAsync(messageTemplate, tokens);

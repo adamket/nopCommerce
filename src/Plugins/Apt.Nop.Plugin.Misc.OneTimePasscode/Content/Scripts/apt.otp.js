@@ -6,7 +6,7 @@
 
   otp.parentSelector = "[apt-otp]";
 
-  var settings = {
+  var settings = otp.settings = {
     sendUrl: "/apt/request-otp",
     verifyUrl: "/apt/validate-otp",
     localeStrings: {
@@ -23,11 +23,11 @@
       requestOtpModal: "[otp-request-modal]",
       validateOtpModal: "[otp-validate-modal]",
       emailInput: "[otp-email-field]",
-      sendButton: "[otp-send-otp-btn]",
+      sendButton: "[otp-request-btn]",
       resendButton: "[otp-resend-btn]",
       errorFlag: "[otp-error-flag]",
       successFlag: "[otp-success-flag]",
-      loginButton: "[otp-login-btn]",
+      validateOtpButton: "[otp-validate-btn]",
       backToOtpRequestButton: "[otp-back-btn]",
       showModalButton: "[otp-show-modal]",
       bypassSendButton: "[otp-bypass-send-btn]",
@@ -69,7 +69,7 @@
       otp.requestOtp(e.target, true, false);
     });
 
-    $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.loginButton}`, function (e) {
+    $(document).on("click", `${settings.selectors.validateOtpModal} ${settings.selectors.validateOtpButton}`, function (e) {
       e.preventDefault();
       otp.verifyOtp();
     });
@@ -168,7 +168,7 @@
   };
 
   otp.verifyOtp = async function () {
-    var btn = document.querySelector(settings.selectors.loginButton);
+    var btn = document.querySelector(settings.selectors.validateOtpButton);
 
     if (apt.shared.loading(btn)) {
       return;

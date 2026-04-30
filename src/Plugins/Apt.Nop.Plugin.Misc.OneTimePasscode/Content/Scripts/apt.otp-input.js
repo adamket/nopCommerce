@@ -6,13 +6,11 @@
 
   var otpFieldSelector = null;
   var pasteCallback = null;
-  var digitCount = null;
 
   otpInput.init = function (data) {
 
     pasteCallback = data.pasteCallback ?? null;
     otpFieldSelector = data.selector || '[otp-field]';
-    digitCount = data.digitCount || 6;
 
     $(apt.otp.parentSelector).on('keydown', otpFieldSelector, onKeyDown);
     $(apt.otp.parentSelector).on('paste', otpFieldSelector, onPaste);
@@ -72,10 +70,8 @@
     const i = codeBoxes.indexOf(input);
     const isCtrlOrCmd = e.ctrlKey || e.metaKey;
 
-    // Allow copy/paste shortcuts
     if (isCtrlOrCmd && (e.key === 'c' || e.key === 'v')) return;
 
-    // Allow tab navigation between OTP boxes
     if (e.key === 'Tab') {
       if (e.shiftKey) {
         if (i > 0) {
@@ -90,11 +86,9 @@
         codeBoxes[i + 1]?.focus();
       }
 
-      // Let normal tab behavior continue from the last box
       return;
     }
 
-    // Arrow key navigation
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
       codeBoxes[i - 1]?.focus();
@@ -107,7 +101,6 @@
       return;
     }
 
-    // Backspace: clear current, move back if already empty
     if (e.key === 'Backspace') {
       e.preventDefault();
       if (input.value) {
@@ -119,7 +112,6 @@
       return;
     }
 
-    // Only allow digit input (0-9)
     if (/^\d$/.test(e.key)) {
       e.preventDefault();
       input.value = e.key;
@@ -128,12 +120,10 @@
       return;
     }
 
-    // Allow a few useful keys
     if (['Delete', 'Home', 'End'].includes(e.key)) {
       return;
     }
 
-    // Block everything else
     e.preventDefault();
   }
 

@@ -85,7 +85,7 @@ public class OtpPlugin : BasePlugin, IMiscPlugin, IWidgetPlugin
             {
                 Name = OtpConstants.MessageTemplateSystemName,
                 Subject = "%Store.Name% - One-time passcode",
-                Body = "Your one-time passcode is: %Otp.Code%",
+                Body = "<p>Hi %Customer.FirstName%,</p>\r\n\r\n<p>Your one-time passcode is:</p>\r\n\r\n<p style=\"font-size: 26px; font-weight: bold; letter-spacing: 6px; font-family: 'Courier New', Consolas, monospace;\">\r\n    %Otp.Code%\r\n</p>\r\n\r\n<p> If you did not request this code, you can safely ignore this email.</p>\r\n\r\n<p>Thank you,<br />%Store.Name%</p>",
                 IsActive = true,
                 DelayBeforeSend = null
             };

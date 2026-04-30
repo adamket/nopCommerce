@@ -49,9 +49,8 @@
         });
 
         apt.otpInput.init({
-            selector: ".otp-field",
             pasteCallback: function(){
-                document.getElementById("verify-otp").click();
+                document.querySelector(apt.otp.settings.selectors.validateOtpButton).click();
             }
         });
     });
