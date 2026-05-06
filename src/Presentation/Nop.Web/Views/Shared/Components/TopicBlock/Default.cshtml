@@ -1,8 +1,4 @@
-﻿@* @using Nop.Services.Security
-@model TopicModel
-
-@inject IPermissionService permissionService
-
+﻿@model TopicModel
 @if (Model.IsPasswordProtected)
 {
     <script asp-location="Footer">
@@ -70,134 +66,15 @@
 }
 else
 {
-
-    var isAuthorizedUser = await permissionService.AuthorizeAsync(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE);
-    var ieAttribute = "";
-    if (isAuthorizedUser)
-    {
-        ieAttribute = "ie-wrapper";
-        <link rel="stylesheet" href="http://localhost:5173/dist/inline-editor.iife.css" />
-        <script src="http://localhost:5173/dist/inline-editor.iife.js"></script>
-
-        <script asp-location="Footer">
-           
-            const editors = InlineEditorLib.InlineEditor.createAll(".topic-block-body", {
-              placeholder: "Start writing...",
-              getTopicId(editor) {
-                return editor.root.closest('[data-topic-id]')?.dataset.topicId;
-              },
-              onChange(html) { },
-              onSave: async function(editor){
-                  var parentEl = editor.root.closest('[data-topic-id]');
-                  if (!parentEl) {
-                      console.error('No parent element with data-topic-id found');
-                      return;
-                  }
-
-                  const topicId = editor.getTopicId();
-                  const response = await fetchRequest({
-                     url: '/apt/topics-plus/update-topic',
-                     method: 'POST',
-                     body: addAntiForgeryToken({ topicId: topicId, content: editor.getHTML() })
-                  });
-
-                  if(!response.success){
-                      editor.showError(response.message || "An error occurred");
-                      return;
-                  }
-
-                  editor.showSuccess("Saved!", 3000);
-              }
-            });
-        </script>
-    }
-
-
-    <div class="topic-block" data-topic-id="@Model.Id">
+    <div class="topic-block">
         @if (!string.IsNullOrEmpty(Model.Title))
         {
             <div class="topic-block-title">
                 <h2>@Model.Title</h2>
             </div>
         }
-        <div class="topic-block-body" @ieAttribute>
-
+        <div class="topic-block-body">
             @Html.Raw(Model.Body)
-
         </div>
     </div>
 }
-
-
-
-<script>
-
-    async function fetchRequest({
-       url,
-       method = 'GET',
-       headers = {},
-       body = null,
-       timeout = 15000
-     }) {
-       const controller = new AbortController();
-       const id = setTimeout(() => controller.abort(), timeout);
-
-       try {
-         let finalBody = null;
-         let finalHeaders = {
-           'X-Requested-With': 'XMLHttpRequest',
-           ...headers
-         };
-
-         // Mimic jQuery: serialize objects to form-urlencoded
-         if (body && method.toUpperCase() !== 'GET') {
-           if (body instanceof FormData) {
-             finalBody = body; // let browser set headers
-           } else {
-             finalBody = new URLSearchParams(body);
-             finalHeaders['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
-           }
-         }
-
-         const response = await fetch(url, {
-           method,
-           headers: finalHeaders,
-           body: finalBody,
-           signal: controller.signal
-         });
-
-         clearTimeout(id);
-
-         if (!response.ok) {
-           const contentType = response.headers.get('content-type');
-           let errorBody;
-
-           if (contentType && contentType.includes('application/json')) {
-             errorBody = await response.json();
-           } else {
-             errorBody = await response.text();
-           }
-
-           throw new Error(
-             `Request failed (${response.status}): ${JSON.stringify(errorBody)}`
-           );
-         }
-
-         if (response.status === 204) return null;
-
-         const contentType = response.headers.get('content-type');
-         return contentType && contentType.includes('application/json')
-           ? await response.json()
-           : await response.text();
-
-       } catch (error) {
-         if (error.name === 'AbortError') {
-           console.error('Request timed out');
-         } else {
-           console.error('Request error:', error);
-         }
-         throw error;
-       }
-     }
-
-</script> *@
