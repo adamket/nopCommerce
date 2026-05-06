@@ -1,4 +1,4 @@
-﻿@* @using Nop.Services.Security
+@using Nop.Services.Security
 @model TopicModel
 
 @inject IPermissionService permissionService
@@ -80,7 +80,7 @@ else
         <script src="http://localhost:5173/dist/inline-editor.iife.js"></script>
 
         <script asp-location="Footer">
-           
+
             const editors = InlineEditorLib.InlineEditor.createAll(".topic-block-body", {
               placeholder: "Start writing...",
               getTopicId(editor) {
@@ -200,4 +200,4 @@ else
        }
      }
 
-</script> *@
+</script>

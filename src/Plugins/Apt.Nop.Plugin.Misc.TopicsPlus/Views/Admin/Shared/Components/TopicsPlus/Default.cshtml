@@ -1,0 +1,18 @@
+@using Apt.Nop.Plugin.Misc.TopicsPlus
+@using Apt.Nop.Plugin.Misc.TopicsPlus.Models
+@using Nop.Core
+@using Nop.Services.Common
+@using Nop.Web.Areas.Admin.Models.Topics
+@model TopicRevisionSearchModel 
+@inject IWorkContext workContext
+@inject IGenericAttributeService genericAttributeService
+@{
+   
+
+    var customer = await workContext.GetCurrentCustomerAsync();
+    const string hideHistoryBlockAttributeName = "TopicDetailsPage.HideTopicsPlusHistoryBlock";
+    var hideHistoryBlock = await genericAttributeService.GetAttributeAsync<bool>
+    (customer, hideHistoryBlockAttributeName, defaultValue: true);
+
+}
+<nop-card asp-name="topic-info" asp-icon="fas fa-info" asp-title="History" asp-hide-block-attribute-name="@hideHistoryBlockAttributeName" asp-hide="@hideHistoryBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.History.cshtml", Model)</nop-card>

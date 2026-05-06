@@ -1,0 +1,52 @@
+﻿@model TopicsPlusConfigurationModel
+
+@using Apt.Nop.Plugin.Misc.TopicsPlus.Models
+
+@{
+    Layout = "_ConfigurePlugin";
+}
+
+<form asp-controller="TopicsPlusConfiguration" asp-action="Configure" method="post">
+    <div class="cards-group">
+        <div class="card card-default">
+            <div class="card-header">
+                @T("Plugins.Misc.TopicsPlus.Configuration")
+            </div>
+
+            <div class="card-body">
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-label asp-for="RevisionRetentionDays" />
+                    </div>
+                    <div class="col-md-9">
+                        <div class="input-group input-group-required">
+                            <nop-editor asp-for="RevisionRetentionDays" />
+
+                            @if (Model.ActiveStoreScopeConfiguration > 0)
+                            {
+                                <div class="input-group-append">
+                                    <nop-override-store-checkbox asp-for="RevisionRetentionDays_OverrideForStore"
+                                                                 asp-input="RevisionRetentionDays"
+                                                                 asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                </div>
+                            }
+
+                            <div class="input-group-btn">
+                                <nop-required />
+                            </div>
+                        </div>
+
+                        <span asp-validation-for="RevisionRetentionDays"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-footer">
+                <button type="submit" name="save" class="btn btn-primary">
+                    <i class="far fa-save"></i>
+                    @T("Admin.Common.Save")
+                </button>
+            </div>
+        </div>
+    </div>
+</form>

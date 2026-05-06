@@ -1,0 +1,17 @@
+@using Apt.Nop.Plugin.Misc.TopicsPlus.Models
+@model TopicRevisionModel
+
+@{
+    Layout = "_ColumnsOne";
+    ViewBag.Title = Model.Title;
+}
+
+<div class="page topic-page topic-revision-preview-page">
+    <div class="page-title">
+        <h1>@Model.Title</h1>
+    </div>
+
+    <div class="page-body">
+        @Html.Raw(Model.Body)
+    </div>
+</div>

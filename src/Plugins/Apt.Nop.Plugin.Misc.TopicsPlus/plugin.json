@@ -1,0 +1,11 @@
+﻿{
+  "Group": "Misc",
+  "FriendlyName": "Topics+",
+  "SystemName": "Apt.Misc.TopicsPlus",
+  "Version": "1.0",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "Aperture Labs",
+  "DisplayOrder": 1,
+  "FileName": "Apt.Nop.Plugin.Misc.TopicsPlus.dll",
+  "Description": "CMS-like functionality for nopCommerce topics."
+}
