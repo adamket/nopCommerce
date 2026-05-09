@@ -10,9 +10,7 @@ public interface ITopicRevisionService
 
     Task<IPagedList<TopicRevision>> SearchTopicRevisionsAsync(
         int? topicId = null,
-        string systemName = null,
         string title = null,
-        bool? published = null,
         DateTime? createdFrom = null,
         DateTime? createdTo = null,
         int pageIndex = 0,

@@ -48,12 +48,24 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Content\Stylesheets\" />
+    <Folder Include="Content\Lib\" />
+    <Folder Include="Content\Scripts\" />
     <Folder Include="Views\Admin\Shared\Components\TopicsPlus\" />
     <Folder Include="Views\Admin\Topic\" />
     <Folder Include="Views\Shared\Components\TopicBlock\" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Content\Scripts\admin.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Content\Scripts\public.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Content\Stylesheets\admin.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Views\Admin\Shared\Components\TopicsPlus\Default.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -64,6 +76,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\Shared\Components\TopicBlock\Default.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Views\Topic\TopicDetails.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

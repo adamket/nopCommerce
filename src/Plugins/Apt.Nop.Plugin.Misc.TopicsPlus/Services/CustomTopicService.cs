@@ -23,23 +23,17 @@ public class CustomTopicService(
 {
     public override async Task UpdateTopicAsync(Topic topic)
     {
-        var existingTopic = await GetTopicByIdAsync(topic.Id);
-        var addRevisionRecord = !(topic.Body == existingTopic.Body
-                                && topic.Title == existingTopic.Title);
-
+        var existingTopic = await _topicRepository.Table.FirstOrDefaultAsync(q => q.Id == topic.Id);
         await base.UpdateTopicAsync(topic);
-
-        if (addRevisionRecord)
+        try
         {
-            try
-            {
-                await topicRevisionService.CreateRevisionAsync(topic,
-                    (await _workContext.GetCurrentCustomerAsync())?.Id ?? 0);
-            }
-            catch (Exception e)
-            {
-               await logger.ErrorAsync("Topics+: Error creating topic revision.", e);
-            }
+            await topicRevisionService.CreateRevisionAsync(topic,
+                (await _workContext.GetCurrentCustomerAsync())?.Id ?? 0);
         }
+        catch (Exception e)
+        {
+            await logger.ErrorAsync("Topics+: Error creating topic revision.", e);
+        }
+
     }
 }

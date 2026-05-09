@@ -15,4 +15,4 @@
     (customer, hideHistoryBlockAttributeName, defaultValue: true);
 
 }
-<nop-card asp-name="topic-info" asp-icon="fas fa-info" asp-title="History" asp-hide-block-attribute-name="@hideHistoryBlockAttributeName" asp-hide="@hideHistoryBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.History.cshtml", Model)</nop-card>
+<nop-card asp-name="topic-info" asp-icon="fas fa-book" asp-title="Revision History" asp-hide-block-attribute-name="@hideHistoryBlockAttributeName" asp-hide="@hideHistoryBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.History.cshtml", Model)</nop-card>

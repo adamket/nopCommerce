@@ -1,10 +1,11 @@
 ﻿using Apt.Nop.Plugin.Misc.TopicsPlus.Domain;
 using Apt.Nop.Plugin.Misc.TopicsPlus.Models;
 using Apt.Nop.Plugin.Misc.TopicsPlus.Services;
-using DocumentFormat.OpenXml.Spreadsheet;
 using Nop.Core.Domain.Customers;
+using Nop.Core.Domain.Topics;
 using Nop.Services.Customers;
 using Nop.Services.Helpers;
+using Nop.Services.Topics;
 using Nop.Web.Areas.Admin.Infrastructure.Mapper.Extensions;
 using Nop.Web.Framework.Models.Extensions;
 
@@ -14,14 +15,16 @@ public class TopicRevisionModelFactory : ITopicRevisionModelFactory
     private readonly IDateTimeHelper _dateTimeHelper;
     private readonly ITopicRevisionService _topicRevisionService;
     private readonly ICustomerService _customerService;
+    private readonly ITopicService _topicService;
 
     public TopicRevisionModelFactory(
         IDateTimeHelper dateTimeHelper,
-        ITopicRevisionService topicRevisionService, ICustomerService customerService)
+        ITopicRevisionService topicRevisionService, ICustomerService customerService, ITopicService topicService)
     {
         _dateTimeHelper = dateTimeHelper;
         _topicRevisionService = topicRevisionService;
         _customerService = customerService;
+        _topicService = topicService;
     }
 
     public Task<TopicRevisionSearchModel> PrepareTopicRevisionSearchModelAsync(TopicRevisionSearchModel searchModel)
@@ -33,11 +36,11 @@ public class TopicRevisionModelFactory : ITopicRevisionModelFactory
         return Task.FromResult(searchModel);
     }
 
-    public async Task<TopicRevisionListModel> PrepareTopicRevisionListModelAsync(TopicRevisionSearchModel searchModel)
+    public async Task<TopicRevisionListModel> PrepareTopicRevisionListModelAsync(TopicRevisionSearchModel searchModel, Topic topic = null)
     {
         ArgumentNullException.ThrowIfNull(searchModel);
 
-       
+        topic ??= await _topicService.GetTopicByIdAsync(searchModel.SearchTopicId);
 
         var revisions = await _topicRevisionService.SearchTopicRevisionsAsync(
             topicId: searchModel.SearchTopicId,
@@ -51,7 +54,7 @@ public class TopicRevisionModelFactory : ITopicRevisionModelFactory
             return revisions.SelectAwait(async revision =>
             {
                 var customer = customers.FirstOrDefault(q => q.Id == revision.CustomerId);
-                var rowModel = await PrepareTopicRevisionModelAsync(null, revision, customer,true);
+                var rowModel = await PrepareTopicRevisionModelAsync(null, revision, topic, customer,true);
                 return rowModel;
             });
         });
@@ -62,6 +65,7 @@ public class TopicRevisionModelFactory : ITopicRevisionModelFactory
     public async Task<TopicRevisionModel> PrepareTopicRevisionModelAsync(
         TopicRevisionModel model,
         TopicRevision revision,
+        Topic topic,
         Customer customer,
         bool excludeProperties = false)
     {
@@ -80,7 +84,9 @@ public class TopicRevisionModelFactory : ITopicRevisionModelFactory
                 Title = revision.Title, 
                 CreatedOn = (await _dateTimeHelper.ConvertToUserTimeAsync(revision.CreatedOnUtc, DateTimeKind.Utc)).ToString("g"),
                 TopicId = revision.TopicId,
-                CustomerName = fullName
+                CustomerName = fullName,
+                Version = revision.Version,
+                HideRevertButton = revision.Body == topic.Body && revision.Title == topic.Title
                 
             };
         }

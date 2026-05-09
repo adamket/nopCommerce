@@ -54,7 +54,7 @@ public class TopicsPlusController : BasePublicController
 
     [HttpPost("apt/topics-plus/update-topic")]
     [CheckPermission(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE)]
-    public async Task<IActionResult> UpdateTopic(int topicId, string content)
+    public async Task<IActionResult> UpdateTopic(int topicId, string content, string title)
     {
         var topic = await _topicService.GetTopicByIdAsync(topicId);
         if (topic == null)
@@ -67,6 +67,7 @@ public class TopicsPlusController : BasePublicController
 
         //var storeId = await _storeContext.GetCurrentStoreIdAsync();
         topic.Body = content;
+        topic.Title = title;
         await _topicService.UpdateTopicAsync(topic);
 
         return Json(new
@@ -87,7 +88,6 @@ public class TopicsPlusController : BasePublicController
         {
             Id = revision.Id,
             TopicId = revision.TopicId,
-            SystemName = revision.SystemName,
             Title = revision.Title,
             Body = revision.Body
         };

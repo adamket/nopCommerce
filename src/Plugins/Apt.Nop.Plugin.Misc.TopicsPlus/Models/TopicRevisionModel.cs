@@ -7,16 +7,13 @@ public record TopicRevisionModel : BaseNopEntityModel
 {
     public int TopicId { get; set; }
 
-    public string SystemName { get; set; }
+    public int Version { get; set; }
 
     public string Title { get; set; }
 
     public string Body { get; set; }
 
-    public bool Published { get; set; }
     public string CustomerName { get; set; }
-
-    public int DisplayOrder { get; set; }
 
     public int CustomerId { get; set; }
 
@@ -24,4 +21,6 @@ public record TopicRevisionModel : BaseNopEntityModel
 
     public string ChangeNote { get; set; }
     public bool IsRevert { get; set; }
+
+    public bool HideRevertButton { get; set; }
 }

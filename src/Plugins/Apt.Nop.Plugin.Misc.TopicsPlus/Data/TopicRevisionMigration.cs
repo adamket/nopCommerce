@@ -9,7 +9,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.TopicsPlus.Data;
 
-[NopMigration("2026-05-03 17:00:01", "TopicsPlus: Create TopicRevision table", MigrationProcessType.Installation)]
+[NopMigration("2026-05-06 17:00:00", "TopicsPlus: Create TopicRevision table", MigrationProcessType.Installation)]
 public class TopicRevisionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()

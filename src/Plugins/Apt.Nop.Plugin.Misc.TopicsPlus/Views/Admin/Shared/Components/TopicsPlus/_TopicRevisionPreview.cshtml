@@ -1,17 +1,63 @@
 @using Apt.Nop.Plugin.Misc.TopicsPlus.Models
 @model TopicRevisionModel
-
+@inject INopHtmlHelper NopHtml
 @{
     Layout = "_ColumnsOne";
     ViewBag.Title = Model.Title;
+
+    NopHtml.AddPageCssClassParts("topic-preview-mode");
 }
+
+<style>
+    .topic-preview-mode .admin-header-links,
+    .topic-preview-mode .header,
+    .topic-preview-mode .header-menu,
+    .topic-preview-mode .breadcrumb,
+    .topic-preview-mode .footer,
+    .topic-preview-mode .side-2 {
+        display: none !important;
+    }
+
+    .topic-preview-mode .master-column-wrapper,
+    .topic-preview-mode .center-1 {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+    }
+
+    .topic-revision-preview-page {
+        padding-top: 20px;
+        padding-bottom: 20px;
+    }
+</style>
 
 <div class="page topic-page topic-revision-preview-page">
     <div class="page-title">
         <h1>@Model.Title</h1>
     </div>
 
-    <div class="page-body">
+    <div class="page-body" id="topic-preview-body">
         @Html.Raw(Model.Body)
     </div>
 </div>
+
+<script asp-location="Footer">
+    document.addEventListener('DOMContentLoaded', function () {
+
+        const previewBody = document.getElementById('topic-preview-body');
+        if (!previewBody)
+            return;
+
+        previewBody.addEventListener('click', function (e) {
+
+            const anchor = e.target.closest('a');
+
+            if (!anchor)
+                return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    });
+</script>

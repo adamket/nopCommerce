@@ -1,0 +1,155 @@
+﻿/* ── Grid wrapper ───────────────────────────── */
+#topic-revisions-grid .dataTables_wrapper {
+  padding: 0;
+}
+
+/* ── Header ─────────────────────────────────── */
+#topic-revisions-grid table thead th {
+  background: #f8fafc;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 2px solid #e5e7eb !important;
+  padding: 14px 16px !important;
+}
+
+#topic-revisions-grid table tbody tr {
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+  #topic-revisions-grid table tbody tr:hover {
+    background-color: #f8fbff !important;
+    box-shadow: inset 3px 0 0 #60a5fa !important;
+  }
+
+#topic-revisions-grid table td,
+#topic-revisions-grid table th {
+  border-color: #f1f3f5 !important;
+  vertical-align: middle;
+}
+
+#topic-revisions-grid table td {
+  padding: 14px 16px !important;
+  color: #1f2937;
+  font-size: 13.5px;
+}
+
+.revision-title {
+  font-weight: 500;
+  color: #111827;
+}
+
+.revision-version {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: middle;
+  letter-spacing: 0.03em;
+}
+
+.topic-revision-customer {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.topic-revision-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+  .topic-revision-badge.normal {
+    background: transparent;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+  }
+
+  .topic-revision-badge.revert {
+    background: transparent;
+    color: #be123c;
+    border: 1px solid #fecdd3;
+  }
+
+.topic-revision-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.topic-revision-preview-button {
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  min-width: 0;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+
+
+  .topic-revision-preview-button.btn-revert {
+    background: #fff;
+    border-color: #d1d5db;
+    color: #374151;
+  }
+
+    .topic-revision-preview-button.btn-revert:hover {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+.card.card-default {
+  border-radius: 14px;
+  border: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 12px 32px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+#topic-revision-preview-modal .modal-content {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 0;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+
+#topic-revision-preview-modal .modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+#topic-revision-preview-modal .modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+#topic-revisions-grid .button-column{
+  width: 90px;
+}
+
+
+.topic-revision-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+  .topic-revision-actions .btn i {
+    font-size: 13px;
+  }

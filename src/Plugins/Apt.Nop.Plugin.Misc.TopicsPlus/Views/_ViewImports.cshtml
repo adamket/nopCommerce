@@ -2,6 +2,10 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, Nop.Web.Framework
 
+
+@inject INopHtmlHelper NopHtml
+@inject INopUrlHelper NopUrl
+
 @using Microsoft.AspNetCore.Mvc.ViewFeatures
 @using Nop.Web.Areas.Admin.Components
 @using Nop.Web.Framework.UI
@@ -9,3 +13,5 @@
 @using System.Text.Encodings.Web
 @using Nop.Web.Models.Topics
 @using Nop.Core.Http
+@using Apt.Nop.Plugin.Misc.TopicsPlus
+@using Nop.Web.Framework.Mvc.Routing

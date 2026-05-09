@@ -1,34 +1,22 @@
-@using Apt.Nop.Plugin.Misc.TopicsPlus.Models
+﻿@using Apt.Nop.Plugin.Misc.TopicsPlus.Models
 @using Nop.Web.Framework.Models.DataTables
-
+@inject INopHtmlHelper NopHtml
 @model TopicRevisionSearchModel
 
-<style>
-    .topic-revision-preview-button {
-        transition: opacity 0.15s ease;
-    }
-
-        .topic-revision-preview-button.loading {
-            opacity: 0.7;
-        }
-</style>
+@{
+    NopHtml.AddCssFileParts($"{TopicsPlusConstants.PathToPlugin}/Content/Stylesheets/admin.css");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/admin.js");
+}
 
 <form asp-controller="TopicRevision" asp-action="List" method="post">
     <input asp-for="SearchTopicId" type="hidden" />
-
-    <div class="content-header clearfix">
-        <h1 class="float-left">
-            @T("Plugins.Misc.TopicsPlus.TopicRevision.List")
-        </h1>
-    </div>
 
     <section class="content">
         <div class="container-fluid">
             <div class="form-horizontal">
                 <div class="cards-group">
-                    <div class="card card-default">
+                    <div class="card card-default mt-3">
                         <div class="card-body">
-                            <divid="topic-revisions-grid"></divid>
                             @await Html.PartialAsync("Table", new DataTablesModel
                             {
                                 Name = "topic-revisions-grid",
@@ -41,43 +29,33 @@
                                                         },
                                                         ColumnCollection = new List<ColumnProperty>
                                                         {
-                                                        // new ColumnProperty(nameof(TopicRevisionModel.Id))
-                                                        // {
-                                                        // Title = T("Admin.Common.Id").Text,
-                                                        // Width = "80"
-                                                        // },
-                                                        // new ColumnProperty(nameof(TopicRevisionModel.TopicId))
-                                                        // {
-                                                        // Title = T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.TopicId").Text,
-                                                        // Width = "100"
-                                                        // },
-                                                        // new ColumnProperty(nameof(TopicRevisionModel.SystemName))
-                                                        // {
-                                                        // Title = T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.SystemName").Text
-                                                        // },
+                                                    
                                                         new ColumnProperty(nameof(TopicRevisionModel.Title))
                                                         {
-                                                        Title = "Title"//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
-                                                        },
-                                                        // new ColumnProperty(nameof(TopicRevisionModel.Published))
-                                                        // {
-                                                        // Title =""// T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Published").Text,
-                                                        // Width = "100",
-                                                        // ClassName = NopColumnClassDefaults.CenterAll,
-                                                        // Render = new RenderBoolean()
-                                                        // },
-                                                        new ColumnProperty(nameof(TopicRevisionModel.CustomerName))
-                                                        {
-                                                            Title = "Updated by",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
-                                                            Width = "200"
-                                                        },
+                                                        Title = "Title",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
+                                                        ClassName = "revision-title"
+                                                        },  
                                                         new ColumnProperty(nameof(TopicRevisionModel.IsRevert))
                                                         {
-                                                        Title = "Is revert",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
-                                                        Width = "50",
-                                                        ClassName = NopColumnClassDefaults.CenterAll,
-                                                        Render = new RenderBoolean()
+                                                        Title = "Type",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
+                                                        Width = "90",
+                                                        ClassName =  NopColumnClassDefaults.Button,
+                                                        Render = new RenderCustom("renderIsRevertBadge")
                                                         },
+                                                        new ColumnProperty(nameof(TopicRevisionModel.Version))
+                                                        {
+                                                        Title = "Version",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
+                                                        Width = "90",
+                                                        ClassName =  NopColumnClassDefaults.Button,
+                                                        Render = new RenderCustom("renderVersion")
+                                                        },
+                                                    
+                                                        new ColumnProperty(nameof(TopicRevisionModel.CustomerName))
+                                                        {
+                                                        Title = "Updated by",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
+                                                        Width = "200"
+                                                        },
+                                                      
                                                         new ColumnProperty(nameof(TopicRevisionModel.CreatedOn))
                                                         {
                                                         Title = "Created on",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
@@ -86,99 +64,49 @@
                                                         new ColumnProperty(nameof(TopicRevisionModel.Id))
                                                         {
                                                         Title = "",
-                                                        Width = "75",
+                                                        Width = "90",
                                                         ClassName = NopColumnClassDefaults.Button,
-                                                        Render = new RenderCustom("renderRevisionPreviewButton")
+                                                        Render = new RenderCustom("renderViewCol")
+                                                        },
+                                                        new ColumnProperty(nameof(TopicRevisionModel.Id))
+                                                        {
+                                                        Title = "",
+                                                        Width = "90",
+                                                        ClassName = NopColumnClassDefaults.Button,
+                                                        Render = new RenderCustom("renderRevertCol")
                                                         }
                                                         }
                                                         })
                         </div>
+
                         <script>
-                               function renderRevisionPreviewButton(data, type, row, meta) {
-                                return `
-                                    <button type="button"
-                                            class="btn btn-primary topic-revision-preview-button"
-                                            onclick="openTopicRevisionPreview(${row.Id}, this)">
-                                        View
-                                    </button>
-                                     <button type="button"
-                                            class="btn btn-default topic-revision-revert-button"
-                                            onclick="revertToTopicRevision(${row.Id}, this)">
-                                        Revert
-                                    </button>
+                            let topicRevisionAdmin = null;
+                            document.addEventListener("DOMContentLoaded", function(){
+                                topicRevisionAdmin = new TopicRevisionAdmin();
+                                topicRevisionAdmin.init();
+                            });
 
-                                    `;
+                             function renderVersion(data, type, row, meta) {
+                                return `<span class="revision-version">v${data}</span>`;
                             }
 
-                            let currentPreviewToken = 0;
-                            let activePreviewButton = null;
+                             function renderViewCol(data, type, row, meta) {
+                                return topicRevisionAdmin.renderViewCol(data, type, row, meta);
+                            }
 
-
-                            function revertToTopicRevision(revisionId, button){
-
+                               function renderRevertCol(data, type, row, meta) {
+                                return topicRevisionAdmin.renderRevertCol(data, type, row, meta);
                             }
 
 
-                            function openTopicRevisionPreview(revisionId, button) {
-                                const iframe = document.getElementById('topic-revision-preview-frame');
-
-                                const token = ++currentPreviewToken;
-
-                                // reset previous button
-                                if (activePreviewButton) {
-                                    setButtonLoading(activePreviewButton, false);
+                            function renderIsRevertBadge(data, type, row, meta) {
+                                if (data) {
+                                    return `<span class="topic-revision-badge revert">↩ Revert</span>`;
                                 }
-
-                                activePreviewButton = button;
-                                setButtonLoading(button, true);
-
-                                iframe.onload = function () {
-                                    if (token !== currentPreviewToken) {
-                                        return; // stale load, ignore
-                                    }
-
-                                    setButtonLoading(activePreviewButton, false);
-                                    activePreviewButton = null;
-
-                                    $('#topic-revision-preview-modal').modal('show');
-                                };
-
-                                iframe.src = `/apt/topics-plus/preview/${revisionId}`;
+                                return `<span class="topic-revision-badge normal">✎ Edit</span>`;
                             }
-                             function setButtonLoading(button, isLoading) {
-                                if (!button) return;
-
-                                if (isLoading) {
-                                    if (button.dataset.loading === 'true') return;
-
-                                    button.dataset.loading = 'true';
-                                    button.dataset.originalHtml = button.innerHTML;
-
-                                    const width = button.offsetWidth;
-                                    button.style.width = width + 'px';
-
-                                    button.disabled = true;
-                                    button.classList.add('loading');
-
-                                    button.innerHTML = `
-                                        <span style="display:inline-flex;align-items:center;justify-content:center;width:100%;">
-                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                        </span>
-                                    `;
-                                } else {
-                                    if (button.dataset.loading !== 'true') return;
-
-                                    button.innerHTML = button.dataset.originalHtml || 'Preview';
-                                    button.style.width = '';
-                                    button.disabled = false;
-                                    button.classList.remove('loading');
-
-                                    delete button.dataset.originalHtml;
-                                    delete button.dataset.loading;
-                                }
-                            }
-                         
                         </script>
+                       
                     </div>
                 </div>
             </div>
@@ -189,7 +117,7 @@
 <div class="modal fade" id="topic-revision-preview-modal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-xl" role="document" style="max-width: 1200px;">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header bg-light">
                 <h5 class="modal-title">Topic revision preview</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&#215;</span>
@@ -203,3 +131,10 @@
         </div>
     </div>
 </div>
+
+<button type="button"
+        id="topic-revision-revert-confirm-button"
+        style="display:none;">
+</button>
+
+<nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />

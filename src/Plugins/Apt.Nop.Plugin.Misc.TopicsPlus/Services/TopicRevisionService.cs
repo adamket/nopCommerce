@@ -9,25 +9,30 @@ public class TopicRevisionService(IRepository<TopicRevision> topicRevisionReposi
 {
     public async Task CreateRevisionAsync(Topic topic, int customerId)
     {
-        var latest = await GetLatestRevisionAsync(topic.Id);
-
-        if (latest != null &&
-            latest.Title == topic.Title &&
-            latest.Body == topic.Body &&
-            latest.SystemName == topic.SystemName &&
-            latest.Published == topic.Published)
+        if (topic == null || topic.Id <= 0)
         {
             return;
         }
 
+        var latest = await GetLatestRevisionAsync(topic.Id);
+
+        if (latest != null &&
+            latest.Title == topic.Title &&
+            latest.Body == topic.Body)
+        {
+            return;
+        }
+
+        var maxVersion = await topicRevisionRepository.Table
+            .Where(r => r.TopicId == topic.Id)
+            .MaxAsync(r => (int?)r.Version) ?? 0;
+
         var revision = new TopicRevision
         {
             TopicId = topic.Id,
-            SystemName = topic.SystemName,
             Title = topic.Title,
             Body = topic.Body,
-            Published = topic.Published,
-            DisplayOrder = topic.DisplayOrder,
+            Version = maxVersion + 1,
             CustomerId = customerId,
             CreatedOnUtc = DateTime.UtcNow
         };
@@ -35,13 +40,9 @@ public class TopicRevisionService(IRepository<TopicRevision> topicRevisionReposi
         await topicRevisionRepository.InsertAsync(revision);
     }
 
-
-
     public async Task<IPagedList<TopicRevision>> SearchTopicRevisionsAsync(
         int? topicId = null,
-        string systemName = null,
         string title = null,
-        bool? published = null,
         DateTime? createdFrom = null,
         DateTime? createdTo = null,
         int pageIndex = 0,
@@ -52,15 +53,9 @@ public class TopicRevisionService(IRepository<TopicRevision> topicRevisionReposi
             if (topicId > 0)
                 query = query.Where(x => x.TopicId == topicId);
 
-            if (!string.IsNullOrWhiteSpace(systemName))
-                query = query.Where(x => x.SystemName.Contains(systemName));
-
             if (!string.IsNullOrWhiteSpace(title))
                 query = query.Where(x => x.Title.Contains(title));
 
-            if (published.HasValue)
-                query = query.Where(x => x.Published == published.Value);
-            
             if (createdFrom.HasValue)
                 query = query.Where(x => x.CreatedOnUtc >= createdFrom.Value);
 
