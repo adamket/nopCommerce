@@ -35,9 +35,10 @@
         return '';
       }
 
-        return `  <button type="button"
+      return `  <button type="button"
             class="btn btn-default topic-revision-revert-button"
             data-topic-revision-revert
+            data-topic-id="${row.TopicId}"
             data-revision-id="${row.Id}">
         <i class="fas fa-history"></i>
         <span>Revert</span>
@@ -130,6 +131,23 @@
       }
 
       confirmButton.click();
+
+      const topicId = button.dataset.topicId;
+      const revisionId = button.dataset.revisionId;
+
+
+
+      $.ajax({
+        url: `/apt/topics-plus/revert/${encodeURIComponent(topicId)}/${encodeURIComponent(revisionId)}`,
+        type: 'POST',
+        data: addAntiFogeryToken({})
+      }).done(function (response) {
+        if (response.success) {
+          location.reload();
+        }
+      }).fail(function () {
+      }).always(function () {
+      });
     }
 
     setButtonLoading(button, isLoading) {

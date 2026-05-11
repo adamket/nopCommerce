@@ -7,7 +7,7 @@ namespace Apt.Nop.Plugin.Misc.TopicsPlus.Services;
 
 public class TopicRevisionService(IRepository<TopicRevision> topicRevisionRepository) : ITopicRevisionService
 {
-    public async Task CreateRevisionAsync(Topic topic, int customerId)
+    public async Task CreateRevisionAsync(Topic topic, int customerId, int? revertedToRevisionId = null)
     {
         if (topic == null || topic.Id <= 0)
         {
@@ -34,7 +34,8 @@ public class TopicRevisionService(IRepository<TopicRevision> topicRevisionReposi
             Body = topic.Body,
             Version = maxVersion + 1,
             CustomerId = customerId,
-            CreatedOnUtc = DateTime.UtcNow
+            CreatedOnUtc = DateTime.UtcNow,
+            RevertedToTopicRevisionId = revertedToRevisionId
         };
 
         await topicRevisionRepository.InsertAsync(revision);

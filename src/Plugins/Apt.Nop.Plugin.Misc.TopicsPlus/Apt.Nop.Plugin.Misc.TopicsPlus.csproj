@@ -50,17 +50,16 @@
   <ItemGroup>
     <Folder Include="Content\Stylesheets\" />
     <Folder Include="Content\Lib\" />
-    <Folder Include="Content\Scripts\" />
     <Folder Include="Views\Admin\Shared\Components\TopicsPlus\" />
     <Folder Include="Views\Admin\Topic\" />
     <Folder Include="Views\Shared\Components\TopicBlock\" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Content\Scripts\admin.js">
+    <None Update="Content\Scripts\topics-plus.admin.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Content\Scripts\public.js">
+    <None Update="Content\Scripts\topics-plus.public.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Content\Stylesheets\admin.css">

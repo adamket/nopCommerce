@@ -25,7 +25,7 @@ public class NopStartup : INopStartup
         //override services
         services.AddScoped<ITopicRevisionService, TopicRevisionService>();
         services.AddScoped<ITopicRevisionModelFactory, TopicRevisionModelFactory>();
-        services.AddScoped<ITopicService, CustomTopicService>();
+        services.AddScoped<ICustomTopicService, CustomTopicService>();
         services.Configure<RazorViewEngineOptions>(options =>
         {
             options.ViewLocationExpanders.Add(new PluginViewLocationExpander());

@@ -13,5 +13,5 @@ public class TopicRevision : BaseEntity
     public DateTime CreatedOnUtc { get; set; }
     public int Version { get; set; }
     public string ChangeNote { get; set; }
-    public bool IsRevert { get; set; }
+    public int? RevertedToTopicRevisionId { get; set; }
 }

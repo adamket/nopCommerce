@@ -19,21 +19,10 @@ public class CustomTopicService(
     IWorkContext workContext,
     ITopicRevisionService topicRevisionService)
     : TopicService(aclService, customerService, topicRepository, staticCacheManager, storeMappingService, workContext),
-        ITopicService
+        ICustomTopicService
 {
-    public override async Task UpdateTopicAsync(Topic topic)
+    public async Task UpdateTopicAsync(Topic topic, bool publishEvent = true)
     {
-        var existingTopic = await _topicRepository.Table.FirstOrDefaultAsync(q => q.Id == topic.Id);
-        await base.UpdateTopicAsync(topic);
-        try
-        {
-            await topicRevisionService.CreateRevisionAsync(topic,
-                (await _workContext.GetCurrentCustomerAsync())?.Id ?? 0);
-        }
-        catch (Exception e)
-        {
-            await logger.ErrorAsync("Topics+: Error creating topic revision.", e);
-        }
-
+       await _topicRepository.UpdateAsync(topic, publishEvent);
     }
 }

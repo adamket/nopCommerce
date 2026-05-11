@@ -5,7 +5,7 @@ using Nop.Core.Domain.Topics;
 namespace Apt.Nop.Plugin.Misc.TopicsPlus.Services;
 public interface ITopicRevisionService
 {
-    Task CreateRevisionAsync(Topic topic, int customerId);
+    Task CreateRevisionAsync(Topic topic, int customerId, int? revertedToRevisionId = null);
     Task<TopicRevision> GetTopicRevisionByIdAsync(int topicRevisionId);
 
     Task<IPagedList<TopicRevision>> SearchTopicRevisionsAsync(

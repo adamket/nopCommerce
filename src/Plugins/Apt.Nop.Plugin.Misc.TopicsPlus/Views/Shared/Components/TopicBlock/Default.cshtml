@@ -71,7 +71,7 @@
 else
 {
 
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/public.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/topics-plus.public.js");
     var isAuthorizedUser = await permissionService.AuthorizeAsync(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE);
     var ieAttribute = "";
     if (isAuthorizedUser)

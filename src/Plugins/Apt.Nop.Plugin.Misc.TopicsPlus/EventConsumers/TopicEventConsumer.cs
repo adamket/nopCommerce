@@ -13,5 +13,7 @@ public class TopicEventConsumer(
 {
     public async Task HandleEventAsync(EntityUpdatedEvent<Topic> eventMessage)
     {
+        var topic = eventMessage.Entity;
+        await topicRevisionService.CreateRevisionAsync(topic, (await workContext.GetCurrentCustomerAsync())?.Id ?? 0);
     }
 }
