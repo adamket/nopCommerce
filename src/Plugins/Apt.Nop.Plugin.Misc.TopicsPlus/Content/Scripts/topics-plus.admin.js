@@ -8,8 +8,11 @@
         previewFrameSelector: '#topic-revision-preview-frame',
         previewUrlTemplate: '/apt/topics-plus/preview/{id}',
         previewTitleTemplate: 'Topic revision created on {createdOn}',
-        revertConfirmButtonSelector: '#topic-revision-revert-confirm-button'
+        revertConfirmButtonSelector: '#topic-revision-revert-confirm-button',
+        topicId: null
       }, options || {});
+
+      this.topicId = this.options.topicId;
       this.pendingRevertRevisionId = null;
       this.pendingRevertButton = null;
       this.currentPreviewToken = 0;
@@ -67,21 +70,18 @@
         }
       });
 
-      const confirmButton = document.querySelector(this.options.revertConfirmButtonSelector);
+      $('#topic-revision-revert-confirm-button-action-confirmation-submit-button')
+        .on('click', (event) => {
+          const yesButton = event.currentTarget;
 
-      if (confirmButton) {
-        confirmButton.addEventListener('click', (event) => {
-          if (confirmButton.dataset.confirmed !== 'true') {
+          if (yesButton.dataset.loading === 'true') {
+            event.preventDefault();
             return;
           }
 
-          event.preventDefault();
-
-          confirmButton.dataset.confirmed = 'false';
-
-          this.confirmRevertRevision();
+          this.setButtonLoading(yesButton, true);
+          this.confirmRevertRevision(yesButton);
         });
-      }
     }
 
     openPreview(revisionId, createdOn, button) {
@@ -131,23 +131,35 @@
       }
 
       confirmButton.click();
+    }
 
-      const topicId = button.dataset.topicId;
-      const revisionId = button.dataset.revisionId;
+    confirmRevertRevision(confirmButton) {
+      const revisionId = this.pendingRevertRevisionId;
+      const button = this.pendingRevertButton;
+      const topicId = this.topicId;
 
-
+      if (!revisionId || !button) {
+        this.setButtonLoading(confirmButton, false);
+        return;
+      }
 
       $.ajax({
-        url: `/apt/topics-plus/revert/${encodeURIComponent(topicId)}/${encodeURIComponent(revisionId)}`,
+        url: `/admin/apt/topics-plus/revert/`,
         type: 'POST',
-        data: addAntiFogeryToken({})
+        data: addAntiForgeryToken({
+          topicRevisionId: revisionId,
+          topicId: topicId
+        })
       }).done(function (response) {
         if (response.success) {
           location.reload();
+          return;
         }
-      }).fail(function () {
-      }).always(function () {
-      });
+
+        this.setButtonLoading(confirmButton, false);
+      }.bind(this)).fail(function () {
+        this.setButtonLoading(confirmButton, false);
+      }.bind(this));
     }
 
     setButtonLoading(button, isLoading) {

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
+﻿namespace Apt.Nop.Plugin.Misc.OneTimePasscode;
 public static class OtpConstants
 {
     public const string OneTimePasscodePluginSystemName = "Apt.Misc.OneTimePasscode";
@@ -20,5 +14,5 @@ public static class OtpConstants
         public const string LoginLastAttempted = "apt.otp.customer.login-last-attempted";
         public const string LoginCode = "apt.otp.customer.login-code";
     }
-
+      
 }

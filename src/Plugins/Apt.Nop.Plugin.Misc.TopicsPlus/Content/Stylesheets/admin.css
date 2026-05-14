@@ -1,9 +1,8 @@
-﻿/* ── Grid wrapper ───────────────────────────── */
-#topic-revisions-grid .dataTables_wrapper {
+﻿#topic-revisions-grid .dataTables_wrapper {
   padding: 0;
 }
 
-/* ── Header ─────────────────────────────────── */
+
 #topic-revisions-grid table thead th {
   background: #f8fafc;
   color: #374151;

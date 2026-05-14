@@ -76,24 +76,7 @@ public class TopicsPlusController : BasePublicController
         });
     }
 
-    [CheckPermission(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE)]
-    [HttpGet("apt/topics-plus/preview/{id}")]
-    public async Task<IActionResult> Preview(int id)
-    {
-        var revision = await _topicRevisionService.GetTopicRevisionByIdAsync(id);
-        if (revision == null)
-            return NotFound();
-
-        var model = new TopicRevisionModel
-        {
-            Id = revision.Id,
-            TopicId = revision.TopicId,
-            Title = revision.Title,
-            Body = revision.Body
-        };
-
-        return View($"{TopicsPlusConstants.PathToPlugin}/Views/Admin/Shared/Components/TopicsPlus/_TopicRevisionPreview.cshtml", model);
-    }
+   
 
 
     #endregion

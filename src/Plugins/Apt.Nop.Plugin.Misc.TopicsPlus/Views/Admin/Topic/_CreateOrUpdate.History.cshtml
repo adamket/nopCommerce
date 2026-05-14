@@ -35,13 +35,13 @@
                                                         Title = "Title",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
                                                         ClassName = "revision-title"
                                                         },  
-                                                        new ColumnProperty(nameof(TopicRevisionModel.IsRevert))
-                                                        {
-                                                        Title = "Type",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
-                                                        Width = "90",
-                                                        ClassName =  NopColumnClassDefaults.Button,
-                                                        Render = new RenderCustom("renderIsRevertBadge")
-                                                        },
+                                                        // new ColumnProperty(nameof(TopicRevisionModel.IsRevert))
+                                                        // {
+                                                        // Title = "Type",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
+                                                        // Width = "90",
+                                                        // ClassName =  NopColumnClassDefaults.Button,
+                                                        // Render = new RenderCustom("renderIsRevertBadge")
+                                                        // },
                                                         new ColumnProperty(nameof(TopicRevisionModel.Version))
                                                         {
                                                         Title = "Version",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
@@ -82,7 +82,9 @@
                         <script>
                             let topicRevisionAdmin = null;
                             document.addEventListener("DOMContentLoaded", function(){
-                                topicRevisionAdmin = new TopicRevisionAdmin();
+                                topicRevisionAdmin = new TopicRevisionAdmin({
+                                    topicId: @(Model.SearchTopicId)
+                                });
                                 topicRevisionAdmin.init();
                             });
 
@@ -112,6 +114,7 @@
             </div>
         </div>
     </section>
+    <nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />
 </form>
 
 <div class="modal fade" id="topic-revision-preview-modal" tabindex="-1" role="dialog">
