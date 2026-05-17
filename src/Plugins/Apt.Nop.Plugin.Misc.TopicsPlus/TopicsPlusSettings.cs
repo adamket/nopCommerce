@@ -7,5 +7,5 @@ namespace Apt.Nop.Plugin.Misc.TopicsPlus;
 /// </summary>
 public class TopicsPlusSettings : ISettings
 {
-    public int RevisionRetentionDays { get; set; }
+    public int? RevisionRetentionCount { get; set; }
 }

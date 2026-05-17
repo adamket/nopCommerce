@@ -13,8 +13,8 @@ public record TopicsPlusConfigurationModel : BaseNopModel
     public int ActiveStoreScopeConfiguration { get; set; }
 
     [NopResourceDisplayName("Plugins.Misc.TopicsPlus.RevisionRetentionDays")]
-    public int RevisionRetentionDays { get; set; }
-    public bool RevisionRetentionDays_OverrideForStore { get; set; }
+    public int? RevisionRetentionCount { get; set; }
+    public bool RevisionRetentionCount_OverrideForStore { get; set; }
 
 
 }

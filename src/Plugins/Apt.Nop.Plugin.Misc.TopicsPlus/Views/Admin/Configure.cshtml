@@ -16,17 +16,17 @@
             <div class="card-body">
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-label asp-for="RevisionRetentionDays" />
+                        <nop-label asp-for="RevisionRetentionCount" />
                     </div>
                     <div class="col-md-9">
                         <div class="input-group input-group-required">
-                            <nop-editor asp-for="RevisionRetentionDays" />
+                            <nop-editor asp-for="RevisionRetentionCount" />
 
                             @if (Model.ActiveStoreScopeConfiguration > 0)
                             {
                                 <div class="input-group-append">
-                                    <nop-override-store-checkbox asp-for="RevisionRetentionDays_OverrideForStore"
-                                                                 asp-input="RevisionRetentionDays"
+                                    <nop-override-store-checkbox asp-for="RevisionRetentionCount_OverrideForStore"
+                                                                 asp-input="RevisionRetentionCount"
                                                                  asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                                 </div>
                             }
@@ -36,7 +36,7 @@
                             </div>
                         </div>
 
-                        <span asp-validation-for="RevisionRetentionDays"></span>
+                        <span asp-validation-for="RevisionRetentionCount"></span>
                     </div>
                 </div>
             </div>

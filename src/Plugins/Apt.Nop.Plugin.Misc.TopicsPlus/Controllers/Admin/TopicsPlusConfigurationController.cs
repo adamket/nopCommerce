@@ -46,13 +46,13 @@ public class TopicsPlusConfigurationController : BasePluginController
         var model = new TopicsPlusConfigurationModel
         {
             ActiveStoreScopeConfiguration = storeScope,
-            RevisionRetentionDays = settings.RevisionRetentionDays
+            RevisionRetentionCount = settings.RevisionRetentionCount
         };
 
         if (storeScope > 0)
         {
-            model.RevisionRetentionDays_OverrideForStore =
-                await _settingService.SettingExistsAsync(settings, x => x.RevisionRetentionDays, storeScope);
+            model.RevisionRetentionCount_OverrideForStore =
+                await _settingService.SettingExistsAsync(settings, x => x.RevisionRetentionCount, storeScope);
         }
 
         return View($"{TopicsPlusConstants.PathToPlugin}/Views/Admin/Configure.cshtml", model);
@@ -66,12 +66,12 @@ public class TopicsPlusConfigurationController : BasePluginController
         var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
         var settings = await _settingService.LoadSettingAsync<TopicsPlusSettings>(storeScope);
 
-        settings.RevisionRetentionDays = model.RevisionRetentionDays;
+        settings.RevisionRetentionCount = model.RevisionRetentionCount;
 
         await _settingService.SaveSettingOverridablePerStoreAsync(
             settings,
-            x => x.RevisionRetentionDays,
-            model.RevisionRetentionDays_OverrideForStore,
+            x => x.RevisionRetentionCount,
+            model.RevisionRetentionCount_OverrideForStore,
             storeScope,
             false);
 

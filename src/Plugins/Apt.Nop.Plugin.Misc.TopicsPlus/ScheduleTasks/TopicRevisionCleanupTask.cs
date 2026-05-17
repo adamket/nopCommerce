@@ -12,8 +12,8 @@ public class TopicRevisionCleanupTask(ITopicRevisionService topicRevisionService
 
     public async Task ExecuteAsync()
     {
-        var cutoffDate = DateTime.UtcNow.AddDays(settings.RevisionRetentionDays > 0  ? -settings.RevisionRetentionDays : -7);
-        var topicRevisions = await topicRevisionService.SearchTopicRevisionsAsync(createdTo: cutoffDate);
-        await topicRevisionService.DeleteTopicRevisionsAsync(topicRevisions);
+        //var cutoffDate = DateTime.UtcNow.AddDays(settings.RevisionRetentionCount > 0  ? -settings.RevisionRetentionDays : -7);
+        //var topicRevisions = await topicRevisionService.SearchTopicRevisionsAsync(createdTo: cutoffDate);
+        //await topicRevisionService.DeleteTopicRevisionsAsync(topicRevisions);
     }
 }
