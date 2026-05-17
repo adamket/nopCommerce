@@ -206,3 +206,4 @@ src/Presentation/Nop.Web/wwwroot/sitemaps/*
 src/packages/*
 src/Tests/Nop.Tests/Connections.resx
 /src/Plugins/Apt.Nop.Plugin.Misc.OneTimePasscode/Apt.Nop.Plugin.Misc.OneTimePasscode.csproj.Backup.tmp
+/src/Presentation/Nop.Web/App_Data/appsettings.json
