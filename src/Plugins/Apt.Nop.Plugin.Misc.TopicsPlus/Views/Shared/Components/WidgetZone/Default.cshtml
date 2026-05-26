@@ -1,0 +1,6 @@
+@model WidgetZoneTopicModel
+
+@foreach (var topic in Model.Topics)
+{
+    @await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Shared/Components/TopicBlock/Default.cshtml", topic)
+}

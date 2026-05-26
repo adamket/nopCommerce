@@ -3,7 +3,7 @@
 @using Nop.Core
 @using Nop.Services.Common
 @using Nop.Web.Areas.Admin.Models.Topics
-@model TopicRevisionSearchModel 
+@model TopicsPlusAdminModel 
 @inject IWorkContext workContext
 @inject IGenericAttributeService genericAttributeService
 @{
@@ -14,5 +14,12 @@
     var hideHistoryBlock = await genericAttributeService.GetAttributeAsync<bool>
     (customer, hideHistoryBlockAttributeName, defaultValue: true);
 
+    const string topicDataBlockAttributeName = "TopicDetailsPage.HideTopicsPlusDataBlock";
+    var hideDataBlock = await genericAttributeService.GetAttributeAsync<bool>
+    (customer, topicDataBlockAttributeName, defaultValue: true);
+
+
 }
-<nop-card asp-name="topic-info" asp-icon="fas fa-book" asp-title="Revision History" asp-hide-block-attribute-name="@hideHistoryBlockAttributeName" asp-hide="@hideHistoryBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.History.cshtml", Model)</nop-card>
+<nop-card asp-name="topic-revision-history" asp-icon="fas fa-book" asp-title="Revision History" asp-hide-block-attribute-name="@hideHistoryBlockAttributeName" asp-hide="@hideHistoryBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.History.cshtml", Model.TopicRevisionSearchModel)</nop-card>
+
+<nop-card asp-name="topic-data" asp-icon="fas fa-book" asp-title="Additional Settings" asp-hide-block-attribute-name="@topicDataBlockAttributeName" asp-hide="@hideDataBlock" asp-advanced="false">@await Html.PartialAsync(TopicsPlusConstants.PathToPlugin + "/Views/Admin/Topic/_CreateOrUpdate.Data.cshtml", Model.TopicDataModel)</nop-card>

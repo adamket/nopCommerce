@@ -1,9 +1,6 @@
-﻿using LinqToDB.Mapping;
-using Nop.Core;
+﻿using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.TopicsPlus.Domain;
-
-[Table("Apt_TopicRevision")]
 public class TopicRevision : BaseEntity
 {
     public int TopicId { get; set; }

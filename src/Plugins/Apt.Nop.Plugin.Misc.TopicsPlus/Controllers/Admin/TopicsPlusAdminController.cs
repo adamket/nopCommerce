@@ -14,7 +14,7 @@ using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.TopicsPlus.Controllers.Admin;
 
-public class TopicRevisionController : BaseAdminController
+public class TopicsPlusAdminController : BaseAdminController
 {
     private readonly IPermissionService _permissionService;
     private readonly ITopicRevisionModelFactory _topicRevisionModelFactory;
@@ -24,7 +24,7 @@ public class TopicRevisionController : BaseAdminController
     private readonly INotificationService _notificationService;
     private readonly IEventPublisher _eventPublisher;
 
-    public TopicRevisionController(IPermissionService permissionService,
+    public TopicsPlusAdminController(IPermissionService permissionService,
         ITopicRevisionModelFactory topicRevisionModelFactory, ICustomTopicService topicService, ITopicRevisionService topicRevisionService, IWorkContext workContext, INotificationService notificationService, IEventPublisher eventPublisher)
     {
         _permissionService = permissionService;
@@ -91,4 +91,27 @@ public class TopicRevisionController : BaseAdminController
 
 
 
+    [CheckPermission(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE)]
+    [HttpPost("admin/apt/topics-plus/update-topic-data/{topicId}")]
+    public async Task<IActionResult> UpdateTopicData(int topicId, IList<string> widgetZones)
+    {
+        var topicData = await _topicService.GetTopicDataByTopicIdAsync(topicId);
+
+        var widgetZonesStr = string.Join(",", widgetZones);
+        if (topicData == null)
+        {
+            topicData = new Domain.TopicData
+            {
+                TopicId = topicId,
+                WidgetZones = widgetZonesStr
+            };
+            await _topicService.InsertTopicDataAsync(topicData);
+        }
+        else
+        {
+            topicData.WidgetZones = widgetZonesStr;
+            await _topicService.UpdateTopicDataAsync(topicData);
+        }
+        return Json(new { success = true });
+    }
 }

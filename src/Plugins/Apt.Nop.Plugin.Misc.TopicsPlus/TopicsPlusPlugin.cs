@@ -22,7 +22,7 @@ public class TopicsPlusPlugin(
     ILocalizationService localizationService,
     ISettingService settingService,
     IWebHelper webHelper,
-    ITopicService topicService,
+    ICustomTopicService topicService,
     ITopicRevisionService topicRevisionService,
     IScheduleTaskService scheduleTaskService)
     : BasePlugin, IMiscPlugin, IWidgetPlugin
@@ -99,14 +99,24 @@ public class TopicsPlusPlugin(
     #endregion
 
     public bool HideInWidgetList => false;
-    public Task<IList<string>> GetWidgetZonesAsync()
+    public async Task<IList<string>> GetWidgetZonesAsync()
     {
-        return Task.FromResult<IList<string>>(new List<string> { AdminWidgetZones.TopicDetailsBlock });
+        var allTopicData = await topicService.GetAllTopicDataAsync();
+        var topicZones = allTopicData.SelectMany(q => q.WidgetZones.Split(",", StringSplitOptions.RemoveEmptyEntries)).ToList();
+
+        topicZones.Add(AdminWidgetZones.TopicDetailsBlock);
+        return topicZones;
     }
 
     public Type GetWidgetViewComponent(string widgetZone)
     {
-        return typeof(TopicsPlusViewComponent);
+        if (widgetZone.Equals(AdminWidgetZones.TopicDetailsBlock, StringComparison.OrdinalIgnoreCase))
+        {
+            return typeof(TopicsPlusAdminViewComponent);
+        }
+
+        return typeof(WidgetZoneTopicsViewComponent);
+
     }
 
     public override string GetConfigurationPageUrl()

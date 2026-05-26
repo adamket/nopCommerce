@@ -20,7 +20,7 @@
                             @await Html.PartialAsync("Table", new DataTablesModel
                             {
                                 Name = "topic-revisions-grid",
-                                                        UrlRead = new DataUrl("List", "TopicRevision", null),
+                                                        UrlRead = new DataUrl("List", "TopicsPlusAdmin", null),
                                                         Length = Model.PageSize,
                                                         LengthMenu = Model.AvailablePageSizes,
                                                         Filters = new List<FilterParameter>

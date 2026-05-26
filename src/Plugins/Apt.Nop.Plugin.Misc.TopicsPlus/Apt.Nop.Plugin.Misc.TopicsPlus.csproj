@@ -51,7 +51,6 @@
     <Folder Include="Content\Stylesheets\" />
     <Folder Include="Content\Lib\" />
     <Folder Include="Views\Admin\Shared\Components\TopicsPlus\" />
-    <Folder Include="Views\Admin\Topic\" />
     <Folder Include="Views\Shared\Components\TopicBlock\" />
   </ItemGroup>
 
@@ -68,6 +67,9 @@
     <None Update="Views\Admin\Shared\Components\TopicsPlus\Default.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Views\Admin\Topic\_CreateOrUpdate.Data.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Views\Admin\Shared\Components\TopicsPlus\_TopicRevisionPreview.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -75,6 +77,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\Shared\Components\TopicBlock\Default.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Views\Shared\Components\WidgetZone\Default.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\Topic\TopicDetails.cshtml">

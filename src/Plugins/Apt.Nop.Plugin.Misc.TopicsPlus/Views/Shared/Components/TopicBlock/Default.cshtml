@@ -70,7 +70,7 @@
 }
 else
 {
-
+    var editorId = $"topic-{Guid.NewGuid().ToString("N")}";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/topics-plus.public.js");
     var isAuthorizedUser = await permissionService.AuthorizeAsync(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE);
     var ieAttribute = "";
@@ -81,24 +81,25 @@ else
         <script src="http://localhost:5173/dist/inline-editor.iife.js"></script>
 
         <script asp-location="Footer">
-            TopicsPlusPublic.initInlineTopicEditor({
-              titleSelector: ".topic-block-title > h2",
-              bodySelector: ".topic-block-body",
+                        TopicsPlusPublic.initInlineTopicEditor({
+              titleSelector: "#@editorId .topic-block-title > h2",
+              bodySelector: "#@editorId .topic-block-body",
               sharedHighlightParentSelector: ".topic-block"
             });
         </script>
     }
 
 
-    <div class="topic-block" data-topic-id="@Model.Id" @ieAttribute>
+
+    <div class="topic-block" data-topic-id="@Model.Id" ie-wrapper id="@editorId">
         @if (!string.IsNullOrEmpty(Model.Title))
         {
             <div class="topic-block-title">
-                <h2>@Model.Title</h2>
+                <h2 data-ie-role="title">@Model.Title</h2>
             </div>
         }
-        <div class="topic-block-body">
-            @Html.Raw(Model.Body) 
+        <div class="topic-block-body" data-ie-role="body">
+            @Html.Raw(Model.Body)
         </div>
     </div>
 }

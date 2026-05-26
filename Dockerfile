@@ -48,7 +48,10 @@ WORKDIR /app
 
 COPY --from=build /app/published .
 
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV ASPNETCORE_URLS=http://+:80
 EXPOSE 80
-                            
-ENTRYPOINT ["dotnet", "Nop.Web.dll"]
+
+ENTRYPOINT ["/entrypoint.sh"]
