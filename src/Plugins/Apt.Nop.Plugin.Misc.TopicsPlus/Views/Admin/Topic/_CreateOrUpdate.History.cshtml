@@ -8,136 +8,139 @@
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/topics-plus.admin.js");
 }
 
-<form asp-controller="TopicRevision" asp-action="List" method="post">
-    <input asp-for="SearchTopicId" type="hidden" />
+<div class="card-body">
 
-    <section class="content">
-        <div class="container-fluid">
-            <div class="form-horizontal">
-                <div class="cards-group">
-                    <div class="card card-default mt-3">
-                        <div class="card-body">
-                            @await Html.PartialAsync("Table", new DataTablesModel
-                            {
-                                Name = "topic-revisions-grid",
-                                                        UrlRead = new DataUrl("List", "TopicsPlusAdmin", null),
-                                                        Length = Model.PageSize,
-                                                        LengthMenu = Model.AvailablePageSizes,
-                                                        Filters = new List<FilterParameter>
-                                                        {
-                                                        new FilterParameter(nameof(Model.SearchTopicId))
-                                                        },
-                                                        ColumnCollection = new List<ColumnProperty>
-                                                        {
-                                                    
-                                                        new ColumnProperty(nameof(TopicRevisionModel.Title))
-                                                        {
-                                                        Title = "Title",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
-                                                        ClassName = "revision-title"
-                                                        },  
-                                                        // new ColumnProperty(nameof(TopicRevisionModel.IsRevert))
-                                                        // {
-                                                        // Title = "Type",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
-                                                        // Width = "90",
-                                                        // ClassName =  NopColumnClassDefaults.Button,
-                                                        // Render = new RenderCustom("renderIsRevertBadge")
-                                                        // },
-                                                        new ColumnProperty(nameof(TopicRevisionModel.Version))
-                                                        {
-                                                        Title = "Version",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
-                                                        Width = "90",
-                                                        ClassName =  NopColumnClassDefaults.Button,
-                                                        Render = new RenderCustom("renderVersion")
-                                                        },
-                                                    
-                                                        new ColumnProperty(nameof(TopicRevisionModel.CustomerName))
-                                                        {
-                                                        Title = "Updated by",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
-                                                        Width = "200"
-                                                        },
-                                                      
-                                                        new ColumnProperty(nameof(TopicRevisionModel.CreatedOn))
-                                                        {
-                                                        Title = "Created on",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
-                                                        Width = "100"
-                                                        },
-                                                        new ColumnProperty(nameof(TopicRevisionModel.Id))
-                                                        {
-                                                        Title = "",
-                                                        Width = "90",
-                                                        ClassName = NopColumnClassDefaults.Button,
-                                                        Render = new RenderCustom("renderViewCol")
-                                                        },
-                                                        new ColumnProperty(nameof(TopicRevisionModel.Id))
-                                                        {
-                                                        Title = "",
-                                                        Width = "90",
-                                                        ClassName = NopColumnClassDefaults.Button,
-                                                        Render = new RenderCustom("renderRevertCol")
-                                                        }
-                                                        }
-                                                        })
-                        </div>
+    <form asp-controller="TopicRevision" asp-action="List" method="post">
+        <input asp-for="SearchTopicId" type="hidden" />
 
-                        <script>
-                            let topicRevisionAdmin = null;
-                            document.addEventListener("DOMContentLoaded", function(){
-                                topicRevisionAdmin = new TopicRevisionAdmin({
-                                    topicId: @(Model.SearchTopicId)
+        <section class="content">
+            <div class="container-fluid">
+                <div class="form-horizontal">
+                    <div class="cards-group">
+                        <div class="card card-default mt-3">
+                            <div class="card-body">
+                                @await Html.PartialAsync("Table", new DataTablesModel
+                                {
+                                    Name = "topic-revisions-grid",
+                                                                UrlRead = new DataUrl("List", "TopicsPlusAdmin", null),
+                                                                Length = Model.PageSize,
+                                                                LengthMenu = Model.AvailablePageSizes,
+                                                                Filters = new List<FilterParameter>
+                                                                {
+                                                                new FilterParameter(nameof(Model.SearchTopicId))
+                                                                },
+                                                                ColumnCollection = new List<ColumnProperty>
+                                                                {
+
+                                                                new ColumnProperty(nameof(TopicRevisionModel.Title))
+                                                                {
+                                                                Title = "Title",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
+                                                                ClassName = "revision-title"
+                                                                },
+                                                                // new ColumnProperty(nameof(TopicRevisionModel.IsRevert))
+                                                                // {
+                                                                // Title = "Type",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.IsRevert").Text,
+                                                                // Width = "90",
+                                                                // ClassName =  NopColumnClassDefaults.Button,
+                                                                // Render = new RenderCustom("renderIsRevertBadge")
+                                                                // },
+                                                                new ColumnProperty(nameof(TopicRevisionModel.Version))
+                                                                {
+                                                                Title = "Version",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.Title").Text
+                                                                Width = "90",
+                                                                ClassName =  NopColumnClassDefaults.Button,
+                                                                Render = new RenderCustom("renderVersion")
+                                                                },
+
+                                                                new ColumnProperty(nameof(TopicRevisionModel.CustomerName))
+                                                                {
+                                                                Title = "Updated by",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
+                                                                Width = "200"
+                                                                },
+
+                                                                new ColumnProperty(nameof(TopicRevisionModel.CreatedOn))
+                                                                {
+                                                                Title = "Created on",//T("Plugins.Misc.TopicsPlus.TopicRevision.Fields.CreatedOnUtc").Text,
+                                                                Width = "100"
+                                                                },
+                                                                new ColumnProperty(nameof(TopicRevisionModel.Id))
+                                                                {
+                                                                Title = "",
+                                                                Width = "90",
+                                                                ClassName = NopColumnClassDefaults.Button,
+                                                                Render = new RenderCustom("renderViewCol")
+                                                                },
+                                                                new ColumnProperty(nameof(TopicRevisionModel.Id))
+                                                                {
+                                                                Title = "",
+                                                                Width = "90",
+                                                                ClassName = NopColumnClassDefaults.Button,
+                                                                Render = new RenderCustom("renderRevertCol")
+                                                                }
+                                                                }
+                                                                })
+                            </div>
+
+                            <script>
+                                let topicsPlusAdmin = null;
+                                document.addEventListener("DOMContentLoaded", function(){
+                                    topicsPlusAdmin = new TopicsPlusAdmin({
+                                        topicId: @(Model.SearchTopicId)
+                                    });
+                                    topicsPlusAdmin.init();
                                 });
-                                topicRevisionAdmin.init();
-                            });
 
-                             function renderVersion(data, type, row, meta) {
-                                return `<span class="revision-version">v${data}</span>`;
-                            }
-
-                             function renderViewCol(data, type, row, meta) {
-                                return topicRevisionAdmin.renderViewCol(data, type, row, meta);
-                            }
-
-                               function renderRevertCol(data, type, row, meta) {
-                                return topicRevisionAdmin.renderRevertCol(data, type, row, meta);
-                            }
-
-
-                            function renderIsRevertBadge(data, type, row, meta) {
-                                if (data) {
-                                    return `<span class="topic-revision-badge revert">↩ Revert</span>`;
+                                 function renderVersion(data, type, row, meta) {
+                                    return `<span class="revision-version">v${data}</span>`;
                                 }
-                                return `<span class="topic-revision-badge normal">✎ Edit</span>`;
-                            }
-                        </script>
-                       
+
+                                 function renderViewCol(data, type, row, meta) {
+                                    return topicsPlusAdmin.renderViewCol(data, type, row, meta);
+                                }
+
+                                   function renderRevertCol(data, type, row, meta) {
+                                    return topicsPlusAdmin.renderRevertCol(data, type, row, meta);
+                                }
+
+
+                                function renderIsRevertBadge(data, type, row, meta) {
+                                    if (data) {
+                                        return `<span class="topic-revision-badge revert">↩ Revert</span>`;
+                                    }
+                                    return `<span class="topic-revision-badge normal">✎ Edit</span>`;
+                                }
+                            </script>
+
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
-    <nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />
-</form>
+        </section>
+        <nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />
+    </form>
 
-<div class="modal fade" id="topic-revision-preview-modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-xl" role="document" style="max-width: 1200px;">
-        <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title">Topic revision preview</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&#215;</span>
-                </button>
-            </div>
+    <div class="modal fade" id="topic-revision-preview-modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl" role="document" style="max-width: 1200px;">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">Topic revision preview</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&#215;</span>
+                    </button>
+                </div>
 
-            <div class="modal-body p-0">
-                <iframe id="topic-revision-preview-frame"
-                        style="width: 100%; height: 75vh; border: 0;"></iframe>
+                <div class="modal-body p-0">
+                    <iframe id="topic-revision-preview-frame"
+                            style="width: 100%; height: 75vh; border: 0;"></iframe>
+                </div>
             </div>
         </div>
     </div>
+
+    <button type="button"
+            id="topic-revision-revert-confirm-button"
+            style="display:none;">
+    </button>
+
+    <nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />
 </div>
-
-<button type="button"
-        id="topic-revision-revert-confirm-button"
-        style="display:none;">
-</button>
-
-<nop-action-confirmation asp-button-id="topic-revision-revert-confirm-button" />

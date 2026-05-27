@@ -1,7 +1,7 @@
 (function (window, $) {
   'use strict';
 
-  class TopicRevisionAdmin {
+  class TopicsPlusAdmin {
     constructor(options) {
       this.options = Object.assign({
         previewModalSelector: '#topic-revision-preview-modal',
@@ -217,6 +217,6 @@
     }
   }
 
-  window.TopicRevisionAdmin = TopicRevisionAdmin;
+  window.TopicsPlusAdmin = TopicsPlusAdmin;
 
 })(window, window.jQuery);

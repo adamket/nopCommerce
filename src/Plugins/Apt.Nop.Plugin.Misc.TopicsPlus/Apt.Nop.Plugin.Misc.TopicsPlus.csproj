@@ -73,6 +73,9 @@
     <None Update="Views\Admin\Shared\Components\TopicsPlus\_TopicRevisionPreview.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Views\Admin\Topic\_CreateOrUpdate.Draft.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Views\Admin\Topic\_CreateOrUpdate.History.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

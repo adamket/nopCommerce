@@ -12,7 +12,7 @@ public class TopicEventConsumer(
     IStaticCacheManager staticCacheManager,
     ITopicRevisionService topicRevisionService,
     IWorkContext workContext)
-    : IConsumer<EntityUpdatedEvent<Topic>>, IConsumer<EntityUpdatedEvent<TopicData>>, IConsumer<EntityDeletedEvent<TopicData>>
+    : IConsumer<EntityUpdatedEvent<Topic>>, IConsumer<EntityUpdatedEvent<TopicData>>, IConsumer<EntityDeletedEvent<TopicData>>, IConsumer<EntityInsertedEvent<TopicData>>
 {
     public async Task HandleEventAsync(EntityUpdatedEvent<Topic> eventMessage)
     {
@@ -20,15 +20,24 @@ public class TopicEventConsumer(
         await topicRevisionService.CreateRevisionAsync(topic, (await workContext.GetCurrentCustomerAsync())?.Id ?? 0);
     }
 
+    public async Task HandleEventAsync(EntityInsertedEvent<TopicData> eventMessage)
+    {
+        await ClearTopicDataCacheAsync(eventMessage.Entity);
+    }
+
     public async Task HandleEventAsync(EntityUpdatedEvent<TopicData> eventMessage)
     {
-        await staticCacheManager.RemoveAsync(TopicsPlusConstants.CacheKeys.TopicDataByTopicIdCacheKey, eventMessage.Entity.TopicId);
-        await staticCacheManager.RemoveAsync(TopicsPlusConstants.CacheKeys.AllTopicDataCacheKey);
+        await ClearTopicDataCacheAsync(eventMessage.Entity);
     }
 
     public async Task HandleEventAsync(EntityDeletedEvent<TopicData> eventMessage)
     {
-        await staticCacheManager.RemoveAsync(TopicsPlusConstants.CacheKeys.TopicDataByTopicIdCacheKey, eventMessage.Entity.TopicId);
+        await ClearTopicDataCacheAsync(eventMessage.Entity);
+    }
+
+    private async Task ClearTopicDataCacheAsync(TopicData topicData)
+    {
+        await staticCacheManager.RemoveAsync(TopicsPlusConstants.CacheKeys.TopicDataByTopicIdCacheKey, topicData.TopicId);
         await staticCacheManager.RemoveAsync(TopicsPlusConstants.CacheKeys.AllTopicDataCacheKey);
     }
 }

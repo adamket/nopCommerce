@@ -1,93 +1,96 @@
 @model Apt.Nop.Plugin.Misc.TopicsPlus.Models.TopicDataModel
-
-<div class="form-group row">
-    <div class="col-md-3">
-        <nop-label asp-for="SelectedWidgetZones" />
-    </div>
-
-    <div class="col-md-9">
-        <div class="input-group-append input-group-required">
-            <div class="input-group">
-                <nop-select asp-for="SelectedWidgetZones"
-                            asp-items="Model.AvailableWidgetZones"
-                            asp-multiple="true" />
-            </div>
-            <div class="input-group-btn">
-                <nop-required />
-            </div>
+<div class="card-body">
+    <div class="form-group row">
+        <div class="col-md-3">
+            <nop-label asp-for="SelectedWidgetZones" />
         </div>
 
-        <button type="button"
-                id="save-topic-data-widget-zones"
-                class="btn btn-primary mt-2">
-            Save widget zones
-        </button>
+        <div class="col-md-9">
+            <div class="input-group-append input-group-required">
+                <div class="input-group">
+                    <nop-select asp-for="SelectedWidgetZones"
+                                asp-items="Model.AvailableWidgetZones"
+                                asp-multiple="true" />
+                </div>
+                <div class="input-group-btn">
+                    <nop-required />
+                </div>
+            </div>
 
-        <span id="save-topic-data-widget-zones-message" class="ml-2"></span>
+            <button type="button"
+                    id="save-topic-data-widget-zones"
+                    class="btn btn-primary mt-2">
+                Save widget zones
+            </button>
 
-        <script>
-            $(function () {
-                var $widgetZonesSelect = $('#@Html.IdFor(model => model.SelectedWidgetZones)');
+            <span id="save-topic-data-widget-zones-message" class="ml-2"></span>
 
-                $widgetZonesSelect.select2({
-                    closeOnSelect: false,
-                    @if (!Model.AvailableWidgetZones.Any())
-                    {
-                            <text>
-                            disabled: true,
-                            placeholder: 'None selected',
-                            </text>
-                    }
-                });
+            <script>
+                $(function () {
+                const admin = new window.TopicsPlusAdmin({});
+             
+                    var $widgetZonesSelect = $('#@Html.IdFor(model => model.SelectedWidgetZones)');
 
-                $('#save-topic-data-widget-zones').on('click', function () {
-                    var $button = $(this);
+                    $widgetZonesSelect.select2({
+                        closeOnSelect: false,
+                        @if (!Model.AvailableWidgetZones.Any())
+                        {
+                                    <text>
+                                    disabled: true,
+                                    placeholder: 'None selected',
+                                    </text>
+                        }
+                    });
+
+                                   $('#save-topic-data-widget-zones').on('click', function () {
+                    var button = this;
                     var $message = $('#save-topic-data-widget-zones-message');
 
                     var selectedWidgetZones = $widgetZonesSelect.val() || [];
 
-                    $button.prop('disabled', true);
-                    $message
-                        .removeClass('text-danger text-success')
-                        .text('Saving...');
+                    admin.setButtonLoading(button, true);
 
-                    $.ajax({
-                        cache: false,
-                        type: 'POST',
-                        url: '@Url.Content("~/admin/apt/topics-plus/update-topic-data/" + Model.TopicId)',
-                        data: addAntiForgeryToken({
-                            widgetZones: selectedWidgetZones
-                        }),
-                        traditional: true,
-                        success: function (response) {
-                            if (response && response.success === false) {
+                    $message
+                        .removeClass('text-danger text-success');
+
+                        $.ajax({
+                            cache: false,
+                            type: 'POST',
+                            url: '@Url.Content("~/admin/apt/topics-plus/update-topic-data/" + Model.TopicId)',
+                            data: addAntiForgeryToken({
+                                widgetZones: selectedWidgetZones
+                            }),
+                            traditional: true,
+                            success: function (response) {
+                                if (response && response.success === false) {
+                                    $message
+                                        .addClass('text-danger')
+                                        .text(response.message || 'Unable to save widget zones.');
+                                    return;
+                                }
+
+                                $message
+                                    .addClass('text-success')
+                                    .text('Widget zones saved.');
+                            },
+                            error: function (xhr) {
+                                var message = 'An error occurred while saving widget zones.';
+
+                                if (xhr.responseJSON && xhr.responseJSON.message) {
+                                    message = xhr.responseJSON.message;
+                                }
+
                                 $message
                                     .addClass('text-danger')
-                                    .text(response.message || 'Unable to save widget zones.');
-                                return;
+                                    .text(message);
+                            },
+                            complete: function () {
+                                admin.setButtonLoading(button, false);
                             }
-
-                            $message
-                                .addClass('text-success')
-                                .text('Widget zones saved.');
-                        },
-                        error: function (xhr) {
-                            var message = 'An error occurred while saving widget zones.';
-
-                            if (xhr.responseJSON && xhr.responseJSON.message) {
-                                message = xhr.responseJSON.message;
-                            }
-
-                            $message
-                                .addClass('text-danger')
-                                .text(message);
-                        },
-                        complete: function () {
-                            $button.prop('disabled', false);
-                        }
+                        });
                     });
                 });
-            });
-        </script>
+            </script>
+        </div>
     </div>
 </div>
