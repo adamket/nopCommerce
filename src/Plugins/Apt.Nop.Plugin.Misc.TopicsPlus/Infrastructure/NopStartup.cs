@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Infrastructure;
 using Nop.Services.Topics;
+using Nop.Web.Factories;
 
 namespace Apt.Nop.Plugin.Misc.TopicsPlus.Infrastructure;
 
@@ -25,6 +26,7 @@ public class NopStartup : INopStartup
         //override services
         services.AddScoped<ITopicRevisionService, TopicRevisionService>();
         services.AddScoped<ITopicRevisionModelFactory, TopicRevisionModelFactory>();
+        services.AddScoped<ITopicModelFactory, TopicsPlusTopicModelFactory>();
         services.AddScoped<ICustomTopicService, CustomTopicService>();
         services.Configure<RazorViewEngineOptions>(options =>
         {

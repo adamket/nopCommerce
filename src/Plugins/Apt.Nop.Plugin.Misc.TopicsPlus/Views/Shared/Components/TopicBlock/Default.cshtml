@@ -70,11 +70,13 @@
 }
 else
 {
+   
     var editorId = $"topic-{Guid.NewGuid().ToString("N")}";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{TopicsPlusConstants.PathToPlugin}/Content/Scripts/topics-plus.public.js");
     var isAuthorizedUser = await permissionService.AuthorizeAsync(StandardPermission.ContentManagement.TOPICS_CREATE_EDIT_DELETE);
     var ieAttribute = "";
-    if (isAuthorizedUser)
+    var hasTokens = Model.CustomProperties.ContainsKey(TopicsPlusConstants.HasTokensPropertyName) && Convert.ToBoolean(Model.CustomProperties[TopicsPlusConstants.HasTokensPropertyName]);
+    if (isAuthorizedUser && !hasTokens)
     {
         ieAttribute = "ie-wrapper";
         <link rel="stylesheet" href="http://localhost:5173/dist/inline-editor.iife.css" />

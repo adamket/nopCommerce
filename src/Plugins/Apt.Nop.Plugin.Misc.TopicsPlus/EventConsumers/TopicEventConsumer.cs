@@ -18,6 +18,8 @@ public class TopicEventConsumer(
     {
         var topic = eventMessage.Entity;
         await topicRevisionService.CreateRevisionAsync(topic, (await workContext.GetCurrentCustomerAsync())?.Id ?? 0);
+
+        await staticCacheManager.RemoveByPrefixAsync(TopicsPlusConstants.CacheKeys.PreparedContentPrefix, topic.Id);
     }
 
     public async Task HandleEventAsync(EntityInsertedEvent<TopicData> eventMessage)
