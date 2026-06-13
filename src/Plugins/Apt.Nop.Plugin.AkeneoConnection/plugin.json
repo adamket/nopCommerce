@@ -1,11 +1,11 @@
 ﻿{
-  "Group": "Payment methods",
-  "FriendlyName": "Check / Money Order",
-  "SystemName": "Payments.CheckMoneyOrder",
+  "Group": "Misc",
+  "FriendlyName": "Akeneo Connection",
+  "SystemName": "Apt.Misc.AkeneoConnection",
   "Version": "4.90.1",
   "SupportedVersions": [ "4.90" ],
-  "Author": "nopCommerce team",
+  "Author": "Aperture Labs",
   "DisplayOrder": 1,
-  "FileName": "Nop.Plugin.Payments.CheckMoneyOrder.dll",
-  "Description": "This plugin enables check and money order payments"
+  "FileName": "Apt.Nop.Plugin.Misc.AkeneoConnection.dll",
+  "Description": "This plugin enables catalog sync with Akeneo"
 }

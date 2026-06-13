@@ -1,5 +1,7 @@
-﻿namespace Apt.Nop.Plugin.AkeneoConnection.Domain;
-public class AkeneoNopEntityMapping
+﻿using Nop.Core;
+
+namespace Apt.Nop.Plugin.AkeneoConnection.Domain;
+public class AkeneoNopEntityMapping : BaseEntity
 {
     public int AkeneoEntityTypeId { get; set; }
     public string AkeneoCode { get; set; }
