@@ -85,7 +85,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.Booster
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.TopicsPlus", "Plugins\Apt.Nop.Plugin.Misc.TopicsPlus\Apt.Nop.Plugin.Misc.TopicsPlus.csproj", "{D175F671-9F23-F971-2684-CFEA0E9F83C5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.AkeneoConnection", "Plugins\Apt.Nop.Plugin.AkeneoConnection\Apt.Nop.Plugin.AkeneoConnection.csproj", "{89A37F2A-ACB6-7288-98B3-EAFA748102B4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apt.Nop.Plugin.Misc.AkeneoConnection", "Plugins\Apt.Nop.Plugin.Misc.AkeneoConnection\Apt.Nop.Plugin.Misc.AkeneoConnection.csproj", "{89A37F2A-ACB6-7288-98B3-EAFA748102B4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

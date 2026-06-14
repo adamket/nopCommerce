@@ -1,0 +1,179 @@
+﻿@using Apt.Nop.Plugin.Misc.AkeneoConnection
+@model AkeneoConfigurationModel
+@{
+    Layout = "_ConfigurePlugin";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+}
+
+@await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
+
+<form asp-controller="AkeneoConnectionConfiguration" asp-action="Configure" method="post">
+    <div class="cards-group">
+        <div class="card card-default">
+            <div class="card-footer">
+                <button type="button" id="test-connection" class="btn btn-primary float-right">
+                    Test Connection
+                </button>
+            </div>
+
+            <div class="card-body">
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="AkeneoConnectionClientId_OverrideForStore" asp-input="AkeneoConnectionClientId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="AkeneoConnectionClientId" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="AkeneoConnectionClientId" />
+                        <span asp-validation-for="AkeneoConnectionClientId"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="AkeneoConnectionClientSecret_OverrideForStore" asp-input="AkeneoConnectionClientSecret" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="AkeneoConnectionClientSecret" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="AkeneoConnectionClientSecret" />
+                        <span asp-validation-for="AkeneoConnectionClientSecret"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="AkeneoConnectionBaseUrl_OverrideForStore" asp-input="AkeneoConnectionBaseUrl" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="AkeneoConnectionBaseUrl" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="AkeneoConnectionBaseUrl" />
+                        <span asp-validation-for="AkeneoConnectionBaseUrl"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="AkeneoConnectionUsername_OverrideForStore" asp-input="AkeneoConnectionUsername" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="AkeneoConnectionUsername" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="AkeneoConnectionUsername" />
+                        <span asp-validation-for="AkeneoConnectionUsername"></span>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="AkeneoConnectionPassword_OverrideForStore" asp-input="AkeneoConnectionPassword" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="AkeneoConnectionPassword" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="AkeneoConnectionPassword" />
+                        <span asp-validation-for="AkeneoConnectionPassword"></span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="card-footer">
+                <button type="submit" name="save" class="btn btn-primary float-right">
+                    <i class="far fa-save"></i>
+                    @T("Admin.Common.Save")
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="modal fade" id="test-connection-modal" tabindex="-1" role="dialog"
+     aria-labelledby="test-connection-modal-title" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="test-connection-modal-title">
+                    <i class="modal-icon mr-2"></i>
+                    <span class="modal-title-text"></span>
+                </h4>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <span class="modal-message"></span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-dismiss="modal">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(function () {
+        var $modal = $('#test-connection-modal');
+
+        $('#test-connection').on('click', function () {
+            var button = this;
+
+            if (button.loading()) {
+                return;
+            }
+
+            button.loading(true);
+
+            $.ajax({
+                type: 'POST',
+                url: '@Url.Action("TestConnection", "AkeneoApi")',
+                data: addAntiForgeryToken({
+                    apiCredentials: {
+                        username: $('#@(Html.IdFor(q => q.AkeneoConnectionUsername))').val(),
+                        password: $('#@(Html.IdFor(q => q.AkeneoConnectionPassword))').val(),
+                        baseUrl: $('#@(Html.IdFor(q => q.AkeneoConnectionBaseUrl))').val(),
+                        clientId: $('#@(Html.IdFor(q => q.AkeneoConnectionClientId))').val(),
+                        clientSecret: $('#@(Html.IdFor(q => q.AkeneoConnectionClientSecret))').val()
+                    }
+                })
+            }).done(function (response) {
+                if (response && response.success) {
+                    showResult(true, response.message || 'Akeneo connection successful with entered credentials.');
+                } else {
+                    showResult(false, response && response.message
+                        ? response.message
+                        : 'Akeneo connection failed.');
+                }
+            }).fail(function (xhr) {
+                var message = 'Akeneo connection request failed.';
+
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    message = xhr.responseText;
+                }
+
+                showResult(false, message);
+            }).always(function () {
+                button.loading(false);
+            });
+        });
+
+        function showResult(isSuccess, message) {
+            $modal.find('.modal-header')
+                .removeClass('bg-success bg-danger')
+                .addClass(isSuccess ? 'bg-success' : 'bg-danger')
+                .addClass('text-white');
+
+            $modal.find('.modal-icon')
+                .attr('class', 'modal-icon mr-2 fas ' + (isSuccess ? 'fa-check-circle' : 'fa-times-circle'));
+
+            $modal.find('.modal-title-text')
+                .text(isSuccess ? 'Connection Successful' : 'Connection Failed');
+
+            $modal.find('.modal-message').text(message);
+
+            $modal.modal('show');
+        }
+    });
+</script>
