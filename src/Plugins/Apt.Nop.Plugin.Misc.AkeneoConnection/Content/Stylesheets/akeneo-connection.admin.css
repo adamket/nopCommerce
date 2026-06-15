@@ -1,0 +1,456 @@
+.akeneo-mapping {
+  --ak-ink: #1b2030;
+  --ak-ink-2: #515b71;
+  --ak-muted: #8a92a6;
+  --ak-surface: #ffffff;
+  --ak-canvas: #f4f5fa;
+  --ak-line: #e7e9f2;
+  --ak-line-strong: #d4d8e6;
+  --ak-accent: #5b51d8;
+  --ak-accent-ink: #4036b8;
+  --ak-accent-tint: #ecebfb;
+  --ak-mapped: #0f9d6b;
+  --ak-mapped-ink: #0a7a52;
+  --ak-mapped-tint: #e6f6ef;
+  --ak-attention: #c2790b;
+  --ak-attention-ink: #9a5f06;
+  --ak-attention-tint: #fcf2e1;
+  --ak-ignored: #8a92a6;
+  --ak-ignored-tint: #eef0f5;
+  --ak-radius: 14px;
+  --ak-shadow: 0 1px 2px rgba(20,25,40,.05), 0 14px 32px -18px rgba(20,25,40,.22);
+  color: var(--ak-ink);
+  font-feature-settings: "tnum" 1;
+}
+
+  .akeneo-mapping .akeneo-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .15em;
+    font-size: .68rem;
+    font-weight: 700;
+    color: var(--ak-accent);
+    margin-bottom: 2px;
+  }
+
+  .akeneo-mapping h1 {
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  .akeneo-mapping .card {
+    border: 1px solid var(--ak-line);
+    border-radius: var(--ak-radius);
+    box-shadow: var(--ak-shadow);
+    background: var(--ak-surface);
+    overflow: hidden;
+  }
+
+    .akeneo-mapping .card + .card {
+      margin-top: 22px;
+    }
+
+  .akeneo-mapping .card-header {
+    background: var(--ak-surface);
+    border-bottom: 1px solid var(--ak-line);
+    padding: 18px 22px;
+  }
+
+  .akeneo-mapping .card-title {
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    font-size: 1.02rem;
+    color: var(--ak-ink);
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+
+    .akeneo-mapping .card-title i {
+      color: var(--ak-accent);
+      font-size: .95rem;
+    }
+
+  .akeneo-mapping .card-body {
+    padding: 22px;
+  }
+
+    .akeneo-mapping .card-body > p {
+      color: var(--ak-ink-2);
+    }
+
+  .akeneo-mapping .alert {
+    border: 1px solid var(--ak-line);
+    border-radius: 10px;
+  }
+
+  .akeneo-mapping .alert-warning {
+    background: var(--ak-attention-tint);
+    border-color: #f1dcb4;
+    color: var(--ak-attention-ink);
+  }
+
+  .akeneo-mapping .alert-info {
+    background: var(--ak-accent-tint);
+    border-color: #d9d6f7;
+    color: var(--ak-accent-ink);
+  }
+
+  /* form controls */
+  .akeneo-mapping .form-control,
+  .akeneo-mapping select.form-control {
+    border: 1px solid var(--ak-line-strong);
+    border-radius: 9px;
+    box-shadow: none;
+    color: var(--ak-ink);
+  }
+
+    .akeneo-mapping .form-control:focus,
+    .akeneo-mapping select.form-control:focus {
+      border-color: var(--ak-accent);
+      box-shadow: 0 0 0 3px rgba(91,81,216,.16);
+    }
+
+  .akeneo-mapping .akeneo-mapping-detail label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ak-muted);
+    font-weight: 700;
+  }
+
+  /* buttons */
+  .akeneo-mapping .btn {
+    border-radius: 9px;
+    font-weight: 600;
+  }
+
+  .akeneo-mapping .btn-primary {
+    background: var(--ak-accent);
+    border-color: var(--ak-accent);
+  }
+
+    .akeneo-mapping .btn-primary:hover,
+    .akeneo-mapping .btn-primary:focus {
+      background: var(--ak-accent-ink);
+      border-color: var(--ak-accent-ink);
+    }
+
+  .akeneo-mapping .btn-default {
+    background: var(--ak-surface);
+    border: 1px solid var(--ak-line-strong);
+    color: var(--ak-ink-2);
+  }
+
+    .akeneo-mapping .btn-default:hover {
+      background: var(--ak-canvas);
+    }
+
+  .akeneo-mapping .btn:focus-visible,
+  .akeneo-mapping a:focus-visible {
+    outline: 2px solid var(--ak-accent);
+    outline-offset: 2px;
+  }
+
+  /* table shell */
+  .akeneo-mapping .table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+    .akeneo-mapping .table thead th {
+      text-transform: uppercase;
+      font-size: .67rem;
+      letter-spacing: .09em;
+      font-weight: 700;
+      color: var(--ak-muted);
+      background: var(--ak-surface);
+      border: 0;
+      border-bottom: 1px solid var(--ak-line-strong);
+      padding: 13px 16px;
+    }
+
+    .akeneo-mapping .table td {
+      padding: 14px 16px;
+      vertical-align: middle;
+      border: 0;
+      border-top: 1px solid var(--ak-line);
+    }
+
+  /* group band */
+  .akeneo-mapping .akeneo-group-row > td {
+    background: var(--ak-canvas);
+    border-top: 1px solid var(--ak-line);
+    border-bottom: 1px solid var(--ak-line);
+    padding: 11px 18px;
+  }
+
+  .akeneo-mapping .akeneo-attribute-group-toggle {
+    color: var(--ak-ink);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+  }
+
+    .akeneo-mapping .akeneo-attribute-group-toggle:hover {
+      color: var(--ak-accent-ink);
+    }
+
+    .akeneo-mapping .akeneo-attribute-group-toggle .chevron {
+      font-size: .72rem;
+      color: var(--ak-muted);
+      transition: transform .18s ease;
+    }
+
+    .akeneo-mapping .akeneo-attribute-group-toggle[aria-expanded="true"] .chevron {
+      transform: rotate(90deg);
+      color: var(--ak-accent);
+    }
+
+  .akeneo-mapping .akeneo-group-count {
+    background: var(--ak-accent-tint);
+    color: var(--ak-accent-ink);
+    font-weight: 700;
+    font-size: .7rem;
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+
+  .akeneo-mapping .akeneo-group-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .72rem;
+    color: var(--ak-muted);
+  }
+
+  /* summary rows + status spine */
+  .akeneo-mapping .akeneo-mapping-summary-row td:first-child {
+    position: relative;
+  }
+
+    .akeneo-mapping .akeneo-mapping-summary-row td:first-child::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--ak-ignored);
+    }
+
+  .akeneo-mapping .akeneo-mapping-summary-row.is-mapped td:first-child::before {
+    background: var(--ak-mapped);
+  }
+
+  .akeneo-mapping .akeneo-mapping-summary-row.is-attention td:first-child::before {
+    background: var(--ak-attention);
+  }
+
+  .akeneo-mapping .akeneo-mapping-summary-row.is-ignored td:first-child::before {
+    background: var(--ak-ignored);
+  }
+
+  .akeneo-mapping .akeneo-mapping-summary-row:hover td {
+    background: #fafbff;
+  }
+
+  .akeneo-mapping .akeneo-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--ak-ink);
+  }
+
+  .akeneo-mapping .akeneo-label {
+    color: var(--ak-ink-2);
+    font-size: .84rem;
+    margin-top: 3px;
+  }
+
+  .akeneo-mapping .akeneo-type-chip {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .73rem;
+    background: var(--ak-canvas);
+    border: 1px solid var(--ak-line);
+    color: var(--ak-ink-2);
+    padding: 3px 8px;
+    border-radius: 7px;
+  }
+
+  .akeneo-mapping .akeneo-flags {
+    margin-top: 7px;
+    display: flex;
+    gap: 5px;
+  }
+
+  .akeneo-mapping .akeneo-flag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: .64rem;
+    font-weight: 800;
+    border: 1px solid var(--ak-line-strong);
+    color: var(--ak-muted);
+    background: var(--ak-surface);
+  }
+
+    .akeneo-mapping .akeneo-flag.on {
+      background: var(--ak-accent-tint);
+      border-color: transparent;
+      color: var(--ak-accent-ink);
+    }
+
+  .akeneo-mapping .akeneo-maps-arrow {
+    color: var(--ak-muted);
+    margin-right: .45rem;
+  }
+
+  .akeneo-mapping .akeneo-summary-target-type {
+    font-weight: 700;
+    color: var(--ak-ink);
+  }
+
+  .akeneo-mapping .akeneo-summary-target-detail {
+    color: var(--ak-muted);
+    font-size: .8rem;
+    margin-top: 3px;
+  }
+
+  .akeneo-mapping .akeneo-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--ak-ignored-tint);
+    color: var(--ak-ignored);
+    white-space: nowrap;
+  }
+
+    .akeneo-mapping .akeneo-status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+  .akeneo-mapping .is-mapped .akeneo-status {
+    background: var(--ak-mapped-tint);
+    color: var(--ak-mapped-ink);
+  }
+
+  .akeneo-mapping .is-attention .akeneo-status {
+    background: var(--ak-attention-tint);
+    color: var(--ak-attention-ink);
+  }
+
+  .akeneo-mapping .is-ignored .akeneo-status {
+    background: var(--ak-ignored-tint);
+    color: var(--ak-ignored);
+  }
+
+  .akeneo-mapping .badge {
+    font-weight: 700;
+    padding: .34em .62em;
+    border-radius: 6px;
+    font-size: .72rem;
+  }
+
+  .akeneo-mapping .badge-success {
+    background: var(--ak-mapped-tint);
+    color: var(--ak-mapped-ink);
+  }
+
+  .akeneo-mapping .badge-warning {
+    background: var(--ak-attention-tint);
+    color: var(--ak-attention-ink);
+  }
+
+  .akeneo-mapping .badge-secondary {
+    background: var(--ak-ignored-tint);
+    color: var(--ak-ignored);
+  }
+
+  .akeneo-mapping .badge-info {
+    background: var(--ak-accent-tint);
+    color: var(--ak-accent-ink);
+  }
+
+  .akeneo-mapping .akeneo-row-status {
+    font-size: .76rem;
+    font-weight: 700;
+  }
+
+  .akeneo-mapping .text-success {
+    color: var(--ak-mapped-ink) !important;
+  }
+
+  .akeneo-mapping .text-danger {
+    color: #c0392b !important;
+  }
+
+  /* edit drawer */
+  .akeneo-mapping .akeneo-mapping-edit-row > td {
+    padding: 0;
+    border-top: 0;
+  }
+
+  .akeneo-mapping .akeneo-mapping-detail {
+    background: var(--ak-canvas);
+    border-left: 3px solid var(--ak-accent);
+    padding: 22px;
+    animation: ak-drawer .2s ease;
+  }
+
+@@keyframes ak-drawer {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.akeneo-mapping .akeneo-detail-none .akeneo-none-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--ak-muted);
+  font-size: .85rem;
+  background: var(--ak-surface);
+  border: 1px dashed var(--ak-line-strong);
+  border-radius: 9px;
+  padding: 10px 14px;
+}
+
+.akeneo-mapping .akeneo-row-errors {
+  border-radius: 9px;
+}
+
+.akeneo-mapping .akeneo-row-saving {
+  color: var(--ak-muted);
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+@@media (prefers-reduced-motion: reduce) {
+  .akeneo-mapping * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

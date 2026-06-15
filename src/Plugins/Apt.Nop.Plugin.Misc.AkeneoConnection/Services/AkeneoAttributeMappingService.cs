@@ -22,18 +22,20 @@ public class AkeneoAttributeMappingService(IRepository<AkeneoAttributeMapping> a
         await attributeMappingRepository.DeleteAsync(attributeMapping);
     }
 
-    public Task<AkeneoAttributeMappingValidationResult> ValidateAttributeMappingsAsync(AkeneoAttributeMappingListModel model)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task SaveAttributeMappingsAsync(AkeneoAttributeMappingListModel model)
-    {
-        throw new NotImplementedException();
-    }
-
     public async Task<IList<AkeneoAttributeMapping>> GetAllAkeneoAttributeMappingsAsync()
     {
         return await attributeMappingRepository.Table.ToListAsync(); //TODO
+    }
+
+    public async Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByIdAsync(int id)
+    {
+        var mapping = await attributeMappingRepository.GetByIdAsync(id);
+        return mapping;
+    }
+
+    public async Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByCodeAsync(string code)
+    {
+        var mapping = await attributeMappingRepository.Table.FirstOrDefaultAsync(q => q.AkeneoAttributeCode == code);
+        return mapping;
     }
 }

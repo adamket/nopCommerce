@@ -1,4 +1,5 @@
-﻿using System.util;
+﻿using System.Text.Json;
+using System.util;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -18,6 +19,38 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
     private readonly IAkeneoNopEntityMappingService _akeneoNopEntityMappingService;
     private readonly ISpecificationAttributeService _specificationAttributeService;
     private readonly IProductAttributeService _productAttributeService;
+
+    // Single source of truth for the NopTargetKey options per target type.
+    // Used both to build the server-side <select> and to emit the client-side map
+    // that the view uses to rebuild the Target Key options when the Target Type changes.
+    private static readonly IReadOnlyDictionary<NopTargetType, IReadOnlyList<KeyValuePair<string, string>>> NopTargetKeyOptions =
+        new Dictionary<NopTargetType, IReadOnlyList<KeyValuePair<string, string>>>
+        {
+            [NopTargetType.ProductField] = new List<KeyValuePair<string, string>>
+            {
+                new("Name", "Name"),
+                new("ShortDescription", "Short description"),
+                new("FullDescription", "Full description"),
+                new("Sku", "SKU"),
+                new("Price", "Price"),
+                new("Gtin", "GTIN"),
+                new("ManufacturerPartNumber", "Manufacturer part number"),
+                new("Published", "Published")
+            },
+
+            [NopTargetType.SeoField] = new List<KeyValuePair<string, string>>
+            {
+                new("MetaTitle", "Meta title"),
+                new("MetaDescription", "Meta description"),
+                new("MetaKeywords", "Meta keywords"),
+                new("SeName", "Search engine name")
+            },
+
+            [NopTargetType.CustomProperty] = new List<KeyValuePair<string, string>>
+            {
+                new("CustomProperty", "Custom property")
+            }
+        };
 
     public AkeneoMappingModelFactory(
         IAkeneoApiClient akeneoApiClient,
@@ -132,6 +165,23 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
         return model;
     }
 
+    /// <summary>
+    /// Serializes the NopTargetKey options as a JSON object keyed by the integer
+    /// NopTargetType value, e.g. { "2": [ { "value": "Name", "text": "Name" }, ... ] }.
+    /// The view emits this so it can rebuild the Target Key select client-side when
+    /// the user changes the Target Type, without a round trip.
+    /// </summary>
+    public static string GetNopTargetKeyMapJson()
+    {
+        var map = NopTargetKeyOptions.ToDictionary(
+            entry => ((int)entry.Key).ToString(),
+            entry => entry.Value
+                .Select(option => new { value = option.Key, text = option.Value })
+                .ToList());
+
+        return JsonSerializer.Serialize(map);
+    }
+
     private static string GetAttributeLabel(AkeneoAttributeDefinition akeneoAttribute)
     {
         if (akeneoAttribute.Labels != null)
@@ -152,7 +202,7 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
         return akeneoAttribute.Code;
     }
 
-   
+
 
     private static void PrepareTargetTypeOptions(
         AkeneoAttributeMappingModel model,
@@ -163,7 +213,7 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
             {
                 Text = GetTargetTypeDisplayName(targetType),
                 Value = ((int)targetType).ToString(),
-                Selected = model.TargetTypeId == (int)targetType
+                Selected = model.NopTargetTypeId == (int)targetType
             })
             .ToList();
 
@@ -171,7 +221,7 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
         model.AvailableTargetTypes.AddRange(options);
     }
 
-  
+
 
 
     private static void PrepareSpecificationAttributeOptions(
@@ -443,35 +493,11 @@ public class AkeneoMappingModelFactory : IAkeneoMappingModelFactory
             Value = ""
         });
 
-        var keys = model.NopTargetTypeId switch
+        if (!Enum.IsDefined(typeof(NopTargetType), model.NopTargetTypeId) ||
+            !NopTargetKeyOptions.TryGetValue((NopTargetType)model.NopTargetTypeId, out var keys))
         {
-            (int)NopTargetType.ProductField => new Dictionary<string, string>
-            {
-                ["Name"] = "Name",
-                ["ShortDescription"] = "Short description",
-                ["FullDescription"] = "Full description",
-                ["Sku"] = "SKU",
-                ["Price"] = "Price",
-                ["Gtin"] = "GTIN",
-                ["ManufacturerPartNumber"] = "Manufacturer part number",
-                ["Published"] = "Published"
-            },
-
-            (int)NopTargetType.SeoField => new Dictionary<string, string>
-            {
-                ["MetaTitle"] = "Meta title",
-                ["MetaDescription"] = "Meta description",
-                ["MetaKeywords"] = "Meta keywords",
-                ["SeName"] = "Search engine name"
-            },
-
-            (int)NopTargetType.CustomProperty => new Dictionary<string, string>
-            {
-                ["CustomProperty"] = "Custom property"
-            },
-
-            _ => new Dictionary<string, string>()
-        };
+            return;
+        }
 
         foreach (var key in keys)
         {

@@ -9,13 +9,10 @@ public interface IAkeneoAttributeMappingService
     Task UpdateAkeneoAttributeMappingAsync(AkeneoAttributeMapping attributeMapping);
     Task DeleteAkeneoAttributeMappingAsync(AkeneoAttributeMapping attributeMapping);
 
-    Task<AkeneoAttributeMappingValidationResult> ValidateAttributeMappingsAsync(
-        AkeneoAttributeMappingListModel model);
-
-    Task SaveAttributeMappingsAsync(
-        AkeneoAttributeMappingListModel model);
-
     Task<IList<AkeneoAttributeMapping>> GetAllAkeneoAttributeMappingsAsync();
 
+    Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByIdAsync(int id);
+
+    Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByCodeAsync(string code);
 
 }

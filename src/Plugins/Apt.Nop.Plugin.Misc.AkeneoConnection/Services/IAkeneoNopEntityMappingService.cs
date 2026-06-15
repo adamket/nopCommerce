@@ -8,4 +8,15 @@ public interface IAkeneoNopEntityMappingService
     Task DeleteAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping);
 
     Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(AkeneoEntityType? akeneoEntityType = null);
+
+    Task UpsertAkeneoNopEntityMappingAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType,
+        int nopEntityId);
+
+    Task DeleteAkeneoNopEntityMappingAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType);
 }
