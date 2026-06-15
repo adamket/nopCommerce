@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,11 @@ public class NopStartup : INopStartup
     {
         //override services
         services.AddScoped<IAkeneoApiClient, AkeneoApiClient>();
+        services.AddScoped<IAkeneoMappingModelFactory, AkeneoMappingModelFactory>();
+        services.AddScoped<IAkeneoNopEntityMappingService, AkeneoNopEntityMappingService>();
+        services.AddScoped<IAkeneoAttributeMappingService, AkeneoAttributeMappingService>();
+        services.AddScoped<IAkeneoSyncProfileService, AkeneoSyncProfileService>();
+        services.AddScoped<IAkeneoSyncItemLogService, AkeneoSyncItemLogService>();
     }
 
     /// <summary>

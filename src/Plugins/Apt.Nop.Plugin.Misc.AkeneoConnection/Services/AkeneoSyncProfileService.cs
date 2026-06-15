@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;

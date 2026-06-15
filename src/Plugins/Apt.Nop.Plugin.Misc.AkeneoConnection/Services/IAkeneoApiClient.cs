@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -13,7 +14,7 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetAttributesAsync(
+    Task<IReadOnlyList<AkeneoAttributeDefinition>> GetAttributesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default);
 

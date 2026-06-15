@@ -6,6 +6,7 @@ public class AkeneoNopEntityMapping : BaseEntity
     public int AkeneoEntityTypeId { get; set; }
     public string AkeneoCode { get; set; }
     public string AkeneoUuid { get; set; }
+    public int NopEntityId { get; set; }
     public int NopEntityTypeId { get; set; }
     public DateTime CreatedOnUtc { get; set; }
     public DateTime UpdatedOnUtc { get; set; }

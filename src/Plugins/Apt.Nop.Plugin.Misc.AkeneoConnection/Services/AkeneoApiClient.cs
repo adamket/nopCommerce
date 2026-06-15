@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Nop.Core.Caching;
 using Nop.Services.Logging;
 
@@ -69,7 +70,7 @@ public class AkeneoApiClient : IAkeneoApiClient
             ValidateCredentials(apiCredentials);
             Configure(apiCredentials.BaseUrl);
 
-            var token = await AuthenticateAsync(forceRefresh: true, cancellationToken, apiCredentials);
+            var token = await AuthenticateAsync(forceRefresh: true, cancellationToken, apiCredentials, true);
             if (string.IsNullOrEmpty(token))
             {
                 return AkeneoConnectionTestResult.FailureResult("Failed to authenticate with Akeneo.");
@@ -132,9 +133,9 @@ public class AkeneoApiClient : IAkeneoApiClient
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/categories", limit, cancellationToken);
 
-    public async Task<IReadOnlyList<JsonElement>> GetAttributesAsync(
+    public async Task<IReadOnlyList<AkeneoAttributeDefinition>> GetAttributesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
-        => await GetSimpleCollectionAsync("api/rest/v1/attributes", limit, cancellationToken);
+        => await GetSimpleCollectionAsync<AkeneoAttributeDefinition>("api/rest/v1/attributes", limit, cancellationToken);
 
     public async Task<IReadOnlyList<JsonElement>> GetFamiliesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
@@ -172,6 +173,20 @@ public class AkeneoApiClient : IAkeneoApiClient
     #endregion
 
     #region HTTP / paging
+
+    private async Task<IReadOnlyList<T>> GetSimpleCollectionAsync<T>(
+        string endpoint,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var items = await GetSimpleCollectionAsync(endpoint, limit, cancellationToken);
+
+        return items
+            .Select(item => item.Deserialize<T>(SnakeCaseJsonOptions))
+            .Where(item => item is not null)
+            .Cast<T>()
+            .ToList();
+    }
 
     private async Task<IReadOnlyList<JsonElement>> GetSimpleCollectionAsync(
         string relativeUrl,
@@ -298,7 +313,8 @@ public class AkeneoApiClient : IAkeneoApiClient
     private async Task<string> AuthenticateAsync(
         bool forceRefresh,
         CancellationToken cancellationToken = default,
-        AkeneoApiCredentials apiCredentials = null)
+        AkeneoApiCredentials apiCredentials = null,
+        bool preventRefreshToken = false)
     {
         await _authLock.WaitAsync(cancellationToken);
         try
@@ -314,7 +330,7 @@ public class AkeneoApiClient : IAkeneoApiClient
 
             AkeneoTokenResponse tokenResponse = null;
 
-            if (!string.IsNullOrWhiteSpace(cachedToken?.RefreshToken))
+            if (!string.IsNullOrWhiteSpace(cachedToken?.RefreshToken) && !preventRefreshToken)
             {
                 tokenResponse = await TryRequestTokenAsync(
                     grantType: "refresh_token",

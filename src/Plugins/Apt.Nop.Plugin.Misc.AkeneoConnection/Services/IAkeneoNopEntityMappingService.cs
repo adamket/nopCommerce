@@ -6,4 +6,6 @@ public interface IAkeneoNopEntityMappingService
     Task InsertAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping);
     Task UpdateAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping);
     Task DeleteAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping);
+
+    Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(AkeneoEntityType? akeneoEntityType = null);
 }

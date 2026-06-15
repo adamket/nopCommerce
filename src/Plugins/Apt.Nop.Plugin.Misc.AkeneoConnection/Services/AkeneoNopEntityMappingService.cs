@@ -20,4 +20,16 @@ public class AkeneoNopEntityMappingService(IRepository<AkeneoNopEntityMapping> n
     {
         await nopEntityMappingRepository.DeleteAsync(entityMapping);
     }
+
+    public async Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(AkeneoEntityType? akeneoEntityType = null)
+    {
+        var query = nopEntityMappingRepository.Table;
+
+        if (akeneoEntityType.HasValue)
+        {
+            query = query.Where(q => q.AkeneoEntityTypeId == (int)akeneoEntityType.Value);
+        }
+
+        return await query.ToListAsync();
+    }
 }
