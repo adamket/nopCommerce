@@ -7,689 +7,482 @@
     Layout = "_ConfigurePlugin";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+
+    var appModel = new
+    {
+        saveUrl = Url.Action("SaveAttributeMappingRow", "AkeneoMapping"),
+        targetTypes = new
+        {
+            ignore = (int)NopTargetType.Ignore,
+            productField = (int)NopTargetType.ProductField,
+            seoField = (int)NopTargetType.SeoField,
+            customProperty = (int)NopTargetType.CustomProperty,
+            specificationAttribute = (int)NopTargetType.SpecificationAttribute,
+            productAttribute = (int)NopTargetType.ProductAttribute
+        },
+        mappings = Model.Mappings.Select((m, idx) => new
+        {
+            index = idx,
+            id = m.Id,
+            code = m.AkeneoAttributeCode,
+            label = m.AkeneoAttributeLabel,
+            type = m.AkeneoAttributeType,
+            group = string.IsNullOrWhiteSpace(m.AkeneoAttributeGroup) ? "ungrouped" : m.AkeneoAttributeGroup,
+            groupLabel = string.IsNullOrWhiteSpace(m.AkeneoAttributeGroupLabel) ? "Ungrouped" : m.AkeneoAttributeGroupLabel,
+            attributeTypeId = m.AkeneoAttributeTypeId,
+            isLocalizable = m.IsLocalizable,
+            isScopable = m.IsScopable,
+            nopTargetTypeId = m.NopTargetTypeId.ToString(),
+            nopTargetKey = m.NopTargetKey ?? string.Empty,
+            nopSpecificationAttributeId = m.NopSpecificationAttributeId?.ToString() ?? string.Empty,
+            nopProductAttributeId = m.NopProductAttributeId?.ToString() ?? string.Empty,
+            isRequired = m.IsRequired,
+            transformRuleJson = m.TransformRuleJson ?? string.Empty,
+            availableTargetTypes = m.AvailableTargetTypes.Select(o => new { value = o.Value, text = o.Text }),
+            availableSpecificationAttributes = m.AvailableSpecificationAttributes.Select(o => new { value = o.Value, text = o.Text }),
+            availableProductAttributes = m.AvailableProductAttributes.Select(o => new { value = o.Value, text = o.Text })
+        }).ToList()
+    };
 }
 
-
-
 <div class="akeneo-mapping">
-    <form id="akeneo-attribute-mapping-form">
-        @Html.AntiForgeryToken()
+    @Html.AntiForgeryToken()
 
-        <div class="content-header clearfix">
-            <div class="float-left">
-                <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
-                <h1 class="m-0">Attribute Mapping</h1>
-            </div>
+    <div class="content-header clearfix">
+        <div class="float-left">
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+            <h1 class="m-0">Attribute Mapping</h1>
         </div>
+    </div>
 
-        <section class="content">
-            <div class="container-fluid">
+    <section class="content">
+        <div class="container-fluid">
 
-                <div asp-validation-summary="All" class="text-danger"></div>
-
-                @if (Model.Warnings?.Any() == true)
-                {
-                    <div class="alert alert-warning">
-                        <ul class="mb-0">
-                            @foreach (var warning in Model.Warnings)
-                            {
-                                <li>@warning</li>
-                            }
-                        </ul>
-                    </div>
-                }
-
-                <div class="card card-default">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-sliders-h"></i>
-                            Sync Context
-                        </div>
-                    </div>
-
-                    <div class="card-body">
-                        <p>
-                            Set the default Akeneo channel, locale, and currency used when resolving scoped values.
-                        </p>
-
-                        <div class="form-group row">
-                            <div class="col-md-3">
-                                <nop-label asp-for="SelectedChannelId" />
-                            </div>
-                            <div class="col-md-9">
-                                <nop-select asp-for="SelectedChannelId" asp-items="Model.AvailableChannels" />
-                                <span asp-validation-for="SelectedChannelId"></span>
-                            </div>
-                        </div>
-
-                        <div class="form-group row">
-                            <div class="col-md-3">
-                                <nop-label asp-for="SelectedLocaleId" />
-                            </div>
-                            <div class="col-md-9">
-                                <nop-select asp-for="SelectedLocaleId" asp-items="Model.AvailableLocales" />
-                                <span asp-validation-for="SelectedLocaleId"></span>
-                            </div>
-                        </div>
-
-                        <div class="form-group row">
-                            <div class="col-md-3">
-                                <nop-label asp-for="SelectedCurrencyId" />
-                            </div>
-                            <div class="col-md-9">
-                                <nop-select asp-for="SelectedCurrencyId" asp-items="Model.AvailableCurrencies" />
-                                <span asp-validation-for="SelectedCurrencyId"></span>
-                            </div>
-                        </div>
+            @* Sync Context stays server-rendered so the nop tag helpers / store-scope keep working. *@
+            <div class="card card-default">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-sliders-h"></i>
+                        Sync Context
                     </div>
                 </div>
 
-                <div class="card card-default">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-project-diagram"></i>
-                            Attribute Mappings
+                <div class="card-body">
+                    <p>Set the default Akeneo channel, locale, and currency used when resolving scoped values.</p>
+
+                    <div class="form-group row">
+                        <div class="col-md-3"><nop-label asp-for="SelectedChannelId" /></div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="SelectedChannelId" asp-items="Model.AvailableChannels" />
+                            <span asp-validation-for="SelectedChannelId"></span>
                         </div>
                     </div>
 
-                    <div class="card-body p-0">
-                        @if (Model.Mappings == null || !Model.Mappings.Any())
-                        {
-                            <div class="p-4">
-                                <div class="alert alert-info mb-0">
-                                    No Akeneo attributes were found. Check the Sync Context connection, then reload this page.
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col" style="width: 28%;">Attribute</th>
-                                            <th scope="col" style="width: 18%;">Type</th>
-                                            <th scope="col" style="width: 28%;">Maps to</th>
-                                            <th scope="col" style="width: 12%;">Status</th>
-                                            <th scope="col" style="width: 14%;"></th>
-                                        </tr>
-                                    </thead>
+                    <div class="form-group row">
+                        <div class="col-md-3"><nop-label asp-for="SelectedLocaleId" /></div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="SelectedLocaleId" asp-items="Model.AvailableLocales" />
+                            <span asp-validation-for="SelectedLocaleId"></span>
+                        </div>
+                    </div>
 
-                                    <tbody>
-                                        @{
-                                            var groupedMappings = Model.Mappings
-                                            .Select((mapping, index) => new { Mapping = mapping, Index = index })
-                                            .GroupBy(item => new
-                                            {
-                                                GroupCode = string.IsNullOrWhiteSpace(item.Mapping.AkeneoAttributeGroup)
-                                            ? "ungrouped"
-                                            : item.Mapping.AkeneoAttributeGroup,
-
-                                                GroupLabel = string.IsNullOrWhiteSpace(item.Mapping.AkeneoAttributeGroupLabel)
-                                            ? "Ungrouped"
-                                            : item.Mapping.AkeneoAttributeGroupLabel
-                                            })
-                                            .OrderBy(group => group.Key.GroupLabel)
-                                            .ToList();
-
-                                            var groupIndex = 0;
-                                        }
-
-                                        @foreach (var group in groupedMappings)
-                                        {
-                                            var groupCssClass = $"akeneo-attribute-group-{groupIndex}";
-                                            var groupToggleId = $"akeneo-attribute-group-toggle-{groupIndex}";
-                                            groupIndex++;
-
-                                            <tr class="akeneo-group-row">
-                                                <td colspan="5">
-                                                    <button id="@groupToggleId"
-                                                            class="btn btn-link p-0 akeneo-attribute-group-toggle"
-                                                            type="button"
-                                                            data-group-class="@groupCssClass"
-                                                            aria-expanded="false">
-                                                        <i class="fas fa-chevron-right chevron"></i>
-                                                        <span>@group.Key.GroupLabel</span>
-                                                    </button>
-
-                                                    <span class="akeneo-group-count ml-2">@group.Count()</span>
-                                                    <span class="akeneo-group-code ml-2">@group.Key.GroupCode</span>
-                                                </td>
-                                            </tr>
-
-                                            foreach (var item in group)
-                                            {
-                                                var i = item.Index;
-                                                var transformCollapseId = $"transform-rule-{i}";
-                                                var hasTransformRule = !string.IsNullOrWhiteSpace(Model.Mappings[i].TransformRuleJson);
-
-                                                var selectedTargetTypeText = Model.Mappings[i].AvailableTargetTypes
-                                                .FirstOrDefault(option => option.Value == Model.Mappings[i].NopTargetTypeId.ToString())?.Text ?? "Ignore";
-
-                                                var selectedTargetKeyText = Model.Mappings[i].AvailableNopTargetKeys
-                                                .FirstOrDefault(option => option.Value == Model.Mappings[i].NopTargetKey)?.Text;
-
-                                                var selectedSpecificationAttributeText = Model.Mappings[i].AvailableSpecificationAttributes
-                                                .FirstOrDefault(option => option.Value == Model.Mappings[i].NopSpecificationAttributeId?.ToString())?.Text;
-
-                                                var selectedProductAttributeText = Model.Mappings[i].AvailableProductAttributes
-                                                .FirstOrDefault(option => option.Value == Model.Mappings[i].NopProductAttributeId?.ToString())?.Text;
-
-                                                var targetTypeId = Model.Mappings[i].NopTargetTypeId;
-                                                var hasEntity = Model.Mappings[i].Id > 0;
-                                                var showTargetKey = targetTypeId == (int)NopTargetType.ProductField
-                                                || targetTypeId == (int)NopTargetType.SeoField
-                                                || targetTypeId == (int)NopTargetType.CustomProperty;
-                                                var showSpec = targetTypeId == (int)NopTargetType.SpecificationAttribute;
-                                                var showProduct = targetTypeId == (int)NopTargetType.ProductAttribute;
-                                                var showNone = !showTargetKey && !showSpec && !showProduct;
-
-                                                var isIgnored = targetTypeId == (int)NopTargetType.Ignore;
-                                                var needsKey = showTargetKey && string.IsNullOrWhiteSpace(Model.Mappings[i].NopTargetKey);
-                                                var needsSpec = showSpec && !Model.Mappings[i].NopSpecificationAttributeId.HasValue;
-                                                var needsProduct = showProduct && !Model.Mappings[i].NopProductAttributeId.HasValue;
-                                                var needsAttention = needsKey || needsSpec || needsProduct;
-                                                var statusClass = isIgnored ? "is-ignored" : (hasEntity ? "is-mapped" : "is-attention");
-                                                var statusText = isIgnored ? "Ignored" : (hasEntity ? "Mapped" : "Unsaved");
-
-                                                <tr class="@groupCssClass akeneo-attribute-group-row akeneo-mapping-summary-row @statusClass"
-                                                    data-mapping-index="@i"
-                                                    style="display: none;">
-                                                    <td>
-                                                        <div class="akeneo-code">@Model.Mappings[i].AkeneoAttributeCode</div>
-                                                        <div class="akeneo-label">@Model.Mappings[i].AkeneoAttributeLabel</div>
-
-                                                        <input type="hidden" asp-for="Mappings[i].Id" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeCode" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeLabel" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeType" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeGroup" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeGroupLabel" />
-                                                        <input type="hidden" asp-for="Mappings[i].AkeneoAttributeTypeId" />
-                                                        <input type="hidden" asp-for="Mappings[i].IsLocalizable" />
-                                                        <input type="hidden" asp-for="Mappings[i].IsScopable" />
-                                                    </td>
-
-                                                    <td>
-                                                        <span class="akeneo-type-chip">@Model.Mappings[i].AkeneoAttributeType</span>
-                                                        <div class="akeneo-flags">
-                                                            <span class="akeneo-flag @(Model.Mappings[i].IsLocalizable ? "on" : "")" title="Localizable">L</span>
-                                                            <span class="akeneo-flag @(Model.Mappings[i].IsScopable ? "on" : "")" title="Scopable">S</span>
-                                                        </div>
-                                                    </td>
-
-                                                    <td>
-                                                        <div>
-                                                            <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
-                                                            <span class="akeneo-summary-target-type">@selectedTargetTypeText</span>
-                                                        </div>
-
-                                                        <div class="akeneo-summary-target-detail">
-                                                            @if (!string.IsNullOrWhiteSpace(selectedTargetKeyText))
-                                                            {
-                                                                <span>Target Key: @selectedTargetKeyText</span>
-                                                            }
-                                                            else if (!string.IsNullOrWhiteSpace(selectedSpecificationAttributeText))
-                                                            {
-                                                                <span>Specification Attribute: @selectedSpecificationAttributeText</span>
-                                                            }
-                                                            else if (!string.IsNullOrWhiteSpace(selectedProductAttributeText))
-                                                            {
-                                                                <span>Product Attribute: @selectedProductAttributeText</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span>No additional target selected</span>
-                                                            }
-                                                        </div>
-                                                    </td>
-
-                                                    <td>
-                                                        <span class="akeneo-status">@statusText</span>
-                                                    </td>
-
-                                                    <td class="text-right">
-                                                        <span class="akeneo-summary-required">
-                                                            @if (Model.Mappings[i].IsRequired)
-                                                            {
-                                                                <span class="badge badge-warning">Required</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="badge badge-secondary">Optional</span>
-                                                            }
-                                                        </span>
-
-                                                        <div class="mt-2">
-                                                            <button type="button"
-                                                                    class="btn btn-sm btn-primary akeneo-edit-row"
-                                                                    data-mapping-index="@i">
-                                                                Edit
-                                                            </button>
-
-                                                            <span class="akeneo-row-status ml-2"></span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-
-                                                <tr class="@groupCssClass akeneo-attribute-group-row akeneo-mapping-edit-row"
-                                                    data-mapping-index="@i"
-                                                    style="display: none;">
-                                                    <td colspan="5">
-                                                        <div class="akeneo-mapping-detail"
-                                                             data-mapping-index="@i"
-                                                             data-original-id="@Model.Mappings[i].Id"
-                                                             data-original-target-type-id="@Model.Mappings[i].NopTargetTypeId"
-                                                             data-original-target-key="@Model.Mappings[i].NopTargetKey"
-                                                             data-original-specification-attribute-id="@Model.Mappings[i].NopSpecificationAttributeId"
-                                                             data-original-product-attribute-id="@Model.Mappings[i].NopProductAttributeId"
-                                                             data-original-is-required="@Model.Mappings[i].IsRequired.ToString().ToLowerInvariant()"
-                                                             data-original-transform-rule-json="@Model.Mappings[i].TransformRuleJson">
-
-                                                            <div class="form-row">
-                                                                <div class="form-group col-md-4">
-                                                                    <label class="font-weight-bold mb-1">Target Type</label>
-                                                                    <nop-select asp-for="Mappings[i].NopTargetTypeId"
-                                                                                asp-items="Model.Mappings[i].AvailableTargetTypes"
-                                                                                class="akeneo-edit-target-type" />
-                                                                    <span asp-validation-for="Mappings[i].NopTargetTypeId"></span>
-                                                                </div>
-
-                                                                <div class="form-group col-md-4 akeneo-detail-block"
-                                                                     data-block="target-key"
-                                                                     style="@(showTargetKey ? "" : "display: none;")">
-                                                                    <label class="font-weight-bold mb-1">Target Key</label>
-                                                                    <nop-select asp-for="Mappings[i].NopTargetKey"
-                                                                                asp-items="Model.Mappings[i].AvailableNopTargetKeys"
-                                                                                class="akeneo-edit-target-key" />
-                                                                    <span asp-validation-for="Mappings[i].NopTargetKey"></span>
-                                                                </div>
-
-                                                                <div class="form-group col-md-4 akeneo-detail-block"
-                                                                     data-block="spec"
-                                                                     style="@(showSpec ? "" : "display: none;")">
-                                                                    <label class="font-weight-bold mb-1">Specification Attribute</label>
-                                                                    <nop-select asp-for="Mappings[i].NopSpecificationAttributeId"
-                                                                                asp-items="Model.Mappings[i].AvailableSpecificationAttributes"
-                                                                                class="akeneo-edit-specification-attribute" />
-                                                                    <span asp-validation-for="Mappings[i].NopSpecificationAttributeId"></span>
-                                                                </div>
-
-                                                                <div class="form-group col-md-4 akeneo-detail-block"
-                                                                     data-block="product"
-                                                                     style="@(showProduct ? "" : "display: none;")">
-                                                                    <label class="font-weight-bold mb-1">Product Attribute</label>
-                                                                    <nop-select asp-for="Mappings[i].NopProductAttributeId"
-                                                                                asp-items="Model.Mappings[i].AvailableProductAttributes"
-                                                                                class="akeneo-edit-product-attribute" />
-                                                                    <span asp-validation-for="Mappings[i].NopProductAttributeId"></span>
-                                                                </div>
-
-                                                                <div class="form-group col-md-12 akeneo-detail-block akeneo-detail-none"
-                                                                     data-block="none"
-                                                                     style="@(showNone ? "" : "display: none;")">
-                                                                    <span class="akeneo-none-hint">
-                                                                        <i class="fas fa-info-circle"></i>
-                                                                        This type maps on its own &mdash; no extra target to choose.
-                                                                    </span>
-                                                                </div>
-
-                                                                <div class="form-group col-md-4">
-                                                                    <label class="font-weight-bold mb-1">Require value during import</label>
-                                                                    <div>
-                                                                        <nop-editor asp-for="Mappings[i].IsRequired" />
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="alert alert-danger akeneo-row-errors" style="display:none;"></div>
-
-                                                            <div class="mb-3">
-                                                                <button class="btn btn-sm btn-default"
-                                                                        type="button"
-                                                                        data-toggle="collapse"
-                                                                        data-target="#@transformCollapseId"
-                                                                        aria-expanded="@(hasTransformRule ? "true" : "false")"
-                                                                        aria-controls="@transformCollapseId">
-                                                                    @if (hasTransformRule)
-                                                                    {
-                                                                        <text>Edit transform JSON</text>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <text>Add transform JSON</text>
-                                                                    }
-                                                                </button>
-
-                                                                @if (hasTransformRule)
-                                                                {
-                                                                    <span class="badge badge-info ml-2">Transform configured</span>
-                                                                }
-
-                                                                <div id="@transformCollapseId"
-                                                                     class="collapse @(hasTransformRule ? "show" : string.Empty) mt-2">
-                                                                    <textarea asp-for="Mappings[i].TransformRuleJson"
-                                                                  class="form-control akeneo-edit-transform-json"
-                                                                  rows="3"
-                                                                  placeholder="{ }"></textarea>
-
-                                                                    <span asp-validation-for="Mappings[i].TransformRuleJson"></span>
-                                                                </div>
-                                                            </div>
-
-                                                            <div>
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-primary akeneo-save-row"
-                                                                        data-mapping-index="@i">
-                                                                    Save
-                                                                </button>
-
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-default akeneo-cancel-row"
-                                                                        data-mapping-index="@i">
-                                                                    Cancel
-                                                                </button>
-
-                                                                <span class="akeneo-row-saving ml-2" style="display:none;">Saving...</span>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            }
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
+                    <div class="form-group row">
+                        <div class="col-md-3"><nop-label asp-for="SelectedCurrencyId" /></div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="SelectedCurrencyId" asp-items="Model.AvailableCurrencies" />
+                            <span asp-validation-for="SelectedCurrencyId"></span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </section>
-    </form>
+
+            @* Mappings table is owned by Vue. *@
+            <div id="akeneo-mapping-app" class="card card-default" v-cloak>
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-project-diagram"></i>
+                        Attribute Mappings
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="p-4" v-if="!mappings.length">
+                        <div class="alert alert-info mb-0">
+                            No Akeneo attributes were found. Check the Sync Context connection, then reload this page.
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" v-else>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th scope="col" style="width: 28%;">Attribute</th>
+                                    <th scope="col" style="width: 18%;">Type</th>
+                                    <th scope="col" style="width: 28%;">Maps to</th>
+                                    <th scope="col" style="width: 12%;">Status</th>
+                                    <th scope="col" style="width: 14%;"></th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                <template v-for="group in groups" :key="group.key">
+                                    <tr class="akeneo-group-row">
+                                        <td colspan="5">
+                                            <button type="button"
+                                                    class="btn btn-link p-0 akeneo-attribute-group-toggle"
+                                                    v-bind:aria-expanded="isExpanded(group.key) ? 'true' : 'false'"
+                                                    v-on:click="toggleGroup(group.key)">
+                                                <i class="fas fa-chevron-right chevron"></i>
+                                                <span>{{ group.label }}</span>
+                                            </button>
+                                            <span class="akeneo-group-count ml-2">{{ group.items.length }}</span>
+                                            <span class="akeneo-group-code ml-2">{{ group.code }}</span>
+                                        </td>
+                                    </tr>
+
+                                    <template v-for="m in group.items" :key="m.index">
+                                        <tr v-show="isExpanded(group.key)"
+                                            class="akeneo-mapping-summary-row"
+                                            v-bind:class="statusFor(m).cls">
+                                            <td>
+                                                <div class="akeneo-code">{{ m.code }}</div>
+                                                <div class="akeneo-label">{{ m.label }}</div>
+                                            </td>
+
+                                            <td>
+                                                <span class="akeneo-type-chip">{{ m.type }}</span>
+                                                <div class="akeneo-flags">
+                                                    <span class="akeneo-flag" v-bind:class="{ on: m.isLocalizable }" title="Localizable">L</span>
+                                                    <span class="akeneo-flag" v-bind:class="{ on: m.isScopable }" title="Scopable">S</span>
+                                                </div>
+                                            </td>
+
+                                            <td>
+                                                <div>
+                                                    <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
+                                                    <span class="akeneo-summary-target-type">{{ targetTypeText(m) }}</span>
+                                                </div>
+                                                <div class="akeneo-summary-target-detail">{{ detail(m) }}</div>
+                                            </td>
+
+                                            <td>
+                                                <span class="akeneo-status">{{ statusFor(m).text }}</span>
+                                            </td>
+
+                                            <td class="text-right">
+                                                <span class="akeneo-summary-required">
+                                                    <span class="badge" v-bind:class="m.isRequired ? 'badge-warning' : 'badge-secondary'">
+                                                        {{ m.isRequired ? 'Required' : 'Optional' }}
+                                                    </span>
+                                                </span>
+                                                <div class="mt-2">
+                                                    <button type="button" class="btn btn-sm btn-primary akeneo-edit-row" v-on:click="edit(m)" v-show="!m.editing">Edit</button>
+                                                    <button type="button" class="btn btn-sm btn-default akeneo-cancel-row" v-on:click="cancel(m)" v-show="m.editing">Cancel</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <tr v-show="isExpanded(group.key) && m.editing" class="akeneo-mapping-edit-row">
+                                            <td colspan="5">
+                                                <div class="akeneo-mapping-detail">
+                                                    <div class="form-row">
+                                                        <div class="form-group col-md-4">
+                                                            <label class="font-weight-bold mb-1">Target Type</label>
+                                                            <select class="form-control akeneo-edit-target-type"
+                                                                    v-model="m.draft.nopTargetTypeId"
+                                                                    v-on:change="onTypeChange(m)">
+                                                                <option v-for="o in m.availableTargetTypes" :key="o.value" :value="o.value">{{ o.text }}</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4 akeneo-detail-block" v-if="isKeyType(m.draft.nopTargetTypeId)">
+                                                            <label class="font-weight-bold mb-1">Target Key</label>
+                                                            <select class="form-control akeneo-edit-target-key" v-model="m.draft.nopTargetKey">
+                                                                <option value="">None</option>
+                                                                <option v-for="o in keyOptions(m.draft.nopTargetTypeId)" :key="o.value" :value="o.value">{{ o.text }}</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4 akeneo-detail-block" v-if="isSpecType(m.draft.nopTargetTypeId)">
+                                                            <label class="font-weight-bold mb-1">Specification Attribute</label>
+                                                            <select class="form-control akeneo-edit-specification-attribute" v-model="m.draft.nopSpecificationAttributeId">
+                                                                <option v-for="o in m.availableSpecificationAttributes" :key="o.value" :value="o.value">{{ o.text }}</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4 akeneo-detail-block" v-if="isProductType(m.draft.nopTargetTypeId)">
+                                                            <label class="font-weight-bold mb-1">Product Attribute</label>
+                                                            <select class="form-control akeneo-edit-product-attribute" v-model="m.draft.nopProductAttributeId">
+                                                                <option v-for="o in m.availableProductAttributes" :key="o.value" :value="o.value">{{ o.text }}</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="form-group col-md-12 akeneo-detail-block akeneo-detail-none" v-if="isNoneType(m.draft.nopTargetTypeId)">
+                                                            <span class="akeneo-none-hint">
+                                                                <i class="fas fa-info-circle"></i>
+                                                                This type maps on its own &mdash; no extra target to choose.
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4">
+                                                            <label class="font-weight-bold mb-1">Require value during import</label>
+                                                            <div>
+                                                                <label class="akeneo-switch">
+                                                                    <input type="checkbox" v-model="m.draft.isRequired" />
+                                                                    <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                                                    <span class="akeneo-switch-text">{{ m.draft.isRequired ? 'Required' : 'Optional' }}</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="alert alert-danger akeneo-row-errors" v-if="m.errors.length">
+                                                        <ul class="mb-0">
+                                                            <li v-for="(err, eIdx) in m.errors" :key="eIdx">{{ err }}</li>
+                                                        </ul>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <button class="btn btn-sm btn-default" type="button" v-on:click="m.draft.showTransform = !m.draft.showTransform">
+                                                            {{ m.draft.transformRuleJson ? 'Edit transform JSON' : 'Add transform JSON' }}
+                                                        </button>
+                                                        <span class="badge badge-info ml-2" v-if="m.draft.transformRuleJson">Transform configured</span>
+
+                                                        <div class="mt-2" v-show="m.draft.showTransform">
+                                                            <textarea class="form-control akeneo-edit-transform-json" rows="3" placeholder="{ }" v-model="m.draft.transformRuleJson"></textarea>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <button type="button" class="btn btn-sm btn-primary akeneo-save-row" v-on:click="save(m)" v-bind:disabled="m.saving">Save</button>
+                                                        <span class="akeneo-row-saving ml-2" v-show="m.saving">Saving...</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                @* Toast stack (fixed-position, floats regardless of where it sits in the DOM). *@
+                <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
+                    <transition-group name="akeneo-toast">
+                        <div v-for="t in toasts" :key="t.id" class="akeneo-toast" v-on:click="dismissToast(t.id)">
+                            <i class="fas fa-check-circle"></i>
+                            <span>{{ t.text }}</span>
+                        </div>
+                    </transition-group>
+                </div>
+            </div>
+
+            @if (Model.Warnings?.Any() == true)
+            {
+                <div class="alert alert-warning">
+                    <ul class="mb-0">
+                        @foreach (var warning in Model.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </section>
 </div>
 
+<script id="akeneo-app-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
+<script id="akeneo-target-key-map" type="application/json">@Html.Raw(AkeneoMappingModelFactory.GetNopTargetKeyMapJson())</script>
+
+@* Self-host instead for an offline/locked-down admin: drop vue.global.prod.js into the plugin and register it with NopHtml.AddScriptParts. *@
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
 <script>
-    window.akeneoTargetTypes = {
-        ignore: @((int)NopTargetType.Ignore),
-        productField: @((int)NopTargetType.ProductField),
-        seoField: @((int)NopTargetType.SeoField),
-        customProperty: @((int)NopTargetType.CustomProperty),
-        specificationAttribute: @((int)NopTargetType.SpecificationAttribute),
-        productAttribute: @((int)NopTargetType.ProductAttribute)
-    };
+    (function () {
+        var appData = JSON.parse(document.getElementById('akeneo-app-data').textContent);
+        var targetKeyMap = JSON.parse(document.getElementById('akeneo-target-key-map').textContent);
 
-    window.akeneoTargetKeyMap = @Html.Raw(AkeneoMappingModelFactory.GetNopTargetKeyMapJson());
-
-    $(document).ready(function () {
-        var targetTypes = window.akeneoTargetTypes;
-        var targetKeyMap = window.akeneoTargetKeyMap || {};
-        var saveUrl = '@Url.Action("SaveAttributeMappingRow", "AkeneoMapping")';
-
-        $('.akeneo-attribute-group-toggle').on('click', function () {
-            var $button = $(this);
-            var groupClass = $button.data('group-class');
-            var isExpanded = $button.attr('aria-expanded') === 'true';
-
-            if (isExpanded) {
-                // Collapse: hide every row in the group, including any open editors.
-                $('tr.' + groupClass).hide();
-                $button.attr('aria-expanded', 'false');
-            } else {
-                // Expand: reveal summary rows only; editors stay closed until Edit.
-                $('tr.akeneo-mapping-summary-row.' + groupClass).show();
-                $button.attr('aria-expanded', 'true');
-            }
+        var mappings = appData.mappings.map(function (m) {
+            return Object.assign({}, m, {
+                editing: false,
+                saving: false,
+                errors: [],
+                draft: {
+                    nopTargetTypeId: m.nopTargetTypeId,
+                    nopTargetKey: m.nopTargetKey,
+                    nopSpecificationAttributeId: m.nopSpecificationAttributeId,
+                    nopProductAttributeId: m.nopProductAttributeId,
+                    isRequired: m.isRequired,
+                    transformRuleJson: m.transformRuleJson,
+                    showTransform: !!(m.transformRuleJson && m.transformRuleJson.trim())
+                }
+            });
         });
 
-        $(document).on('click', '.akeneo-edit-row', function () {
-            var index = $(this).data('mapping-index');
-            var $editRow = $('.akeneo-mapping-edit-row[data-mapping-index="' + index + '"]');
+        Vue.createApp({
+            data: function () {
+                return {
+                    mappings: mappings,
+                    targetTypes: appData.targetTypes,
+                    targetKeyMap: targetKeyMap,
+                    expanded: {},
+                    toasts: []
+                };
+            },
+            computed: {
+                groups: function () {
+                    var map = {};
+                    this.mappings.forEach(function (m) {
+                        var key = m.groupLabel || 'Ungrouped';
+                        if (!map[key]) {
+                            map[key] = { key: key, label: key, code: m.group, items: [] };
+                        }
+                        map[key].items.push(m);
+                    });
+                    return Object.values(map).sort(function (a, b) {
+                        return a.label.localeCompare(b.label);
+                    });
+                }
+            },
+            methods: {
+                isExpanded: function (key) {
+                    return !!this.expanded[key];
+                },
+                toggleGroup: function (key) {
+                    this.expanded[key] = !this.expanded[key];
+                },
+                keyOptions: function (typeId) {
+                    return this.targetKeyMap[String(typeId)] || [];
+                },
+                isKeyType: function (t) {
+                    t = Number(t);
+                    return t === this.targetTypes.productField
+                        || t === this.targetTypes.seoField
+                        || t === this.targetTypes.customProperty;
+                },
+                isSpecType: function (t) {
+                    return Number(t) === this.targetTypes.specificationAttribute;
+                },
+                isProductType: function (t) {
+                    return Number(t) === this.targetTypes.productAttribute;
+                },
+                isNoneType: function (t) {
+                    return !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t);
+                },
+                targetTypeText: function (m) {
+                    var found = m.availableTargetTypes.find(function (o) { return o.value === m.nopTargetTypeId; });
+                    return found ? found.text : 'Ignore';
+                },
+                detail: function (m) {
+                    var t = Number(m.nopTargetTypeId);
 
-            $editRow.show();
-            $editRow.find('.akeneo-row-errors').hide().empty();
-        });
-
-        $(document).on('click', '.akeneo-cancel-row', function () {
-            var index = $(this).data('mapping-index');
-            resetRow(index);
-            $('.akeneo-mapping-edit-row[data-mapping-index="' + index + '"]').hide();
-        });
-
-        $(document).on('change', '.akeneo-edit-target-type', function () {
-            var $detail = $(this).closest('.akeneo-mapping-detail');
-            var index = $detail.data('mapping-index');
-            var typeId = parseInt($(this).val(), 10);
-
-            applyTargetTypeVisibility(index, typeId);
-        });
-
-        $(document).on('click', '.akeneo-save-row', function () {
-            var index = $(this).data('mapping-index');
-            saveRow(index);
-        });
-
-        function saveRow(index) {
-            var $detail = $('.akeneo-mapping-detail[data-mapping-index="' + index + '"]');
-            var $summaryRow = $('.akeneo-mapping-summary-row[data-mapping-index="' + index + '"]');
-            var $errors = $detail.find('.akeneo-row-errors');
-            var $saving = $detail.find('.akeneo-row-saving');
-            var token = $('input[name="__RequestVerificationToken"]').val();
-
-            $errors.hide().empty();
-            $saving.show();
-
-            var data = {
-                __RequestVerificationToken: token,
-                Id: getHiddenValue(index, 'Id'),
-                AkeneoAttributeCode: getHiddenValue(index, 'AkeneoAttributeCode'),
-                AkeneoAttributeTypeId: getHiddenValue(index, 'AkeneoAttributeTypeId'),
-                NopTargetTypeId: $detail.find('.akeneo-edit-target-type').val(),
-                NopTargetKey: $detail.find('.akeneo-edit-target-key').val(),
-                NopSpecificationAttributeId: $detail.find('.akeneo-edit-specification-attribute').val(),
-                NopProductAttributeId: $detail.find('.akeneo-edit-product-attribute').val(),
-                IsRequired: $detail.find('input[type="checkbox"][name="Mappings[' + index + '].IsRequired"]').is(':checked'),
-                TransformRuleJson: $detail.find('.akeneo-edit-transform-json').val()
-            };
-
-            $.ajax({
-                type: 'POST',
-                url: saveUrl,
-                data: data,
-                success: function (response) {
-                    if (!response || !response.success) {
-                        showRowErrors($errors, response && response.errors ? response.errors : ['Unable to save mapping.']);
-                        return;
+                    if (this.isKeyType(t)) {
+                        var k = this.keyOptions(t).find(function (o) { return o.value === m.nopTargetKey; });
+                        return (m.nopTargetKey && k) ? 'Target Key: ' + k.text : 'No target key selected';
                     }
-
-                    setHiddenValue(index, 'Id', response.id);
-
-                    updateOriginalValues(index, response.id);
-                    updateSummary(index);
-
-                    $summaryRow.find('.akeneo-row-status')
-                        .removeClass('text-danger')
-                        .addClass('text-success')
-                        .text('Saved');
-
+                    if (this.isSpecType(t)) {
+                        var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopSpecificationAttributeId; });
+                        return (m.nopSpecificationAttributeId && s) ? 'Specification Attribute: ' + s.text : 'No specification attribute selected';
+                    }
+                    if (this.isProductType(t)) {
+                        var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopProductAttributeId; });
+                        return (m.nopProductAttributeId && p) ? 'Product Attribute: ' + p.text : 'No product attribute selected';
+                    }
+                    return 'No additional target selected';
+                },
+                statusFor: function (m) {
+                    if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
+                        return { cls: 'is-ignored', text: 'Ignored' };
+                    }
+                    return Number(m.id) > 0
+                        ? { cls: 'is-mapped', text: 'Mapped' }
+                        : { cls: 'is-attention', text: 'Unsaved' };
+                },
+                edit: function (m) {
+                    // Reset the draft from the saved state so reopening after a cancel is clean.
+                    m.draft.nopTargetTypeId = m.nopTargetTypeId;
+                    m.draft.nopTargetKey = m.nopTargetKey;
+                    m.draft.nopSpecificationAttributeId = m.nopSpecificationAttributeId;
+                    m.draft.nopProductAttributeId = m.nopProductAttributeId;
+                    m.draft.isRequired = m.isRequired;
+                    m.draft.transformRuleJson = m.transformRuleJson;
+                    m.errors = [];
+                    m.editing = true;
+                },
+                cancel: function (m) {
+                    m.editing = false;
+                },
+                onTypeChange: function (m) {
+                    // Drop a now-invalid target key when the type changes.
+                    var valid = this.keyOptions(m.draft.nopTargetTypeId).some(function (o) {
+                        return o.value === m.draft.nopTargetKey;
+                    });
+                    if (!valid) {
+                        m.draft.nopTargetKey = '';
+                    }
+                },
+                notify: function (text) {
+                    var self = this;
+                    var id = Date.now() + '-' + Math.random().toString(36).slice(2);
+                    this.toasts.push({ id: id, text: text });
                     setTimeout(function () {
-                        $summaryRow.find('.akeneo-row-status').text('');
-                    }, 2500);
-
-                    $('.akeneo-mapping-edit-row[data-mapping-index="' + index + '"]').hide();
+                        self.dismissToast(id);
+                    }, 3000);
                 },
-                error: function () {
-                    showRowErrors($errors, ['Unable to save mapping due to a server error.']);
+                dismissToast: function (id) {
+                    this.toasts = this.toasts.filter(function (t) { return t.id !== id; });
                 },
-                complete: function () {
-                    $saving.hide();
+                save: function (m) {
+                    var self = this;
+                    var d = m.draft;
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+
+                    m.errors = [];
+                    m.saving = true;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.saveUrl,
+                        data: addAntiForgeryToken({
+                            Id: m.id,
+                            AkeneoAttributeCode: m.code,
+                            AkeneoAttributeTypeId: m.attributeTypeId,
+                            NopTargetTypeId: d.nopTargetTypeId,
+                            NopTargetKey: d.nopTargetKey || '',
+                            NopSpecificationAttributeId: d.nopSpecificationAttributeId || '',
+                            NopProductAttributeId: d.nopProductAttributeId || '',
+                            IsRequired: d.isRequired,
+                            TransformRuleJson: d.transformRuleJson || ''
+                        }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                m.errors = (res && res.errors) ? res.errors : ['Unable to save mapping.'];
+                                return;
+                            }
+
+                            // Commit the draft into the saved state.
+                            m.id = res.id;
+                            m.nopTargetTypeId = d.nopTargetTypeId;
+                            m.nopTargetKey = d.nopTargetKey;
+                            m.nopSpecificationAttributeId = d.nopSpecificationAttributeId;
+                            m.nopProductAttributeId = d.nopProductAttributeId;
+                            m.isRequired = d.isRequired;
+                            m.transformRuleJson = d.transformRuleJson;
+
+                            m.editing = false;
+                            self.notify('Mapping saved \u2014 ' + m.code);
+                        },
+                        error: function () {
+                            m.errors = ['Unable to save mapping due to a server error.'];
+                        },
+                        complete: function () {
+                            m.saving = false;
+                        }
+                    });
                 }
-            });
-        }
-
-        function showRowErrors($errors, errors) {
-            var html = '<ul class="mb-0">';
-
-            $.each(errors, function (_, error) {
-                html += '<li>' + $('<div>').text(error).html() + '</li>';
-            });
-
-            html += '</ul>';
-
-            $errors.html(html).show();
-        }
-
-        function getHiddenValue(index, propertyName) {
-            return $('input[name="Mappings[' + index + '].' + propertyName + '"]').val();
-        }
-
-        function setHiddenValue(index, propertyName, value) {
-            $('input[name="Mappings[' + index + '].' + propertyName + '"]').val(value);
-        }
-
-        function resetRow(index) {
-            var $detail = $('.akeneo-mapping-detail[data-mapping-index="' + index + '"]');
-
-            var targetTypeId = $detail.data('original-target-type-id');
-            var targetKey = $detail.data('original-target-key') || '';
-            var specId = $detail.data('original-specification-attribute-id') || '';
-            var productId = $detail.data('original-product-attribute-id') || '';
-            var isRequired = $detail.data('original-is-required') === true || $detail.data('original-is-required') === 'true';
-            var transformJson = $detail.data('original-transform-rule-json') || '';
-
-            $detail.find('.akeneo-edit-target-type').val(targetTypeId);
-            applyTargetTypeVisibility(index, parseInt(targetTypeId, 10));
-
-            $detail.find('.akeneo-edit-target-key').val(targetKey);
-            $detail.find('.akeneo-edit-specification-attribute').val(specId);
-            $detail.find('.akeneo-edit-product-attribute').val(productId);
-            $detail.find('input[type="checkbox"][name="Mappings[' + index + '].IsRequired"]').prop('checked', isRequired);
-            $detail.find('.akeneo-edit-transform-json').val(transformJson);
-
-            $detail.find('.akeneo-row-errors').hide().empty();
-        }
-
-        function updateOriginalValues(index, id) {
-            var $detail = $('.akeneo-mapping-detail[data-mapping-index="' + index + '"]');
-
-            $detail.data('original-id', id);
-            $detail.data('original-target-type-id', $detail.find('.akeneo-edit-target-type').val());
-            $detail.data('original-target-key', $detail.find('.akeneo-edit-target-key').val());
-            $detail.data('original-specification-attribute-id', $detail.find('.akeneo-edit-specification-attribute').val());
-            $detail.data('original-product-attribute-id', $detail.find('.akeneo-edit-product-attribute').val());
-            $detail.data('original-is-required', $detail.find('input[type="checkbox"][name="Mappings[' + index + '].IsRequired"]').is(':checked'));
-            $detail.data('original-transform-rule-json', $detail.find('.akeneo-edit-transform-json').val());
-        }
-
-    function computeStatus(typeId, mappingId) {
-        if (typeId === targetTypes.ignore) {
-            return { cls: 'is-ignored', text: 'Ignored' };
-        }
-
-        return parseInt(mappingId, 10) > 0
-            ? { cls: 'is-mapped', text: 'Mapped' }
-            : { cls: 'is-attention', text: 'Unsaved' };
-    }
-
-           function updateSummary(index) {
-        var $detail = $('.akeneo-mapping-detail[data-mapping-index="' + index + '"]');
-        var $summaryRow = $('.akeneo-mapping-summary-row[data-mapping-index="' + index + '"]');
-
-        var targetTypeText = $detail.find('.akeneo-edit-target-type option:selected').text();
-        var targetKeyText = $detail.find('.akeneo-edit-target-key option:selected').text();
-        var specText = $detail.find('.akeneo-edit-specification-attribute option:selected').text();
-        var productText = $detail.find('.akeneo-edit-product-attribute option:selected').text();
-        var targetTypeId = parseInt($detail.find('.akeneo-edit-target-type').val(), 10);
-        var keyVal = $detail.find('.akeneo-edit-target-key').val();
-        var specVal = $detail.find('.akeneo-edit-specification-attribute').val();
-        var productVal = $detail.find('.akeneo-edit-product-attribute').val();
-        var isRequired = $detail.find('input[type="checkbox"][name="Mappings[' + index + '].IsRequired"]').is(':checked');
-
-        // Detail line
-        var detailText = 'No additional target selected';
-
-        if (targetTypeId === targetTypes.productField ||
-            targetTypeId === targetTypes.seoField ||
-            targetTypeId === targetTypes.customProperty) {
-            detailText = keyVal && targetKeyText !== 'None'
-                ? 'Target Key: ' + targetKeyText
-                : 'No target key selected';
-        }
-
-        if (targetTypeId === targetTypes.specificationAttribute) {
-            detailText = specVal && specText !== 'None'
-                ? 'Specification Attribute: ' + specText
-                : 'No specification attribute selected';
-        }
-
-        if (targetTypeId === targetTypes.productAttribute) {
-            detailText = productVal && productText !== 'None'
-                ? 'Product Attribute: ' + productText
-                : 'No product attribute selected';
-        }
-
-        $summaryRow.find('.akeneo-summary-target-type').text(targetTypeText);
-        $summaryRow.find('.akeneo-summary-target-detail').text(detailText);
-
-        // Required pill
-        if (isRequired) {
-            $summaryRow.find('.akeneo-summary-required').html('<span class="badge badge-warning">Required</span>');
-        } else {
-            $summaryRow.find('.akeneo-summary-required').html('<span class="badge badge-secondary">Optional</span>');
-        }
-
-        // Status: "Mapped" only when a persisted record exists (Id > 0); Ignore wins.
-        var mappingId = getHiddenValue(index, 'Id');
-        var status = computeStatus(targetTypeId, mappingId);
-        $summaryRow.removeClass('is-mapped is-attention is-ignored').addClass(status.cls);
-        $summaryRow.find('.akeneo-status').text(status.text);
-    }
-
-        function applyTargetTypeVisibility(index, typeId) {
-            var $detail = $('.akeneo-mapping-detail[data-mapping-index="' + index + '"]');
-
-            var showKey = typeId === targetTypes.productField
-                || typeId === targetTypes.seoField
-                || typeId === targetTypes.customProperty;
-            var showSpec = typeId === targetTypes.specificationAttribute;
-            var showProduct = typeId === targetTypes.productAttribute;
-            var showNone = !showKey && !showSpec && !showProduct;
-
-            $detail.find('[data-block="target-key"]').toggle(showKey);
-            $detail.find('[data-block="spec"]').toggle(showSpec);
-            $detail.find('[data-block="product"]').toggle(showProduct);
-            $detail.find('[data-block="none"]').toggle(showNone);
-
-            if (showKey) {
-                rebuildTargetKeyOptions($detail.find('.akeneo-edit-target-key'), typeId);
             }
-        }
-
-        function rebuildTargetKeyOptions($select, typeId) {
-            if (!$select.length) {
-                return;
-            }
-
-            var options = targetKeyMap[typeId] || [];
-            var current = $select.val();
-            var stillValid = false;
-
-            $select.empty();
-            $select.append($('<option>').val('').text('None'));
-
-            $.each(options, function (_, option) {
-                var $option = $('<option>').val(option.value).text(option.text);
-
-                if (option.value === current) {
-                    $option.prop('selected', true);
-                    stillValid = true;
-                }
-
-                $select.append($option);
-            });
-
-            if (!stillValid) {
-                $select.val('');
-            }
-        }
-    });
+        }).mount('#akeneo-mapping-app');
+    })();
 </script>

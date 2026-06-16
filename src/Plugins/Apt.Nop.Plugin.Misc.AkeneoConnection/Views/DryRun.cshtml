@@ -1,0 +1,407 @@
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoProductMappingPreviewModel
+
+@{
+    Layout = "_ConfigurePlugin";
+}
+
+<form asp-controller="AkeneoSync" asp-action="DryRun" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="content-header clearfix">
+        <h1 class="float-left">
+            Akeneo Product Dry Run
+        </h1>
+
+        <div class="float-right">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i>
+                Preview
+            </button>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+
+            <div class="card card-default">
+                <div class="card-header">
+                    <div class="card-title">
+                        Product Lookup
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <p>
+                        Enter an Akeneo identifier/SKU to preview how the saved attribute mappings would apply.
+                        No nopCommerce product data will be created or updated.
+                    </p>
+
+                    <div class="form-group row">
+                        <div class="col-md-3">
+                            <label asp-for="AkeneoIdentifier">Akeneo Identifier/SKU</label>
+                        </div>
+                        <div class="col-md-9">
+                            <input asp-for="AkeneoIdentifier" class="form-control" />
+                            <span asp-validation-for="AkeneoIdentifier"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.HasSearched)
+            {
+                <div class="card card-default">
+                    <div class="card-header">
+                        <div class="card-title">
+                            Preview Summary
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Akeneo product found</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.AkeneoProductFound)
+                                {
+                                    <span class="badge badge-success">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-danger">No</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">nopCommerce product found</dt>
+                            <dd class="col-sm-9">
+                                @if (Model.NopProductFound)
+                                {
+                                    <span class="badge badge-success">Yes</span>
+                                    <span class="ml-2">Product ID: @Model.NopProductId</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">No</span>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-3">Action</dt>
+                            <dd class="col-sm-9">
+                                @if (!string.IsNullOrWhiteSpace(Model.Action))
+                                {
+                                    @Model.Action
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No action available.</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                @if (Model.Errors?.Any() == true)
+                {
+                    <div class="alert alert-danger">
+                        <strong>Errors</strong>
+                        <ul class="mb-0">
+                            @foreach (var error in Model.Errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (Model.Warnings?.Any() == true)
+                {
+                    <div class="alert alert-warning">
+                        <strong>Warnings</strong>
+                        <ul class="mb-0">
+                            @foreach (var warning in Model.Warnings)
+                            {
+                                <li>@warning</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (Model.ProductFields?.Any() == true)
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title">
+                                Product Fields
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>nopCommerce Field</th>
+                                        <th>Akeneo Attribute</th>
+                                        <th>Value</th>
+                                        <th>Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var field in Model.ProductFields)
+                                    {
+                                        <tr>
+                                            <td>@field.TargetKey</td>
+                                            <td><code>@field.AkeneoAttributeCode</code></td>
+                                            <td>
+                                                @if (field.HasValue)
+                                                {
+                                                    @field.Value
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No value</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (field.IsRequired)
+                                                {
+                                                    <span class="badge badge-warning">Required</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Optional</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.SpecificationAttributes?.Any() == true)
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title">
+                                Specification Attributes
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>nopCommerce Specification Attribute</th>
+                                        <th>Akeneo Attribute</th>
+                                        <th>Value</th>
+                                        <th>Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sattribute in Model.SpecificationAttributes)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @sattribute.NopAttributeName
+                                                @if (sattribute.NopAttributeId.HasValue)
+                                                {
+                                                    <span class="text-muted">#@sattribute.NopAttributeId</span>
+                                                }
+                                            </td>
+                                            <td><code>@sattribute.AkeneoAttributeCode</code></td>
+                                            <td>
+                                                @if (sattribute.HasValue)
+                                                {
+                                                    @sattribute.Value
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No value</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (sattribute.IsRequired)
+                                                {
+                                                    <span class="badge badge-warning">Required</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Optional</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.ProductAttributes?.Any() == true)
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title">
+                                Product Attributes
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>nopCommerce Product Attribute</th>
+                                        <th>Akeneo Attribute</th>
+                                        <th>Value</th>
+                                        <th>Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var pattribute in Model.ProductAttributes)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @pattribute.NopAttributeName
+                                                @if (pattribute.NopAttributeId.HasValue)
+                                                {
+                                                    <span class="text-muted">#@pattribute.NopAttributeId</span>
+                                                }
+                                            </td>
+                                            <td><code>@pattribute.AkeneoAttributeCode</code></td>
+                                            <td>
+                                                @if (pattribute.HasValue)
+                                                {
+                                                    @pattribute.Value
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No value</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (pattribute.IsRequired)
+                                                {
+                                                    <span class="badge badge-warning">Required</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Optional</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.SeoFields?.Any() == true)
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title">
+                                SEO Fields
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>SEO Field</th>
+                                        <th>Akeneo Attribute</th>
+                                        <th>Value</th>
+                                        <th>Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var field in Model.SeoFields)
+                                    {
+                                        <tr>
+                                            <td>@field.TargetKey</td>
+                                            <td><code>@field.AkeneoAttributeCode</code></td>
+                                            <td>
+                                                @if (field.HasValue)
+                                                {
+                                                    @field.Value
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No value</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (field.IsRequired)
+                                                {
+                                                    <span class="badge badge-warning">Required</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Optional</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.CustomProperties?.Any() == true)
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title">
+                                Custom Properties
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Custom Key</th>
+                                        <th>Akeneo Attribute</th>
+                                        <th>Value</th>
+                                        <th>Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var field in Model.CustomProperties)
+                                    {
+                                        <tr>
+                                            <td>@field.TargetKey</td>
+                                            <td><code>@field.AkeneoAttributeCode</code></td>
+                                            <td>
+                                                @if (field.HasValue)
+                                                {
+                                                    @field.Value
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No value</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (field.IsRequired)
+                                                {
+                                                    <span class="badge badge-warning">Required</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-secondary">Optional</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+</form>

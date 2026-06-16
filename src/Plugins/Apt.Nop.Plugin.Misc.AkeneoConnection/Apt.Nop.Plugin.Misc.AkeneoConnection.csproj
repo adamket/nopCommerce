@@ -62,6 +62,9 @@
     <None Update="Views\AttributeMappings.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Views\DryRun.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- This target execute after "Build" target -->
