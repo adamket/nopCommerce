@@ -123,7 +123,6 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
                         model,
                         mapping,
                         value,
-                        entityMappings,
                         specificationAttributes);
                     break;
 
@@ -268,28 +267,22 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         AkeneoProductMappingPreviewModel model,
         AkeneoAttributeMapping mapping,
         string value,
-        IList<AkeneoNopEntityMapping> entityMappings,
         IList<SpecificationAttribute> specificationAttributes)
     {
-        var entityMapping = entityMappings.FirstOrDefault(entityMapping =>
-            string.Equals(entityMapping.AkeneoCode, mapping.AkeneoAttributeCode, StringComparison.OrdinalIgnoreCase) &&
-            entityMapping.NopEntityTypeId == (int)NopEntityType.SpecificationAttribute);
-
-        if (entityMapping == null || entityMapping.NopEntityId <= 0)
+        var id = mapping.NopTargetEntityId ?? 0;
+        if (id <= 0)
         {
-            model.Warnings.Add(
-                $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Specification Attribute, but no nopCommerce specification attribute is selected.");
+            model.Warnings.Add($"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Specification Attribute, but no nopCommerce specification attribute is selected.");
             return;
         }
 
-        var specificationAttribute = specificationAttributes.FirstOrDefault(attribute =>
-            attribute.Id == entityMapping.NopEntityId);
+        var specificationAttribute = specificationAttributes.FirstOrDefault(a => a.Id == id);
 
         model.SpecificationAttributes.Add(new AkeneoMappedAttributePreviewModel
         {
             AkeneoAttributeCode = mapping.AkeneoAttributeCode,
-            NopAttributeId = entityMapping.NopEntityId,
-            NopAttributeName = specificationAttribute?.Name ?? $"SpecificationAttributeId {entityMapping.NopEntityId}",
+            NopAttributeId = id,
+            NopAttributeName = specificationAttribute?.Name ?? $"SpecificationAttributeId {id}",
             Value = value,
             IsRequired = mapping.IsRequired
         });

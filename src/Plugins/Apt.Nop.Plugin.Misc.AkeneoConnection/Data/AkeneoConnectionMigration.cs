@@ -8,7 +8,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-06-14 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
+[NopMigration("2026-06-17 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
 public class AkeneoConnectionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()

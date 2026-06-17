@@ -170,7 +170,9 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
         };
     }
 
-    public string ResolveDefaultTargetKey(AkeneoAttributeDefinition attribute, NopTargetType targetType)
+    public string ResolveDefaultTargetKey(
+        AkeneoAttributeDefinition attribute,
+        NopTargetType targetType)
     {
         if (targetType == NopTargetType.Ignore)
             return string.Empty;

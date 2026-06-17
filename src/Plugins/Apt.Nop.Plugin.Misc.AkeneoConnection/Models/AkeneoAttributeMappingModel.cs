@@ -14,9 +14,7 @@ public class AkeneoAttributeMappingModel
     public bool IsScopable { get; set; }
 
     public int TargetTypeId { get; set; }
-    public int? NopSpecificationAttributeId { get; set; }
-    public int? NopProductAttributeId { get; set; }
-
+    public int? NopTargetEntityId { get; set; }
     public bool IsEnabled { get; set; }
 
     public int AkeneoAttributeTypeId { get; set; }

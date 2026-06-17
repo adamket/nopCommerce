@@ -2,37 +2,79 @@
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-public class AkeneoNopEntityMappingService(IRepository<AkeneoNopEntityMapping> nopEntityMappingRepository)
+
+public class AkeneoNopEntityMappingService(
+    IRepository<AkeneoNopEntityMapping> nopEntityMappingRepository)
     : IAkeneoNopEntityMappingService
 {
-
-    public async Task InsertAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping)
+    public async Task InsertAkeneoNopEntityMappingAsync(
+        AkeneoNopEntityMapping entityMapping)
     {
         await nopEntityMappingRepository.InsertAsync(entityMapping);
     }
 
-    public async Task UpdateAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping)
+    public async Task UpdateAkeneoNopEntityMappingAsync(
+        AkeneoNopEntityMapping entityMapping)
     {
         await nopEntityMappingRepository.UpdateAsync(entityMapping);
     }
 
-    public async Task DeleteAkeneoNopEntityMappingAsync(AkeneoNopEntityMapping entityMapping)
+    public async Task DeleteAkeneoNopEntityMappingAsync(
+        AkeneoNopEntityMapping entityMapping)
     {
         await nopEntityMappingRepository.DeleteAsync(entityMapping);
     }
 
-    public async Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(AkeneoEntityType? akeneoEntityType = null)
+    public async Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(
+        AkeneoEntityType? akeneoEntityType = null)
     {
         var query = nopEntityMappingRepository.Table;
 
         if (akeneoEntityType.HasValue)
         {
-            query = query.Where(q => q.AkeneoEntityTypeId == (int)akeneoEntityType.Value);
+            query = query.Where(mapping =>
+                mapping.AkeneoEntityTypeId == (int)akeneoEntityType.Value);
         }
 
         return await query.ToListAsync();
     }
 
+    public async Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType)
+    {
+        if (string.IsNullOrWhiteSpace(akeneoCode))
+            return null;
+
+        akeneoCode = akeneoCode.Trim();
+        var normalizedAkeneoCode = akeneoCode.ToLowerInvariant();
+
+        var mappings = await nopEntityMappingRepository.GetAllAsync(query =>
+            query.Where(mapping =>
+                mapping.AkeneoEntityTypeId == (int)akeneoEntityType &&
+                mapping.NopEntityTypeId == (int)nopEntityType &&
+                mapping.AkeneoCode != null &&
+                mapping.AkeneoCode.ToLower() == normalizedAkeneoCode));
+
+        return mappings.FirstOrDefault();
+    }
+
+    public async Task<int?> GetMappedNopEntityIdAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType)
+    {
+        var mapping = await GetAkeneoNopEntityMappingAsync(
+            akeneoEntityType,
+            akeneoCode,
+            nopEntityType);
+
+        if (mapping == null || mapping.NopEntityId <= 0)
+            return null;
+
+        return mapping.NopEntityId;
+    }
 
     public async Task UpsertAkeneoNopEntityMappingAsync(
        AkeneoEntityType akeneoEntityType,
@@ -48,13 +90,10 @@ public class AkeneoNopEntityMappingService(IRepository<AkeneoNopEntityMapping> n
 
         akeneoCode = akeneoCode.Trim();
 
-        var existingMappings = await nopEntityMappingRepository.GetAllAsync(query =>
-            query.Where(mapping =>
-                mapping.AkeneoEntityTypeId == (int)akeneoEntityType &&
-                mapping.AkeneoCode == akeneoCode &&
-                mapping.NopEntityTypeId == (int)nopEntityType));
-
-        var existingMapping = existingMappings.FirstOrDefault();
+        var existingMapping = await GetAkeneoNopEntityMappingAsync(
+            akeneoEntityType,
+            akeneoCode,
+            nopEntityType);
 
         if (existingMapping == null)
         {
@@ -87,15 +126,18 @@ public class AkeneoNopEntityMappingService(IRepository<AkeneoNopEntityMapping> n
             return;
 
         akeneoCode = akeneoCode.Trim();
+        var normalizedAkeneoCode = akeneoCode.ToLowerInvariant();
 
         var mappings = await nopEntityMappingRepository.GetAllAsync(query =>
             query.Where(mapping =>
                 mapping.AkeneoEntityTypeId == (int)akeneoEntityType &&
-                mapping.AkeneoCode == akeneoCode &&
-                mapping.NopEntityTypeId == (int)nopEntityType));
+                mapping.NopEntityTypeId == (int)nopEntityType &&
+                mapping.AkeneoCode != null &&
+                mapping.AkeneoCode.ToLower() == normalizedAkeneoCode));
+
+        if (!mappings.Any())
+            return;
 
         await nopEntityMappingRepository.DeleteAsync(mappings);
     }
-
-
 }

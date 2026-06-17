@@ -19,4 +19,14 @@ public interface IAkeneoNopEntityMappingService
         AkeneoEntityType akeneoEntityType,
         string akeneoCode,
         NopEntityType nopEntityType);
+
+    Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType);
+
+    Task<int?> GetMappedNopEntityIdAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        NopEntityType nopEntityType);
 }

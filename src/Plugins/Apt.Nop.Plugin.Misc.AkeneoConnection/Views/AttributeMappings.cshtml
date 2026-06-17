@@ -37,8 +37,7 @@
             isScopable = m.IsScopable,
             nopTargetTypeId = m.NopTargetTypeId.ToString(),
             nopTargetKey = m.NopTargetKey ?? string.Empty,
-            nopSpecificationAttributeId = m.NopSpecificationAttributeId?.ToString() ?? string.Empty,
-            nopProductAttributeId = m.NopProductAttributeId?.ToString() ?? string.Empty,
+            nopTargetEntityId = m.NopTargetEntityId?.ToString() ?? string.Empty,
             isRequired = m.IsRequired,
             transformRuleJson = m.TransformRuleJson ?? string.Empty,
             availableTargetTypes = m.AvailableTargetTypes.Select(o => new { value = o.Value, text = o.Text }),
@@ -175,14 +174,14 @@
 
                                                         <div class="form-group col-md-4 akeneo-detail-block" v-if="isSpecType(m.draft.nopTargetTypeId)">
                                                             <label class="font-weight-bold mb-1">Specification Attribute</label>
-                                                            <select class="form-control akeneo-edit-specification-attribute" v-model="m.draft.nopSpecificationAttributeId">
+                                                            <select class="form-control akeneo-edit-specification-attribute" v-model="m.draft.nopTargetEntityId">
                                                                 <option v-for="o in m.availableSpecificationAttributes" :key="o.value" :value="o.value">{{ o.text }}</option>
                                                             </select>
                                                         </div>
 
                                                         <div class="form-group col-md-4 akeneo-detail-block" v-if="isProductType(m.draft.nopTargetTypeId)">
                                                             <label class="font-weight-bold mb-1">Product Attribute</label>
-                                                            <select class="form-control akeneo-edit-product-attribute" v-model="m.draft.nopProductAttributeId">
+                                                            <select class="form-control akeneo-edit-product-attribute" v-model="m.draft.nopTargetEntityId">
                                                                 <option v-for="o in m.availableProductAttributes" :key="o.value" :value="o.value">{{ o.text }}</option>
                                                             </select>
                                                         </div>
@@ -299,8 +298,7 @@
                 draft: {
                     nopTargetTypeId: m.nopTargetTypeId,
                     nopTargetKey: m.nopTargetKey,
-                    nopSpecificationAttributeId: m.nopSpecificationAttributeId,
-                    nopProductAttributeId: m.nopProductAttributeId,
+                    nopTargetEntityId: m.nopTargetEntityId,
                     isRequired: m.isRequired,
                     transformRuleJson: m.transformRuleJson,
                     showTransform: !!(m.transformRuleJson && m.transformRuleJson.trim())
@@ -378,12 +376,12 @@
                         return (m.nopTargetKey && k) ? 'Target Key: ' + k.text : 'No target key selected';
                     }
                     if (this.isSpecType(t)) {
-                        var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopSpecificationAttributeId; });
-                        return (m.nopSpecificationAttributeId && s) ? 'Specification Attribute: ' + s.text : 'No specification attribute selected';
+                        var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
+                        return (m.nopTargetEntityId && s) ? 'Specification Attribute: ' + s.text : 'No specification attribute selected';
                     }
                     if (this.isProductType(t)) {
-                        var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopProductAttributeId; });
-                        return (m.nopProductAttributeId && p) ? 'Product Attribute: ' + p.text : 'No product attribute selected';
+                        var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
+                        return (m.nopTargetEntityId && p) ? 'Product Attribute: ' + p.text : 'No product attribute selected';
                     }
                     return 'No additional target selected';
                 },
@@ -398,8 +396,7 @@
                 edit: function (m) {
                     m.draft.nopTargetTypeId = m.nopTargetTypeId;
                     m.draft.nopTargetKey = m.nopTargetKey;
-                    m.draft.nopSpecificationAttributeId = m.nopSpecificationAttributeId;
-                    m.draft.nopProductAttributeId = m.nopProductAttributeId;
+                    m.draft.nopTargetEntityId = m.nopTargetEntityId ;
                     m.draft.isRequired = m.isRequired;
                     m.draft.transformRuleJson = m.transformRuleJson;
                     m.draft.showTransform = !!(m.transformRuleJson && m.transformRuleJson.trim());
@@ -444,8 +441,7 @@
                             AkeneoAttributeTypeId: m.attributeTypeId,
                             NopTargetTypeId: d.nopTargetTypeId,
                             NopTargetKey: d.nopTargetKey || '',
-                            NopSpecificationAttributeId: d.nopSpecificationAttributeId || '',
-                            NopProductAttributeId: d.nopProductAttributeId || '',
+                            NopTargetEntityId: d.nopTargetEntityId || '',
                             IsRequired: d.isRequired,
                             TransformRuleJson: d.transformRuleJson || ''
                         }),
@@ -458,8 +454,7 @@
                             m.id = res.id;
                             m.nopTargetTypeId = d.nopTargetTypeId;
                             m.nopTargetKey = d.nopTargetKey;
-                            m.nopSpecificationAttributeId = d.nopSpecificationAttributeId;
-                            m.nopProductAttributeId = d.nopProductAttributeId;
+                            m.nopTargetEntityId = d.nopTargetEntityId;
                             m.isRequired = d.isRequired;
                             m.transformRuleJson = d.transformRuleJson;
 

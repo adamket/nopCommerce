@@ -109,8 +109,7 @@ public class AkeneoAttributeAttributeMappingModelFactory(
                 IsRequired = existingAttributeMapping?.IsRequired ?? false,
 
                 // Backed by AkeneoNopEntityMapping
-                NopSpecificationAttributeId = specificationAttributeMapping?.NopEntityId,
-                NopProductAttributeId = productAttributeMapping?.NopEntityId
+                NopTargetEntityId = existingAttributeMapping?.NopTargetEntityId,
             };
 
             PrepareTargetTypeOptions(mappingModel, akeneoAttribute);
@@ -214,7 +213,7 @@ public class AkeneoAttributeAttributeMappingModelFactory(
             {
                 Text = specificationAttribute.Name,
                 Value = specificationAttribute.Id.ToString(),
-                Selected = model.NopSpecificationAttributeId == specificationAttribute.Id
+                Selected = model.NopTargetEntityId == specificationAttribute.Id
             });
         }
     }
@@ -237,7 +236,7 @@ public class AkeneoAttributeAttributeMappingModelFactory(
             {
                 Text = productAttribute.Name,
                 Value = productAttribute.Id.ToString(),
-                Selected = model.NopProductAttributeId == productAttribute.Id
+                Selected = model.NopTargetEntityId == productAttribute.Id
             });
         }
     }
@@ -278,14 +277,14 @@ public class AkeneoAttributeAttributeMappingModelFactory(
         foreach (var mapping in activeMappings)
         {
             if (mapping.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute &&
-                !mapping.NopSpecificationAttributeId.HasValue)
+                !mapping.NopTargetEntityId.HasValue)
             {
                 model.Warnings.Add(
                     $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a specification attribute, but no nopCommerce specification attribute is selected.");
             }
 
             if (mapping.NopTargetTypeId == (int)NopTargetType.ProductAttribute &&
-                !mapping.NopProductAttributeId.HasValue)
+                !mapping.NopTargetEntityId.HasValue)
             {
                 model.Warnings.Add(
                     $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a product attribute, but no nopCommerce product attribute is selected.");

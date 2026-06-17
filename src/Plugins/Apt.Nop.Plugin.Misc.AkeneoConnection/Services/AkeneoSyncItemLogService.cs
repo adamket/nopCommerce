@@ -2,7 +2,9 @@
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-public class AkeneoSyncItemLogService(IRepository<AkeneoSyncItemLog> syncItemLogRepository)
+
+public class AkeneoSyncItemLogService(
+    IRepository<AkeneoSyncItemLog> syncItemLogRepository)
     : IAkeneoSyncItemLogService
 {
     public async Task InsertAkeneoSyncItemLogAsync(AkeneoSyncItemLog syncItem)
@@ -18,5 +20,30 @@ public class AkeneoSyncItemLogService(IRepository<AkeneoSyncItemLog> syncItemLog
     public async Task DeleteAkeneoSyncItemLogAsync(AkeneoSyncItemLog syncItem)
     {
         await syncItemLogRepository.DeleteAsync(syncItem);
+    }
+
+    public async Task<IList<AkeneoSyncItemLog>> GetAkeneoSyncItemLogsAsync(
+        string syncRunId = null,
+        string akeneoProductUuid = null,
+        string akeneoIdentifier = null,
+        int? nopProductId = null)
+    {
+        var query = syncItemLogRepository.Table;
+
+        if (!string.IsNullOrWhiteSpace(syncRunId))
+            query = query.Where(log => log.SyncRunId == syncRunId);
+
+        if (!string.IsNullOrWhiteSpace(akeneoProductUuid))
+            query = query.Where(log => log.AkeneoProductUuid == akeneoProductUuid);
+
+        if (!string.IsNullOrWhiteSpace(akeneoIdentifier))
+            query = query.Where(log => log.AkeneoIdentifier == akeneoIdentifier);
+
+        if (nopProductId.HasValue)
+            query = query.Where(log => log.NopProductId == nopProductId.Value);
+
+        return await query
+            .OrderByDescending(log => log.CreatedOnUtc)
+            .ToListAsync();
     }
 }

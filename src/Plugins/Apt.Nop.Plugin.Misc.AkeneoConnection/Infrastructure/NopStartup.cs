@@ -30,6 +30,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
+        services.AddScoped<IAkeneoProductImportService, AkeneoProductImportService>();
 
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
     }

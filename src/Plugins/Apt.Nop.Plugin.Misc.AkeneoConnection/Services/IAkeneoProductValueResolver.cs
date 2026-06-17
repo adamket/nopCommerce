@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 public interface IAkeneoProductValueResolver
@@ -11,6 +7,14 @@ public interface IAkeneoProductValueResolver
     string GetValue(
         JsonElement product,
         string attributeCode,
+        string locale = null,
+        string channel = null,
+        string currency = null);
+
+    bool TryGetValue(
+        JsonElement product,
+        string attributeCode,
+        out AkeneoResolvedProductValue resolvedValue,
         string locale = null,
         string channel = null,
         string currency = null);

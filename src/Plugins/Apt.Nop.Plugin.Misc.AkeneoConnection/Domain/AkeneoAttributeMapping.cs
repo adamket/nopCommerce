@@ -6,6 +6,7 @@ public class AkeneoAttributeMapping : BaseEntity
     public string AkeneoAttributeCode { get; set; }
     public int AkeneoAttributeTypeId { get; set; }
     public int NopTargetTypeId { get; set; } 
+    public int? NopTargetEntityId { get; set; }
     public string NopTargetKey { get; set; }
     public string Locale { get; set; }
     public string Channel { get; set; }

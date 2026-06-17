@@ -30,5 +30,6 @@ public enum NopEntityType
     Manufacturer = 30,
     SpecificationAttribute = 40,
     ProductAttribute = 50,
+    AttributeOption = 55,
     Picture = 60
 }

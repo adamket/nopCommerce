@@ -43,7 +43,6 @@ public class AkeneoMappingController(
         AkeneoAttributeMappingModel model)
     {
         var errors = ValidateAttributeMappingRow(model);
-
         if (errors.Any())
         {
             return Json(new
@@ -70,6 +69,15 @@ public class AkeneoMappingController(
         mapping.AkeneoAttributeTypeId = model.AkeneoAttributeTypeId;
         mapping.NopTargetTypeId = model.NopTargetTypeId;
         mapping.NopTargetKey = model.NopTargetKey;
+
+        // Only persist the entity id for the target types that actually use one,
+        // so switching away from spec/product doesn't leave a stale id behind.
+        mapping.NopTargetEntityId =
+            model.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute ||
+            model.NopTargetTypeId == (int)NopTargetType.ProductAttribute
+                ? model.NopTargetEntityId
+                : null;
+
         mapping.Locale = model.Locale;
         mapping.Channel = model.Channel;
         mapping.TransformRuleJson = model.TransformRuleJson;
@@ -79,8 +87,6 @@ public class AkeneoMappingController(
             await akeneoAttributeMappingService.InsertAkeneoAttributeMappingAsync(mapping);
         else
             await akeneoAttributeMappingService.UpdateAkeneoAttributeMappingAsync(mapping);
-
-        await SaveRelatedNopEntityMappingsAsync(model);
 
         return Json(new
         {
@@ -124,68 +130,19 @@ public class AkeneoMappingController(
         }
 
         if (targetType == NopTargetType.SpecificationAttribute &&
-            (!model.NopSpecificationAttributeId.HasValue || model.NopSpecificationAttributeId.Value <= 0))
+            (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId.Value <= 0))
         {
             errors.Add("Specification Attribute is required when Target Type is Specification Attribute.");
         }
 
         if (targetType == NopTargetType.ProductAttribute &&
-            (!model.NopProductAttributeId.HasValue || model.NopProductAttributeId.Value <= 0))
+            (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId <= 0))
         {
             errors.Add("Product Attribute is required when Target Type is Product Attribute.");
         }
 
         return errors;
     }
-
-    private async Task SaveRelatedNopEntityMappingsAsync(
-        AkeneoAttributeMappingModel model)
-    {
-        var targetType = (NopTargetType)model.NopTargetTypeId;
-
-        if (targetType == NopTargetType.SpecificationAttribute)
-        {
-            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
-                akeneoEntityType: AkeneoEntityType.Attribute,
-                akeneoCode: model.AkeneoAttributeCode,
-                nopEntityType: NopEntityType.SpecificationAttribute,
-                nopEntityId: model.NopSpecificationAttributeId.Value);
-
-            await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
-                akeneoEntityType: AkeneoEntityType.Attribute,
-                akeneoCode: model.AkeneoAttributeCode,
-                nopEntityType: NopEntityType.ProductAttribute);
-
-            return;
-        }
-
-        if (targetType == NopTargetType.ProductAttribute)
-        {
-            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
-                akeneoEntityType: AkeneoEntityType.Attribute,
-                akeneoCode: model.AkeneoAttributeCode,
-                nopEntityType: NopEntityType.ProductAttribute,
-                nopEntityId: model.NopProductAttributeId.Value);
-
-            await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
-                akeneoEntityType: AkeneoEntityType.Attribute,
-                akeneoCode: model.AkeneoAttributeCode,
-                nopEntityType: NopEntityType.SpecificationAttribute);
-
-            return;
-        }
-
-        await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
-            akeneoEntityType: AkeneoEntityType.Attribute,
-            akeneoCode: model.AkeneoAttributeCode,
-            nopEntityType: NopEntityType.SpecificationAttribute);
-
-        await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
-            akeneoEntityType: AkeneoEntityType.Attribute,
-            akeneoCode: model.AkeneoAttributeCode,
-            nopEntityType: NopEntityType.ProductAttribute);
-    }
-
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> CategoryMappings()
