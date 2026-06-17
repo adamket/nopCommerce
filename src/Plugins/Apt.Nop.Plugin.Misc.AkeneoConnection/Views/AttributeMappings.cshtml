@@ -141,6 +141,7 @@
                                                                 class="btn btn-sm btn-primary akeneo-edit-row"
                                                                 v-on:click="edit(m)"
                                                                 v-show="!m.editing">
+                                                            <i class="fas fa-pencil-alt"></i>
                                                             Edit
                                                         </button>
 
@@ -218,10 +219,14 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="alert alert-danger akeneo-row-errors" v-if="m.errors.length">
-                                                        <ul class="mb-0">
-                                                            <li v-for="(err, eIdx) in m.errors" :key="eIdx">{{ err }}</li>
-                                                        </ul>
+                                                    <div class="alert alert-danger akeneo-row-errors" v-if="m.errors.length" role="alert">
+                                                        <i class="fas fa-exclamation-circle akeneo-row-errors-icon" aria-hidden="true"></i>
+                                                        <div class="akeneo-row-errors-body">
+                                                            <div class="akeneo-row-errors-title">{{ m.errors.length > 1 ? 'Please fix these issues:' : 'Please fix this issue:' }}</div>
+                                                            <ul class="mb-0">
+                                                                <li v-for="(err, eIdx) in m.errors" :key="eIdx">{{ err }}</li>
+                                                            </ul>
+                                                        </div>
                                                     </div>
 
                                                     <div class="mb-3" v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
@@ -236,7 +241,10 @@
                                                     </div>
 
                                                     <div>
-                                                        <button type="button" class="btn btn-sm btn-primary akeneo-save-row" v-on:click="save(m)" v-bind:disabled="m.saving">Save</button>
+                                                        <button type="button" class="btn btn-sm btn-primary akeneo-save-row" v-on:click="save(m)" v-bind:disabled="m.saving">
+                                                            <i class="fas fa-save"></i>
+                                                            Save
+                                                        </button>
                                                         <span class="akeneo-row-saving ml-2" v-show="m.saving">Saving...</span>
                                                     </div>
                                                 </div>
@@ -470,42 +478,5 @@
                 }
             }
         }).mount('#akeneo-mapping-app');
-    })();
-</script>
-
-<script>
-    (function () {
-        var saveUrl = '@Url.Action("SaveSyncContext", "AkeneoMapping")';
-        var $button = $('#akeneo-save-sync-context');
-        var $status = $('#akeneo-sync-context-status');
-
-        $button.on('click', function () {
-            $button.prop('disabled', true);
-            $status.removeClass('text-success text-danger').text('Saving...');
-
-            $.ajax({
-                type: 'POST',
-                url: saveUrl,
-                data: addAntiForgeryToken({
-                    SelectedChannelCode: $('#SelectedChannelCode').val(),
-                    SelectedLocaleCode: $('#SelectedLocaleCode').val(),
-                    SelectedCurrencyCode: $('#SelectedCurrencyCode').val()
-                }),
-                success: function (res) {
-                    if (res && res.success) {
-                        $status.addClass('text-success').text('Saved');
-                    } else {
-                        var msg = (res && res.errors && res.errors.length) ? res.errors[0] : 'Save failed.';
-                        $status.addClass('text-danger').text(msg);
-                    }
-                },
-                error: function () {
-                    $status.addClass('text-danger').text('Save failed due to a server error.');
-                },
-                complete: function () {
-                    $button.prop('disabled', false);
-                }
-            });
-        });
     })();
 </script>

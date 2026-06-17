@@ -18,6 +18,10 @@
   --ak-ignored: #8a92a6;
   --ak-ignored-tint: #eef0f5;
   --ak-radius: 14px;
+  --ak-danger: #d64a45;
+  --ak-danger-ink: #b3322c;
+  --ak-danger-tint: #fceceb;
+  --ak-danger-line: #f3cdca;
   --ak-shadow: 0 1px 2px rgba(20, 25, 40, .05), 0 14px 32px -18px rgba(20, 25, 40, .22);
   color: var(--ak-ink);
   font-feature-settings: "tnum" 1;
@@ -226,8 +230,8 @@
 
 
 .akeneo-mapping .akeneo-list {
-  --ak-row-indent: 52px;
-  --ak-detail-indent: 34px;
+  --ak-row-indent: 30px; /* was 52px — attribute rows, level 1 */
+  --ak-detail-indent: 30px; /* was 34px — detail panel adds a 2nd 30px, total 60px */
   --ak-row-edge-width: 3px;
   background: transparent;
   overflow: visible;
@@ -375,8 +379,16 @@
   box-shadow: none;
   padding: 22px;
   overflow: visible;
+/*  animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;*/
+}
+
+
+
+.akeneo-mapping .akeneo-detail-slide-enter-active {
   animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;
 }
+
+
 
 .akeneo-mapping .akeneo-list {
   --ak-row-edge-width: 4px;
@@ -387,23 +399,23 @@
   box-shadow: 8px 0 14px -7px rgba(20, 25, 40, .85), 18px 0 28px -22px rgba(20, 25, 40, .7);
 }
 
-  /* Detail colored edge with drop shadow. */
-  .akeneo-mapping .akeneo-mapping-detail::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--ak-row-edge-width);
-    background: var(--ak-accent);
-    box-shadow: 7px 0 14px -9px rgba(20, 25, 40, .9);
-    z-index: 2;
-  }
+/* Detail colored edge with drop shadow. */
+.akeneo-mapping .akeneo-mapping-detail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--ak-row-edge-width);
+  background: var(--ak-accent);
+  box-shadow: 7px 0 14px -9px rgba(20, 25, 40, .9);
+  z-index: 2;
+}
 
-  .akeneo-mapping .akeneo-mapping-detail > * {
-    position: relative;
-    z-index: 3;
-  }
+.akeneo-mapping .akeneo-mapping-detail > * {
+  position: relative;
+  z-index: 3;
+}
 
 /* Inward stagger animation */
 @keyframes akeneo-row-stagger-in {
@@ -644,9 +656,9 @@
   color: #c0392b !important;
 }
 
-.akeneo-detail-none .akeneo-none-hint{
-    position: absolute;
-    bottom:0;
+.akeneo-detail-none .akeneo-none-hint {
+  position: absolute;
+  bottom: 0;
 }
 
 .akeneo-mapping .akeneo-detail-none .akeneo-none-hint {
@@ -662,7 +674,72 @@
 }
 
 .akeneo-mapping .akeneo-row-errors {
-  border-radius: 9px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+  margin: 0 0 18px;
+  padding: 13px 16px;
+  border: 1px solid var(--ak-danger-line);
+  border-left: 0;
+  border-radius: 10px;
+  background: var(--ak-danger-tint);
+  color: var(--ak-danger-ink);
+  box-shadow: 0 1px 2px rgba(20, 25, 40, .04), 0 12px 26px -20px rgba(179, 50, 44, .55);
+  overflow: hidden;
+  animation: akeneo-errors-in .18s ease both;
+}
+
+  /* colored left edge, matching the row status bars */
+  .akeneo-mapping .akeneo-row-errors::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--ak-danger);
+  }
+
+.akeneo-mapping .akeneo-row-errors-icon {
+  flex: none;
+  margin-top: 1px;
+  font-size: 1rem;
+  color: var(--ak-danger);
+}
+
+.akeneo-mapping .akeneo-row-errors-title {
+  font-weight: 700;
+  font-size: .82rem;
+  letter-spacing: -.01em;
+  margin-bottom: 3px;
+}
+
+.akeneo-mapping .akeneo-row-errors ul {
+  margin: 0;
+  padding-left: 1.05rem;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+.akeneo-mapping .akeneo-row-errors li {
+  margin-top: 2px;
+}
+
+  .akeneo-mapping .akeneo-row-errors li::marker {
+    color: var(--ak-danger);
+  }
+
+@keyframes akeneo-errors-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .akeneo-mapping .akeneo-row-saving {
@@ -803,4 +880,14 @@
     transition: none !important;
     animation: none !important;
   }
+}
+/* Edit row opens with animation, but hides immediately on Cancel */
+.akeneo-mapping .akeneo-mapping-detail.akeneo-detail-slide-leave-active,
+.akeneo-mapping .akeneo-mapping-detail.akeneo-detail-slide-leave-from,
+.akeneo-mapping .akeneo-mapping-detail.akeneo-detail-slide-leave-to {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  opacity: 0 !important;
+  display: none !important;
 }
