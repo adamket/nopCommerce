@@ -104,14 +104,12 @@
                                                     <div class="akeneo-flags" aria-label="Attribute localization and scope">
                                                         <span class="akeneo-flag"
                                                               v-bind:class="{ on: m.isLocalizable }"
-                                                              v-bind:title="m.isLocalizable ? 'Localizable' : 'Non localizable'"
                                                               v-bind:aria-label="m.isLocalizable ? 'Localizable' : 'Non localizable'"
                                                               v-bind:data-ak-tooltip="m.isLocalizable ? 'Localizable: Akeneo can store a different value per locale.' : 'Non localizable: this attribute uses the same value for every locale.'"
                                                               tabindex="0">L</span>
 
                                                         <span class="akeneo-flag"
                                                               v-bind:class="{ on: m.isScopable }"
-                                                              v-bind:title="m.isScopable ? 'Scopable' : 'Non scopable'"
                                                               v-bind:aria-label="m.isScopable ? 'Scopable' : 'Non scopable'"
                                                               v-bind:data-ak-tooltip="m.isScopable ? 'Scopable: Akeneo can store a different value per channel.' : 'Non scopable: this attribute uses the same value for every channel.'"
                                                               tabindex="0">S</span>
