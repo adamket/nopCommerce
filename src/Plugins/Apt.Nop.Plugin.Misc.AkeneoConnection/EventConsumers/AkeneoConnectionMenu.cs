@@ -26,7 +26,7 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
                         IconClass = "far fa-circle",
                         SystemName = "AkeneoIntegration.Configuration",
                         Title = "Connection",
-                        Url = eventMessage.GetMenuItemUrl("AkeneoConnection", "Configure"),
+                        Url = eventMessage.GetMenuItemUrl("AkeneoConnectionConfiguration", "Configure"),
                         Visible = true
                     },
                     new AdminMenuItem

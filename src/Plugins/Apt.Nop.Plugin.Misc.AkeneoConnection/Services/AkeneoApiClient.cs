@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Nop.Core.Caching;
@@ -145,11 +146,11 @@ public class AkeneoApiClient : IAkeneoApiClient
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/locales", limit, cancellationToken);
 
-    public async Task<IReadOnlyList<JsonElement>> GetChannelsAsync(
+    public async Task<IReadOnlyList<AkeneoChannelDefinition>> GetChannelsAsync(
         int limit = 100,
         CancellationToken cancellationToken = default,
         AkeneoApiCredentials apiCredentials = null)
-        => await GetSimpleCollectionAsync("api/rest/v1/channels", limit, cancellationToken, apiCredentials);
+        => await GetSimpleCollectionAsync<AkeneoChannelDefinition>("api/rest/v1/channels", limit, cancellationToken, apiCredentials);
 
     public async Task<IReadOnlyList<JsonElement>> GetAttributeOptionsAsync(
         string attributeCode,
@@ -177,9 +178,10 @@ public class AkeneoApiClient : IAkeneoApiClient
     private async Task<IReadOnlyList<T>> GetSimpleCollectionAsync<T>(
         string endpoint,
         int limit = 100,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AkeneoApiCredentials apiCredentials = null)
     {
-        var items = await GetSimpleCollectionAsync(endpoint, limit, cancellationToken);
+        var items = await GetSimpleCollectionAsync(endpoint, limit, cancellationToken, apiCredentials);
 
         return items
             .Select(item => item.Deserialize<T>(SnakeCaseJsonOptions))

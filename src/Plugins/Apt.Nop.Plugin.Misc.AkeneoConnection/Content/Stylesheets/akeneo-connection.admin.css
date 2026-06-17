@@ -1,4 +1,4 @@
-.akeneo-mapping {
+﻿.akeneo-mapping {
   --ak-ink: #1b2030;
   --ak-ink-2: #515b71;
   --ak-muted: #8a92a6;
@@ -18,7 +18,7 @@
   --ak-ignored: #8a92a6;
   --ak-ignored-tint: #eef0f5;
   --ak-radius: 14px;
-  --ak-shadow: 0 1px 2px rgba(20,25,40,.05), 0 14px 32px -18px rgba(20,25,40,.22);
+  --ak-shadow: 0 1px 2px rgba(20, 25, 40, .05), 0 14px 32px -18px rgba(20, 25, 40, .22);
   color: var(--ak-ink);
   font-feature-settings: "tnum" 1;
 }
@@ -46,7 +46,7 @@
   border-radius: var(--ak-radius);
   box-shadow: var(--ak-shadow);
   background: var(--ak-surface);
-  overflow: hidden;
+  overflow: visible;
 }
 
   .akeneo-mapping .card + .card {
@@ -57,6 +57,7 @@
   background: var(--ak-surface);
   border-bottom: 1px solid var(--ak-line);
   padding: 18px 22px;
+  border-radius: var(--ak-radius) var(--ak-radius) 0 0;
 }
 
 .akeneo-mapping .card-title {
@@ -77,6 +78,7 @@
 
 .akeneo-mapping .card-body {
   padding: 22px;
+  overflow: visible;
 }
 
   .akeneo-mapping .card-body > p {
@@ -104,7 +106,6 @@
 .akeneo-mapping .form-control,
 .akeneo-mapping select.form-control {
   border: 1px solid var(--ak-line-strong);
- /* border-radius: 9px;*/
   box-shadow: none;
   color: var(--ak-ink);
 }
@@ -112,7 +113,7 @@
   .akeneo-mapping .form-control:focus,
   .akeneo-mapping select.form-control:focus {
     border-color: var(--ak-accent);
-    box-shadow: 0 0 0 3px rgba(91,81,216,.16);
+    box-shadow: 0 0 0 3px rgba(91, 81, 216, .16);
   }
 
 .akeneo-mapping .akeneo-mapping-detail label {
@@ -156,40 +157,7 @@
   outline-offset: 2px;
 }
 
-/* table shell */
-.akeneo-mapping .table {
-  margin-bottom: 0;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-  .akeneo-mapping .table thead th {
-    text-transform: uppercase;
-    font-size: .67rem;
-    letter-spacing: .09em;
-    font-weight: 700;
-    color: var(--ak-muted);
-    background: var(--ak-surface);
-    border: 0;
-    border-bottom: 1px solid var(--ak-line-strong);
-    padding: 13px 16px;
-  }
-
-  .akeneo-mapping .table td {
-    padding: 14px 16px;
-    vertical-align: middle;
-    border: 0;
-    border-top: 1px solid var(--ak-line);
-  }
-
-/* group band */
-.akeneo-mapping .akeneo-group-row > td {
-  background: var(--ak-canvas);
-  border-top: 1px solid var(--ak-line);
-  border-bottom: 1px solid var(--ak-line);
-  padding: 11px 18px;
-}
-
+/* group controls */
 .akeneo-mapping .akeneo-attribute-group-toggle {
   color: var(--ak-ink);
   font-weight: 700;
@@ -230,35 +198,237 @@
   color: var(--ak-muted);
 }
 
-/* summary rows + status spine */
-.akeneo-mapping .akeneo-mapping-summary-row td:first-child {
-  position: relative;
+
+
+.akeneo-mapping .akeneo-row::before,
+.akeneo-mapping .akeneo-mapping-detail::before {
+  box-shadow: 8px 0 14px -7px rgba(20, 25, 40, .85), 18px 0 28px -22px rgba(20, 25, 40, .7);
 }
 
-  .akeneo-mapping .akeneo-mapping-summary-row td:first-child::before {
+.akeneo-mapping #akeneo-mapping-app.card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.akeneo-mapping #akeneo-mapping-app .card-header {
+  background: var(--ak-surface);
+  border: 1px solid var(--ak-line);
+  border-radius: var(--ak-radius) var(--ak-radius) 0 0;
+}
+
+.akeneo-mapping #akeneo-mapping-app .card-body {
+  background: transparent;
+  overflow: visible;
+}
+
+
+
+.akeneo-mapping .akeneo-list {
+  --ak-row-indent: 52px;
+  --ak-detail-indent: 34px;
+  --ak-row-edge-width: 3px;
+  background: transparent;
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Group header remains full-width */
+.akeneo-mapping .akeneo-group-row {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  background: var(--ak-canvas);
+  border: 1px solid var(--ak-line);
+  border-top: 0;
+  padding: 11px 18px;
+}
+
+/* This is the first inward level. Keep it transparent so the page background shows through. */
+.akeneo-mapping .akeneo-group-items {
+  background: transparent;
+  padding-left: var(--ak-row-indent);
+  overflow: visible;
+}
+
+/* Each summary row animates inward from the group edge. */
+.akeneo-mapping .akeneo-row-shell {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  animation: akeneo-row-stagger-in .26s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+  .akeneo-mapping .akeneo-row-shell:hover,
+  .akeneo-mapping .akeneo-row-shell:focus-within {
+    z-index: 10;
+  }
+
+/* CSS-only stagger, so this works even without a Vue style binding. */
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(2) {
+  animation-delay: 45ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(4) {
+  animation-delay: 135ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(5) {
+  animation-delay: 180ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(6) {
+  animation-delay: 225ms;
+}
+
+.akeneo-mapping .akeneo-group-items .akeneo-row-shell:nth-child(n + 7) {
+  animation-delay: 260ms;
+}
+
+/* Summary row surface */
+.akeneo-mapping .akeneo-row {
+  --ak-row-edge-color: var(--ak-ignored);
+  position: relative;
+  display: grid;
+  grid-template-columns: 28% 18% 28% 12% 14%;
+  align-items: center;
+  width: 100%;
+  min-height: 92px;
+  box-sizing: border-box;
+  background: var(--ak-surface);
+  border-top: 1px solid var(--ak-line);
+  border-right: 1px solid var(--ak-line);
+  border-bottom: 1px solid var(--ak-line);
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  transition: background .16s ease;
+}
+
+  /* Colored edge with drop shadow. This is attached to the shifted row. */
+  .akeneo-mapping .akeneo-row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -1px;
+    bottom: -1px;
+    width: var(--ak-row-edge-width);
+    background: var(--ak-row-edge-color);
+    box-shadow: 7px 0 14px -9px rgba(20, 25, 40, .9);
+    z-index: 2;
+  }
+
+  .akeneo-mapping .akeneo-row.is-mapped {
+    --ak-row-edge-color: var(--ak-mapped);
+  }
+
+  .akeneo-mapping .akeneo-row.is-attention {
+    --ak-row-edge-color: var(--ak-attention);
+  }
+
+  .akeneo-mapping .akeneo-row.is-ignored {
+    --ak-row-edge-color: var(--ak-ignored);
+  }
+
+  .akeneo-mapping .akeneo-row:hover {
+    background: #fafbff;
+  }
+
+/* Columns */
+.akeneo-mapping .akeneo-col {
+  min-width: 0;
+  padding: 14px 16px;
+  box-sizing: border-box;
+}
+
+  .akeneo-mapping .akeneo-col:first-child {
+    padding-left: 20px;
+  }
+
+.akeneo-mapping .akeneo-col-actions {
+  text-align: right;
+}
+
+/* Detail panel: second inward level */
+.akeneo-mapping .akeneo-mapping-detail {
+  position: relative;
+  margin-top: 0;
+  margin-left: var(--ak-detail-indent);
+  width: calc(100% - var(--ak-detail-indent));
+  box-sizing: border-box;
+  background: var(--ak-surface);
+  border-right: 1px solid var(--ak-line);
+  border-bottom: 1px solid var(--ak-line);
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 22px;
+  overflow: visible;
+  animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.akeneo-mapping .akeneo-list {
+  --ak-row-edge-width: 4px;
+}
+
+.akeneo-mapping .akeneo-row::before,
+.akeneo-mapping .akeneo-mapping-detail::before {
+  box-shadow: 8px 0 14px -7px rgba(20, 25, 40, .85), 18px 0 28px -22px rgba(20, 25, 40, .7);
+}
+
+  /* Detail colored edge with drop shadow. */
+  .akeneo-mapping .akeneo-mapping-detail::before {
     content: "";
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 3px;
-    background: var(--ak-ignored);
+    width: var(--ak-row-edge-width);
+    background: var(--ak-accent);
+    box-shadow: 7px 0 14px -9px rgba(20, 25, 40, .9);
+    z-index: 2;
   }
 
-.akeneo-mapping .akeneo-mapping-summary-row.is-mapped td:first-child::before {
-  background: var(--ak-mapped);
+  .akeneo-mapping .akeneo-mapping-detail > * {
+    position: relative;
+    z-index: 3;
+  }
+
+/* Inward stagger animation */
+@keyframes akeneo-row-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--ak-row-indent)));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.akeneo-mapping .akeneo-mapping-summary-row.is-attention td:first-child::before {
-  background: var(--ak-attention);
-}
+/* Detail panel slides in from its parent row edge */
+@keyframes akeneo-detail-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--ak-detail-indent)));
+  }
 
-.akeneo-mapping .akeneo-mapping-summary-row.is-ignored td:first-child::before {
-  background: var(--ak-ignored);
-}
-
-.akeneo-mapping .akeneo-mapping-summary-row:hover td {
-  background: #fafbff;
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .akeneo-mapping .akeneo-code {
@@ -285,13 +455,18 @@
   border-radius: 7px;
 }
 
+/* flag tooltip */
 .akeneo-mapping .akeneo-flags {
+  position: relative;
+  z-index: 2;
   margin-top: 7px;
   display: flex;
   gap: 5px;
 }
 
 .akeneo-mapping .akeneo-flag {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -303,7 +478,66 @@
   border: 1px solid var(--ak-line-strong);
   color: var(--ak-muted);
   background: var(--ak-surface);
+  cursor: help;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
 }
+
+  .akeneo-mapping .akeneo-flag:hover,
+  .akeneo-mapping .akeneo-flag:focus-visible {
+    transform: translateY(-1px);
+    z-index: 50;
+  }
+
+  .akeneo-mapping .akeneo-flag::before,
+  .akeneo-mapping .akeneo-flag::after {
+    position: absolute;
+    top: 50%;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+  }
+
+  .akeneo-mapping .akeneo-flag::before {
+    content: "";
+    left: calc(100% + 4px);
+    z-index: 61;
+    border-top: 6px solid transparent;
+    border-right: 6px solid var(--ak-ink);
+    border-bottom: 6px solid transparent;
+    transform: translateY(-50%) translateX(-3px);
+  }
+
+  .akeneo-mapping .akeneo-flag::after {
+    content: attr(data-ak-tooltip);
+    left: calc(100% + 10px);
+    z-index: 60;
+    width: max-content;
+    max-width: 260px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: var(--ak-ink);
+    color: #fff;
+    box-shadow: 0 10px 28px -10px rgba(20, 25, 40, .55);
+    font-family: inherit;
+    font-size: .74rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: left;
+    white-space: normal;
+    transform: translateY(-50%) translateX(-3px);
+  }
+
+  .akeneo-mapping .akeneo-flag:hover::before,
+  .akeneo-mapping .akeneo-flag:hover::after,
+  .akeneo-mapping .akeneo-flag:focus-visible::before,
+  .akeneo-mapping .akeneo-flag:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0);
+  }
 
   .akeneo-mapping .akeneo-flag.on {
     background: var(--ak-accent-tint);
@@ -392,6 +626,11 @@
   color: var(--ak-accent-ink);
 }
 
+.akeneo-mapping .badge-danger {
+  background: #fbe3e0;
+  color: var(--ak-text-danger, #c0392b);
+}
+
 .akeneo-mapping .akeneo-row-status {
   font-size: .76rem;
   font-weight: 700;
@@ -405,29 +644,9 @@
   color: #c0392b !important;
 }
 
-/* edit drawer */
-.akeneo-mapping .akeneo-mapping-edit-row > td {
-  padding: 0;
-  border-top: 0;
-}
-
-.akeneo-mapping .akeneo-mapping-detail {
-  background: var(--ak-canvas);
-  border-left: 3px solid var(--ak-accent);
-  padding: 22px;
-  animation: ak-drawer .2s ease;
-}
-
-@@keyframes ak-drawer {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.akeneo-detail-none .akeneo-none-hint{
+    position: absolute;
+    bottom:0;
 }
 
 .akeneo-mapping .akeneo-detail-none .akeneo-none-hint {
@@ -436,7 +655,7 @@
   gap: .5rem;
   color: var(--ak-muted);
   font-size: .85rem;
-  background: var(--ak-surface);
+  background: var(--ak-canvas);
   border: 1px dashed var(--ak-line-strong);
   border-radius: 9px;
   padding: 10px 14px;
@@ -450,13 +669,6 @@
   color: var(--ak-muted);
   font-size: .82rem;
   font-weight: 600;
-}
-
-@@media (prefers-reduced-motion: reduce) {
-  .akeneo-mapping * {
-    transition: none !important;
-    animation: none !important;
-  }
 }
 
 /* toast */
@@ -562,4 +774,33 @@
   color: var(--ak-ink-2);
   text-transform: none;
   letter-spacing: 0;
+}
+
+@media (max-width: 1199px) {
+  .akeneo-mapping .akeneo-list {
+    overflow-x: auto;
+  }
+
+  .akeneo-mapping .akeneo-row,
+  .akeneo-mapping .akeneo-mapping-detail {
+    min-width: 980px;
+  }
+}
+
+@media (max-width: 767px) {
+  .akeneo-mapping .akeneo-list {
+    --ak-row-indent: 18px;
+    --ak-detail-indent: 18px;
+  }
+
+  .akeneo-mapping .akeneo-group-items {
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .akeneo-mapping * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -7,6 +7,9 @@
     Layout = "_ConfigurePlugin";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+
+    ViewBag.PageTitle = "Akeneo Connection - Attribute Mappings";
 
     var appModel = new
     {
@@ -57,46 +60,6 @@
 
     <section class="content">
         <div class="container-fluid">
-
-            @* Sync Context stays server-rendered so the nop tag helpers / store-scope keep working. *@
-            <div class="card card-default">
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="fas fa-sliders-h"></i>
-                        Sync Context
-                    </div>
-                </div>
-
-                <div class="card-body">
-                    <p>Set the default Akeneo channel, locale, and currency used when resolving scoped values.</p>
-
-                    <div class="form-group row">
-                        <div class="col-md-3"><nop-label asp-for="SelectedChannelId" /></div>
-                        <div class="col-md-9">
-                            <nop-select asp-for="SelectedChannelId" asp-items="Model.AvailableChannels" />
-                            <span asp-validation-for="SelectedChannelId"></span>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <div class="col-md-3"><nop-label asp-for="SelectedLocaleId" /></div>
-                        <div class="col-md-9">
-                            <nop-select asp-for="SelectedLocaleId" asp-items="Model.AvailableLocales" />
-                            <span asp-validation-for="SelectedLocaleId"></span>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <div class="col-md-3"><nop-label asp-for="SelectedCurrencyId" /></div>
-                        <div class="col-md-9">
-                            <nop-select asp-for="SelectedCurrencyId" asp-items="Model.AvailableCurrencies" />
-                            <span asp-validation-for="SelectedCurrencyId"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @* Mappings table is owned by Vue. *@
             <div id="akeneo-mapping-app" class="card card-default" v-cloak>
                 <div class="card-header">
                     <div class="card-title">
@@ -112,79 +75,87 @@
                         </div>
                     </div>
 
-                    <div class="table-responsive" v-else>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th scope="col" style="width: 28%;">Attribute</th>
-                                    <th scope="col" style="width: 18%;">Type</th>
-                                    <th scope="col" style="width: 28%;">Maps to</th>
-                                    <th scope="col" style="width: 12%;">Status</th>
-                                    <th scope="col" style="width: 14%;"></th>
-                                </tr>
-                            </thead>
+                    <div class="akeneo-list" v-else>
+                        <template v-for="group in groups" :key="group.key">
+                            <div class="akeneo-group-row">
+                                <button type="button"
+                                        class="btn btn-link p-0 akeneo-attribute-group-toggle"
+                                        v-bind:aria-expanded="isExpanded(group.key) ? 'true' : 'false'"
+                                        v-on:click="toggleGroup(group.key)">
+                                    <i class="fas fa-chevron-right chevron"></i>
+                                    <span>{{ group.label }}</span>
+                                </button>
+                                <span class="akeneo-group-count ml-2">{{ group.items.length }}</span>
+                                <span class="akeneo-group-code ml-2">{{ group.code }}</span>
+                            </div>
 
-                            <tbody>
-                                <template v-for="group in groups" :key="group.key">
-                                    <tr class="akeneo-group-row">
-                                        <td colspan="5">
-                                            <button type="button"
-                                                    class="btn btn-link p-0 akeneo-attribute-group-toggle"
-                                                    v-bind:aria-expanded="isExpanded(group.key) ? 'true' : 'false'"
-                                                    v-on:click="toggleGroup(group.key)">
-                                                <i class="fas fa-chevron-right chevron"></i>
-                                                <span>{{ group.label }}</span>
-                                            </button>
-                                            <span class="akeneo-group-count ml-2">{{ group.items.length }}</span>
-                                            <span class="akeneo-group-code ml-2">{{ group.code }}</span>
-                                        </td>
-                                    </tr>
-
-                                    <template v-for="m in group.items" :key="m.index">
-                                        <tr v-show="isExpanded(group.key)"
-                                            class="akeneo-mapping-summary-row"
-                                            v-bind:class="statusFor(m).cls">
-                                            <td>
-                                                <div class="akeneo-code">{{ m.code }}</div>
-                                                <div class="akeneo-label">{{ m.label }}</div>
-                                            </td>
-
-                                            <td>
-                                                <span class="akeneo-type-chip">{{ m.type }}</span>
-                                                <div class="akeneo-flags">
-                                                    <span class="akeneo-flag" v-bind:class="{ on: m.isLocalizable }" title="Localizable">L</span>
-                                                    <span class="akeneo-flag" v-bind:class="{ on: m.isScopable }" title="Scopable">S</span>
+                            <transition name="akeneo-group-items">
+                                <div class="akeneo-group-items" v-if="isExpanded(group.key)">
+                                    <template v-for="(m, itemIndex) in group.items" :key="m.index">
+                                        <div class="akeneo-row-shell" v-bind:style="rowStaggerStyle(itemIndex)">
+                                            <div class="akeneo-row" v-bind:class="statusFor(m).cls">
+                                                <div class="akeneo-col akeneo-col-attr">
+                                                    <div class="akeneo-code">{{ m.code }}</div>
+                                                    <div class="akeneo-label">{{ m.label }}</div>
                                                 </div>
-                                            </td>
 
-                                            <td>
-                                                <div>
-                                                    <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
-                                                    <span class="akeneo-summary-target-type">{{ targetTypeText(m) }}</span>
+                                                <div class="akeneo-col akeneo-col-type">
+                                                    <span class="akeneo-type-chip">{{ m.type }}</span>
+                                                    <div class="akeneo-flags" aria-label="Attribute localization and scope">
+                                                        <span class="akeneo-flag"
+                                                              v-bind:class="{ on: m.isLocalizable }"
+                                                              v-bind:title="m.isLocalizable ? 'Localizable' : 'Non localizable'"
+                                                              v-bind:aria-label="m.isLocalizable ? 'Localizable' : 'Non localizable'"
+                                                              v-bind:data-ak-tooltip="m.isLocalizable ? 'Localizable: Akeneo can store a different value per locale.' : 'Non localizable: this attribute uses the same value for every locale.'"
+                                                              tabindex="0">L</span>
+
+                                                        <span class="akeneo-flag"
+                                                              v-bind:class="{ on: m.isScopable }"
+                                                              v-bind:title="m.isScopable ? 'Scopable' : 'Non scopable'"
+                                                              v-bind:aria-label="m.isScopable ? 'Scopable' : 'Non scopable'"
+                                                              v-bind:data-ak-tooltip="m.isScopable ? 'Scopable: Akeneo can store a different value per channel.' : 'Non scopable: this attribute uses the same value for every channel.'"
+                                                              tabindex="0">S</span>
+                                                    </div>
                                                 </div>
-                                                <div class="akeneo-summary-target-detail">{{ detail(m) }}</div>
-                                            </td>
 
-                                            <td>
-                                                <span class="akeneo-status">{{ statusFor(m).text }}</span>
-                                            </td>
+                                                <div class="akeneo-col akeneo-col-maps">
+                                                    <div>
+                                                        <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
+                                                        <span class="akeneo-summary-target-type">{{ targetTypeText(m) }}</span>
+                                                    </div>
+                                                    <div class="akeneo-summary-target-detail">{{ detail(m) }}</div>
+                                                </div>
 
-                                            <td class="text-right">
-                                                <span class="akeneo-summary-required">
-                                                    <span class="badge" v-bind:class="m.isRequired ? 'badge-warning' : 'badge-secondary'">
-                                                        {{ m.isRequired ? 'Required' : 'Optional' }}
+                                                <div class="akeneo-col akeneo-col-status">
+                                                    <span class="akeneo-status">{{ statusFor(m).text }}</span>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-actions">
+                                                    <span class="akeneo-summary-required">
+                                                        <span class="badge" v-bind:class="m.isRequired ? 'badge-warning' : 'badge-secondary'">
+                                                            {{ m.isRequired ? 'Required' : 'Optional' }}
+                                                        </span>
                                                     </span>
-                                                </span>
-                                                <div class="mt-2">
-                                                    <button type="button" class="btn btn-sm btn-primary akeneo-edit-row" v-on:click="edit(m)" v-show="!m.editing">Edit</button>
-                                                    <button type="button" class="btn btn-sm btn-default akeneo-cancel-row" v-on:click="cancel(m)" v-show="m.editing">Cancel</button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                    <div class="mt-2">
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-primary akeneo-edit-row"
+                                                                v-on:click="edit(m)"
+                                                                v-show="!m.editing">
+                                                            Edit
+                                                        </button>
 
-                                        <tr v-show="isExpanded(group.key) && m.editing" class="akeneo-mapping-edit-row">
-                                            <td colspan="5">
-                                                <div class="akeneo-mapping-detail">
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-default akeneo-cancel-row"
+                                                                v-on:click="cancel(m)"
+                                                                v-show="m.editing">
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <transition name="akeneo-detail-slide">
+                                                <div v-if="m.editing" class="akeneo-mapping-detail">
                                                     <div class="form-row">
                                                         <div class="form-group col-md-4">
                                                             <label class="font-weight-bold mb-1">Target Type</label>
@@ -217,14 +188,25 @@
                                                             </select>
                                                         </div>
 
-                                                        <div class="form-group col-md-12 akeneo-detail-block akeneo-detail-none" v-if="isNoneType(m.draft.nopTargetTypeId)">
+                                                        <div class="form-group col-md-8 akeneo-detail-block akeneo-detail-none"
+                                                             v-if="isIgnoreType(m.draft.nopTargetTypeId)">
+                                                            <label class="font-weight-bold mb-1" aria-hidden="true">&nbsp;</label>
                                                             <span class="akeneo-none-hint">
-                                                                <i class="fas fa-info-circle"></i>
-                                                                This type maps on its own &mdash; no extra target to choose.
+                                                                <i class="fas fa-ban"></i>
+                                                                This attribute is ignored - nothing will be imported.
                                                             </span>
                                                         </div>
 
-                                                        <div class="form-group col-md-4">
+                                                        <div class="form-group col-md-8 akeneo-detail-block akeneo-detail-none"
+                                                             v-else-if="isNoneType(m.draft.nopTargetTypeId)">
+                                                            <label class="font-weight-bold mb-1" aria-hidden="true">&nbsp;</label>
+                                                            <span class="akeneo-none-hint">
+                                                                <i class="fas fa-info-circle"></i>
+                                                                This type maps on its own - no extra target to choose.
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4" v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
                                                             <label class="font-weight-bold mb-1">Require value during import</label>
                                                             <div>
                                                                 <label class="akeneo-switch">
@@ -242,7 +224,7 @@
                                                         </ul>
                                                     </div>
 
-                                                    <div class="mb-3">
+                                                    <div class="mb-3" v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
                                                         <button class="btn btn-sm btn-default" type="button" v-on:click="m.draft.showTransform = !m.draft.showTransform">
                                                             {{ m.draft.transformRuleJson ? 'Edit transform JSON' : 'Add transform JSON' }}
                                                         </button>
@@ -258,16 +240,15 @@
                                                         <span class="akeneo-row-saving ml-2" v-show="m.saving">Saving...</span>
                                                     </div>
                                                 </div>
-                                            </td>
-                                        </tr>
+                                            </transition>
+                                        </div>
                                     </template>
-                                </template>
-                            </tbody>
-                        </table>
+                                </div>
+                            </transition>
+                        </template>
                     </div>
                 </div>
 
-                @* Toast stack (fixed-position, floats regardless of where it sits in the DOM). *@
                 <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
                     <transition-group name="akeneo-toast">
                         <div v-for="t in toasts" :key="t.id" class="akeneo-toast" v-on:click="dismissToast(t.id)">
@@ -280,7 +261,7 @@
 
             @if (Model.Warnings?.Any() == true)
             {
-                <div class="alert alert-warning">
+                <div class="alert alert-warning mt-3">
                     <ul class="mb-0">
                         @foreach (var warning in Model.Warnings)
                         {
@@ -294,7 +275,7 @@
 </div>
 
 <script id="akeneo-app-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
-<script id="akeneo-target-key-map" type="application/json">@Html.Raw(AkeneoMappingModelFactory.GetNopTargetKeyMapJson())</script>
+<script id="akeneo-target-key-map" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NopTargetKeyMap))</script>
 
 @* Self-host instead for an offline/locked-down admin: drop vue.global.prod.js into the plugin and register it with NopHtml.AddScriptParts. *@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -347,6 +328,14 @@
                 }
             },
             methods: {
+                isIgnoreType: function (t) {
+                    return Number(t) === this.targetTypes.ignore;
+                },
+                    rowStaggerStyle: function (index) {
+                    return {
+                        animationDelay: Math.min(index * 45, 260) + 'ms'
+                    };
+                },
                 isExpanded: function (key) {
                     return !!this.expanded[key];
                 },
@@ -401,13 +390,13 @@
                         : { cls: 'is-attention', text: 'Unsaved' };
                 },
                 edit: function (m) {
-                    // Reset the draft from the saved state so reopening after a cancel is clean.
                     m.draft.nopTargetTypeId = m.nopTargetTypeId;
                     m.draft.nopTargetKey = m.nopTargetKey;
                     m.draft.nopSpecificationAttributeId = m.nopSpecificationAttributeId;
                     m.draft.nopProductAttributeId = m.nopProductAttributeId;
                     m.draft.isRequired = m.isRequired;
                     m.draft.transformRuleJson = m.transformRuleJson;
+                    m.draft.showTransform = !!(m.transformRuleJson && m.transformRuleJson.trim());
                     m.errors = [];
                     m.editing = true;
                 },
@@ -415,7 +404,6 @@
                     m.editing = false;
                 },
                 onTypeChange: function (m) {
-                    // Drop a now-invalid target key when the type changes.
                     var valid = this.keyOptions(m.draft.nopTargetTypeId).some(function (o) {
                         return o.value === m.draft.nopTargetKey;
                     });
@@ -437,7 +425,6 @@
                 save: function (m) {
                     var self = this;
                     var d = m.draft;
-                    var token = $('input[name="__RequestVerificationToken"]').val();
 
                     m.errors = [];
                     m.saving = true;
@@ -462,7 +449,6 @@
                                 return;
                             }
 
-                            // Commit the draft into the saved state.
                             m.id = res.id;
                             m.nopTargetTypeId = d.nopTargetTypeId;
                             m.nopTargetKey = d.nopTargetKey;
@@ -472,7 +458,7 @@
                             m.transformRuleJson = d.transformRuleJson;
 
                             m.editing = false;
-                            self.notify('Mapping saved \u2014 ' + m.code);
+                            self.notify('Mapping saved - ' + m.code);
                         },
                         error: function () {
                             m.errors = ['Unable to save mapping due to a server error.'];
@@ -484,5 +470,42 @@
                 }
             }
         }).mount('#akeneo-mapping-app');
+    })();
+</script>
+
+<script>
+    (function () {
+        var saveUrl = '@Url.Action("SaveSyncContext", "AkeneoMapping")';
+        var $button = $('#akeneo-save-sync-context');
+        var $status = $('#akeneo-sync-context-status');
+
+        $button.on('click', function () {
+            $button.prop('disabled', true);
+            $status.removeClass('text-success text-danger').text('Saving...');
+
+            $.ajax({
+                type: 'POST',
+                url: saveUrl,
+                data: addAntiForgeryToken({
+                    SelectedChannelCode: $('#SelectedChannelCode').val(),
+                    SelectedLocaleCode: $('#SelectedLocaleCode').val(),
+                    SelectedCurrencyCode: $('#SelectedCurrencyCode').val()
+                }),
+                success: function (res) {
+                    if (res && res.success) {
+                        $status.addClass('text-success').text('Saved');
+                    } else {
+                        var msg = (res && res.errors && res.errors.length) ? res.errors[0] : 'Save failed.';
+                        $status.addClass('text-danger').text(msg);
+                    }
+                },
+                error: function () {
+                    $status.addClass('text-danger').text('Save failed due to a server error.');
+                },
+                complete: function () {
+                    $button.prop('disabled', false);
+                }
+            });
+        });
     })();
 </script>

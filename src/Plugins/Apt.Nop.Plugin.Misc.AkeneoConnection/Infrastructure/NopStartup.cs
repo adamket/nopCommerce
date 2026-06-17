@@ -22,13 +22,15 @@ public class NopStartup : INopStartup
     {
         //override services
         services.AddScoped<IAkeneoApiClient, AkeneoApiClient>();
-        services.AddScoped<IAkeneoMappingModelFactory, AkeneoMappingModelFactory>();
+        services.AddScoped<IAkeneoMappingModelFactory, AkeneoAttributeMappingModelFactory>();
         services.AddScoped<IAkeneoNopEntityMappingService, AkeneoNopEntityMappingService>();
         services.AddScoped<IAkeneoAttributeMappingService, AkeneoAttributeMappingService>();
         services.AddScoped<IAkeneoSyncProfileService, AkeneoSyncProfileService>();
         services.AddScoped<IAkeneoSyncItemLogService, AkeneoSyncItemLogService>();
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
+
+        services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
     }
 
     /// <summary>

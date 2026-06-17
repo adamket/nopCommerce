@@ -1,4 +1,5 @@
-﻿using Nop.Core.Configuration;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Core.Configuration;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
 
@@ -14,13 +15,10 @@ public class AkeneoConnectionSettings : ISettings
     public string AkeneoConnectionUsername { get; set; }
     public string AkeneoConnectionPassword { get; set; }
 
-    public string AkeneoConnectionChannel { get; set; }
-    public string AkeneoConnectionLocale { get; set; }
-   // public int AkeneoConnectionDefaultSto
+    public string DefaultChannelCode { get; set; } = string.Empty;
+    public string DefaultLocaleCode { get; set; } = string.Empty;
+    public string DefaultCurrencyCode { get; set; } = string.Empty;
 
-    //Channel
-    // Locale(s)
-    // Default store
-    // Default tax category
-    // Default warehouse
+
+
 }

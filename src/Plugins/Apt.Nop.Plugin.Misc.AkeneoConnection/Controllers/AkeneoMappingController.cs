@@ -4,7 +4,10 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
+using Nop.Core;
+using Nop.Services.Configuration;
 using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -21,18 +24,23 @@ public class AkeneoMappingController : BasePluginController
     private readonly IAkeneoAttributeMappingService _akeneoAttributeMappingService;
     private readonly INotificationService _notificationService;
     private readonly IAkeneoNopEntityMappingService _entityMappingService;
+    private readonly IStoreContext _storeContext;
+    private readonly ISettingService _settingService;
 
     public AkeneoMappingController(
         IAkeneoMappingModelFactory mappingModelFactory,
         IAkeneoAttributeMappingService akeneoAttributeMappingService,
-        INotificationService notificationService, IAkeneoNopEntityMappingService entityMappingService)
+        INotificationService notificationService, IAkeneoNopEntityMappingService entityMappingService, IStoreContext storeContext, ISettingService settingService)
     {
         _mappingModelFactory = mappingModelFactory;
         _akeneoAttributeMappingService = akeneoAttributeMappingService;
         _notificationService = notificationService;
         _entityMappingService = entityMappingService;
+        _storeContext = storeContext;
+        _settingService = settingService;
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> AttributeMappings()
     {
         var model = await _mappingModelFactory.PrepareAttributeMappingListModelAsync();
@@ -40,6 +48,7 @@ public class AkeneoMappingController : BasePluginController
         return View($"{AkeneoConstants.PathToPlugin}/Views/AttributeMappings.cshtml", model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     public async Task<IActionResult> SaveAttributeMappingRow(
         AkeneoAttributeMappingModel model)

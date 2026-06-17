@@ -1,4 +1,5 @@
-﻿using Nop.Web.Framework.Models;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Web.Framework.Models;
 using Nop.Web.Framework.Mvc.ModelBinding;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -28,43 +29,18 @@ public record AkeneoConfigurationModel : BaseNopModel
         
     
     [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Channel")]
-    public string AkeneoConnectionChannel { get; set; }
-    public bool AkeneoConnectionChannel_OverrideForStore { get; set; }
+    public string DefaultChannelCode { get; set; }
+    public bool DefaultChannelCode_OverrideForStore { get; set; }
 
     [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Locale")]
-    public string AkeneoConnectionLocale { get; set; }
-    public bool AkeneoConnectionLocale_OverrideForStore { get; set; }
+    public string DefaultLocaleCode { get; set; }
+    public bool DefaultLocaleCode_OverrideForStore { get; set; }
 
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Currency")]
+    public string DefaultCurrencyCode { get; set; }
+    public bool DefaultCurrencyCode_OverrideForStore { get; set; }
 
-
-    //[NopResourceDisplayName("Plugins.Payment.CheckMoneyOrder.DescriptionText")]
-    //public string DescriptionText { get; set; }
-    //public bool DescriptionText_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Payment.CheckMoneyOrder.AdditionalFee")]
-    //public decimal AdditionalFee { get; set; }
-    //public bool AdditionalFee_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Payment.CheckMoneyOrder.AdditionalFeePercentage")]
-    //public bool AdditionalFeePercentage { get; set; }
-    //public bool AdditionalFeePercentage_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Payment.CheckMoneyOrder.ShippableProductRequired")]
-    //public bool ShippableProductRequired { get; set; }
-    //public bool ShippableProductRequired_OverrideForStore { get; set; }
-
-    //public IList<ConfigurationLocalizedModel> Locales { get; set; }
-
-    #region Nested class
-
-    //public class ConfigurationLocalizedModel : ILocalizedLocaleModel
-    //{
-    //    public int LanguageId { get; set; }
-
-    //    [NopResourceDisplayName("Plugins.Payment.CheckMoneyOrder.DescriptionText")]
-    //    public string DescriptionText { get; set; }
-    //}
-
-    #endregion
-
+    public List<SelectListItem> AvailableChannelCodes { get; set; }
+    public List<SelectListItem> AvailableLocaleCodes { get; set; }
+    public List<SelectListItem> AvailableCurrencyCodes { get; set; }        
 }

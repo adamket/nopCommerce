@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -47,7 +48,7 @@ public interface IAkeneoApiClient
         AkeneoApiCredentials apiCredentials = null
        );
 
-    Task<IReadOnlyList<JsonElement>> GetChannelsAsync(
+    Task<IReadOnlyList<AkeneoChannelDefinition>> GetChannelsAsync(
         int limit = 100,
         CancellationToken cancellationToken = default, 
         AkeneoApiCredentials apiCredentials = null);
