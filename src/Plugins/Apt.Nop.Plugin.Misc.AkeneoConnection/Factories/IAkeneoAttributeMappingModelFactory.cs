@@ -1,7 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
-public interface IAkeneoMappingModelFactory
+public interface IAkeneoAttributeMappingModelFactory
 {
     Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync();
 

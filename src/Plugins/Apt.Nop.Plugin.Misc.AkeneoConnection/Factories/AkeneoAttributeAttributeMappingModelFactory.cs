@@ -9,14 +9,14 @@ using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
-public class AkeneoAttributeMappingModelFactory(
+public class AkeneoAttributeAttributeMappingModelFactory(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoAttributeMappingService akeneoAttributeMappingService,
     IAkeneoNopEntityMappingService akeneoNopEntityMappingService,
     ISpecificationAttributeService specificationAttributeService,
     IProductAttributeService productAttributeService,
     IAkeneoTargetTypeResolver targetTypeResolver)
-    : IAkeneoMappingModelFactory
+    : IAkeneoAttributeMappingModelFactory
 {
     public async Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync()
     {

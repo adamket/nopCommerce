@@ -379,7 +379,7 @@
   box-shadow: none;
   padding: 22px;
   overflow: visible;
-/*  animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;*/
+  /*  animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;*/
 }
 
 
@@ -801,7 +801,7 @@
   margin: 0;
   cursor: pointer;
   user-select: none;
-  margin-top:5px;
+  margin-top: 5px;
 }
 
   .akeneo-mapping .akeneo-switch input {
@@ -891,4 +891,22 @@
   transform: none !important;
   opacity: 0 !important;
   display: none !important;
+}
+
+.akeneo-mapping .akeneo-mapping-card.card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.akeneo-mapping .akeneo-mapping-card .card-header {
+  background: var(--ak-surface);
+  border: 1px solid var(--ak-line);
+  border-radius: var(--ak-radius) var(--ak-radius) 0 0;
+}
+
+.akeneo-mapping .akeneo-mapping-card .card-body {
+  background: transparent;
+  overflow: visible;
 }

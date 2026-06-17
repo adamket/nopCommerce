@@ -1,0 +1,461 @@
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoCategoryMappingListModel
+
+@{
+    Layout = "_ConfigurePlugin";
+
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.CategoryMappings");
+
+    ViewBag.PageTitle = "Akeneo Connection - Category Mappings";
+
+    var appModel = new
+    {
+        saveUrl = Url.Action("SaveCategoryMapping", "AkeneoMapping"),
+        deleteUrl = Url.Action("DeleteCategoryMapping", "AkeneoMapping"),
+        categories = Model.Rows.Select((row, idx) => new
+        {
+            index = idx,
+            code = row.AkeneoCode,
+            label = row.AkeneoLabel,
+            parentCode = row.AkeneoParentCode,
+            level = row.Level,
+            nopCategoryId = row.NopCategoryId.ToString(),
+            nopCategoryName = row.NopCategoryName ?? string.Empty,
+            isMapped = row.IsMapped
+        }).ToList(),
+        availableNopCategories = Model.AvailableNopCategories.Select(category => new
+        {
+            value = category.Value,
+            text = category.Text
+        }).ToList()
+    };
+}
+
+<div class="akeneo-mapping">
+    @Html.AntiForgeryToken()
+
+    <div class="content-header clearfix">
+        <div class="float-left">
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+            <h1 class="m-0">Category Mapping</h1>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div id="akeneo-mapping-app" class="card card-default akeneo-mapping-card" v-cloak>
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-sitemap"></i>
+                        Category Mappings
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="p-4" v-if="!categories.length">
+                        <div class="alert alert-info mb-0">
+                            No Akeneo categories were found. Check the Sync Context connection, then reload this page.
+                        </div>
+                    </div>
+
+                    <div class="akeneo-list" v-else>
+                        <template v-for="group in groups" :key="group.key">
+                            <div class="akeneo-group-row">
+                                <button type="button"
+                                        class="btn btn-link p-0 akeneo-attribute-group-toggle"
+                                        v-bind:aria-expanded="isExpanded(group.key) ? 'true' : 'false'"
+                                        v-on:click="toggleGroup(group.key)">
+                                    <i class="fas fa-chevron-right chevron"></i>
+                                    <span>{{ group.label }}</span>
+                                </button>
+
+                                <span class="akeneo-group-count ml-2">{{ group.items.length }}</span>
+                                <span class="akeneo-group-code ml-2">{{ group.code }}</span>
+                            </div>
+
+                            <transition name="akeneo-group-items">
+                                <div class="akeneo-group-items" v-if="isExpanded(group.key)">
+                                    <template v-for="(category, itemIndex) in group.items" :key="category.index">
+                                        <div class="akeneo-row-shell"
+                                             v-bind:style="rowStaggerStyle(itemIndex)">
+                                            <div class="akeneo-row"
+                                                 v-bind:class="statusFor(category).cls">
+                                                <div class="akeneo-col akeneo-col-attr akeneo-col-category">
+                                                    <div class="akeneo-category-indent"
+                                                         v-bind:style="{ paddingLeft: category.level * 24 + 'px' }">
+                                                        <div class="akeneo-code">{{ category.code }}</div>
+                                                        <div class="akeneo-label">{{ category.label || category.code }}</div>
+
+                                                        <div class="akeneo-category-parent"
+                                                             v-if="category.parentCode">
+                                                            Parent: {{ category.parentCode }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-type">
+                                                    <span class="akeneo-type-chip">Category</span>
+
+                                                    <div class="akeneo-flags" aria-label="Category hierarchy">
+                                                        <span class="akeneo-flag on"
+                                                              v-bind:data-ak-tooltip="'Hierarchy level ' + category.level"
+                                                              tabindex="0">
+                                                            L{{ category.level }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-maps">
+                                                    <div>
+                                                        <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
+                                                        <span class="akeneo-summary-target-type">nopCommerce Category</span>
+                                                    </div>
+
+                                                    <div class="akeneo-summary-target-detail">
+                                                        {{ detail(category) }}
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-status">
+                                                    <span class="akeneo-status">{{ statusFor(category).text }}</span>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-actions">
+                                                    <div>
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-primary akeneo-edit-row"
+                                                                v-on:click="edit(category)"
+                                                                v-show="!category.editing">
+                                                            <i class="fas fa-pencil-alt"></i>
+                                                            Edit
+                                                        </button>
+
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-default akeneo-cancel-row"
+                                                                v-on:click="cancel(category)"
+                                                                v-show="category.editing">
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <transition name="akeneo-detail-slide">
+                                                <div v-if="category.editing" class="akeneo-mapping-detail">
+                                                    <div class="form-row">
+                                                        <div class="form-group col-md-8">
+                                                            <label class="font-weight-bold mb-1">
+                                                                nopCommerce Category
+                                                            </label>
+
+                                                            <select class="form-control akeneo-edit-target-key"
+                                                                    v-model="category.draft.nopCategoryId">
+                                                                <option v-for="option in availableNopCategories"
+                                                                        :key="option.value"
+                                                                        :value="option.value">
+                                                                    {{ option.text }}
+                                                                </option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="form-group col-md-4 akeneo-detail-block">
+                                                            <label class="font-weight-bold mb-1" aria-hidden="true">
+                                                                &nbsp;
+                                                            </label>
+
+                                                            <span class="akeneo-none-hint" v-if="Number(category.draft.nopCategoryId) <= 0">
+                                                                <i class="fas fa-info-circle"></i>
+                                                                Choose a category to create a mapping.
+                                                            </span>
+
+                                                            <span class="akeneo-none-hint" v-else>
+                                                                <i class="fas fa-link"></i>
+                                                                This Akeneo category will map to the selected nopCommerce category.
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="alert alert-danger akeneo-row-errors"
+                                                         v-if="category.errors.length"
+                                                         role="alert">
+                                                        <i class="fas fa-exclamation-circle akeneo-row-errors-icon" aria-hidden="true"></i>
+
+                                                        <div class="akeneo-row-errors-body">
+                                                            <div class="akeneo-row-errors-title">
+                                                                {{ category.errors.length > 1 ? 'Please fix these issues:' : 'Please fix this issue:' }}
+                                                            </div>
+
+                                                            <ul class="mb-0">
+                                                                <li v-for="(err, eIdx) in category.errors" :key="eIdx">
+                                                                    {{ err }}
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-primary akeneo-save-row"
+                                                                v-on:click="save(category)"
+                                                                v-bind:disabled="category.saving">
+                                                            <i class="fas fa-save"></i>
+                                                            Save
+                                                        </button>
+
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-danger ml-2"
+                                                                v-on:click="clearMapping(category)"
+                                                                v-bind:disabled="category.saving || Number(category.nopCategoryId) <= 0">
+                                                            <i class="fas fa-unlink"></i>
+                                                            Clear
+                                                        </button>
+
+                                                        <span class="akeneo-row-saving ml-2" v-show="category.saving">
+                                                            Saving...
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </transition>
+                                        </div>
+                                    </template>
+                                </div>
+                            </transition>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
+                    <transition-group name="akeneo-toast">
+                        <div v-for="toast in toasts"
+                             :key="toast.id"
+                             class="akeneo-toast"
+                             v-on:click="dismissToast(toast.id)">
+                            <i class="fas fa-check-circle"></i>
+                            <span>{{ toast.text }}</span>
+                        </div>
+                    </transition-group>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script id="akeneo-category-app-data" type="application/json">
+    @Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))
+</script>
+
+@* Self-host instead for an offline/locked-down admin: drop vue.global.prod.js into the plugin and register it with NopHtml.AddScriptParts. *@
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+<script>
+    (function () {
+        var appData = JSON.parse(document.getElementById('akeneo-category-app-data').textContent);
+
+        var categories = appData.categories.map(function (category) {
+            return Object.assign({}, category, {
+                editing: false,
+                saving: false,
+                errors: [],
+                draft: {
+                    nopCategoryId: category.nopCategoryId || '0'
+                }
+            });
+        });
+
+        Vue.createApp({
+            data: function () {
+                return {
+                    categories: categories,
+                    availableNopCategories: appData.availableNopCategories,
+                    expanded: {},
+                    toasts: []
+                };
+            },
+            computed: {
+                groups: function () {
+                    var groups = [];
+                    var currentGroup = null;
+
+                    this.categories.forEach(function (category) {
+                        var isRoot = Number(category.level) === 0 || !category.parentCode;
+
+                        if (isRoot || !currentGroup) {
+                            currentGroup = {
+                                key: category.code,
+                                code: category.code,
+                                label: category.label || category.code,
+                                items: []
+                            };
+
+                            groups.push(currentGroup);
+                        }
+
+                        currentGroup.items.push(category);
+                    });
+
+                    return groups;
+                }
+            },
+            methods: {
+                isExpanded: function (key) {
+                    return !!this.expanded[key];
+                },
+
+                toggleGroup: function (key) {
+                    this.expanded[key] = !this.expanded[key];
+                },
+
+                rowStaggerStyle: function (index) {
+                    return {
+                        animationDelay: Math.min(index * 45, 260) + 'ms'
+                    };
+                },
+
+                statusFor: function (category) {
+                    return Number(category.nopCategoryId) > 0
+                        ? { cls: 'is-mapped', text: 'Mapped' }
+                        : { cls: 'is-attention', text: 'Unmapped' };
+                },
+
+                detail: function (category) {
+                    if (Number(category.nopCategoryId) <= 0) {
+                        return 'No nopCommerce category selected';
+                    }
+
+                    return category.nopCategoryName
+                        ? 'Mapped to: ' + category.nopCategoryName
+                        : 'Mapped to category ID ' + category.nopCategoryId;
+                },
+
+                selectedCategoryText: function (categoryId) {
+                    var option = this.availableNopCategories.find(function (item) {
+                        return String(item.value) === String(categoryId);
+                    });
+
+                    if (!option || Number(option.value) <= 0) {
+                        return '';
+                    }
+
+                    return option.text;
+                },
+
+                edit: function (category) {
+                    category.draft.nopCategoryId = category.nopCategoryId || '0';
+                    category.errors = [];
+                    category.editing = true;
+                },
+
+                cancel: function (category) {
+                    category.errors = [];
+                    category.draft.nopCategoryId = category.nopCategoryId || '0';
+                    category.editing = false;
+                },
+
+                notify: function (text) {
+                    var self = this;
+                    var id = Date.now() + '-' + Math.random().toString(36).slice(2);
+
+                    this.toasts.push({
+                        id: id,
+                        text: text
+                    });
+
+                    setTimeout(function () {
+                        self.dismissToast(id);
+                    }, 3000);
+                },
+
+                dismissToast: function (id) {
+                    this.toasts = this.toasts.filter(function (toast) {
+                        return toast.id !== id;
+                    });
+                },
+
+                save: function (category) {
+                    var self = this;
+                    var nopCategoryId = Number(category.draft.nopCategoryId) || 0;
+
+                    category.errors = [];
+
+                    if (nopCategoryId <= 0) {
+                        category.errors = ['Please select a nopCommerce category.'];
+                        return;
+                    }
+
+                    category.saving = true;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.saveUrl,
+                        data: addAntiForgeryToken({
+                            AkeneoCode: category.code,
+                            NopCategoryId: nopCategoryId
+                        }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                category.errors = res && res.errors
+                                    ? res.errors
+                                    : [res && res.message ? res.message : 'Unable to save category mapping.'];
+
+                                return;
+                            }
+
+                            category.nopCategoryId = String(nopCategoryId);
+                            category.nopCategoryName = self.selectedCategoryText(nopCategoryId);
+                            category.isMapped = true;
+                            category.editing = false;
+
+                            self.notify('Category mapping saved - ' + category.code);
+                        },
+                        error: function () {
+                            category.errors = ['Unable to save category mapping due to a server error.'];
+                        },
+                        complete: function () {
+                            category.saving = false;
+                        }
+                    });
+                },
+
+                clearMapping: function (category) {
+                    var self = this;
+
+                    category.errors = [];
+                    category.saving = true;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.deleteUrl,
+                        data: addAntiForgeryToken({
+                            akeneoCode: category.code
+                        }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                category.errors = res && res.errors
+                                    ? res.errors
+                                    : [res && res.message ? res.message : 'Unable to clear category mapping.'];
+
+                                return;
+                            }
+
+                            category.nopCategoryId = '0';
+                            category.nopCategoryName = '';
+                            category.isMapped = false;
+                            category.draft.nopCategoryId = '0';
+                            category.editing = false;
+
+                            self.notify('Category mapping cleared - ' + category.code);
+                        },
+                        error: function () {
+                            category.errors = ['Unable to clear category mapping due to a server error.'];
+                        },
+                        complete: function () {
+                            category.saving = false;
+                        }
+                    });
+                }
+            }
+        }).mount('#akeneo-mapping-app');
+    })();
+</script>

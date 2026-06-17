@@ -17,33 +17,22 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AuthorizeAdmin]
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
-public class AkeneoMappingController : BasePluginController
+public class AkeneoMappingController(
+    IAkeneoAttributeMappingModelFactory attributeMappingModelFactory,
+    IAkeneoAttributeMappingService akeneoAttributeMappingService,
+    INotificationService notificationService,
+    IAkeneoNopEntityMappingService entityMappingService,
+    IStoreContext storeContext,
+    ISettingService settingService,
+    IAkeneoCategoryMappingModelFactory categoryMappingModelFactory)
+    : BasePluginController
 {
 
-    private readonly IAkeneoMappingModelFactory _mappingModelFactory;
-    private readonly IAkeneoAttributeMappingService _akeneoAttributeMappingService;
-    private readonly INotificationService _notificationService;
-    private readonly IAkeneoNopEntityMappingService _entityMappingService;
-    private readonly IStoreContext _storeContext;
-    private readonly ISettingService _settingService;
-
-    public AkeneoMappingController(
-        IAkeneoMappingModelFactory mappingModelFactory,
-        IAkeneoAttributeMappingService akeneoAttributeMappingService,
-        INotificationService notificationService, IAkeneoNopEntityMappingService entityMappingService, IStoreContext storeContext, ISettingService settingService)
-    {
-        _mappingModelFactory = mappingModelFactory;
-        _akeneoAttributeMappingService = akeneoAttributeMappingService;
-        _notificationService = notificationService;
-        _entityMappingService = entityMappingService;
-        _storeContext = storeContext;
-        _settingService = settingService;
-    }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> AttributeMappings()
     {
-        var model = await _mappingModelFactory.PrepareAttributeMappingListModelAsync();
+        var model = await attributeMappingModelFactory.PrepareAttributeMappingListModelAsync();
 
         return View($"{AkeneoConstants.PathToPlugin}/Views/AttributeMappings.cshtml", model);
     }
@@ -65,10 +54,10 @@ public class AkeneoMappingController : BasePluginController
         }
 
         var mapping = model.Id > 0
-            ? await _akeneoAttributeMappingService.GetAkeneoAttributeMappingByIdAsync(model.Id)
+            ? await akeneoAttributeMappingService.GetAkeneoAttributeMappingByIdAsync(model.Id)
             : null;
 
-        mapping ??= await _akeneoAttributeMappingService
+        mapping ??= await akeneoAttributeMappingService
             .GetAkeneoAttributeMappingByCodeAsync(model.AkeneoAttributeCode);
 
         var isNew = mapping == null;
@@ -87,9 +76,9 @@ public class AkeneoMappingController : BasePluginController
         mapping.IsRequired = model.IsRequired;
 
         if (isNew)
-            await _akeneoAttributeMappingService.InsertAkeneoAttributeMappingAsync(mapping);
+            await akeneoAttributeMappingService.InsertAkeneoAttributeMappingAsync(mapping);
         else
-            await _akeneoAttributeMappingService.UpdateAkeneoAttributeMappingAsync(mapping);
+            await akeneoAttributeMappingService.UpdateAkeneoAttributeMappingAsync(mapping);
 
         await SaveRelatedNopEntityMappingsAsync(model);
 
@@ -156,13 +145,13 @@ public class AkeneoMappingController : BasePluginController
 
         if (targetType == NopTargetType.SpecificationAttribute)
         {
-            await _entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
                 akeneoEntityType: AkeneoEntityType.Attribute,
                 akeneoCode: model.AkeneoAttributeCode,
                 nopEntityType: NopEntityType.SpecificationAttribute,
                 nopEntityId: model.NopSpecificationAttributeId.Value);
 
-            await _entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+            await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
                 akeneoEntityType: AkeneoEntityType.Attribute,
                 akeneoCode: model.AkeneoAttributeCode,
                 nopEntityType: NopEntityType.ProductAttribute);
@@ -172,13 +161,13 @@ public class AkeneoMappingController : BasePluginController
 
         if (targetType == NopTargetType.ProductAttribute)
         {
-            await _entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
                 akeneoEntityType: AkeneoEntityType.Attribute,
                 akeneoCode: model.AkeneoAttributeCode,
                 nopEntityType: NopEntityType.ProductAttribute,
                 nopEntityId: model.NopProductAttributeId.Value);
 
-            await _entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+            await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
                 akeneoEntityType: AkeneoEntityType.Attribute,
                 akeneoCode: model.AkeneoAttributeCode,
                 nopEntityType: NopEntityType.SpecificationAttribute);
@@ -186,14 +175,92 @@ public class AkeneoMappingController : BasePluginController
             return;
         }
 
-        await _entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+        await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
             akeneoEntityType: AkeneoEntityType.Attribute,
             akeneoCode: model.AkeneoAttributeCode,
             nopEntityType: NopEntityType.SpecificationAttribute);
 
-        await _entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+        await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
             akeneoEntityType: AkeneoEntityType.Attribute,
             akeneoCode: model.AkeneoAttributeCode,
             nopEntityType: NopEntityType.ProductAttribute);
     }
+
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    public async Task<IActionResult> CategoryMappings()
+    {
+        
+
+        var model = await categoryMappingModelFactory.PrepareCategoryMappingListModelAsync();
+
+        return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/CategoryMappings.cshtml", model);
+    }
+
+    [HttpPost]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    public async Task<IActionResult> SaveCategoryMapping(AkeneoCategoryMappingModel model)
+    {
+        
+
+        if (string.IsNullOrWhiteSpace(model.AkeneoCode))
+        {
+            return Json(new
+            {
+                success = false,
+                message = "Akeneo category code is required."
+            });
+        }
+
+        if (model.NopCategoryId <= 0)
+        {
+            return Json(new
+            {
+                success = false,
+                message = "Please select a nopCommerce category."
+            });
+        }
+
+        await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+            AkeneoEntityType.Category,
+            model.AkeneoCode,
+            NopEntityType.Category,
+            model.NopCategoryId);
+
+        return Json(new
+        {
+            success = true,
+            message = "Category mapping saved."
+        });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> DeleteCategoryMapping(string akeneoCode)
+    {
+       
+
+        if (string.IsNullOrWhiteSpace(akeneoCode))
+        {
+            return Json(new
+            {
+                success = false,
+                message = "Akeneo category code is required."
+            });
+        }
+
+        await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+            AkeneoEntityType.Category,
+            akeneoCode,
+            NopEntityType.Category);
+
+        return Json(new
+        {
+            success = true,
+            message = "Category mapping cleared."
+        });
+    }
+
+
+
 }
