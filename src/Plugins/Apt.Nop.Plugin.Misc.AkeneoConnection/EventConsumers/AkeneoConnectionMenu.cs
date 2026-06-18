@@ -60,6 +60,14 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
                         Title = "Dry Run",
                         Url = eventMessage.GetMenuItemUrl("AkeneoSync", "DryRun"),
                         Visible = true
+                    },
+                    new AdminMenuItem
+                    {
+                        IconClass = "far fa-circle",
+                        SystemName = "AkeneoIntegration.SyncLogs",
+                        Title = "Sync Logs",
+                        Url = eventMessage.GetMenuItemUrl("AkeneoSyncLog", "List"),
+                        Visible = true
                     }
                 }
             });

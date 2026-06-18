@@ -1087,7 +1087,7 @@
 }
 
 .akeneo-mapping .akeneo-pager .btn {
-  min-width: 116px;
+  min-width: 100px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
