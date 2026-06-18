@@ -181,6 +181,7 @@ public class AkeneoMappingController(
         await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
             AkeneoEntityType.Category,
             model.AkeneoCode,
+            null,
             NopEntityType.Category,
             model.NopCategoryId);
 

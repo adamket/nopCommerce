@@ -90,17 +90,19 @@ public class AkeneoProductImportService(
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result)
     {
-        var akeneoProductKey =
-            GetRootString(akeneoProduct, "uuid") ??
-            GetRootString(akeneoProduct, "identifier");
+        var akeneoUuid = GetRootString(akeneoProduct, "uuid")?.Trim();
+        var akeneoIdentifier = GetRootString(akeneoProduct, "identifier")?.Trim();
 
-        if (string.IsNullOrWhiteSpace(akeneoProductKey))
+        if (string.IsNullOrWhiteSpace(akeneoUuid) &&
+            string.IsNullOrWhiteSpace(akeneoIdentifier))
         {
             result.AddError("Akeneo product does not contain a uuid or identifier.");
             return result;
         }
 
-        result.AkeneoProductKey = akeneoProductKey;
+        result.AkeneoProductUuid = akeneoUuid;
+        result.AkeneoIdentifier = akeneoIdentifier;
+        result.AkeneoProductKey = akeneoUuid ?? akeneoIdentifier;
 
         var mappings = await attributeMappingService.GetAllAkeneoAttributeMappingsAsync();
 
@@ -117,7 +119,8 @@ public class AkeneoProductImportService(
         result.Sku = sku;
 
         var product = await ResolveNopProductAsync(
-            akeneoProductKey,
+            akeneoUuid,
+            akeneoIdentifier,
             sku,
             result);
 
@@ -125,7 +128,9 @@ public class AkeneoProductImportService(
 
         if (isNew && !request.CreateNewProducts)
         {
-            result.AddError($"Product does not exist and CreateNewProducts is disabled. Akeneo key: {akeneoProductKey}");
+            result.AddError(
+                $"Product does not exist and CreateNewProducts is disabled. Akeneo UUID: {akeneoUuid}, identifier: {akeneoIdentifier}");
+
             return result;
         }
 
@@ -136,7 +141,9 @@ public class AkeneoProductImportService(
             return result;
         }
 
-        product ??= CreateBaseProduct(sku, akeneoProductKey);
+        product ??= CreateBaseProduct(
+            sku,
+            akeneoIdentifier ?? akeneoUuid);
 
         ApplyProductFields(product, mappedValues, result);
 
@@ -164,7 +171,8 @@ public class AkeneoProductImportService(
 
         await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
             AkeneoEntityType.Product,
-            akeneoProductKey,
+            akeneoIdentifier,
+            akeneoUuid,
             NopEntityType.Product,
             product.Id);
 
@@ -257,24 +265,41 @@ public class AkeneoProductImportService(
     }
 
     private async Task<Product> ResolveNopProductAsync(
-        string akeneoProductKey,
-        string sku,
-        AkeneoProductImportResult result)
+     string akeneoUuid,
+     string akeneoIdentifier,
+     string sku,
+     AkeneoProductImportResult result)
     {
-        var mappedProductId = await entityMappingService.GetMappedNopEntityIdAsync(
-            AkeneoEntityType.Product,
-            akeneoProductKey,
-            NopEntityType.Product);
-
-        if (mappedProductId.HasValue)
+        if (!string.IsNullOrWhiteSpace(akeneoUuid))
         {
-            var mappedProduct = await productService.GetProductByIdAsync(mappedProductId.Value);
+            var mappedProductId = await entityMappingService.GetMappedNopEntityIdByAkeneoUuidAsync(
+                AkeneoEntityType.Product,
+                akeneoUuid,
+                NopEntityType.Product);
+
+            var mappedProduct = await GetMappedProductOrWarnAsync(
+                mappedProductId,
+                $"Akeneo UUID {akeneoUuid}",
+                result);
 
             if (mappedProduct != null)
                 return mappedProduct;
+        }
 
-            result.AddWarning(
-                $"Product mapping exists for Akeneo key {akeneoProductKey}, but nopCommerce product ID {mappedProductId.Value} was not found.");
+        if (!string.IsNullOrWhiteSpace(akeneoIdentifier))
+        {
+            var mappedProductId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.Product,
+                akeneoIdentifier,
+                NopEntityType.Product);
+
+            var mappedProduct = await GetMappedProductOrWarnAsync(
+                mappedProductId,
+                $"Akeneo identifier {akeneoIdentifier}",
+                result);
+
+            if (mappedProduct != null)
+                return mappedProduct;
         }
 
         if (!string.IsNullOrWhiteSpace(sku))
@@ -282,8 +307,32 @@ public class AkeneoProductImportService(
             var productBySku = await productService.GetProductBySkuAsync(sku);
 
             if (productBySku != null)
+            {
+                result.AddMessage(
+                    $"Matched existing nopCommerce product by SKU '{sku}'. UUID mapping will be saved after import.");
+
                 return productBySku;
+            }
         }
+
+        return null;
+    }
+
+    private async Task<Product> GetMappedProductOrWarnAsync(
+        int? mappedProductId,
+        string mappingDescription,
+        AkeneoProductImportResult result)
+    {
+        if (!mappedProductId.HasValue)
+            return null;
+
+        var product = await productService.GetProductByIdAsync(mappedProductId.Value);
+
+        if (product != null)
+            return product;
+
+        result.AddWarning(
+            $"Product mapping exists for {mappingDescription}, but nopCommerce product ID {mappedProductId.Value} was not found.");
 
         return null;
     }
@@ -435,7 +484,7 @@ public class AkeneoProductImportService(
 
         foreach (var categoryCode in categoryCodes)
         {
-            var nopCategoryId = await entityMappingService.GetMappedNopEntityIdAsync(
+            var nopCategoryId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
                 AkeneoEntityType.Category,
                 categoryCode,
                 NopEntityType.Category);
@@ -463,6 +512,7 @@ public class AkeneoProductImportService(
                 var nopCategoryId = await entityMappingService.GetMappedNopEntityIdAsync(
                     AkeneoEntityType.Category,
                     categoryCode,
+                    null,
                     NopEntityType.Category);
 
                 if (!nopCategoryId.HasValue)
