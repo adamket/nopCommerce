@@ -3,7 +3,8 @@
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 public class AkeneoSyncItemLog : BaseEntity
 {
-    public string SyncRunId { get; set; }
+
+    public int SyncRunRecordId { get; set; }
     public string AkeneoProductUuid { get; set; }
     public string AkeneoIdentifier { get; set; }
     public int NopProductId { get; set; }

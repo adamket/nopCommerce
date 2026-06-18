@@ -2,7 +2,7 @@
 
 public class AkeneoProductImportRequest
 {
-    public string SyncRunId { get; set; }
+    public int SyncRunRecordId { get; set; }
 
     public string AkeneoProductUuid { get; set; }
 

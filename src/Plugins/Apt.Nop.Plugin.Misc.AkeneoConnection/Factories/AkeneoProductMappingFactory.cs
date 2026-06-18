@@ -42,12 +42,22 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
     }
 
     public async Task<AkeneoProductMappingPreviewModel> PreviewProductMappingAsync(
-        string akeneoIdentifier,
-        CancellationToken cancellationToken = default)
+     string akeneoIdentifier,
+     string locale = null,
+     string channel = null,
+     string currency = null,
+     CancellationToken cancellationToken = default)
     {
+        locale = Normalize(locale, DefaultLocale);
+        channel = Normalize(channel, DefaultChannel);
+        currency = Normalize(currency, DefaultCurrency);
+
         var model = new AkeneoProductMappingPreviewModel
         {
             AkeneoIdentifier = akeneoIdentifier,
+            Locale = locale,
+            Channel = channel,
+            Currency = currency,
             HasSearched = true
         };
 
@@ -71,6 +81,13 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
 
         model.AkeneoProductFound = true;
+        model.AkeneoProductUuid = GetRootString(akeneoProduct.Value, "uuid");
+
+        if (string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
+        {
+            model.Errors.Add("The Akeneo product was found, but it did not contain a UUID. Import cannot run.");
+            return model;
+        }
 
         var savedMappings = await _akeneoAttributeMappingService
             .GetAllAkeneoAttributeMappingsAsync();
@@ -100,9 +117,9 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
             var value = _akeneoProductValueResolver.GetValue(
                 akeneoProduct.Value,
                 mapping.AkeneoAttributeCode,
-                locale: !string.IsNullOrWhiteSpace(mapping.Locale) ? mapping.Locale : DefaultLocale,
-                channel: !string.IsNullOrWhiteSpace(mapping.Channel) ? mapping.Channel : DefaultChannel,
-                currency: DefaultCurrency);
+                locale: !string.IsNullOrWhiteSpace(mapping.Locale) ? mapping.Locale : locale,
+                channel: !string.IsNullOrWhiteSpace(mapping.Channel) ? mapping.Channel : channel,
+                currency: currency);
 
             if (mapping.IsRequired && string.IsNullOrWhiteSpace(value))
             {
@@ -131,7 +148,6 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
                         model,
                         mapping,
                         value,
-                        entityMappings,
                         productAttributes);
                     break;
 
@@ -292,28 +308,26 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         AkeneoProductMappingPreviewModel model,
         AkeneoAttributeMapping mapping,
         string value,
-        IList<AkeneoNopEntityMapping> entityMappings,
         IList<ProductAttribute> productAttributes)
     {
-        var entityMapping = entityMappings.FirstOrDefault(entityMapping =>
-            string.Equals(entityMapping.AkeneoCode, mapping.AkeneoAttributeCode, StringComparison.OrdinalIgnoreCase) &&
-            entityMapping.NopEntityTypeId == (int)NopEntityType.ProductAttribute);
+        var id = mapping.NopTargetEntityId ?? 0;
 
-        if (entityMapping == null || entityMapping.NopEntityId <= 0)
+        if (id <= 0)
         {
             model.Warnings.Add(
                 $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Product Attribute, but no nopCommerce product attribute is selected.");
+
             return;
         }
 
         var productAttribute = productAttributes.FirstOrDefault(attribute =>
-            attribute.Id == entityMapping.NopEntityId);
+            attribute.Id == id);
 
         model.ProductAttributes.Add(new AkeneoMappedAttributePreviewModel
         {
             AkeneoAttributeCode = mapping.AkeneoAttributeCode,
-            NopAttributeId = entityMapping.NopEntityId,
-            NopAttributeName = productAttribute?.Name ?? $"ProductAttributeId {entityMapping.NopEntityId}",
+            NopAttributeId = id,
+            NopAttributeName = productAttribute?.Name ?? $"ProductAttributeId {id}",
             Value = value,
             IsRequired = mapping.IsRequired
         });
@@ -339,5 +353,22 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         {
             model.Warnings.Add("No active mapping targets Product.Price.");
         }
+    }
+
+    private static string GetRootString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+            return null;
+
+        return property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static string Normalize(string value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? fallback
+            : value.Trim();
     }
 }

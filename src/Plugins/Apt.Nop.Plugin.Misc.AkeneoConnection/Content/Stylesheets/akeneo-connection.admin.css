@@ -621,26 +621,31 @@
 .akeneo-mapping .badge-success {
   background: var(--ak-mapped-tint);
   color: var(--ak-mapped-ink);
+ /* border: 1px solid var(--ak-mapped-ink);*/
 }
 
 .akeneo-mapping .badge-warning {
   background: var(--ak-attention-tint);
   color: var(--ak-attention-ink);
+  /*border: 1px solid var(--ak-attention-ink);*/
 }
 
 .akeneo-mapping .badge-secondary {
   background: var(--ak-ignored-tint);
   color: var(--ak-ignored);
+  /*border: 1px solid var(--ak-ignored);*/
 }
 
 .akeneo-mapping .badge-info {
   background: var(--ak-accent-tint);
   color: var(--ak-accent-ink);
+ /* border: 1px solid var(--ak-accent-ink);*/
 }
 
 .akeneo-mapping .badge-danger {
   background: #fbe3e0;
   color: var(--ak-text-danger, #c0392b);
+ /* border: 1px solid var(--ak-text-danger, #c0392b);*/
 }
 
 .akeneo-mapping .akeneo-row-status {
@@ -909,4 +914,182 @@
 .akeneo-mapping .akeneo-mapping-card .card-body {
   background: transparent;
   overflow: visible;
+}
+
+/* ===========================================================
+   Akeneo Sync Logs
+   Reuses the .akeneo-mapping design tokens — the page is wrapped
+   in <div class="akeneo-mapping"> so the --ak-* vars are in scope.
+   =========================================================== */
+
+/* themed danger alert (shared file only had info/warning) */
+.akeneo-mapping .alert-danger {
+  background: var(--ak-danger-tint);
+  border-color: var(--ak-danger-line);
+  color: var(--ak-danger-ink);
+}
+
+.akeneo-mapping .akeneo-sync-log.card {
+  overflow: hidden; /* clip the table to the card radius (no tooltips here) */
+}
+
+/* Runs table */
+.akeneo-mapping .akeneo-run-table {
+  margin: 0;
+  color: var(--ak-ink);
+}
+
+  .akeneo-mapping .akeneo-run-table thead th {
+    background: var(--ak-canvas);
+    border-top: 0;
+    border-bottom: 1px solid var(--ak-line);
+    color: var(--ak-muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-size: .66rem;
+    font-weight: 700;
+    padding: 11px 16px;
+    white-space: nowrap;
+  }
+
+  .akeneo-mapping .akeneo-run-table tbody td {
+    border-top: 1px solid var(--ak-line);
+    padding: 14px 16px;
+    vertical-align: middle;
+    font-size: .85rem;
+  }
+
+  .akeneo-mapping .akeneo-run-table .akeneo-dim {
+    color: var(--ak-muted);
+  }
+
+.akeneo-mapping .akeneo-chevron-cell {
+  width: 32px;
+}
+
+/* Run summary row */
+.akeneo-mapping .akeneo-run-row {
+  cursor: pointer;
+  transition: background .16s ease;
+}
+
+  .akeneo-mapping .akeneo-run-row:hover {
+    background: #fafbff;
+  }
+
+  .akeneo-mapping .akeneo-run-row .chevron {
+    color: var(--ak-muted);
+    font-size: .72rem;
+    transition: transform .18s ease, color .18s ease;
+  }
+
+  .akeneo-mapping .akeneo-run-row.is-open {
+    background: var(--ak-accent-tint);
+  }
+
+    .akeneo-mapping .akeneo-run-row.is-open .chevron {
+      transform: rotate(90deg);
+      color: var(--ak-accent);
+    }
+/* Expanded detail — inset white panel with accent edge + inward slide,
+   mirroring the mapping page's .akeneo-mapping-detail */
+.akeneo-mapping .akeneo-detail-row > td {
+  padding: 0;
+  border-top: 0;
+  background: var(--ak-canvas); /* recessed channel; the leading cell is the indent */
+}
+
+.akeneo-mapping .akeneo-run-detail {
+  background: var(--ak-canvas);
+}
+
+.akeneo-mapping .akeneo-run-detail-inner {
+  --ak-detail-indent: 30px; /* drives the slide-in distance */
+  position: relative;
+  background: var(--ak-surface);
+  border-right: 1px solid var(--ak-line);
+  border-bottom: 1px solid var(--ak-line);
+  padding: 20px 22px;
+  overflow: visible;
+  animation: akeneo-detail-stagger-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+  /* accent edge with the same layered drop shadow as the mapping detail */
+  .akeneo-mapping .akeneo-run-detail-inner::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--ak-accent);
+    box-shadow: 8px 0 14px -7px rgba(20, 25, 40, .85), 18px 0 28px -22px rgba(20, 25, 40, .7);
+    z-index: 2;
+  }
+
+  .akeneo-mapping .akeneo-run-detail-inner > * {
+    position: relative;
+    z-index: 3;
+  }
+
+/* Item log table — flush on the panel, no nested card box */
+.akeneo-mapping .akeneo-item-table {
+  background: transparent;
+  border: 0;
+}
+
+  .akeneo-mapping .akeneo-item-table thead th {
+    background: transparent;
+    border-top: 0;
+    border-bottom: 1px solid var(--ak-line);
+    color: var(--ak-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: .62rem;
+    font-weight: 700;
+    padding: 9px 12px;
+  }
+
+  .akeneo-mapping .akeneo-item-table tbody td {
+    border-top: 1px solid var(--ak-line);
+    padding: 10px 12px;
+    font-size: .8rem;
+    vertical-align: top;
+  }
+
+  .akeneo-mapping .akeneo-item-table .akeneo-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--ak-ink);
+  }
+
+/* Pager (runs footer + per-run items) */
+.akeneo-mapping .akeneo-pager {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ak-line);
+  background: var(--ak-surface);
+}
+
+.akeneo-mapping .akeneo-pager-sm {
+  margin-top: 12px;
+  padding: 10px 0 0;
+  background: transparent;
+  border-top: 1px solid var(--ak-line);
+}
+
+.akeneo-mapping .akeneo-pager .akeneo-pager-info {
+  margin-left: auto;
+  color: var(--ak-muted);
+  font-size: .8rem;
+  white-space: nowrap;
+}
+
+.akeneo-mapping .akeneo-pager .btn {
+  min-width: 116px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
 }

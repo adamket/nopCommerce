@@ -1,0 +1,285 @@
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncRunListModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Akeneo Sync Logs";
+
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncLogs");
+
+    var appModel = new
+    {
+        runsUrl = Url.Action("Runs", "AkeneoSyncLog"),
+        itemsUrl = Url.Action("RunItems", "AkeneoSyncLog"),
+        runsPageSize = Model.SyncRunRecordPageSize,
+        itemsPageSize = Model.SyncItemLogPageSize
+    };
+}
+
+<div class="akeneo-mapping">
+    @Html.AntiForgeryToken()
+
+    <div class="content-header clearfix">
+        <div class="float-left">
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+            <h1 class="m-0">Sync Logs</h1>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div id="akeneo-sync-log-app" class="akeneo-sync-log card card-default" v-cloak>
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-clipboard-list"></i>
+                        Sync Runs
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="p-4" v-if="runsLoading && !runs.length">
+                        <div class="akeneo-detail-status">Loading sync runs&hellip;</div>
+                    </div>
+                    <div class="p-4" v-else-if="runsError">
+                        <div class="alert alert-danger mb-0">{{ runsError }}</div>
+                    </div>
+                    <div class="p-4" v-else-if="!runs.length">
+                        <div class="alert alert-info mb-0">No sync runs have been recorded yet.</div>
+                    </div>
+
+                    <table class="table table-hover mb-0 akeneo-run-table" v-else>
+                        <thead>
+                            <tr>
+                                <th class="akeneo-chevron-cell"></th>
+                                <th>Started (UTC)</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th class="text-right">Read</th>
+                                <th class="text-right">Created</th>
+                                <th class="text-right">Updated</th>
+                                <th class="text-right">Skipped</th>
+                                <th class="text-right">Failed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template v-for="run in runs" :key="run.id">
+                                <tr class="akeneo-run-row" v-bind:class="{ 'is-open': run.open }" v-on:click="toggle(run)">
+                                    <td class="akeneo-chevron-cell"><i class="fas fa-chevron-right chevron"></i></td>
+                                    <td class="akeneo-dim">{{ run.startedOnUtc }}</td>
+                                    <td>{{ run.syncType }}</td>
+                                    <td><span class="badge" v-bind:class="statusClass(run.status)">{{ run.status }}</span></td>
+                                    <td class="text-right">{{ run.totalRead }}</td>
+                                    <td class="text-right">{{ run.createdCount }}</td>
+                                    <td class="text-right">{{ run.updatedCount }}</td>
+                                    <td class="text-right">{{ run.skippedCount }}</td>
+                                    <td class="text-right">
+                                        <span v-bind:class="{ 'text-danger font-weight-bold': run.failedCount > 0 }">{{ run.failedCount }}</span>
+                                    </td>
+                                </tr>
+
+                                <tr v-if="run.open" class="akeneo-detail-row">
+                                    <td></td>
+                                    <td colspan="8" class="akeneo-run-detail">
+                                        <div class="akeneo-run-detail-inner">
+                                            <div v-if="run.errorSummary" class="alert alert-danger py-2 mb-3">{{ run.errorSummary }}</div>
+                                            <div v-if="run.loading && !run.items.length" class="akeneo-detail-status">Loading items&hellip;</div>
+                                            <div v-else-if="run.loadError" class="akeneo-detail-status text-danger">{{ run.loadError }}</div>
+                                            <div v-else-if="run.loaded && !run.items.length" class="akeneo-detail-status">No item logs for this run.</div>
+                                            <template v-else>
+                                                <table class="table table-sm mb-0 akeneo-item-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Created (UTC)</th>
+                                                            <th>Action</th>
+                                                            <th>Identifier</th>
+                                                            <th>Nop product</th>
+                                                            <th>Message</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr v-for="item in run.items" :key="item.id">
+                                                            <td class="akeneo-dim">{{ item.createdOnUtc }}</td>
+                                                            <td><span class="badge" v-bind:class="actionClass(item.action)">{{ item.action }}</span></td>
+                                                            <td class="akeneo-mono">{{ item.akeneoIdentifier || item.akeneoProductUuid || '-' }}</td>
+                                                            <td>{{ item.nopProductId > 0 ? item.nopProductId : '-' }}</td>
+                                                            <td class="akeneo-msg">{{ item.message }}</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+
+                                                <div class="akeneo-pager akeneo-pager-sm" v-if="run.itemTotalPages > 1">
+                                                    <button type="button" class="btn btn-sm btn-default"
+                                                            v-on:click="loadItems(run, run.itemPage - 1)"
+                                                            v-bind:disabled="run.itemPage <= 0 || run.loading">
+                                                        <i class="fas fa-chevron-left"></i>
+                                                        Previous
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-default"
+                                                            v-on:click="loadItems(run, run.itemPage + 1)"
+                                                            v-bind:disabled="run.itemPage >= run.itemTotalPages - 1 || run.loading">
+                                                        Next
+                                                        <i class="fas fa-chevron-right"></i>
+                                                    </button>
+                                                    <span class="akeneo-pager-info">
+                                                        Page {{ run.itemPage + 1 }} of {{ run.itemTotalPages }} &middot;
+                                                        {{ run.itemTotal }} item{{ run.itemTotal === 1 ? '' : 's' }}
+                                                    </span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="akeneo-pager" v-if="runs.length && runsTotalPages > 1">
+                    <button type="button" class="btn btn-sm btn-default"
+                            v-on:click="loadRuns(runsPage - 1)"
+                            v-bind:disabled="runsPage <= 0 || runsLoading">
+                        <i class="fas fa-chevron-left"></i>
+                        Previous
+                    </button>
+                    <button type="button" class="btn btn-sm btn-default"
+                            v-on:click="loadRuns(runsPage + 1)"
+                            v-bind:disabled="runsPage >= runsTotalPages - 1 || runsLoading">
+                        Next
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <span class="akeneo-pager-info">
+                        Page {{ runsPage + 1 }} of {{ runsTotalPages }} &middot;
+                        {{ runsTotal }} run{{ runsTotal === 1 ? '' : 's' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script id="akeneo-sync-log-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
+
+@* Self-host vue.global.prod.js for a locked-down admin, same as the mapping page. *@
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+<script>
+    (function () {
+        var appData = JSON.parse(document.getElementById('akeneo-sync-log-data').textContent);
+
+        Vue.createApp({
+            data: function () {
+                return {
+                    runs: [],
+                    runsLoading: false,
+                    runsError: null,
+                    runsPage: 0,
+                    runsTotalPages: 0,
+                    runsTotal: 0
+                };
+            },
+            mounted: function () {
+                this.loadRuns(0);
+            },
+            methods: {
+                loadRuns: function (page) {
+                    if (page < 0) return;
+                    if (this.runsTotalPages && page > this.runsTotalPages - 1) return;
+
+                    var self = this;
+                    this.runsLoading = true;
+                    this.runsError = null;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.runsUrl,
+                        data: addAntiForgeryToken({ page: page, pageSize: appData.runsPageSize }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                self.runsError = 'Unable to load sync runs.';
+                                return;
+                            }
+                            self.runs = (res.runs || []).map(function (r) {
+                                return Object.assign({}, r, {
+                                    open: false,
+                                    loaded: false,
+                                    loading: false,
+                                    loadError: null,
+                                    items: [],
+                                    itemPage: 0,
+                                    itemTotalPages: 0,
+                                    itemTotal: 0
+                                });
+                            });
+                            self.runsPage = res.pageIndex;
+                            self.runsTotalPages = res.totalPages;
+                            self.runsTotal = res.totalCount;
+                        },
+                        error: function () {
+                            self.runsError = 'Server error while loading sync runs.';
+                        },
+                        complete: function () {
+                            self.runsLoading = false;
+                        }
+                    });
+                },
+                toggle: function (run) {
+                    run.open = !run.open;
+                    if (run.open && !run.loaded && !run.loading)
+                        this.loadItems(run, 0);
+                },
+                loadItems: function (run, page) {
+                    if (page < 0) return;
+                    if (run.itemTotalPages && page > run.itemTotalPages - 1) return;
+
+                    run.loading = true;
+                    run.loadError = null;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.itemsUrl,
+                        data: addAntiForgeryToken({
+                            syncRunRecordId: run.syncRunRecordId,
+                            page: page,
+                            pageSize: appData.itemsPageSize
+                        }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                run.loadError = (res && res.errors && res.errors[0]) || 'Unable to load items.';
+                                return;
+                            }
+                            run.items = res.items || [];
+                            run.itemPage = res.pageIndex;
+                            run.itemTotalPages = res.totalPages;
+                            run.itemTotal = res.totalCount;
+                            run.loaded = true;
+                        },
+                        error: function () {
+                            run.loadError = 'Server error while loading items.';
+                        },
+                        complete: function () {
+                            run.loading = false;
+                        }
+                    });
+                },
+                statusClass: function (status) {
+                    switch (status) {
+                        case 'Completed': return 'badge-success';
+                        case 'CompletedWithWarnings': return 'badge-warning';
+                        case 'Failed': return 'badge-danger';
+                        case 'Cancelled': return 'badge-secondary';
+                        default: return 'badge-info'; // Started
+                    }
+                },
+                actionClass: function (action) {
+                    switch (action) {
+                        case 'Created': return 'badge-success';
+                        case 'Updated': return 'badge-info';
+                        case 'Failed': return 'badge-danger';
+                        default: return 'badge-secondary'; // Skipped
+                    }
+                }
+            }
+        }).mount('#akeneo-sync-log-app');
+    })();
+</script>

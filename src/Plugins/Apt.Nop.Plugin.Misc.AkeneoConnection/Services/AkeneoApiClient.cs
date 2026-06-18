@@ -100,7 +100,8 @@ public class AkeneoApiClient : IAkeneoApiClient
         var query = new Dictionary<string, string?>
         {
             ["pagination_type"] = "search_after",
-            ["limit"] = limit.ToString()
+            ["limit"] = limit.ToString(),
+            ["with_attribute_options"] = "true"
         };
 
         if (!string.IsNullOrWhiteSpace(searchJson))
@@ -118,7 +119,7 @@ public class AkeneoApiClient : IAkeneoApiClient
             throw new ArgumentException("Product UUID is required.", nameof(uuid));
 
         return await GetJsonOrNullAsync(
-            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}", cancellationToken);
+            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true", cancellationToken);
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetChangedProductsAsync(

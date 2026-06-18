@@ -33,9 +33,10 @@ public class AkeneoProductImportService(
         var result = new AkeneoProductImportResult();
 
         request ??= new AkeneoProductImportRequest();
-        request.SyncRunId = string.IsNullOrWhiteSpace(request.SyncRunId)
-            ? Guid.NewGuid().ToString("N")
-            : request.SyncRunId.Trim();
+        if (request.SyncRunRecordId <= 0)
+        {
+            throw new ArgumentException("SyncRunRecordId must be provided in the request.", nameof(request));
+        }
 
         result.AkeneoProductUuid = request.AkeneoProductUuid;
 
@@ -229,8 +230,8 @@ public class AkeneoProductImportService(
                 akeneoProduct,
                 mapping.AkeneoAttributeCode,
                 out var value,
-                request.Locale,
-                request.Channel,
+                !string.IsNullOrWhiteSpace(mapping.Locale) ? mapping.Locale : request.Locale,
+                !string.IsNullOrWhiteSpace(mapping.Channel) ? mapping.Channel : request.Channel,
                 request.Currency);
 
             if (!hasValue || string.IsNullOrWhiteSpace(value?.DisplayValue))
@@ -809,26 +810,17 @@ public class AkeneoProductImportService(
             : new[] { singleValue.Trim() };
     }
 
-    private static IReadOnlyList<string> GetDisplayValueItems(
-        AkeneoResolvedProductValue resolvedValue)
+    private static IReadOnlyList<string> GetDisplayValueItems(AkeneoResolvedProductValue resolvedValue)
     {
-        if (resolvedValue == null || string.IsNullOrWhiteSpace(resolvedValue.DisplayValue) || resolvedValue.RawData == null)
+        if (resolvedValue == null)
             return Array.Empty<string>();
 
-        var rawData = resolvedValue.RawData.Value;
+        if (resolvedValue.DisplayValues is { Count: > 0 })
+            return resolvedValue.DisplayValues;
 
-        if (rawData.ValueKind == JsonValueKind.Array)
-        {
-            return rawData
-                .EnumerateArray()
-                .Select(ConvertJsonElementToString)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-
-        return new[] { resolvedValue.DisplayValue.Trim() };
+        return string.IsNullOrWhiteSpace(resolvedValue.DisplayValue)
+            ? Array.Empty<string>()
+            : new[] { resolvedValue.DisplayValue.Trim() };
     }
 
     private static string ConvertJsonElementToString(JsonElement element)
@@ -890,7 +882,7 @@ public class AkeneoProductImportService(
         await syncItemLogService.InsertAkeneoSyncItemLogAsync(
             new AkeneoSyncItemLog
             {
-                SyncRunId = request.SyncRunId,
+                SyncRunRecordId = request.SyncRunRecordId,
                 AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
                 AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
                 NopProductId = result.NopProductId,

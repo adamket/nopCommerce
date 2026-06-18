@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
@@ -8,40 +9,95 @@ using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
+
 [AuthorizeAdmin]
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
-public class AkeneoSyncController(IAkeneoProductMappingFactory akeneoProductMappingService, IAkeneoProductImportService akeneoProductImportService) : BasePluginController
+public class AkeneoSyncController(
+    IAkeneoProductMappingFactory akeneoProductMappingFactory,
+    IAkeneoProductImportService akeneoProductImportService,
+    IAkeneoSyncRunRecordService syncRunRecordService) : BasePluginController
 {
-  
+    private const string DryRunViewPath =
+        "~/Plugins/Apt.Misc.AkeneoConnection/Views/DryRun.cshtml";
+
+    [HttpGet]
     public IActionResult DryRun()
     {
-        return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/DryRun.cshtml",
-            new AkeneoProductMappingPreviewModel());
+        return View(DryRunViewPath, new AkeneoProductMappingPreviewModel
+        {
+            Locale = "en_US",
+            Channel = "ecommerce",
+            Currency = "USD"
+        });
     }
 
     [HttpPost]
-    public async Task<IActionResult> DryRun(string akeneoIdentifier)
+    public async Task<IActionResult> DryRun(
+        AkeneoProductMappingPreviewModel input,
+        CancellationToken cancellationToken)
     {
-        var model = await akeneoProductMappingService
-            .PreviewProductMappingAsync(akeneoIdentifier);
+        input ??= new AkeneoProductMappingPreviewModel();
 
-        return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/DryRun.cshtml", model);
+        input.Locale = Normalize(input.Locale, "en_US");
+        input.Channel = Normalize(input.Channel, "ecommerce");
+        input.Currency = Normalize(input.Currency, "USD");
+
+        if (string.IsNullOrWhiteSpace(input.AkeneoIdentifier))
+        {
+            input.HasSearched = true;
+            input.Errors.Add("Akeneo identifier/SKU is required.");
+
+            return View(DryRunViewPath, input);
+        }
+
+        var model = await akeneoProductMappingFactory.PreviewProductMappingAsync(
+            input.AkeneoIdentifier,
+            input.Locale,
+            input.Channel,
+            input.Currency,
+            cancellationToken);
+
+        model.Locale = input.Locale;
+        model.Channel = input.Channel;
+        model.Currency = input.Currency;
+
+        return View(DryRunViewPath, model);
     }
 
     [HttpPost]
-    public async Task<IActionResult> ImportProduct(string uuid, string locale, string channel, string currency)
+    public async Task<IActionResult> ImportProduct(
+        AkeneoProductImportModel input,
+        CancellationToken cancellationToken)
     {
-        var syncRunId = Guid.NewGuid().ToString("N");
+        if (input == null || string.IsNullOrWhiteSpace(input.Uuid))
+        {
+            return Json(new
+            {
+                success = false,
+                action = "failed",
+                errors = new[] { "Akeneo product UUID is required. Run the dry run first, then import from the preview result." }
+            });
+        }
+
+        var syncRunRecord = new AkeneoSyncRunRecord
+        {
+            StartedOnUtc = DateTime.UtcNow,
+            SyncTypeId = (int)SyncType.ManualProductSync,
+            SyncStatusId = (int)SyncRunStatus.Started
+        };
+
+        await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(syncRunRecord);
 
         var result = await akeneoProductImportService.ImportProductByUuidAsync(
             new AkeneoProductImportRequest
             {
-                SyncRunId = syncRunId,
-                AkeneoProductUuid = uuid,
-                Locale = locale,
-                Channel = channel,
-                Currency = currency,
+                SyncRunRecordId = syncRunRecord.Id,
+                AkeneoProductUuid = input.Uuid.Trim(),
+                Locale = Normalize(input.Locale, "en_US"),
+                Channel = Normalize(input.Channel, "ecommerce"),
+                Currency = Normalize(input.Currency, "USD"),
+
                 CreateNewProducts = true,
                 UpdateExistingProducts = true,
                 CreateMissingSpecificationAttributeOptions = true,
@@ -49,19 +105,20 @@ public class AkeneoSyncController(IAkeneoProductMappingFactory akeneoProductMapp
                 AddMappedCategories = true,
                 AddMappedManufacturers = true,
                 SaveRawPayloadSnapshot = false
-            });
+            },
+            cancellationToken);
+
+
+        syncRunRecord.FinishedOnUtc = DateTime.UtcNow;
+        syncRunRecord.SyncStatusId = (int)SyncRunStatus.Completed;
+
+        await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(syncRunRecord);
 
         return Json(new
         {
             success = result.Success,
-            syncRunId,
-            action = result.Created
-                ? "created"
-                : result.Updated
-                    ? "updated"
-                    : result.Skipped
-                        ? "skipped"
-                        : "failed",
+            syncRunRecordId = syncRunRecord.Id,
+            action = ResolveAction(result),
             productId = result.NopProductId,
             akeneoProductUuid = result.AkeneoProductUuid,
             akeneoIdentifier = result.AkeneoIdentifier,
@@ -71,7 +128,27 @@ public class AkeneoSyncController(IAkeneoProductMappingFactory akeneoProductMapp
         });
     }
 
+    private static string ResolveAction(AkeneoProductImportResult result)
+    {
+        if (!result.Success)
+            return "failed";
 
+        if (result.Created)
+            return "created";
 
+        if (result.Updated)
+            return "updated";
 
+        if (result.Skipped)
+            return "skipped";
+
+        return "completed";
+    }
+
+    private static string Normalize(string value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? fallback
+            : value.Trim();
+    }
 }

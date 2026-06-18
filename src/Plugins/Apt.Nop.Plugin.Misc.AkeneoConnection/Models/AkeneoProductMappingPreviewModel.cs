@@ -1,6 +1,20 @@
 ﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 public record AkeneoProductMappingPreviewModel
 {
+    public string AkeneoProductUuid { get; set; }
+
+    public string Locale { get; set; } = "en_US";
+
+    public string Channel { get; set; } = "ecommerce";
+
+    public string Currency { get; set; } = "USD";
+
+    public bool CanImport =>
+        HasSearched &&
+        AkeneoProductFound &&
+        !string.IsNullOrWhiteSpace(AkeneoProductUuid) &&
+        Errors?.Any() != true;
+
     public bool HasSearched { get; set; }
 
     public string AkeneoIdentifier { get; set; }

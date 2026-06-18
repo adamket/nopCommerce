@@ -5,5 +5,8 @@ public interface IAkeneoProductMappingFactory
 {
     Task<AkeneoProductMappingPreviewModel> PreviewProductMappingAsync(
         string akeneoIdentifier,
+        string locale,
+        string channel,
+        string currency,
         CancellationToken cancellationToken = default);
 }

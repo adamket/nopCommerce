@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Nop.Core;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -22,16 +23,18 @@ public class AkeneoSyncItemLogService(
         await syncItemLogRepository.DeleteAsync(syncItem);
     }
 
-    public async Task<IList<AkeneoSyncItemLog>> GetAkeneoSyncItemLogsAsync(
-        string syncRunId = null,
+    public async Task<IPagedList<AkeneoSyncItemLog>> SearchAkeneoSyncItemLogsAsync(
+        int? syncRunRecordId = null,
         string akeneoProductUuid = null,
         string akeneoIdentifier = null,
-        int? nopProductId = null)
+        int? nopProductId = null,
+        int pageIndex = 0,
+        int pageSize = int.MaxValue)
     {
         var query = syncItemLogRepository.Table;
 
-        if (!string.IsNullOrWhiteSpace(syncRunId))
-            query = query.Where(log => log.SyncRunId == syncRunId);
+        if (syncRunRecordId.HasValue)
+            query = query.Where(log => log.SyncRunRecordId == syncRunRecordId.Value);
 
         if (!string.IsNullOrWhiteSpace(akeneoProductUuid))
             query = query.Where(log => log.AkeneoProductUuid == akeneoProductUuid);
@@ -44,6 +47,6 @@ public class AkeneoSyncItemLogService(
 
         return await query
             .OrderByDescending(log => log.CreatedOnUtc)
-            .ToListAsync();
+            .ToPagedListAsync(pageIndex, pageSize);
     }
 }

@@ -13,4 +13,5 @@ public class AkeneoResolvedProductValue
     public JsonElement? RawData { get; set; }
 
     public string DisplayValue { get; set; }
+    public IReadOnlyList<string> DisplayValues { get; set; }
 }

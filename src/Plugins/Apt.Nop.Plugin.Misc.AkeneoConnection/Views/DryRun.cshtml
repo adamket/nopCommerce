@@ -131,6 +131,69 @@
                         </div>
                     }
 
+                    @if (Model.AkeneoProductFound)
+                    {
+                        <div class="card card-default">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <i class="fas fa-file-import"></i>
+                                    One-Time Import
+                                </div>
+                            </div>
+
+                            <div class="card-body">
+                                <p>
+                                    This will create or update the nopCommerce product using the mappings shown in this dry run.
+                                </p>
+
+                                <dl class="row">
+                                    <dt class="col-sm-3">Akeneo UUID</dt>
+                                    <dd class="col-sm-9">
+                                        @if (!string.IsNullOrWhiteSpace(Model.AkeneoProductUuid))
+                                        {
+                                            <span class="akeneo-code">@Model.AkeneoProductUuid</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-danger">Missing UUID. Import cannot run.</span>
+                                        }
+                                    </dd>
+
+                                    <dt class="col-sm-3">Locale / Channel / Currency</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="akeneo-code">@Model.Locale</span>
+                                        <span class="mx-1">/</span>
+                                        <span class="akeneo-code">@Model.Channel</span>
+                                        <span class="mx-1">/</span>
+                                        <span class="akeneo-code">@Model.Currency</span>
+                                    </dd>
+                                </dl>
+
+                                <button type="button"
+                                        id="akeneo-import-product"
+                                        class="btn btn-success"
+                                        disabled="@(!Model.CanImport)"
+                                        data-import-url="@Url.Action("ImportProduct", "AkeneoSync", new { area = "admin" })"
+                                        data-uuid="@Model.AkeneoProductUuid"
+                                        data-locale="@Model.Locale"
+                                        data-channel="@Model.Channel"
+                                        data-currency="@Model.Currency">
+                                    <i class="fas fa-file-import"></i>
+                                    Import Product
+                                </button>
+
+                                @if (!Model.CanImport)
+                                {
+                                    <div class="text-muted mt-2">
+                                        Import is disabled until the product is found, a UUID is available, and the preview has no errors.
+                                    </div>
+                                }
+
+                                <div id="akeneo-import-result" class="alert d-none mt-3"></div>
+                            </div>
+                        </div>
+                    }
+
                     @if (Model.ProductFields?.Any() == true)
                     {
                         <div class="card card-default">
@@ -427,3 +490,127 @@
         </section>
     </form>
 </div>
+
+<script>
+    $(function () {
+        var $button = $('#akeneo-import-product');
+        var $result = $('#akeneo-import-result');
+
+        function escapeHtml(value) {
+            return $('<div/>').text(value == null ? '' : value).html();
+        }
+
+        function renderList(title, items) {
+            if (!items || !items.length) {
+                return '';
+            }
+
+            var html = '<strong>' + escapeHtml(title) + '</strong><ul class="mb-0">';
+
+            $.each(items, function (_, item) {
+                html += '<li>' + escapeHtml(item) + '</li>';
+            });
+
+            html += '</ul>';
+
+            return html;
+        }
+
+        function showResult(success, html) {
+            $result
+                .removeClass('d-none alert-success alert-danger')
+                .addClass(success ? 'alert-success' : 'alert-danger')
+                .html(html);
+        }
+
+        $button.on('click', function () {
+            if ($button.prop('disabled')) {
+                return;
+            }
+
+            if (!confirm('Import this Akeneo product into nopCommerce now?')) {
+                return;
+            }
+
+            var originalHtml = $button.html();
+
+            $button
+                .prop('disabled', true)
+                .html('<i class="fas fa-spinner fa-spin"></i> Importing...');
+
+            $result
+                .addClass('d-none')
+                .removeClass('alert-success alert-danger')
+                .empty();
+
+            $.ajax({
+                type: 'POST',
+                url: $button.data('import-url'),
+                data: {
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val(),
+                    uuid: $button.data('uuid'),
+                    locale: $button.data('locale'),
+                    channel: $button.data('channel'),
+                    currency: $button.data('currency')
+                }
+            })
+            .done(function (response) {
+                var success = response && response.success === true;
+
+                var html = '';
+
+                if (success) {
+                    html += '<strong>Import completed.</strong>';
+                } else {
+                    html += '<strong>Import failed.</strong>';
+                }
+
+                html += '<div class="mt-2">';
+                html += '<div><strong>Action:</strong> ' + escapeHtml(response.action) + '</div>';
+
+                if (response.productId) {
+                    html += '<div><strong>nopCommerce Product ID:</strong> ' + escapeHtml(response.productId) + '</div>';
+                }
+
+                if (response.akeneoIdentifier) {
+                    html += '<div><strong>Akeneo Identifier:</strong> ' + escapeHtml(response.akeneoIdentifier) + '</div>';
+                }
+
+                if (response.syncRunId) {
+                    html += '<div><strong>Sync Run ID:</strong> <span class="akeneo-code">' + escapeHtml(response.syncRunId) + '</span></div>';
+                }
+
+                html += '</div>';
+
+                html += renderList('Messages', response.messages);
+                html += renderList('Warnings', response.warnings);
+                html += renderList('Errors', response.errors);
+
+                showResult(success, html);
+
+                if (success) {
+                    $button.html('<i class="fas fa-check"></i> Imported');
+                } else {
+                    $button
+                        .prop('disabled', false)
+                        .html(originalHtml);
+                }
+            })
+            .fail(function (xhr) {
+                var message = 'The import request failed.';
+
+                if (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.length) {
+                    message = xhr.responseJSON.errors.join(' ');
+                } else if (xhr.responseText) {
+                    message = xhr.responseText;
+                }
+
+                showResult(false, '<strong>Import failed.</strong><div class="mt-2">' + escapeHtml(message) + '</div>');
+
+                $button
+                    .prop('disabled', false)
+                    .html(originalHtml);
+            });
+        });
+    });
+</script>

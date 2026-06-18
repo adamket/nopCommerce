@@ -35,11 +35,16 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 
         if (TryGetRootValue(product, attributeCode, out var rootValue))
         {
+            var rootDisplay = FormatDataValue(rootValue, currency);
+
             resolvedValue = new AkeneoResolvedProductValue
             {
                 AttributeCode = attributeCode,
                 RawData = rootValue,
-                DisplayValue = FormatDataValue(rootValue, currency)
+                DisplayValue = rootDisplay,
+                DisplayValues = string.IsNullOrWhiteSpace(rootDisplay)
+                    ? Array.Empty<string>()
+                    : new[] { rootDisplay }
             };
 
             return true;
@@ -71,6 +76,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 
         var resolvedLocale = GetNullableStringProperty(selectedValueObject, "locale");
         var resolvedChannel = GetNullableStringProperty(selectedValueObject, "scope");
+        var displayValues = ResolveDisplayValues(selectedValueObject, dataElement, locale, currency);
 
         resolvedValue = new AkeneoResolvedProductValue
         {
@@ -79,7 +85,13 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
             Channel = resolvedChannel,
             Currency = currency,
             RawData = dataElement.Clone(),
-            DisplayValue = FormatValueObject(selectedValueObject, dataElement, locale, currency)
+            DisplayValue = displayValues.Count switch
+            {
+                0 => string.Empty,
+                1 => displayValues[0],
+                _ => string.Join(", ", displayValues)
+            },
+            DisplayValues = displayValues
         };
 
         return true;
@@ -143,8 +155,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 
         var best = candidates.First();
 
-        if (best.Score < -500)
-            best = candidates.First();
+        if (best.Score < 0)
+            return false;
 
         selectedValueObject = best.Value;
         return true;
@@ -166,6 +178,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         return score;
     }
 
+    //todo evaluate
     private static int ScoreContextValue(
         string actualValue,
         string requestedValue)
@@ -370,5 +383,103 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         return property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+    }
+
+    private static IReadOnlyList<string> ResolveDisplayValues(
+    JsonElement valueObject,
+    JsonElement dataElement,
+    string locale,
+    string currency)
+    {
+        var hasLinkedData =
+            valueObject.TryGetProperty("linked_data", out var linkedData) &&
+            linkedData.ValueKind == JsonValueKind.Object;
+
+        // Multi-select / collection: map each option code to its label.
+        if (dataElement.ValueKind == JsonValueKind.Array)
+        {
+            var items = new List<string>();
+
+            foreach (var element in dataElement.EnumerateArray())
+            {
+                string display = null;
+
+                if (element.ValueKind == JsonValueKind.String)
+                {
+                    var code = element.GetString();
+
+                    if (hasLinkedData && !string.IsNullOrWhiteSpace(code))
+                        display = GetOptionLabel(linkedData, code, locale);
+
+                    display ??= code; // fall back to the code if there's no label
+                }
+                else
+                {
+                    display = FormatDataValue(element, currency);
+                }
+
+                if (!string.IsNullOrWhiteSpace(display))
+                    items.Add(display.Trim());
+            }
+
+            return items;
+        }
+
+        // Single select: data is the option code, linked_data is keyed by it.
+        if (dataElement.ValueKind == JsonValueKind.String && hasLinkedData)
+        {
+            var code = dataElement.GetString();
+            var label = string.IsNullOrWhiteSpace(code) ? null : GetOptionLabel(linkedData, code, locale);
+
+            if (!string.IsNullOrWhiteSpace(label))
+                return new[] { label.Trim() };
+        }
+
+        // Everything else (text, number, price, metric, reference entity, ...).
+        var single = FormatValueObject(valueObject, dataElement, locale, currency);
+
+        return string.IsNullOrWhiteSpace(single)
+            ? Array.Empty<string>()
+            : new[] { single.Trim() };
+    }
+
+    private static string GetOptionLabel(
+        JsonElement linkedData,
+        string code,
+        string locale)
+    {
+        if (!linkedData.TryGetProperty(code, out var entry) ||
+            entry.ValueKind != JsonValueKind.Object ||
+            !entry.TryGetProperty("labels", out var labels) ||
+            labels.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(locale) &&
+            labels.TryGetProperty(locale, out var localized) &&
+            localized.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(localized.GetString()))
+        {
+            return localized.GetString();
+        }
+
+        if (labels.TryGetProperty("en_US", out var english) &&
+            english.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(english.GetString()))
+        {
+            return english.GetString();
+        }
+
+        foreach (var label in labels.EnumerateObject())
+        {
+            if (label.Value.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(label.Value.GetString()))
+            {
+                return label.Value.GetString();
+            }
+        }
+
+        return null;
     }
 }
