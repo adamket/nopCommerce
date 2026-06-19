@@ -19,6 +19,10 @@ public class AkeneoConnectionSettings : ISettings
     public string DefaultLocaleCode { get; set; } = string.Empty;
     public string DefaultCurrencyCode { get; set; } = string.Empty;
 
+    public int UnmappedAkeneoAttributeBehaviorId { get; set; }
+    public int CreateNewProductsOnImport { get; set; }
 
 
+   
 }
+

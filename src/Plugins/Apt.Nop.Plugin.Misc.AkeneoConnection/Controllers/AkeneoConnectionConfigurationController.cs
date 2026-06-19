@@ -1,10 +1,10 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
+using Nop.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
@@ -19,38 +19,19 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AuthorizeAdmin]
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
-public class AkeneoConnectionConfigurationController : BasePluginController
+public class AkeneoConnectionConfigurationController(
+    IAkeneoApiClient akeneoApiClient,
+    ILanguageService languageService,
+    ILocalizationService localizationService,
+    INotificationService notificationService,
+    IPermissionService permissionService,
+    ISettingService settingService,
+    IStoreContext storeContext)
+    : BasePluginController
 {
-    #region Fields
 
-    protected readonly IAkeneoApiClient _akeneoApiClient;
-    protected readonly ILanguageService _languageService;
-    protected readonly ILocalizationService _localizationService;
-    protected readonly INotificationService _notificationService;
-    protected readonly IPermissionService _permissionService;
-    protected readonly ISettingService _settingService;
-    protected readonly IStoreContext _storeContext;
-
-    #endregion
 
     #region Ctor
-
-    public AkeneoConnectionConfigurationController(IAkeneoApiClient akeneoApiClient,
-        ILanguageService languageService,
-        ILocalizationService localizationService,
-        INotificationService notificationService,
-        IPermissionService permissionService,
-        ISettingService settingService,
-        IStoreContext storeContext)
-    {
-        _akeneoApiClient = akeneoApiClient;
-        _languageService = languageService;
-        _localizationService = localizationService;
-        _notificationService = notificationService;
-        _permissionService = permissionService;
-        _settingService = settingService;
-        _storeContext = storeContext;
-    }
 
     #endregion
 
@@ -66,14 +47,14 @@ public class AkeneoConnectionConfigurationController : BasePluginController
 
         try
         {
-            channels = await _akeneoApiClient.GetChannelsAsync();
+            channels = await akeneoApiClient.GetChannelsAsync();
         }
         catch (Exception ex)
         {
             AddEmptyOption(model.AvailableChannelCodes, "Unable to load Akeneo channels");
             AddEmptyOption(model.AvailableLocaleCodes, "Unable to load Akeneo locales");
             AddEmptyOption(model.AvailableCurrencyCodes, "Unable to load Akeneo currencies");
-            _notificationService.WarningNotification($"Unable to load Akeneo sync context options. {ex.Message}");
+            notificationService.WarningNotification($"Unable to load Akeneo sync context options. {ex.Message}");
             return;
         }
 
@@ -87,9 +68,12 @@ public class AkeneoConnectionConfigurationController : BasePluginController
             AddEmptyOption(model.AvailableChannelCodes, "No Akeneo channels available");
             AddEmptyOption(model.AvailableLocaleCodes, "No Akeneo locales available");
             AddEmptyOption(model.AvailableCurrencyCodes, "No Akeneo currencies available");
-            _notificationService.WarningNotification("No Akeneo channels were found. Verify your Akeneo connection and channel configuration.");
+            notificationService.WarningNotification("No Akeneo channels were found. Verify your Akeneo connection and channel configuration.");
             return;
         }
+
+
+        model.AvailableUnmappedAkeneoAttributeBehaviors = (await UnmappedAkeneoAttributeBehavior.Ignore.ToSelectListAsync(false)).ToList();
 
         model.DefaultChannelCode = ResolveSelectedCode(
             model.DefaultChannelCode,
@@ -211,8 +195,8 @@ public class AkeneoConnectionConfigurationController : BasePluginController
     public async Task<IActionResult> Configure()
     {
         //load settings for a chosen store scope
-        var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
-        var akeneoConnectionSettings = await _settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
+        var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
+        var akeneoConnectionSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
 
         var model = new AkeneoConfigurationModel
         {
@@ -229,14 +213,14 @@ public class AkeneoConnectionConfigurationController : BasePluginController
 
         if (storeScope > 0)
         {
-            model.AkeneoConnectionBaseUrl_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionBaseUrl, storeScope);
-            model.AkeneoConnectionClientId_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientId, storeScope);
-            model.AkeneoConnectionClientSecret_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, storeScope);
-            model.AkeneoConnectionUsername_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, storeScope);
-            model.AkeneoConnectionPassword_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, storeScope);
-            model.DefaultChannelCode_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, storeScope);
-            model.DefaultLocaleCode_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, storeScope);
-            model.DefaultCurrencyCode_OverrideForStore = await _settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, storeScope);
+            model.AkeneoConnectionBaseUrl_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionBaseUrl, storeScope);
+            model.AkeneoConnectionClientId_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientId, storeScope);
+            model.AkeneoConnectionClientSecret_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, storeScope);
+            model.AkeneoConnectionUsername_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, storeScope);
+            model.AkeneoConnectionPassword_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, storeScope);
+            model.DefaultChannelCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, storeScope);
+            model.DefaultLocaleCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, storeScope);
+            model.DefaultCurrencyCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, storeScope);
         }
 
         await PrepareSyncContextOptionsAsync(model);
@@ -252,8 +236,8 @@ public class AkeneoConnectionConfigurationController : BasePluginController
             return await Configure();
 
         //load settings for a chosen store scope
-        var storeScope = await _storeContext.GetActiveStoreScopeConfigurationAsync();
-        var akeneoConnectionSettings = await _settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
+        var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
+        var akeneoConnectionSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
 
         //save settings
         akeneoConnectionSettings.AkeneoConnectionBaseUrl = model.AkeneoConnectionBaseUrl;
@@ -268,19 +252,19 @@ public class AkeneoConnectionConfigurationController : BasePluginController
         /* We do not clear cache after each setting update.
          * This behavior can increase performance because cached settings will not be cleared
          * and loaded from database after each update */
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionBaseUrl, model.AkeneoConnectionBaseUrl_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientId, model.AkeneoConnectionClientId_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, model.AkeneoConnectionClientSecret_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, model.AkeneoConnectionUsername_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, model.AkeneoConnectionPassword_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
-        await _settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionBaseUrl, model.AkeneoConnectionBaseUrl_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientId, model.AkeneoConnectionClientId_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, model.AkeneoConnectionClientSecret_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, model.AkeneoConnectionUsername_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, model.AkeneoConnectionPassword_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);
 
         //now clear settings cache
-        await _settingService.ClearCacheAsync();
+        await settingService.ClearCacheAsync();
 
-        _notificationService.SuccessNotification(await _localizationService.GetResourceAsync("Admin.Plugins.Saved"));
+        notificationService.SuccessNotification(await localizationService.GetResourceAsync("Admin.Plugins.Saved"));
 
         return await Configure();
     }

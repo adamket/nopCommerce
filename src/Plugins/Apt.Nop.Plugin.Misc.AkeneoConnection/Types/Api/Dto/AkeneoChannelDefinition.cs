@@ -1,4 +1,4 @@
-﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using System.Text.Json.Serialization;
 
 public class AkeneoChannelDefinition

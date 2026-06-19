@@ -99,8 +99,8 @@ public class AkeneoSyncLogController(
         Enum.IsDefined(typeof(SyncType), id) ? ((SyncType)id).ToString() : $"Type {id}";
 
     private static string GetStatusName(int id) =>
-        Enum.IsDefined(typeof(SyncRunStatus), id) ? ((SyncRunStatus)id).ToString() : $"Status {id}";
+        Enum.IsDefined(typeof(SyncStatus), id) ? ((SyncStatus)id).ToString() : $"Status {id}";
 
     private static string GetActionName(int id) =>
-        Enum.IsDefined(typeof(ActionType), id) ? ((ActionType)id).ToString() : $"Action {id}";
+        Enum.IsDefined(typeof(SyncItemActionType), id) ? ((SyncItemActionType)id).ToString() : $"Action {id}";
 }

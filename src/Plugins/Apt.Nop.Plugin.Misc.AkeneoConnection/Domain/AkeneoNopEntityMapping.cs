@@ -31,5 +31,8 @@ public enum NopEntityType
     SpecificationAttribute = 40,
     ProductAttribute = 50,
     AttributeOption = 55,
-    Picture = 60
+    Picture = 60,
+    SpecificationAttributeOption = 70,
+    ProductAttributeMapping = 80,
+    ProductAttributeValue = 90,
 }

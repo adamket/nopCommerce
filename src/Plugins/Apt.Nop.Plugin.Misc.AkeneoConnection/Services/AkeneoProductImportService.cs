@@ -26,6 +26,141 @@ public class AkeneoProductImportService(
     : IAkeneoProductImportService
 {
 
+
+    public async Task<AkeneoProductBatchImportResult> ImportProductsAsync(
+    AkeneoProductBatchImportRequest request,
+    CancellationToken cancellationToken = default)
+    {
+        request ??= new AkeneoProductBatchImportRequest();
+
+        if (request.SyncRunRecordId <= 0)
+        {
+            throw new ArgumentException(
+                "SyncRunRecordId must be provided in the request.",
+                nameof(request));
+        }
+
+        var batchResult = new AkeneoProductBatchImportResult
+        {
+            SyncRunRecordId = request.SyncRunRecordId
+        };
+
+        var pageSize = request.PageSize <= 0 ? 100 : request.PageSize;
+        var searchAfter = request.SearchAfter;
+
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var page = await akeneoApiClient.GetProductsPageAsync(
+                    pageSize,
+                    searchAfter,
+                    request.SearchJson,
+                    cancellationToken);
+
+                if (page?.Items == null || !page.Items.Any())
+                    break;
+
+                foreach (var akeneoProduct in page.Items)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (request.MaxProducts.HasValue &&
+                        batchResult.TotalRead >= request.MaxProducts.Value)
+                    {
+                        batchResult.AddMessage(
+                            $"Stopped after reaching MaxProducts limit of {request.MaxProducts.Value}.");
+
+                        return batchResult;
+                    }
+
+                    batchResult.TotalRead++;
+
+                    var itemResult = new AkeneoProductImportResult
+                    {
+                        AkeneoProductUuid = GetRootString(akeneoProduct, "uuid"),
+                        AkeneoIdentifier = GetRootString(akeneoProduct, "identifier"),
+                        AkeneoProductKey =
+                            GetRootString(akeneoProduct, "uuid") ??
+                            GetRootString(akeneoProduct, "identifier")
+                    };
+
+                    string rawPayloadSnapshot = null;
+
+                    try
+                    {
+                        if (request.SaveRawPayloadSnapshot)
+                        {
+                            rawPayloadSnapshot = TruncateForLog(
+                                akeneoProduct.GetRawText(),
+                                12000);
+                        }
+
+                        itemResult = await ImportProductAsync(
+                            akeneoProduct,
+                            request,
+                            itemResult);
+
+                        ApplyItemResultToBatchResult(
+                            batchResult,
+                            itemResult);
+
+                        await SaveBatchItemLogIfNeededAsync(
+                            request,
+                            itemResult,
+                            rawPayloadSnapshot);
+
+                        if (ShouldKeepItemResultInMemory(itemResult))
+                            batchResult.LoggedItemResults.Add(itemResult);
+                    }
+                    catch (Exception ex)
+                    {
+                        itemResult.AddError(ex.Message);
+                        itemResult.ActionType = SyncItemActionType.Failed;
+
+                        ApplyItemResultToBatchResult(
+                            batchResult,
+                            itemResult);
+
+                        await SaveBatchItemLogIfNeededAsync(
+                            request,
+                            itemResult,
+                            rawPayloadSnapshot);
+
+                        batchResult.LoggedItemResults.Add(itemResult);
+
+                        if (!request.ContinueOnError)
+                            throw;
+                    }
+                }
+
+                if (!page.HasNextPage)
+                    break;
+
+                searchAfter = page.SearchAfter;
+            }
+
+            batchResult.AddMessage(
+                $"Product import completed. Read: {batchResult.TotalRead}, Created: {batchResult.CreatedCount}, Updated: {batchResult.UpdatedCount}, Skipped: {batchResult.SkippedCount}, Failed: {batchResult.FailedCount}.");
+
+            return batchResult;
+        }
+        catch (OperationCanceledException)
+        {
+            batchResult.Canceled = true;
+            batchResult.AddError("Product import was canceled.");
+            return batchResult;
+        }
+        catch (Exception ex)
+        {
+            batchResult.AddError(ex.Message);
+            return batchResult;
+        }
+    }
+
+
     public async Task<AkeneoProductImportResult> ImportProductByUuidAsync(
         AkeneoProductImportRequest request,
         CancellationToken cancellationToken = default)
@@ -145,7 +280,10 @@ public class AkeneoProductImportService(
             sku,
             akeneoIdentifier ?? akeneoUuid);
 
-        ApplyProductFields(product, mappedValues, result);
+        var productChanged = ApplyProductFields(
+            product,
+            mappedValues,
+            result);
 
         if (isNew)
         {
@@ -154,17 +292,22 @@ public class AkeneoProductImportService(
 
             await productService.InsertProductAsync(product);
 
-            result.Created = true;
+            result.ActionType = SyncItemActionType.Created;
             result.AddMessage($"Created nopCommerce product ID {product.Id}.");
         }
-        else
+        else if (productChanged)
         {
             product.UpdatedOnUtc = DateTime.UtcNow;
 
             await productService.UpdateProductAsync(product);
 
-            result.Updated = true;
+            result.ActionType = SyncItemActionType.Updated;
             result.AddMessage($"Updated nopCommerce product ID {product.Id}.");
+        }
+        else
+        {
+            result.ActionType = SyncItemActionType.Skipped;
+            return result;
         }
 
         result.NopProductId = product.Id;
@@ -176,7 +319,11 @@ public class AkeneoProductImportService(
             NopEntityType.Product,
             product.Id);
 
-        await ApplySeoFieldsAsync(product, mappedValues, result);
+        var seoChanged = await ApplySeoFieldsAsync(
+            product,
+            mappedValues,
+            result);
+
 
         if (request.AddMappedCategories)
         {
@@ -211,10 +358,13 @@ public class AkeneoProductImportService(
             request,
             result);
 
-        await ApplyCustomPropertiesAsync(
+        var customPropertiesChanged = await ApplyCustomPropertiesAsync(
             product,
             mappedValues,
             result);
+
+        if (customPropertiesChanged)
+            result.ActionType = SyncItemActionType.Updated;
 
         return result;
     }
@@ -369,60 +519,102 @@ public class AkeneoProductImportService(
         return GetRootString(akeneoProduct, "identifier")?.Trim();
     }
 
-    private static void ApplyProductFields(
-        Product product,
-        IList<ResolvedMappedValue> mappedValues,
-        AkeneoProductImportResult result)
+    private static bool ApplyProductFields(
+    Product product,
+    IList<ResolvedMappedValue> mappedValues,
+    AkeneoProductImportResult result)
     {
+        var changed = false;
+
         foreach (var mappedValue in mappedValues.Where(value => value.TargetType == NopTargetType.ProductField))
         {
             var targetKey = mappedValue.Mapping.NopTargetKey?.Trim();
-            var value = ApplyTransform(mappedValue.Value.DisplayValue, mappedValue.Mapping.TransformRuleJson);
+            var value = ApplyTransform(
+                mappedValue.Value.DisplayValue,
+                mappedValue.Mapping.TransformRuleJson);
 
             if (string.IsNullOrWhiteSpace(targetKey))
             {
-                result.AddWarning($"Product field mapping has no target key. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+                result.AddWarning(
+                    $"Product field mapping has no target key. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
                 continue;
             }
 
             switch (targetKey)
             {
                 case "Name":
-                    product.Name = value;
+                    changed |= SetStringIfChanged(
+                        product.Name,
+                        value,
+                        newValue => product.Name = newValue);
                     break;
 
                 case "ShortDescription":
-                    product.ShortDescription = value;
+                    changed |= SetStringIfChanged(
+                        product.ShortDescription,
+                        value,
+                        newValue => product.ShortDescription = newValue);
                     break;
 
                 case "FullDescription":
-                    product.FullDescription = value;
+                    changed |= SetStringIfChanged(
+                        product.FullDescription,
+                        value,
+                        newValue => product.FullDescription = newValue);
                     break;
 
                 case "Sku":
-                    product.Sku = value;
+                    changed |= SetStringIfChanged(
+                        product.Sku,
+                        value,
+                        newValue => product.Sku = newValue);
                     break;
 
                 case "Price":
                     if (TryParseDecimal(value, out var price))
-                        product.Price = price;
+                    {
+                        changed |= SetDecimalIfChanged(
+                            product.Price,
+                            price,
+                            newValue => product.Price = newValue);
+                    }
                     else
-                        result.AddWarning($"Could not parse price value '{value}' from {mappedValue.Mapping.AkeneoAttributeCode}.");
+                    {
+                        result.AddWarning(
+                            $"Could not parse price value '{value}' from {mappedValue.Mapping.AkeneoAttributeCode}.");
+                    }
+
                     break;
 
                 case "Gtin":
-                    product.Gtin = value;
+                    changed |= SetStringIfChanged(
+                        product.Gtin,
+                        value,
+                        newValue => product.Gtin = newValue);
                     break;
 
                 case "ManufacturerPartNumber":
-                    product.ManufacturerPartNumber = value;
+                    changed |= SetStringIfChanged(
+                        product.ManufacturerPartNumber,
+                        value,
+                        newValue => product.ManufacturerPartNumber = newValue);
                     break;
 
                 case "Published":
                     if (TryParseBoolean(value, out var published))
-                        product.Published = published;
+                    {
+                        changed |= SetBoolIfChanged(
+                            product.Published,
+                            published,
+                            newValue => product.Published = newValue);
+                    }
                     else
-                        result.AddWarning($"Could not parse published value '{value}' from {mappedValue.Mapping.AkeneoAttributeCode}.");
+                    {
+                        result.AddWarning(
+                            $"Could not parse published value '{value}' from {mappedValue.Mapping.AkeneoAttributeCode}.");
+                    }
+
                     break;
 
                 default:
@@ -430,40 +622,60 @@ public class AkeneoProductImportService(
                     break;
             }
         }
+
+        return changed;
     }
 
-    private async Task ApplySeoFieldsAsync(
-        Product product,
-        IList<ResolvedMappedValue> mappedValues,
-        AkeneoProductImportResult result)
+    private async Task<bool> ApplySeoFieldsAsync(
+      Product product,
+      IList<ResolvedMappedValue> mappedValues,
+      AkeneoProductImportResult result)
     {
+        var changed = false;
+
         foreach (var mappedValue in mappedValues.Where(value => value.TargetType == NopTargetType.SeoField))
         {
             var targetKey = mappedValue.Mapping.NopTargetKey?.Trim();
-            var value = ApplyTransform(mappedValue.Value.DisplayValue, mappedValue.Mapping.TransformRuleJson);
+            var value = ApplyTransform(
+                mappedValue.Value.DisplayValue,
+                mappedValue.Mapping.TransformRuleJson);
 
             if (string.IsNullOrWhiteSpace(targetKey))
             {
-                result.AddWarning($"SEO mapping has no target key. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+                result.AddWarning(
+                    $"SEO mapping has no target key. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
                 continue;
             }
 
             switch (targetKey)
             {
                 case "MetaTitle":
-                    product.MetaTitle = value;
+                    changed |= SetStringIfChanged(
+                        product.MetaTitle,
+                        value,
+                        newValue => product.MetaTitle = newValue);
                     break;
 
                 case "MetaDescription":
-                    product.MetaDescription = value;
+                    changed |= SetStringIfChanged(
+                        product.MetaDescription,
+                        value,
+                        newValue => product.MetaDescription = newValue);
                     break;
 
                 case "MetaKeywords":
-                    product.MetaKeywords = value;
+                    changed |= SetStringIfChanged(
+                        product.MetaKeywords,
+                        value,
+                        newValue => product.MetaKeywords = newValue);
                     break;
 
                 case "SeName":
+                    // For now, this may still write every time depending on SaveSlugAsync behavior.
+                    // Better version: compare current slug first.
                     await urlRecordService.SaveSlugAsync(product, value, 0);
+                    result.AddMessage($"Saved SEO slug '{value}'.");
                     break;
 
                 default:
@@ -472,7 +684,16 @@ public class AkeneoProductImportService(
             }
         }
 
+        if (!changed) {  return false; }
+
+        product.UpdatedOnUtc = DateTime.UtcNow;
+
         await productService.UpdateProductAsync(product);
+
+        result.ActionType = SyncItemActionType.Updated;
+        result.AddMessage($"Updated SEO fields for nopCommerce product ID {product.Id}.");
+
+        return true;
     }
 
     private async Task ApplyRootCategoryMappingsAsync(
@@ -495,7 +716,16 @@ public class AkeneoProductImportService(
                 continue;
             }
 
-            await AddProductCategoryIfMissingAsync(product.Id, nopCategoryId.Value);
+            var categoryAdded = await AddProductCategoryIfMissingAsync(
+                product.Id,
+                nopCategoryId.Value);
+
+            if (categoryAdded)
+            {
+                result.ActionType = SyncItemActionType.Updated;
+                result.AddMessage($"Assigned category {nopCategoryId.Value} from Akeneo category '{categoryCode}'.");
+            }
+
             result.AddMessage($"Assigned category {nopCategoryId.Value} from Akeneo category '{categoryCode}'.");
         }
     }
@@ -523,13 +753,22 @@ public class AkeneoProductImportService(
                     continue;
                 }
 
-                await AddProductCategoryIfMissingAsync(product.Id, nopCategoryId.Value);
+                var categoryAdded = await AddProductCategoryIfMissingAsync(
+                    product.Id,
+                    nopCategoryId.Value);
+
+                if (categoryAdded)
+                {
+                    result.ActionType = SyncItemActionType.Updated;
+                    result.AddMessage($"Assigned category {nopCategoryId.Value} from Akeneo category '{categoryCode}'.");
+                }
+
                 result.AddMessage($"Assigned category {nopCategoryId.Value} from attribute {mappedValue.Mapping.AkeneoAttributeCode}.");
             }
         }
     }
 
-    private async Task AddProductCategoryIfMissingAsync(
+    private async Task<bool> AddProductCategoryIfMissingAsync(
         int productId,
         int categoryId)
     {
@@ -538,7 +777,7 @@ public class AkeneoProductImportService(
             showHidden: true);
 
         if (existingCategories.Any(category => category.CategoryId == categoryId))
-            return;
+            return false;
 
         await categoryService.InsertProductCategoryAsync(new ProductCategory
         {
@@ -546,6 +785,8 @@ public class AkeneoProductImportService(
             CategoryId = categoryId,
             DisplayOrder = 0
         });
+
+        return true;
     }
 
     //private async Task ApplyManufacturerMappingsAsync(
@@ -607,38 +848,181 @@ public class AkeneoProductImportService(
 
             if (specificationAttributeId <= 0)
             {
-                result.AddWarning($"Specification attribute mapping has no nopCommerce specification attribute. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+                result.AddWarning(
+                    $"Specification attribute mapping has no nopCommerce specification attribute. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
                 continue;
             }
 
-            foreach (var value in GetDisplayValueItems(mappedValue.Value))
+            var optionItems = GetResolvedOptionItems(mappedValue);
+
+            foreach (var optionItem in optionItems)
             {
                 var option = await GetOrCreateSpecificationAttributeOptionAsync(
                     specificationAttributeId,
-                    value,
+                    mappedValue.Mapping.AkeneoAttributeCode,
+                    optionItem.AkeneoOptionCode,
+                    optionItem.DisplayName,
                     request.CreateMissingSpecificationAttributeOptions);
 
                 if (option == null)
                 {
-                    result.AddWarning($"Specification option '{value}' was not found and could not be created.");
+                    result.AddWarning(
+                        $"Specification option '{optionItem.DisplayName}' was not found and could not be created. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
                     continue;
                 }
 
-                await AddProductSpecificationAttributeIfMissingAsync(product.Id, option.Id);
-                result.AddMessage($"Assigned specification option '{value}' to product.");
+                await AddProductSpecificationAttributeIfMissingAsync(
+                    product.Id,
+                    option.Id);
+
+                result.AddMessage(
+                    $"Assigned specification option '{option.Name}' to product.");
             }
         }
     }
 
-    private async Task<SpecificationAttributeOption> GetOrCreateSpecificationAttributeOptionAsync(
-        int specificationAttributeId,
-        string optionName,
-        bool createMissing)
+    private async Task<ProductAttributeValue> GetOrCreateProductAttributeValueAsync(
+    int productAttributeMappingId,
+    string akeneoAttributeCode,
+    string akeneoProductKey,
+    string akeneoOptionCode,
+    string valueName,
+    bool createMissing)
     {
-        if (string.IsNullOrWhiteSpace(optionName))
+        if (string.IsNullOrWhiteSpace(valueName) &&
+            string.IsNullOrWhiteSpace(akeneoOptionCode))
+        {
+            return null;
+        }
+
+        akeneoAttributeCode = akeneoAttributeCode?.Trim();
+        akeneoProductKey = akeneoProductKey?.Trim();
+        akeneoOptionCode = akeneoOptionCode?.Trim();
+        valueName = valueName?.Trim() ?? akeneoOptionCode;
+
+        var akeneoValueMappingCode = BuildProductAttributeValueMappingCode(
+            akeneoProductKey,
+            akeneoAttributeCode,
+            akeneoOptionCode ?? valueName);
+
+        if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
+        {
+            var mappedValueId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.Option,
+                akeneoValueMappingCode,
+                NopEntityType.ProductAttributeValue);
+
+            if (mappedValueId.HasValue)
+            {
+                var mappedValue = await productAttributeService.GetProductAttributeValueByIdAsync(
+                    mappedValueId.Value);
+
+                if (mappedValue != null &&
+                    mappedValue.ProductAttributeMappingId == productAttributeMappingId)
+                {
+                    if (!string.Equals(mappedValue.Name, valueName, StringComparison.Ordinal))
+                    {
+                        mappedValue.Name = valueName;
+                        await productAttributeService.UpdateProductAttributeValueAsync(mappedValue);
+                    }
+
+                    return mappedValue;
+                }
+            }
+        }
+
+        var existingValues = await productAttributeService.GetProductAttributeValuesAsync(
+            productAttributeMappingId);
+
+        var existingValue = existingValues.FirstOrDefault(value =>
+            string.Equals(value.Name, valueName, StringComparison.OrdinalIgnoreCase));
+
+        if (existingValue != null)
+        {
+            if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
+            {
+                await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                    AkeneoEntityType.Option,
+                    akeneoValueMappingCode,
+                    null,
+                    NopEntityType.ProductAttributeValue,
+                    existingValue.Id);
+            }
+
+            return existingValue;
+        }
+
+        if (!createMissing)
             return null;
 
-        optionName = optionName.Trim();
+        var newValue = new ProductAttributeValue
+        {
+            ProductAttributeMappingId = productAttributeMappingId,
+            AttributeValueTypeId = (int)AttributeValueType.Simple,
+            Name = valueName,
+            DisplayOrder = 0
+        };
+
+        await productAttributeService.InsertProductAttributeValueAsync(newValue);
+
+        if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
+        {
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                AkeneoEntityType.Option,
+                akeneoValueMappingCode,
+                null,
+                NopEntityType.ProductAttributeValue,
+                newValue.Id);
+        }
+
+        return newValue;
+    }
+
+    private async Task<SpecificationAttributeOption> GetOrCreateSpecificationAttributeOptionAsync(
+      int specificationAttributeId,
+      string akeneoAttributeCode,
+      string akeneoOptionCode,
+      string optionName,
+      bool createMissing)
+    {
+        if (specificationAttributeId <= 0)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(optionName) &&
+            string.IsNullOrWhiteSpace(akeneoOptionCode))
+        {
+            return null;
+        }
+
+        akeneoAttributeCode = akeneoAttributeCode?.Trim();
+        akeneoOptionCode = akeneoOptionCode?.Trim();
+        optionName = optionName?.Trim();
+
+        var akeneoOptionMappingCode = BuildAkeneoOptionMappingCode(
+            akeneoAttributeCode,
+            akeneoOptionCode ?? optionName);
+
+        if (!string.IsNullOrWhiteSpace(akeneoOptionMappingCode))
+        {
+            var mappedOptionId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.Option,
+                akeneoOptionMappingCode,
+                NopEntityType.SpecificationAttributeOption);
+
+            if (mappedOptionId.HasValue)
+            {
+                var mappedOption = await specificationAttributeService
+                    .GetSpecificationAttributeOptionByIdAsync(mappedOptionId.Value);
+
+                if (mappedOption != null &&
+                    mappedOption.SpecificationAttributeId == specificationAttributeId)
+                {
+                    return mappedOption;
+                }
+            }
+        }
 
         var existingOptions = await specificationAttributeService
             .GetSpecificationAttributeOptionsBySpecificationAttributeAsync(specificationAttributeId);
@@ -647,7 +1031,19 @@ public class AkeneoProductImportService(
             string.Equals(option.Name, optionName, StringComparison.OrdinalIgnoreCase));
 
         if (existingOption != null)
+        {
+            if (!string.IsNullOrWhiteSpace(akeneoOptionMappingCode))
+            {
+                await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                    AkeneoEntityType.Option,
+                    akeneoOptionMappingCode,
+                    null,
+                    NopEntityType.SpecificationAttributeOption,
+                    existingOption.Id);
+            }
+
             return existingOption;
+        }
 
         if (!createMissing)
             return null;
@@ -655,11 +1051,21 @@ public class AkeneoProductImportService(
         var newOption = new SpecificationAttributeOption
         {
             SpecificationAttributeId = specificationAttributeId,
-            Name = optionName,
+            Name = optionName ?? akeneoOptionCode,
             DisplayOrder = 0
         };
 
         await specificationAttributeService.InsertSpecificationAttributeOptionAsync(newOption);
+
+        if (!string.IsNullOrWhiteSpace(akeneoOptionMappingCode))
+        {
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                AkeneoEntityType.Option,
+                akeneoOptionMappingCode,
+                null,
+                NopEntityType.SpecificationAttributeOption,
+                newOption.Id);
+        }
 
         return newOption;
     }
@@ -697,95 +1103,125 @@ public class AkeneoProductImportService(
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result)
     {
+        var akeneoProductKey = result.AkeneoProductUuid ?? result.AkeneoIdentifier;
+
         foreach (var mappedValue in mappedValues.Where(value => value.TargetType == NopTargetType.ProductAttribute))
         {
             var productAttributeId = mappedValue.Mapping.NopTargetEntityId ?? 0;
 
             if (productAttributeId <= 0)
             {
-                result.AddWarning($"Product attribute mapping has no nopCommerce product attribute. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+                result.AddWarning(
+                    $"Product attribute mapping has no nopCommerce product attribute. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
                 continue;
             }
 
             var productAttributeMapping = await GetOrCreateProductAttributeMappingAsync(
                 product.Id,
                 productAttributeId,
-                mappedValue.Mapping.AkeneoAttributeCode);
+                mappedValue.Mapping,
+                akeneoProductKey);
 
-            foreach (var value in GetDisplayValueItems(mappedValue.Value))
+            foreach (var optionItem in GetResolvedOptionItems(mappedValue))
             {
-                await AddProductAttributeValueIfMissingAsync(
+                var productAttributeValue = await GetOrCreateProductAttributeValueAsync(
                     productAttributeMapping.Id,
-                    value,
+                    mappedValue.Mapping.AkeneoAttributeCode,
+                    akeneoProductKey,
+                    optionItem.AkeneoOptionCode,
+                    optionItem.DisplayName,
                     request.CreateMissingProductAttributeValues);
 
-                result.AddMessage($"Added product attribute value '{value}' to product attribute {productAttributeId}.");
+                if (productAttributeValue == null)
+                {
+                    result.AddWarning(
+                        $"Product attribute value '{optionItem.DisplayName}' was not found and could not be created. Akeneo attribute: {mappedValue.Mapping.AkeneoAttributeCode}");
+
+                    continue;
+                }
+
+                result.AddMessage(
+                    $"Added product attribute value '{productAttributeValue.Name}' to product attribute {productAttributeId}.");
             }
         }
     }
 
     private async Task<ProductAttributeMapping> GetOrCreateProductAttributeMappingAsync(
-        int productId,
-        int productAttributeId,
-        string textPrompt)
+     int productId,
+     int productAttributeId,
+     AkeneoAttributeMapping mapping,
+     string akeneoProductKey)
     {
+        var akeneoMappingCode = BuildAkeneoOptionMappingCode(
+            akeneoProductKey,
+            mapping.AkeneoAttributeCode);
+
+        if (!string.IsNullOrWhiteSpace(akeneoMappingCode))
+        {
+            var mappedProductAttributeMappingId =
+                await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                    AkeneoEntityType.Attribute,
+                    akeneoMappingCode,
+                    NopEntityType.ProductAttributeMapping);
+
+            if (mappedProductAttributeMappingId.HasValue)
+            {
+                var existingByMappingId =
+                    await productAttributeService.GetProductAttributeMappingByIdAsync(
+                        mappedProductAttributeMappingId.Value);
+
+                if (existingByMappingId != null &&
+                    existingByMappingId.ProductId == productId &&
+                    existingByMappingId.ProductAttributeId == productAttributeId)
+                {
+                    return existingByMappingId;
+                }
+            }
+        }
+
         var mappings = await productAttributeService.GetProductAttributeMappingsByProductIdAsync(productId);
 
-        var existingMapping = mappings.FirstOrDefault(mapping =>
-            mapping.ProductAttributeId == productAttributeId);
+        var existingMapping = mappings.FirstOrDefault(item =>
+            item.ProductAttributeId == productAttributeId);
 
-        if (existingMapping != null)
-            return existingMapping;
-
-        var newMapping = new ProductAttributeMapping
+        if (existingMapping == null)
         {
-            ProductId = productId,
-            ProductAttributeId = productAttributeId,
-            TextPrompt = textPrompt,
-            IsRequired = false,
-            AttributeControlTypeId = (int)AttributeControlType.DropdownList,
-            DisplayOrder = 0
-        };
-
-        await productAttributeService.InsertProductAttributeMappingAsync(newMapping);
-
-        return newMapping;
-    }
-
-    private async Task AddProductAttributeValueIfMissingAsync(
-        int productAttributeMappingId,
-        string valueName,
-        bool createMissing)
-    {
-        if (string.IsNullOrWhiteSpace(valueName))
-            return;
-
-        valueName = valueName.Trim();
-
-        var existingValues = await productAttributeService.GetProductAttributeValuesAsync(
-            productAttributeMappingId);
-
-        var existingValue = existingValues.FirstOrDefault(value =>
-            string.Equals(value.Name, valueName, StringComparison.OrdinalIgnoreCase));
-
-        if (existingValue != null || !createMissing)
-            return;
-
-        await productAttributeService.InsertProductAttributeValueAsync(
-            new ProductAttributeValue
+            existingMapping = new ProductAttributeMapping
             {
-                ProductAttributeMappingId = productAttributeMappingId,
-                AttributeValueTypeId = (int)AttributeValueType.Simple,
-                Name = valueName,
+                ProductId = productId,
+                ProductAttributeId = productAttributeId,
+                TextPrompt = mapping.AkeneoAttributeCode,
+                IsRequired = false,
+                AttributeControlTypeId = (int)AttributeControlType.DropdownList,
                 DisplayOrder = 0
-            });
+            };
+
+            await productAttributeService.InsertProductAttributeMappingAsync(existingMapping);
+        }
+
+        if (!string.IsNullOrWhiteSpace(akeneoMappingCode))
+        {
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                AkeneoEntityType.Attribute,
+                akeneoMappingCode,
+                null,
+                NopEntityType.ProductAttributeMapping,
+                existingMapping.Id);
+        }
+
+        return existingMapping;
     }
 
-    private async Task ApplyCustomPropertiesAsync(
+
+
+    private async Task<bool> ApplyCustomPropertiesAsync(
         Product product,
         IList<ResolvedMappedValue> mappedValues,
         AkeneoProductImportResult result)
     {
+        var changed = false;
+
         foreach (var mappedValue in mappedValues.Where(value => value.TargetType == NopTargetType.CustomProperty))
         {
             var key = mappedValue.Mapping.NopTargetKey;
@@ -797,10 +1233,20 @@ public class AkeneoProductImportService(
                 mappedValue.Value.DisplayValue,
                 mappedValue.Mapping.TransformRuleJson);
 
+            var existingValue = await genericAttributeService.GetAttributeAsync<string>(
+                product,
+                key);
+
+            if (string.Equals(existingValue ?? string.Empty, value ?? string.Empty, StringComparison.Ordinal))
+                continue;
+
             await genericAttributeService.SaveAttributeAsync(product, key, value);
 
+            changed = true;
             result.AddMessage($"Saved custom property '{key}'.");
         }
+
+        return changed;
     }
 
     private static IReadOnlyList<string> GetRootStringArray(
@@ -929,6 +1375,13 @@ public class AkeneoProductImportService(
         AkeneoProductImportResult result,
         string rawPayloadSnapshot)
     {
+
+        var shouldWriteItemLog =
+            result.ActionType != SyncItemActionType.Skipped;
+
+        if (!shouldWriteItemLog)
+            return result;
+
         await syncItemLogService.InsertAkeneoSyncItemLogAsync(
             new AkeneoSyncItemLog
             {
@@ -936,28 +1389,13 @@ public class AkeneoProductImportService(
                 AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
                 AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
                 NopProductId = result.NopProductId,
-                ActionTypeId = (int)ResolveActionType(result),
+                ActionTypeId = (int)result.ActionType,
                 Message = BuildLogMessage(result),
                 RawPayloadSnapshot = rawPayloadSnapshot,
                 CreatedOnUtc = DateTime.UtcNow
             });
 
         return result;
-    }
-
-    private static ActionType ResolveActionType(
-        AkeneoProductImportResult result)
-    {
-        if (result.Errors.Any())
-            return ActionType.Failed;
-
-        if (result.Created)
-            return ActionType.Created;
-
-        if (result.Updated)
-            return ActionType.Updated;
-
-        return ActionType.Skipped;
     }
 
     private static string BuildLogMessage(
@@ -998,6 +1436,66 @@ public class AkeneoProductImportService(
         return value;
     }
 
+    private static IReadOnlyList<ResolvedOptionItem> GetResolvedOptionItems(
+        ResolvedMappedValue mappedValue)
+    {
+        var rawItems = GetRawValueItems(mappedValue.Value);
+        var displayItems = GetDisplayValueItems(mappedValue.Value);
+
+        var maxCount = Math.Max(rawItems.Count, displayItems.Count);
+        var items = new List<ResolvedOptionItem>();
+
+        for (var i = 0; i < maxCount; i++)
+        {
+            var rawValue = i < rawItems.Count ? rawItems[i] : null;
+            var displayValue = i < displayItems.Count ? displayItems[i] : rawValue;
+
+            if (string.IsNullOrWhiteSpace(rawValue) &&
+                string.IsNullOrWhiteSpace(displayValue))
+            {
+                continue;
+            }
+
+            items.Add(new ResolvedOptionItem
+            {
+                AkeneoOptionCode = rawValue?.Trim(),
+                DisplayName = displayValue?.Trim() ?? rawValue?.Trim()
+            });
+        }
+
+        return items;
+    }
+
+    private static string BuildAkeneoOptionMappingCode(
+        string akeneoAttributeCode,
+        string akeneoOptionCode)
+    {
+        if (string.IsNullOrWhiteSpace(akeneoAttributeCode) ||
+            string.IsNullOrWhiteSpace(akeneoOptionCode))
+        {
+            return null;
+        }
+
+        return $"{akeneoAttributeCode.Trim()}:{akeneoOptionCode.Trim()}";
+    }
+
+
+
+    private static string BuildProductAttributeValueMappingCode(
+        string akeneoProductKey,
+        string akeneoAttributeCode,
+        string akeneoOptionCodeOrValue)
+    {
+        if (string.IsNullOrWhiteSpace(akeneoProductKey) ||
+            string.IsNullOrWhiteSpace(akeneoAttributeCode) ||
+            string.IsNullOrWhiteSpace(akeneoOptionCodeOrValue))
+        {
+            return null;
+        }
+
+        return $"{akeneoProductKey.Trim()}:{akeneoAttributeCode.Trim()}:{akeneoOptionCodeOrValue.Trim()}";
+    }
+
     private sealed class ResolvedMappedValue
     {
         public AkeneoAttributeMapping Mapping { get; set; }
@@ -1005,5 +1503,134 @@ public class AkeneoProductImportService(
         public NopTargetType TargetType { get; set; }
 
         public AkeneoResolvedProductValue Value { get; set; }
+    }
+
+
+    private sealed class ResolvedOptionItem
+    {
+        public string AkeneoOptionCode { get; set; }
+
+        public string DisplayName { get; set; }
+    }
+
+    private static bool SetStringIfChanged(
+        string currentValue,
+        string newValue,
+        Action<string> setter)
+    {
+        currentValue ??= string.Empty;
+        newValue ??= string.Empty;
+
+        if (string.Equals(currentValue, newValue, StringComparison.Ordinal))
+            return false;
+
+        setter(newValue);
+        return true;
+    }
+
+    private static bool SetDecimalIfChanged(
+        decimal currentValue,
+        decimal newValue,
+        Action<decimal> setter)
+    {
+        if (currentValue == newValue)
+            return false;
+
+        setter(newValue);
+        return true;
+    }
+
+    private static bool SetBoolIfChanged(
+        bool currentValue,
+        bool newValue,
+        Action<bool> setter)
+    {
+        if (currentValue == newValue)
+            return false;
+
+        setter(newValue);
+        return true;
+    }
+
+    private static void ApplyItemResultToBatchResult(
+        AkeneoProductBatchImportResult batchResult,
+        AkeneoProductImportResult itemResult)
+    {
+        if (itemResult.Errors.Any() ||
+            itemResult.ActionType == SyncItemActionType.Failed)
+        {
+            batchResult.FailedCount++;
+            return;
+        }
+
+        if (itemResult.Warnings.Any())
+            batchResult.WarningCount++;
+
+        switch (itemResult.ActionType)
+        {
+            case SyncItemActionType.Created:
+                batchResult.CreatedCount++;
+                break;
+
+            case SyncItemActionType.Updated:
+                batchResult.UpdatedCount++;
+                break;
+
+            case SyncItemActionType.Skipped:
+            default:
+                batchResult.SkippedCount++;
+
+                if (batchResult.SkippedSkuSample.Count < 50)
+                {
+                    var sku = itemResult.Sku ??
+                              itemResult.AkeneoIdentifier ??
+                              itemResult.AkeneoProductUuid;
+
+                    if (!string.IsNullOrWhiteSpace(sku))
+                        batchResult.SkippedSkuSample.Add(sku);
+                }
+
+                break;
+        }
+    }
+
+    private async Task SaveBatchItemLogIfNeededAsync(
+        AkeneoProductBatchImportRequest request,
+        AkeneoProductImportResult result,
+        string rawPayloadSnapshot)
+    {
+        var shouldWriteItemLog =
+            result.ActionType == SyncItemActionType.Created ||
+            result.ActionType == SyncItemActionType.Updated ||
+            result.ActionType == SyncItemActionType.Failed ||
+            result.Errors.Any() ||
+            result.Warnings.Any() ||
+            request.LogSkippedProducts;
+
+        if (!shouldWriteItemLog)
+            return;
+
+        await syncItemLogService.InsertAkeneoSyncItemLogAsync(
+            new AkeneoSyncItemLog
+            {
+                SyncRunRecordId = request.SyncRunRecordId,
+                AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
+                AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
+                NopProductId = result.NopProductId,
+                ActionTypeId = (int)result.ActionType,
+                Message = BuildLogMessage(result),
+                RawPayloadSnapshot = rawPayloadSnapshot,
+                CreatedOnUtc = DateTime.UtcNow
+            });
+    }
+
+    private static bool ShouldKeepItemResultInMemory(
+        AkeneoProductImportResult result)
+    {
+        return result.ActionType == SyncItemActionType.Created ||
+               result.ActionType == SyncItemActionType.Updated ||
+               result.ActionType == SyncItemActionType.Failed ||
+               result.Errors.Any() ||
+               result.Warnings.Any();
     }
 }

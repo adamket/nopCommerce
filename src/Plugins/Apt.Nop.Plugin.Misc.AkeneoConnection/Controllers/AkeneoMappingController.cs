@@ -218,7 +218,4 @@ public class AkeneoMappingController(
             message = "Category mapping cleared."
         });
     }
-
-
-
 }

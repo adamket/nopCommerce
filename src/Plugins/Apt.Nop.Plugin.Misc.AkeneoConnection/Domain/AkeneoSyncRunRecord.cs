@@ -33,7 +33,7 @@ public enum SyncType
     ManualProductSync = 30
 }
 
-public enum SyncRunStatus
+public enum SyncStatus
 {
     Started = 10,
     Completed = 20,

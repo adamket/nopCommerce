@@ -14,7 +14,7 @@ public class AkeneoSyncItemLog : BaseEntity
     public DateTime CreatedOnUtc { get; set; }
 }
 
-public enum ActionType
+public enum SyncItemActionType
 {
     Created = 10,
     Updated = 20,

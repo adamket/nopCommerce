@@ -6,4 +6,8 @@ public interface IAkeneoProductImportService
     Task<AkeneoProductImportResult> ImportProductByUuidAsync(
         AkeneoProductImportRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<AkeneoProductBatchImportResult> ImportProductsAsync(
+        AkeneoProductBatchImportRequest request,
+        CancellationToken cancellationToken = default);
 }

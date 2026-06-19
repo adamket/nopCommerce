@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -55,5 +54,11 @@ public interface IAkeneoApiClient
 
     Task ClearCachedTokenAsync(
         AkeneoApiCredentials apiCredentials = null);
+
+    Task<AkeneoProductPageResult> GetProductsPageAsync(
+        int limit = 100,
+        string searchAfter = null,
+        string searchJson = null,
+        CancellationToken cancellationToken = default);
 
 }

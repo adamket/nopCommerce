@@ -40,7 +40,12 @@ public record AkeneoConfigurationModel : BaseNopModel
     public string DefaultCurrencyCode { get; set; }
     public bool DefaultCurrencyCode_OverrideForStore { get; set; }
 
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.UnmappedAkeneoAttributeBehavior")]
+    public string UnmappedAkeneoAttributeBehaviorId { get; set; }
+    public bool UnmappedAkeneoAttributeBehaviorId_OverrideForStore { get; set; }
+
     public List<SelectListItem> AvailableChannelCodes { get; set; }
     public List<SelectListItem> AvailableLocaleCodes { get; set; }
     public List<SelectListItem> AvailableCurrencyCodes { get; set; }        
+    public List<SelectListItem> AvailableUnmappedAkeneoAttributeBehaviors { get; set; }        
 }

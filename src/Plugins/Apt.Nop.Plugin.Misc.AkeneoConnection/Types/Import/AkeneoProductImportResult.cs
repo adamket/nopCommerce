@@ -1,4 +1,6 @@
-﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+
+namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 public class AkeneoProductImportResult
 {
@@ -12,11 +14,7 @@ public class AkeneoProductImportResult
 
     public string Sku { get; set; }
 
-    public bool Created { get; set; }
-
-    public bool Updated { get; set; }
-
-    public bool Skipped { get; set; }
+    public SyncItemActionType ActionType { get; set; } = SyncItemActionType.Skipped;
 
     public IList<string> Messages { get; } = new List<string>();
 

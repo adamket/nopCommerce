@@ -156,6 +156,20 @@
                             <span asp-validation-for="DefaultCurrencyCode"></span>
                         </div>
                     </div>
+                    
+                    
+                    <div class="form-group row">
+                        <div class="col-md-3">
+                            <nop-override-store-checkbox asp-for="UnmappedAkeneoAttributeBehaviorId_OverrideForStore" asp-input="UnmappedAkeneoAttributeBehaviorId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                            <nop-label asp-for="UnmappedAkeneoAttributeBehaviorId" />
+                        </div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="UnmappedAkeneoAttributeBehaviorId" asp-items="Model.AvailableUnmappedAkeneoAttributeBehaviors" />
+                            <span asp-validation-for="UnmappedAkeneoAttributeBehaviorId"></span>
+                        </div>
+                    </div>
+
+
 
                 </div>
             </div>
