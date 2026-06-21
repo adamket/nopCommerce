@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -32,8 +33,17 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductImportService, AkeneoProductImportService>();
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
+        services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
+        services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
+        services.AddScoped<
+            IAkeneoFamilyVariantImportConfigurationService,
+            AkeneoFamilyVariantImportConfigurationService>();
 
+
+        services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
+
+        
     }
 
     /// <summary>

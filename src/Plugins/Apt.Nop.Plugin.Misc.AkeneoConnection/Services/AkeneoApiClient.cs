@@ -171,6 +171,53 @@ public class AkeneoApiClient : IAkeneoApiClient
         await _staticCacheManager.RemoveAsync(CreateTokenCacheKey(apiCredentials));
     }
 
+
+    public async Task<AkeneoProductPageResult> GetProductsPageAsync(
+        int limit = 100,
+        string searchAfter = null,
+        string searchJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+            limit = 100;
+
+        var query = new Dictionary<string, string?>
+        {
+            ["pagination_type"] = "search_after",
+            ["limit"] = limit.ToString(),
+            ["with_attribute_options"] = "true"
+        };
+
+        if (!string.IsNullOrWhiteSpace(searchAfter))
+            query["search_after"] = searchAfter;
+
+        if (!string.IsNullOrWhiteSpace(searchJson))
+            query["search"] = searchJson;
+
+        var relativeUrl = "api/rest/v1/products-uuid" + ToQueryString(query);
+
+        using var document = await GetJsonDocumentAsync(
+            relativeUrl,
+            cancellationToken, null);
+
+        var root = document.RootElement;
+
+        var result = new AkeneoProductPageResult();
+
+        if (root.TryGetProperty("_embedded", out var embedded) &&
+            embedded.TryGetProperty("items", out var items) &&
+            items.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in items.EnumerateArray())
+                result.Items.Add(item.Clone());
+        }
+
+        var nextPageUrl = GetNextPageUrl(root);
+        result.SearchAfter = ExtractQueryStringValue(nextPageUrl, "search_after");
+
+        return result;
+    }
+
     #endregion
 
     #region HTTP / paging
@@ -212,7 +259,7 @@ public class AkeneoApiClient : IAkeneoApiClient
 
         while (!string.IsNullOrWhiteSpace(nextUrl))
         {
-            using var document = await GetJsonDocumentAsync(nextUrl, apiCredentials, cancellationToken);
+            using var document = await GetJsonDocumentAsync(nextUrl, cancellationToken, apiCredentials);
             var root = document.RootElement;
 
             if (root.TryGetProperty("_embedded", out var embedded) &&
@@ -231,8 +278,9 @@ public class AkeneoApiClient : IAkeneoApiClient
 
     private async Task<JsonDocument> GetJsonDocumentAsync(
         string relativeOrAbsoluteUrl,
-        AkeneoApiCredentials apiCredentials = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AkeneoApiCredentials apiCredentials = null
+       )
     {
         using var response = await SendAuthenticatedGetAsync(
             relativeOrAbsoluteUrl, apiCredentials, cancellationToken);
@@ -460,6 +508,63 @@ public class AkeneoApiClient : IAkeneoApiClient
 
     #region Helpers
 
+    private static string ExtractQueryStringValue(
+        string relativeOrAbsoluteUrl,
+        string key)
+    {
+        if (string.IsNullOrWhiteSpace(relativeOrAbsoluteUrl) ||
+            string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        string queryString = null;
+
+        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+        {
+            queryString = absoluteUri.Query;
+        }
+        else
+        {
+            var questionMarkIndex = relativeOrAbsoluteUrl.IndexOf('?');
+
+            if (questionMarkIndex >= 0 &&
+                questionMarkIndex < relativeOrAbsoluteUrl.Length - 1)
+            {
+                queryString = relativeOrAbsoluteUrl[(questionMarkIndex + 1)..];
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(queryString))
+            return null;
+
+        queryString = queryString.TrimStart('?');
+
+        var parameters = queryString.Split(
+            '&',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var parameter in parameters)
+        {
+            var separatorIndex = parameter.IndexOf('=');
+
+            if (separatorIndex <= 0)
+                continue;
+
+            var parameterKey = Uri.UnescapeDataString(parameter[..separatorIndex]);
+
+            if (!string.Equals(parameterKey, key, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parameterValue = parameter[(separatorIndex + 1)..];
+
+            return string.IsNullOrWhiteSpace(parameterValue)
+                ? null
+                : Uri.UnescapeDataString(parameterValue);
+        }
+
+        return null;
+    }
     private CacheKey CreateTokenCacheKey(AkeneoApiCredentials apiCredentials)
     {
         apiCredentials ??= GetApiCredentialsFromSettings();

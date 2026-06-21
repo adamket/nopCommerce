@@ -1,0 +1,143 @@
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.SyncProfiles.AkeneoSyncProfileListModel
+
+@{
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Akeneo Sync Profiles";
+
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncProfileList");
+}
+
+<div class="akeneo-mapping">
+    <div class="content-header clearfix">
+        <h1 class="float-left">
+            <span class="akeneo-eyebrow">Akeneo</span>
+            Akeneo Sync Profiles
+        </h1>
+
+        <div class="float-right">
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="fas fa-plus-square"></i>
+                Add new profile
+            </a>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div class="cards-group">
+                <div class="card card-default akeneo-sync-log">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-sync-alt"></i>
+                            Sync Profiles
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        @if (!Model.Profiles.Any())
+                        {
+                            <div class="p-4">
+                                <div class="alert alert-info mb-0">
+                                    No Akeneo sync profiles have been created yet.
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover akeneo-run-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Enabled</th>
+                                            <th>Channel</th>
+                                            <th>Locales</th>
+                                            <th>Root Category</th>
+                                            <th>Import Mode</th>
+                                            <th>Unmapped Attributes</th>
+                                            <th>Category Filter</th>
+                                            <th>Enabled Filter</th>
+                                            <th>Parent Filter</th>
+                                            <th style="width: 140px;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var profile in Model.Profiles)
+                                        {
+                                            <tr class="akeneo-run-row">
+                                                <td>
+                                                    <div class="akeneo-code">@profile.Name</div>
+                                                </td>
+
+                                                <td>
+                                                    @if (profile.Enabled)
+                                                    {
+                                                        <span class="badge badge-success">Enabled</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge badge-secondary">Disabled</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(profile.AkeneoChannel))
+                                                    {
+                                                        <span class="akeneo-type-chip">@profile.AkeneoChannel</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="akeneo-dim">Not set</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(profile.AkeneoLocales))
+                                                    {
+                                                        <span class="akeneo-type-chip">@profile.AkeneoLocales</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="akeneo-dim">Not set</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(profile.RootCategoryCode))
+                                                    {
+                                                        <span class="akeneo-type-chip">@profile.RootCategoryCode</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="akeneo-dim">None</span>
+                                                    }
+                                                </td>
+
+                                                <td>@profile.ImportModeName</td>
+                                                <td>@profile.UnmappedAttributeBehaviorName</td>
+                                                <td>@profile.CategoryFilterModeName</td>
+                                                <td>@profile.ProductEnabledFilterName</td>
+                                                <td>@profile.ProductParentFilterModeName</td>
+
+                                                <td>
+                                                    <a asp-action="Edit"
+                                                       asp-route-id="@profile.Id"
+                                                       class="btn btn-sm btn-default">
+                                                        <i class="fas fa-pencil-alt"></i>
+                                                        Edit
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>

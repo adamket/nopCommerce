@@ -1093,3 +1093,36 @@
   justify-content: center;
   gap: .4rem;
 }
+
+/* ===========================================================
+   Akeneo Sync Profiles
+   =========================================================== */
+
+.akeneo-mapping .akeneo-dim {
+  color: var(--ak-muted);
+  font-size: .82rem;
+}
+
+.akeneo-mapping .form-text {
+  color: var(--ak-muted) !important;
+  font-size: .8rem;
+  margin-top: .35rem;
+}
+
+.akeneo-mapping textarea.form-control,
+.akeneo-mapping .k-textbox textarea {
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.akeneo-mapping .content-header h1 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+  .akeneo-mapping .content-header h1 small {
+    font-size: .82rem;
+    font-weight: 600;
+    letter-spacing: 0;
+  }

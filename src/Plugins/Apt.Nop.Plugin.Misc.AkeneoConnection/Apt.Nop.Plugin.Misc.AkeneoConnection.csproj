@@ -50,6 +50,7 @@
     <Folder Include="Content\Stylesheets\" />
     <Folder Include="Content\Scripts\" />
     <Folder Include="ScheduleTasks\" />
+    <Folder Include="Views\SyncProfile\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -69,6 +70,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\DryRun.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Views\SyncProfile\CreateOrUpdate.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Views\SyncProfile\List.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

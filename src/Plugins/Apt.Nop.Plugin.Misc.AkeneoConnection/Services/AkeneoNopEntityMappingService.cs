@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -45,6 +46,26 @@ public class AkeneoNopEntityMappingService(
             return;
 
         await nopEntityMappingRepository.DeleteAsync(mappings);
+    }
+
+    public async Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingByAkeneoUuidAsync(AkeneoEntityType akeneoEntityType, string akeneoUuid,
+        NopEntityType nopEntityType)
+    {
+        var item = await nopEntityMappingRepository.Table.FirstOrDefaultAsync(q=>q.AkeneoUuid == akeneoUuid 
+                                                                      && q.AkeneoEntityTypeId == (int)akeneoEntityType 
+                                                                      && q.NopEntityTypeId == (int)nopEntityType);
+
+        return item;
+    }
+
+    public async Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingByAkeneoCodeAsync(AkeneoEntityType akeneoEntityType, string akeneoCode,
+        NopEntityType nopEntityType)
+    {
+        var item = await nopEntityMappingRepository.Table.FirstOrDefaultAsync(q => q.AkeneoCode == akeneoCode
+            && q.AkeneoEntityTypeId == (int)akeneoEntityType
+            && q.NopEntityTypeId == (int)nopEntityType);
+
+        return item;
     }
 
     public async Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(
@@ -137,12 +158,12 @@ public class AkeneoNopEntityMappingService(
     }
 
 
-    public async Task UpsertAkeneoNopEntityMappingAsync(
-      AkeneoEntityType akeneoEntityType,
-      string akeneoCode,
-      string akeneoUuid,
-      NopEntityType nopEntityType,
-      int nopEntityId)
+    public async Task<bool> UpsertAkeneoNopEntityMappingAsync(
+     AkeneoEntityType akeneoEntityType,
+     string akeneoCode,
+     string akeneoUuid,
+     NopEntityType nopEntityType,
+     int nopEntityId)
     {
         akeneoCode = akeneoCode?.Trim();
         akeneoUuid = akeneoUuid?.Trim();
@@ -150,79 +171,74 @@ public class AkeneoNopEntityMappingService(
         if (string.IsNullOrWhiteSpace(akeneoCode) &&
             string.IsNullOrWhiteSpace(akeneoUuid))
         {
-            throw new ArgumentException(
-                "Akeneo code or UUID is required for entity mapping.");
+            throw new ArgumentException("Either Akeneo code or Akeneo UUID must be provided.");
         }
 
         if (nopEntityId <= 0)
+            throw new ArgumentException("nopCommerce entity ID must be greater than zero.", nameof(nopEntityId));
+
+        var akeneoEntityTypeId = (int)akeneoEntityType;
+        var nopEntityTypeId = (int)nopEntityType;
+
+        var mapping = await FindExistingMappingAsync(
+            akeneoEntityType,
+            akeneoCode,
+            akeneoUuid,
+            nopEntityType);
+
+        if (mapping == null)
         {
-            throw new ArgumentException(
-                "nopCommerce entity ID must be greater than zero.",
-                nameof(nopEntityId));
-        }
-
-        AkeneoNopEntityMapping mappingByUuid = null;
-        AkeneoNopEntityMapping mappingByCode = null;
-
-        if (!string.IsNullOrWhiteSpace(akeneoUuid))
-        {
-            mappingByUuid = await nopEntityMappingRepository.Table
-                .FirstOrDefaultAsync(mapping =>
-                    mapping.AkeneoEntityTypeId == (int)akeneoEntityType &&
-                    mapping.NopEntityTypeId == (int)nopEntityType &&
-                    mapping.AkeneoUuid == akeneoUuid);
-        }
-
-        if (!string.IsNullOrWhiteSpace(akeneoCode))
-        {
-            var normalizedAkeneoCode = akeneoCode.ToLowerInvariant();
-
-            mappingByCode = await nopEntityMappingRepository.Table
-                .FirstOrDefaultAsync(mapping =>
-                    mapping.AkeneoEntityTypeId == (int)akeneoEntityType &&
-                    mapping.NopEntityTypeId == (int)nopEntityType &&
-                    mapping.AkeneoCode != null &&
-                    mapping.AkeneoCode.ToLower() == normalizedAkeneoCode);
-        }
-
-        if (mappingByUuid != null &&
-            mappingByCode != null &&
-            mappingByUuid.Id != mappingByCode.Id)
-        {
-            throw new InvalidOperationException(
-                $"Conflicting Akeneo mappings found. UUID '{akeneoUuid}' maps to mapping ID {mappingByUuid.Id}, " +
-                $"but code '{akeneoCode}' maps to mapping ID {mappingByCode.Id}.");
-        }
-
-        var existingMapping = mappingByUuid ?? mappingByCode;
-
-        if (existingMapping == null)
-        {
-            existingMapping = new AkeneoNopEntityMapping
+            mapping = new AkeneoNopEntityMapping
             {
-                AkeneoEntityTypeId = (int)akeneoEntityType,
+                AkeneoEntityTypeId = akeneoEntityTypeId,
                 AkeneoCode = akeneoCode,
                 AkeneoUuid = akeneoUuid,
-                NopEntityTypeId = (int)nopEntityType,
+                NopEntityTypeId = nopEntityTypeId,
                 NopEntityId = nopEntityId,
                 CreatedOnUtc = DateTime.UtcNow,
                 UpdatedOnUtc = DateTime.UtcNow
             };
 
-            await nopEntityMappingRepository.InsertAsync(existingMapping);
-            return;
+            await InsertAkeneoNopEntityMappingAsync(mapping);
+
+            return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(akeneoCode))
-            existingMapping.AkeneoCode = akeneoCode;
+        var changed = false;
 
-        if (!string.IsNullOrWhiteSpace(akeneoUuid))
-            existingMapping.AkeneoUuid = akeneoUuid;
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            mapping.AkeneoEntityTypeId,
+            akeneoEntityTypeId,
+            value => mapping.AkeneoEntityTypeId = value);
 
-        existingMapping.NopEntityId = nopEntityId;
-        existingMapping.UpdatedOnUtc = DateTime.UtcNow;
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            mapping.AkeneoCode,
+            akeneoCode,
+            value => mapping.AkeneoCode = value);
 
-        await nopEntityMappingRepository.UpdateAsync(existingMapping);
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            mapping.AkeneoUuid, 
+            akeneoUuid,
+            value => mapping.AkeneoUuid = value);
+
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            mapping.NopEntityTypeId,
+            nopEntityTypeId,
+            value => mapping.NopEntityTypeId = value);
+
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            mapping.NopEntityId,
+            nopEntityId,
+            value => mapping.NopEntityId = value);
+
+        if (!changed)
+            return false;
+
+        mapping.UpdatedOnUtc = DateTime.UtcNow;
+
+        await UpdateAkeneoNopEntityMappingAsync(mapping);
+
+        return true;
     }
 
 
@@ -260,5 +276,36 @@ public class AkeneoNopEntityMappingService(
             return;
 
         await nopEntityMappingRepository.DeleteAsync(mappings);
+    }
+
+    private async Task<AkeneoNopEntityMapping> FindExistingMappingAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        string akeneoUuid,
+        NopEntityType nopEntityType)
+    {
+        if (!string.IsNullOrWhiteSpace(akeneoUuid))
+        {
+            var mappingByUuid = await GetAkeneoNopEntityMappingByAkeneoUuidAsync(
+                akeneoEntityType,
+                akeneoUuid,
+                nopEntityType);
+
+            if (mappingByUuid != null)
+                return mappingByUuid;
+        }
+
+        if (!string.IsNullOrWhiteSpace(akeneoCode))
+        {
+            var mappingByCode = await GetAkeneoNopEntityMappingByAkeneoCodeAsync(
+                akeneoEntityType,
+                akeneoCode,
+                nopEntityType);
+
+            if (mappingByCode != null)
+                return mappingByCode;
+        }
+
+        return null;
     }
 }

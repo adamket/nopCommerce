@@ -2,65 +2,26 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
-namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
+namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 
-public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
+public class AkeneoProductSearchJsonBuilder 
 {
-    public int PageSize { get; set; } = 100;
-
-    public int? MaxProducts { get; set; }
-
-    public bool ContinueOnError { get; set; } = true;
-
-
-    public IList<string> AkeneoCategoryCodes { get; set; } = new List<string>();
-
-    public AkeneoCategoryFilterMode CategoryFilterMode { get; set; }
-
-    public IList<string> AkeneoFamilyCodes { get; set; } = new List<string>();
-
-    public AkeneoProductEnabledFilter ProductEnabledFilter { get; set; }
-
-    public DateTime? UpdatedAfterUtc { get; set; }
-
-    public int? UpdatedSinceLastNDays { get; set; }
-
-    public AkeneoProductParentFilterMode ProductParentFilterMode { get; set; }
-
-    public string AdditionalSearchJson { get; set; }
-
-    public string SearchJson { get; set; }
-
-    public string SearchAfter { get; set; }
-
-    public UnmappedAkeneoAttributeBehavior UnmappedAttributeBehavior { get; set; }
-
-    //defaultwarehouseid
-    //defaulttaxcategoryid
-
-
-    public string ParseSearchJson(AkeneoSyncProfile profile)
+    public string Build(AkeneoProductBatchImportRequest request)
     {
-        var result = BuildSearchJsonFromProfile(profile, this);
-        return result;
-    }
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
 
-    private static string BuildSearchJsonFromProfile(
-    AkeneoSyncProfile profile,
-    AkeneoProductBatchImportRequest request)
-    {
         var search = new JsonObject();
 
         AddFamilySearch(search, request);
-        AddCategorySearch(search, profile, request);
+        AddCategorySearch(search, request);
         AddEnabledSearch(search, request);
         AddUpdatedSearch(search, request);
         AddParentSearch(search, request);
 
-        MergeAdditionalSearchJson(
-            search,
-            request.AdditionalSearchJson);
+        MergeAdditionalSearchJson(search, request.AdditionalSearchJson);
 
         return search.Count == 0
             ? null
@@ -70,35 +31,17 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
             });
     }
 
-    private static void AddFamilySearch(
-        JsonObject search,
-        AkeneoProductBatchImportRequest request)
+    private static void AddFamilySearch(JsonObject search, AkeneoProductBatchImportRequest request)
     {
-        if (request.AkeneoFamilyCodes == null ||
-            !request.AkeneoFamilyCodes.Any())
-        {
+        if (request.AkeneoFamilyCodes == null || !request.AkeneoFamilyCodes.Any())
             return;
-        }
 
-        AddSearchCriterion(
-            search,
-            "family",
-            "IN",
-            request.AkeneoFamilyCodes);
+        AddSearchCriterion(search, "family", "IN", request.AkeneoFamilyCodes);
     }
 
-    private static void AddCategorySearch(
-        JsonObject search,
-        AkeneoSyncProfile profile,
-        AkeneoProductBatchImportRequest request)
+    private static void AddCategorySearch(JsonObject search, AkeneoProductBatchImportRequest request)
     {
         var categoryCodes = request.AkeneoCategoryCodes?.ToList() ?? new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(profile.RootCategoryCode) &&
-            !categoryCodes.Any())
-        {
-            categoryCodes.Add(profile.RootCategoryCode.Trim());
-        }
 
         switch (request.CategoryFilterMode)
         {
@@ -131,9 +74,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         }
     }
 
-    private static void AddEnabledSearch(
-        JsonObject search,
-        AkeneoProductBatchImportRequest request)
+    private static void AddEnabledSearch(JsonObject search, AkeneoProductBatchImportRequest request)
     {
         switch (request.ProductEnabledFilter)
         {
@@ -147,9 +88,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         }
     }
 
-    private static void AddUpdatedSearch(
-        JsonObject search,
-        AkeneoProductBatchImportRequest request)
+    private static void AddUpdatedSearch(JsonObject search, AkeneoProductBatchImportRequest request)
     {
         var updatedAfterUtc = request.UpdatedAfterUtc;
 
@@ -175,9 +114,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
                 .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
     }
 
-    private static void AddParentSearch(
-        JsonObject search,
-        AkeneoProductBatchImportRequest request)
+    private static void AddParentSearch(JsonObject search, AkeneoProductBatchImportRequest request)
     {
         switch (request.ProductParentFilterMode)
         {
@@ -200,11 +137,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         if (values == null || !values.Any())
             return;
 
-        AddSearchCriterion(
-            search,
-            fieldName,
-            operatorName,
-            values);
+        AddSearchCriterion(search, fieldName, operatorName, values);
     }
 
     private static void AddSearchCriterion(
@@ -231,9 +164,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         criteria.Add(criterion);
     }
 
-    private static void MergeAdditionalSearchJson(
-        JsonObject search,
-        string additionalSearchJson)
+    private static void MergeAdditionalSearchJson(JsonObject search, string additionalSearchJson)
     {
         if (string.IsNullOrWhiteSpace(additionalSearchJson))
             return;
@@ -241,9 +172,7 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         var additionalNode = JsonNode.Parse(additionalSearchJson);
 
         if (additionalNode is not JsonObject additionalSearch)
-        {
             throw new InvalidOperationException("Additional search JSON must be a JSON object.");
-        }
 
         foreach (var item in additionalSearch)
         {
@@ -266,12 +195,10 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
         }
     }
 
-    private static JsonNode CloneJsonNode(
-        JsonNode node)
+    private static JsonNode CloneJsonNode(JsonNode node)
     {
         return node == null
             ? null
             : JsonNode.Parse(node.ToJsonString());
     }
-
 }

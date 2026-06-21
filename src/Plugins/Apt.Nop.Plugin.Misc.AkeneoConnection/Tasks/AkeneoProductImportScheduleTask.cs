@@ -31,7 +31,6 @@ public class AkeneoProductImportScheduleTask(
                 AddMappedManufacturers = true,
                 CreateMissingSpecificationAttributeOptions = true,
                 CreateMissingProductAttributeValues = true,
-                LogSkippedProducts = false,
                 SaveRawPayloadSnapshot = false
             });
 
@@ -41,7 +40,7 @@ public class AkeneoProductImportScheduleTask(
         syncRun.UpdatedCount = result.UpdatedCount;
         syncRun.SkippedCount = result.SkippedCount;
         syncRun.FailedCount = result.FailedCount;
-        syncRun.Status = result.Success ? "Completed" : "CompletedWithErrors";
+        syncRun.SyncStatusId = (int)result.SyncStatus;
         syncRun.ErrorSummary = result.Errors.Any()
             ? string.Join(" | ", result.Errors)
             : null;

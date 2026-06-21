@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc;
@@ -42,7 +43,7 @@ public class AkeneoConnectionConfigurationController(
         model.AvailableChannelCodes = new List<SelectListItem>();
         model.AvailableLocaleCodes = new List<SelectListItem>();
         model.AvailableCurrencyCodes = new List<SelectListItem>();
-
+        model.AvailableUnmappedAkeneoAttributeBehaviors = (await UnmappedAkeneoAttributeBehavior.Ignore.ToSelectListAsync()).ToList();
         IReadOnlyList<AkeneoChannelDefinition> channels;
 
         try
@@ -71,9 +72,6 @@ public class AkeneoConnectionConfigurationController(
             notificationService.WarningNotification("No Akeneo channels were found. Verify your Akeneo connection and channel configuration.");
             return;
         }
-
-
-        model.AvailableUnmappedAkeneoAttributeBehaviors = (await UnmappedAkeneoAttributeBehavior.Ignore.ToSelectListAsync(false)).ToList();
 
         model.DefaultChannelCode = ResolveSelectedCode(
             model.DefaultChannelCode,

@@ -29,8 +29,6 @@ public class AkeneoSyncProfile : BaseEntity
 
     public bool SaveRawPayloadSnapshot { get; set; }
 
-    public bool LogSkippedProducts { get; set; }
-
     // Import behavior
     public bool AddMappedCategories { get; set; }
 

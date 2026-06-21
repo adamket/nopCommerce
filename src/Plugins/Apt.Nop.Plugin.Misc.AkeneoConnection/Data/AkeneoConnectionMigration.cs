@@ -4,11 +4,12 @@ using FluentMigrator;
 using Nop.Core;
 using Nop.Data;
 using Nop.Data.Extensions;
+using Nop.Data.Mapping;
 using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-06-17 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
+[NopMigration("2026-06-21 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
 public class AkeneoConnectionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()
@@ -22,6 +23,27 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         CreateTable<AkeneoSyncItemLog>();
         CreateTable<AkeneoSyncProfile>();
         CreateTable<AkeneoSyncRunRecord>();
+        Create.TableFor<AkeneoFamilyVariantImportConfiguration>();
+        Create.TableFor<AkeneoFamilyVariantAxisMapping>();
+
+        var configurationTable =
+            NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantImportConfiguration));
+
+        var axisMappingTable =
+            NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantAxisMapping));
+
+        Create.Index($"IX_{configurationTable}_AkeneoFamilyCode")
+            .OnTable(configurationTable)
+            .OnColumn(nameof(AkeneoFamilyVariantImportConfiguration.AkeneoFamilyCode))
+            .Ascending()
+            .WithOptions()
+            .Unique();
+
+        Create.Index($"IX_{axisMappingTable}_ConfigurationId")
+            .OnTable(axisMappingTable)
+            .OnColumn(nameof(AkeneoFamilyVariantAxisMapping.FamilyVariantImportConfigurationId))
+            .Ascending();
+
     }
 
     public override void Down()
@@ -31,6 +53,8 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         DropTopicChildTableAsync<AkeneoSyncItemLog>().Wait();
         DropTopicChildTableAsync<AkeneoSyncProfile>().Wait();
         DropTopicChildTableAsync<AkeneoSyncRunRecord>().Wait();
+        DropTopicChildTableAsync<AkeneoFamilyVariantImportConfiguration>().Wait();
+        DropTopicChildTableAsync<AkeneoFamilyVariantAxisMapping>().Wait();
     }
 
 

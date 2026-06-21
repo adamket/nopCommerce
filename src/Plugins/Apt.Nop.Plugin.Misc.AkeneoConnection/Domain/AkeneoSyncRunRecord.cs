@@ -38,6 +38,7 @@ public enum SyncStatus
     Started = 10,
     Completed = 20,
     CompletedWithWarnings = 30,
+    CompletedWithErrors = 60,
     Failed = 40,
     Cancelled = 50
 }

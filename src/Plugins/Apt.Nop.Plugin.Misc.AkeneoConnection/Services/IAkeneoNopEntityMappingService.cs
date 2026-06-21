@@ -9,7 +9,7 @@ public interface IAkeneoNopEntityMappingService
 
     Task<IList<AkeneoNopEntityMapping>> GetAkeneoNopEntityMappingsAsync(AkeneoEntityType? akeneoEntityType = null);
 
-    Task UpsertAkeneoNopEntityMappingAsync(
+    Task<bool> UpsertAkeneoNopEntityMappingAsync(
         AkeneoEntityType akeneoEntityType,
         string akeneoCode,
         string akeneoUuid,
@@ -46,5 +46,15 @@ public interface IAkeneoNopEntityMappingService
 
     Task DeleteAkeneoNopEntityMappingByAkeneoUuidAsync(AkeneoEntityType akeneoEntityType,
         string akeneoUuid,
+        NopEntityType nopEntityType);
+
+    Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingByAkeneoUuidAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoUuid,
+        NopEntityType nopEntityType);
+
+    Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingByAkeneoCodeAsync(
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
         NopEntityType nopEntityType);
 }

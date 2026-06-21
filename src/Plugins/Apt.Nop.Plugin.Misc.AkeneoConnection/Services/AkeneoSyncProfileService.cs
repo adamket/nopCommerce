@@ -19,4 +19,15 @@ public class AkeneoSyncProfileService(IRepository<AkeneoSyncProfile> syncProfile
     {
         await syncProfileRepository.DeleteAsync(syncProfile);
     }
+
+    public async Task<AkeneoSyncProfile> GetAkeneoSyncProfileByIdAsync(int id)
+    {
+        return await syncProfileRepository.GetByIdAsync(id);
+    }
+
+    public async Task<IList<AkeneoSyncProfile>> GetAllAkeneoSyncProfilesAsync()
+    {
+        return await syncProfileRepository.Table.ToListAsync();
+    }
+
 }
