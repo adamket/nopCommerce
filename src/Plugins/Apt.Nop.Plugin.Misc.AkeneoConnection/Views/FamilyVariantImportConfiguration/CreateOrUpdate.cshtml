@@ -1,0 +1,586 @@
+@model AkeneoFamilyVariantImportConfigurationModel
+@using System.Text.Json
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
+
+@{
+
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+
+    Layout = "_AdminLayout";
+
+    var isCreate = Model.Id == 0;
+
+    ViewBag.PageTitle = isCreate
+        ? "Create Akeneo family variant import configuration"
+        : "Edit Akeneo family variant import configuration";
+
+
+
+    var vueModelJson = JsonSerializer.Serialize(
+        new
+        {
+            id = Model.Id,
+            akeneoFamilyCode = Model.AkeneoFamilyCode,
+            enabled = Model.Enabled,
+            variantRelationshipModeId = Model.VariantRelationshipModeId,
+            preserveExistingNopVariantStructure = Model.PreserveExistingNopVariantStructure,
+            associatedProductAttributeId = Model.AssociatedProductAttributeId,
+            associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
+            hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
+            displayOrder = Model.DisplayOrder,
+            axisMappings = Model.AxisMappings.Select(x => new
+            {
+                id = x.Id,
+                familyVariantImportConfigurationId = x.FamilyVariantImportConfigurationId,
+                akeneoAttributeCode = x.AkeneoAttributeCode,
+                nopProductAttributeId = x.NopProductAttributeId,
+                isRequired = x.IsRequired,
+                displayOrder = x.DisplayOrder
+            }),
+            availableProductAttributes = Model.AvailableProductAttributes.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            availableAkeneoFamilies = Model.AvailableAkeneoFamilies.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            })
+        },
+        new JsonSerializerOptions(JsonSerializerDefaults.Web));
+}
+
+<div class="akeneo-mapping">
+    <div id="akeneo-family-variant-config-edit-app" v-cloak>
+        <form asp-controller="AkeneoFamilyVariantImportConfiguration"
+              asp-action="@(isCreate ? "Create" : "Edit")"
+              method="post">
+
+            <input asp-for="Id" type="hidden" />
+
+            <div class="content-header clearfix">
+                <h1 class="float-left">
+                    <span class="akeneo-eyebrow">Akeneo Import</span>
+                    @ViewBag.PageTitle
+                    <small>
+                        <i class="fas fa-arrow-circle-left"></i>
+                        <a asp-action="List">back to list</a>
+                    </small>
+                </h1>
+
+                <div class="float-right">
+                    <button type="submit" name="save" class="btn btn-primary">
+                        <i class="far fa-save"></i>
+                        Save
+                    </button>
+
+                    @if (!isCreate)
+                    {
+                        <button type="button"
+                                class="btn btn-default"
+                                v-on:click="showDeleteModal = true">
+                            <i class="far fa-trash-alt"></i>
+                            Delete
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <section class="content">
+                <div class="container-fluid">
+                    <div asp-validation-summary="All" class="akeneo-row-errors text-danger"></div>
+
+                    <div class="card akeneo-mapping-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-sliders-h"></i>
+                                General configuration
+                            </h3>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="akeneo-mapping-detail">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label asp-for="AkeneoFamilyCode"></label>
+                                            <select asp-for="AkeneoFamilyCode"
+                                                    class="form-control"
+                                                    v-model="form.akeneoFamilyCode">
+                                                <option v-for="family in availableAkeneoFamilies"
+                                                        v-bind:key="family.value || 'empty'"
+                                                        v-bind:value="family.value">
+                                                    {{ family.text }}
+                                                </option>
+                                            </select>
+                                            <span asp-validation-for="AkeneoFamilyCode"></span>
+                                            <div class="form-text">
+                                                Select the Akeneo family this configuration applies to.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label asp-for="DisplayOrder"></label>
+                                            <input asp-for="DisplayOrder"
+                                                   type="number"
+                                                   class="form-control"
+                                                   v-model.number="form.displayOrder" />
+                                            <span asp-validation-for="DisplayOrder"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label>Status</label>
+                                            <div>
+                                                <label class="akeneo-switch">
+                                                    <input asp-for="Enabled"
+                                                           type="checkbox"
+                                                           v-model="form.enabled" />
+                                                    <span class="akeneo-switch-track">
+                                                        <span class="akeneo-switch-thumb"></span>
+                                                    </span>
+                                                    <span class="akeneo-switch-text">
+                                                        {{ form.enabled ? 'Enabled' : 'Disabled' }}
+                                                    </span>
+                                                </label>
+                                            </div>
+                                            <span asp-validation-for="Enabled"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr />
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label asp-for="VariantRelationshipModeId"></label>
+                                            <select asp-for="VariantRelationshipModeId"
+                                                    class="form-control"
+                                                    v-model.number="form.variantRelationshipModeId">
+                                                <option value="@((int)AkeneoVariantRelationshipMode.None)">
+                                                    None
+                                                </option>
+                                                <option value="@((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations)">
+                                                    Product attribute combinations
+                                                </option>
+                                                <option value="@((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue)">
+                                                    Associated-to-product product attribute values
+                                                </option>
+                                                <option value="@((int)AkeneoVariantRelationshipMode.GroupedProducts)">
+                                                    Grouped products
+                                                </option>
+                                            </select>
+                                            <span asp-validation-for="VariantRelationshipModeId"></span>
+                                            <div class="form-text">
+                                                Controls how newly inserted products and variants for this Akeneo family are represented in nopCommerce.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Existing nopCommerce structure</label>
+                                            <div>
+                                                <label class="akeneo-switch">
+                                                    <input asp-for="PreserveExistingNopVariantStructure"
+                                                           type="checkbox"
+                                                           v-model="form.preserveExistingNopVariantStructure" />
+                                                    <span class="akeneo-switch-track">
+                                                        <span class="akeneo-switch-thumb"></span>
+                                                    </span>
+                                                    <span class="akeneo-switch-text">
+                                                        Preserve existing parent variant structure
+                                                    </span>
+                                                </label>
+                                            </div>
+                                            <span asp-validation-for="PreserveExistingNopVariantStructure"></span>
+                                            <div class="form-text">
+                                                Recommended. If a nopCommerce parent already has variants, the import follows that existing structure.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <transition name="akeneo-detail-slide">
+                                    <div v-if="isAssociatedMode" class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label asp-for="AssociatedProductAttributeId"></label>
+                                                <select asp-for="AssociatedProductAttributeId"
+                                                        class="form-control"
+                                                        v-model="form.associatedProductAttributeId">
+                                                    <option v-for="attribute in availableProductAttributes"
+                                                            v-bind:key="attribute.value || 'empty'"
+                                                            v-bind:value="attribute.value">
+                                                        {{ attribute.text }}
+                                                    </option>
+                                                </select>
+                                                <span asp-validation-for="AssociatedProductAttributeId"></span>
+                                                <div class="form-text">
+                                                    Required only for associated-to-product product attribute value mode.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label asp-for="AssociatedValueNameTemplate"></label>
+                                                <input asp-for="AssociatedValueNameTemplate"
+                                                       class="form-control"
+                                                       v-model="form.associatedValueNameTemplate" />
+                                                <span asp-validation-for="AssociatedValueNameTemplate"></span>
+                                                <div class="form-text">
+                                                    Supports {sku} and {axes}. Example: {sku} - {axes}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+
+                                <transition name="akeneo-detail-slide">
+                                    <div v-if="usesChildProducts" class="row">
+                                        <div class="col-md-12">
+                                            <div class="form-group">
+                                                <label>Child product visibility</label>
+                                                <div>
+                                                    <label class="akeneo-switch">
+                                                        <input asp-for="HideChildProductsWhenRepresentedByParent"
+                                                               type="checkbox"
+                                                               v-model="form.hideChildProductsWhenRepresentedByParent" />
+                                                        <span class="akeneo-switch-track">
+                                                            <span class="akeneo-switch-thumb"></span>
+                                                        </span>
+                                                        <span class="akeneo-switch-text">
+                                                            Hide child products when represented by parent
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                                <span asp-validation-for="HideChildProductsWhenRepresentedByParent"></span>
+                                                <div class="form-text">
+                                                    Applies to grouped product and associated-to-product modes.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </div>
+
+                    <transition name="akeneo-detail-slide">
+                        <div v-if="isCombinationMode" class="card akeneo-mapping-card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-random"></i>
+                                    Axis mappings
+                                </h3>
+                            </div>
+
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    Map each Akeneo variant axis to a nopCommerce product attribute.
+                                    These mappings are used only for product attribute combination mode.
+                                </div>
+
+                                <div class="akeneo-list">
+                                    <div class="akeneo-group-row">
+                                        <a href="#"
+                                           class="akeneo-attribute-group-toggle"
+                                           v-bind:aria-expanded="axisMappingsOpen ? 'true' : 'false'"
+                                           v-on:click.prevent="axisMappingsOpen = !axisMappingsOpen">
+                                            <i class="fas fa-chevron-right chevron"></i>
+                                            Axis mappings
+                                            <span class="akeneo-group-count" v-text="form.axisMappings.length"></span>
+                                        </a>
+
+                                        <button type="button"
+                                                class="btn btn-default ml-auto"
+                                                v-on:click="addAxisMapping">
+                                            <i class="fas fa-plus-square"></i>
+                                            Add axis mapping
+                                        </button>
+                                    </div>
+
+                                    <transition name="akeneo-detail-slide">
+                                        <div v-show="axisMappingsOpen" class="akeneo-group-items">
+                                            <div v-for="(row, index) in form.axisMappings"
+                                                 v-bind:key="row.uid"
+                                                 class="akeneo-row-shell">
+                                                <div class="akeneo-row"
+                                                     v-bind:class="axisRowClass(row)">
+                                                    <div class="akeneo-col">
+                                                        <div class="form-group mb-0">
+                                                            <label>Akeneo attribute code</label>
+
+                                                            <input type="hidden"
+                                                                   v-bind:name="axisName(index, 'Id')"
+                                                                   v-bind:value="row.id" />
+
+                                                            <input type="hidden"
+                                                                   v-bind:name="axisName(index, 'FamilyVariantImportConfigurationId')"
+                                                                   v-bind:value="row.familyVariantImportConfigurationId" />
+
+                                                            <input type="text"
+                                                                   class="form-control"
+                                                                   v-bind:name="axisName(index, 'AkeneoAttributeCode')"
+                                                                   v-model="row.akeneoAttributeCode"
+                                                                   placeholder="color" />
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="akeneo-col">
+                                                        <div class="form-group mb-0">
+                                                            <label>nopCommerce product attribute</label>
+                                                            <select class="form-control"
+                                                                    v-bind:name="axisName(index, 'NopProductAttributeId')"
+                                                                    v-model.number="row.nopProductAttributeId">
+                                                                <option v-for="attribute in availableProductAttributes"
+                                                                        v-bind:key="attribute.value || 'empty'"
+                                                                        v-bind:value="numberOrEmpty(attribute.value)">
+                                                                    {{ attribute.text }}
+                                                                </option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="akeneo-col">
+                                                        <label class="akeneo-switch">
+                                                            <input type="hidden"
+                                                                   v-bind:name="axisName(index, 'IsRequired')"
+                                                                   value="false" />
+                                                            <input type="checkbox"
+                                                                   v-bind:name="axisName(index, 'IsRequired')"
+                                                                   value="true"
+                                                                   v-model="row.isRequired" />
+                                                            <span class="akeneo-switch-track">
+                                                                <span class="akeneo-switch-thumb"></span>
+                                                            </span>
+                                                            <span class="akeneo-switch-text">
+                                                                {{ row.isRequired ? 'Required' : 'Optional' }}
+                                                            </span>
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="akeneo-col">
+                                                        <div class="form-group mb-0">
+                                                            <label>Display order</label>
+                                                            <input type="number"
+                                                                   class="form-control"
+                                                                   v-bind:name="axisName(index, 'DisplayOrder')"
+                                                                   v-model.number="row.displayOrder" />
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="akeneo-col akeneo-col-actions">
+                                                        <button type="button"
+                                                                class="btn btn-default"
+                                                                v-on:click="removeAxisMapping(index)">
+                                                            <i class="far fa-trash-alt"></i>
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <transition name="akeneo-detail-slide">
+                                                    <div v-if="axisRowNeedsAttention(row)" class="akeneo-mapping-detail">
+                                                        <div class="akeneo-row-errors mb-0">
+                                                            <i class="fas fa-exclamation-triangle akeneo-row-errors-icon"></i>
+                                                            <div>
+                                                                <div class="akeneo-row-errors-title">
+                                                                    Mapping is incomplete
+                                                                </div>
+                                                                <ul>
+                                                                    <li v-if="!row.akeneoAttributeCode">
+                                                                        Akeneo attribute code is required.
+                                                                    </li>
+                                                                    <li v-if="!row.nopProductAttributeId">
+                                                                        nopCommerce product attribute is required.
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </transition>
+                                            </div>
+                                        </div>
+                                    </transition>
+                                </div>
+                            </div>
+                        </div>
+                    </transition>
+                </div>
+            </section>
+        </form>
+
+        @if (!isCreate)
+        {
+            <div v-if="showDeleteModal"
+                 class="modal fade show"
+                 style="display: block;"
+                 tabindex="-1"
+                 role="dialog"
+                 aria-modal="true">
+                <div class="modal-dialog" role="document">
+                    <form asp-controller="AkeneoFamilyVariantImportConfiguration"
+                          asp-action="Delete"
+                          asp-route-id="@Model.Id"
+                          method="post">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Delete configuration</h5>
+                                <button type="button"
+                                        class="close"
+                                        aria-label="Close"
+                                        v-on:click="showDeleteModal = false">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+
+                            <div class="modal-body">
+                                Are you sure you want to delete this family variant import configuration?
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button"
+                                        class="btn btn-default"
+                                        v-on:click="showDeleteModal = false">
+                                    Cancel
+                                </button>
+
+                                <button type="submit" class="btn btn-danger">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div v-if="showDeleteModal"
+                 class="modal-backdrop fade show"
+                 v-on:click="showDeleteModal = false"></div>
+        }
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+<script>
+    (() => {
+        const { createApp } = Vue;
+
+        const initialModel = @Html.Raw(vueModelJson);
+
+        createApp({
+            data() {
+                return {
+                    showDeleteModal: false,
+                    axisMappingsOpen: true,
+                    modes: {
+                        none: @((int)AkeneoVariantRelationshipMode.None),
+                        combinations: @((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations),
+                        associated: @((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue),
+                        grouped: @((int)AkeneoVariantRelationshipMode.GroupedProducts)
+                    },
+                    availableProductAttributes: initialModel.availableProductAttributes,
+                    availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
+                    form: {
+                        ...initialModel,
+                        associatedProductAttributeId: initialModel.associatedProductAttributeId ?? '',
+                        axisMappings: initialModel.axisMappings.map((row, index) => ({
+                            uid: this?.newUid ? this.newUid() : `${Date.now()}-${index}`,
+                            id: row.id || 0,
+                            familyVariantImportConfigurationId: row.familyVariantImportConfigurationId || initialModel.id || 0,
+                            akeneoAttributeCode: row.akeneoAttributeCode || '',
+                            nopProductAttributeId: row.nopProductAttributeId || '',
+                            isRequired: row.isRequired !== false,
+                            displayOrder: row.displayOrder || index + 1
+                        }))
+                    }
+                };
+            },
+
+            computed: {
+                isCombinationMode() {
+                    return Number(this.form.variantRelationshipModeId) === this.modes.combinations;
+                },
+
+                isAssociatedMode() {
+                    return Number(this.form.variantRelationshipModeId) === this.modes.associated;
+                },
+
+                isGroupedMode() {
+                    return Number(this.form.variantRelationshipModeId) === this.modes.grouped;
+                },
+
+                usesChildProducts() {
+                    return this.isAssociatedMode || this.isGroupedMode;
+                }
+            },
+
+            mounted() {
+                if (this.form.axisMappings.length === 0)
+                    this.addAxisMapping();
+            },
+
+            methods: {
+                newUid() {
+                    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                },
+
+                addAxisMapping() {
+                    this.form.axisMappings.push({
+                        uid: this.newUid(),
+                        id: 0,
+                        familyVariantImportConfigurationId: this.form.id || 0,
+                        akeneoAttributeCode: '',
+                        nopProductAttributeId: '',
+                        isRequired: true,
+                        displayOrder: this.form.axisMappings.length + 1
+                    });
+
+                    this.axisMappingsOpen = true;
+                },
+
+                removeAxisMapping(index) {
+                    this.form.axisMappings.splice(index, 1);
+
+                    this.form.axisMappings.forEach((row, rowIndex) => {
+                        if (!row.displayOrder)
+                            row.displayOrder = rowIndex + 1;
+                    });
+                },
+
+                axisName(index, propertyName) {
+                    return `AxisMappings[${index}].${propertyName}`;
+                },
+
+                numberOrEmpty(value) {
+                    if (value === null || value === undefined || value === '')
+                        return '';
+
+                    return Number(value);
+                },
+
+                axisRowNeedsAttention(row) {
+                    return !row.akeneoAttributeCode || !row.nopProductAttributeId;
+                },
+
+                axisRowClass(row) {
+                    if (this.axisRowNeedsAttention(row))
+                        return 'is-attention';
+
+                    return 'is-mapped';
+                }
+            }
+        }).mount('#akeneo-family-variant-config-edit-app');
+    })();
+</script>

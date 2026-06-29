@@ -9,7 +9,7 @@ using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
-public class AkeneoAttributeAttributeMappingModelFactory(
+public class AkeneoAttributeMappingModelFactory(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoAttributeMappingService akeneoAttributeMappingService,
     IAkeneoNopEntityMappingService akeneoNopEntityMappingService,

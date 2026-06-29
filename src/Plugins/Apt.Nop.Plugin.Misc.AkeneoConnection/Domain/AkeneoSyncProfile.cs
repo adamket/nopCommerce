@@ -43,6 +43,8 @@ public class AkeneoSyncProfile : BaseEntity
 
     public string AkeneoCategoryCodes { get; set; }
 
+    public string AkeneoProductGroupCodes { get; set; }
+
     public int CategoryFilterModeId { get; set; }
 
     public int ProductEnabledFilterId { get; set; }

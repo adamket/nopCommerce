@@ -1,6 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -189,7 +190,25 @@ public class AkeneoConnectionConfigurationController(
 
     #region Methods
 
+
+    [AuthorizeAdmin]
+    [HttpPost("admin/akeneo-connection/test-connection")]
+    public async Task<IActionResult> TestConnection(AkeneoApiCredentials apiCredentials, CancellationToken cancellationToken)
+    {
+
+        var result = await akeneoApiClient.TestConnectionAsync(
+            apiCredentials, cancellationToken);
+
+        return Json(new
+        {
+            success = result.Success,
+            message = result.Message
+        });
+    }
+
+
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet("admin/akeneo-connection/configure")]
     public async Task<IActionResult> Configure()
     {
         //load settings for a chosen store scope
@@ -226,8 +245,8 @@ public class AkeneoConnectionConfigurationController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/Configure.cshtml", model);
     }
 
-    [HttpPost]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost("admin/akeneo-connection/configure")]
     public async Task<IActionResult> Configure(AkeneoConfigurationModel model)
     {
         if (!ModelState.IsValid)
@@ -264,7 +283,7 @@ public class AkeneoConnectionConfigurationController(
 
         notificationService.SuccessNotification(await localizationService.GetResourceAsync("Admin.Plugins.Saved"));
 
-        return await Configure();
+        return RedirectToAction("Configure");
     }
 
     #endregion

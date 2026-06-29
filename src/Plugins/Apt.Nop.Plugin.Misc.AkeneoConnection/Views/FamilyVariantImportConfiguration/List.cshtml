@@ -1,0 +1,198 @@
+@model AkeneoFamilyVariantImportConfigurationListModel
+@using System.Text.Json
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
+
+@{
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Akeneo family variant import configurations";
+
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+    var configurationsJson = JsonSerializer.Serialize(
+        Model.Configurations.Select(x => new
+        {
+            id = x.Id,
+            akeneoFamilyCode = x.AkeneoFamilyCode,
+            enabled = x.Enabled,
+            variantRelationshipModeId = x.VariantRelationshipModeId,
+            preserveExistingNopVariantStructure = x.PreserveExistingNopVariantStructure,
+            displayOrder = x.DisplayOrder
+        }),
+        new JsonSerializerOptions(JsonSerializerDefaults.Web));
+}
+
+<div class="akeneo-mapping">
+    <div id="akeneo-family-variant-config-list-app" v-cloak>
+        <div class="content-header clearfix">
+            <h1 class="float-left">
+                <span class="akeneo-eyebrow">Akeneo Import</span>
+                Family variant import configurations
+                <small class="akeneo-dim">
+                    Configure how Akeneo families create nopCommerce products, variants, combinations, or grouped products.
+                </small>
+            </h1>
+
+            <div class="float-right">
+                <a asp-action="Create" class="btn btn-primary">
+                    <i class="fas fa-plus-square"></i>
+                    Add new
+                </a>
+            </div>
+        </div>
+
+        <section class="content">
+            <div class="container-fluid">
+                <div class="card akeneo-mapping-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-project-diagram"></i>
+                            Configured families
+                        </h3>
+                    </div>
+
+                    <div class="card-body">
+                        <div v-if="orderedConfigurations.length === 0" class="alert alert-info">
+                            No family variant import configurations have been created yet.
+                        </div>
+
+                        <div v-else class="akeneo-list">
+                            <div class="akeneo-group-row">
+                                <a href="#"
+                                   class="akeneo-attribute-group-toggle"
+                                   v-bind:aria-expanded="familiesOpen ? 'true' : 'false'"
+                                   v-on:click.prevent="familiesOpen = !familiesOpen">
+                                    <i class="fas fa-chevron-right chevron"></i>
+                                    Family configurations
+                                    <span class="akeneo-group-count" v-text="orderedConfigurations.length"></span>
+                                </a>
+                            </div>
+
+                            <transition name="akeneo-detail-slide">
+                                <div v-show="familiesOpen" class="akeneo-group-items">
+                                    <div v-for="item in orderedConfigurations"
+                                         v-bind:key="item.id"
+                                         class="akeneo-row-shell">
+                                        <div class="akeneo-row"
+                                             v-bind:class="rowStatusClass(item)">
+                                            <div class="akeneo-col">
+                                                <div class="akeneo-code" v-text="item.akeneoFamilyCode"></div>
+                                                <div class="akeneo-label">Akeneo family code</div>
+                                            </div>
+
+                                            <div class="akeneo-col">
+                                                <span class="akeneo-type-chip" v-text="modeLabel(item.variantRelationshipModeId)"></span>
+                                            </div>
+
+                                            <div class="akeneo-col">
+                                                <div>
+                                                    <span class="akeneo-maps-arrow">
+                                                        <i class="fas fa-arrow-right"></i>
+                                                    </span>
+                                                    <span class="akeneo-summary-target-type">
+                                                        nopCommerce variant structure
+                                                    </span>
+                                                </div>
+                                                <div class="akeneo-summary-target-detail">
+                                                    <span v-if="item.preserveExistingNopVariantStructure">
+                                                        Preserve existing parent structure when detected
+                                                    </span>
+                                                    <span v-else>
+                                                        Always use this family configuration for new imports
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div class="akeneo-col">
+                                                <span class="akeneo-status" v-text="item.enabled ? 'Enabled' : 'Disabled'"></span>
+                                                <div class="akeneo-summary-target-detail">
+                                                    Display order: <span v-text="item.displayOrder"></span>
+                                                </div>
+                                            </div>
+
+                                            <div class="akeneo-col akeneo-col-actions">
+                                                <a class="btn btn-default"
+                                                   v-bind:href="editUrl(item.id)">
+                                                    <i class="fas fa-pencil-alt"></i>
+                                                    Edit
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </transition>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+<script>
+    (() => {
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    familiesOpen: true,
+                    configurations: @Html.Raw(configurationsJson),
+                    modes: {
+                        none: @((int)AkeneoVariantRelationshipMode.None),
+                        combinations: @((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations),
+                        associated: @((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue),
+                        grouped: @((int)AkeneoVariantRelationshipMode.GroupedProducts)
+                    }
+                };
+            },
+
+            computed: {
+                orderedConfigurations() {
+                    return [...this.configurations].sort((a, b) => {
+                        const displayOrderCompare = (a.displayOrder || 0) - (b.displayOrder || 0);
+
+                        if (displayOrderCompare !== 0)
+                            return displayOrderCompare;
+
+                        return (a.akeneoFamilyCode || '').localeCompare(b.akeneoFamilyCode || '');
+                    });
+                }
+            },
+
+            methods: {
+                modeLabel(modeId) {
+                    switch (Number(modeId)) {
+                        case this.modes.combinations:
+                            return 'Product attribute combinations';
+                        case this.modes.associated:
+                            return 'Associated-to-product values';
+                        case this.modes.grouped:
+                            return 'Grouped products';
+                        case this.modes.none:
+                            return 'None';
+                        default:
+                            return 'Unknown';
+                    }
+                },
+
+                rowStatusClass(item) {
+                    if (!item.enabled)
+                        return 'is-ignored';
+
+                    if (!item.preserveExistingNopVariantStructure)
+                        return 'is-attention';
+
+                    return 'is-mapped';
+                },
+
+                editUrl(id) {
+                    return '@Url.Action("Edit", "AkeneoFamilyVariantImportConfiguration")/' + id;
+                }
+            }
+        }).mount('#akeneo-family-variant-config-list-app');
+    })();
+</script>

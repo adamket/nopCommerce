@@ -3,6 +3,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+
 public class AkeneoFamilyVariantImportConfigurationService(
     IRepository<AkeneoFamilyVariantImportConfiguration> configurationRepository,
     IRepository<AkeneoFamilyVariantAxisMapping> axisMappingRepository)
@@ -98,13 +99,8 @@ public class AkeneoFamilyVariantImportConfigurationService(
                 : configuration.AssociatedValueNameTemplate,
             HideChildProductsWhenRepresentedByParent = configuration.HideChildProductsWhenRepresentedByParent,
             AxisMappings = axisMappings
-                .Select(x => new AkeneoVariantAxisMapping
-                {
-                    AkeneoAttributeCode = x.AkeneoAttributeCode,
-                    NopProductAttributeId = x.NopProductAttributeId,
-                    IsRequired = x.IsRequired,
-                    DisplayOrder = x.DisplayOrder
-                })
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.Id)
                 .ToList()
         };
     }

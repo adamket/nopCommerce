@@ -13,50 +13,40 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AuthorizeAdmin]
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
-public class AkeneoFamilyVariantImportConfigurationController : BasePluginController
+public class AkeneoFamilyVariantImportConfigurationController(
+    IAkeneoFamilyVariantImportConfigurationService configurationService,
+    IAkeneoFamilyVariantImportConfigurationModelFactory modelFactory,
+    INotificationService notificationService)
+    : BasePluginController
 {
     private const string ListViewPath =
-        "~/Plugins/Apt.Misc.AkeneoConnection/Views/FamilyVariantImportConfiguration/List.cshtml";
+        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyVariantImportConfiguration/List.cshtml";
 
     private const string EditViewPath =
-        "~/Plugins/Apt.Misc.AkeneoConnection/Views/FamilyVariantImportConfiguration/Edit.cshtml";
+        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyVariantImportConfiguration/CreateOrUpdate.cshtml";
 
-    private readonly IAkeneoFamilyVariantImportConfigurationService _configurationService;
-    private readonly IAkeneoFamilyVariantImportConfigurationModelFactory _modelFactory;
-    private readonly INotificationService _notificationService;
-
-    public AkeneoFamilyVariantImportConfigurationController(
-        IAkeneoFamilyVariantImportConfigurationService configurationService,
-        IAkeneoFamilyVariantImportConfigurationModelFactory modelFactory,
-        INotificationService notificationService)
-    {
-        _configurationService = configurationService;
-        _modelFactory = modelFactory;
-        _notificationService = notificationService;
-    }
-
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/family-mapping/list")]
     public async Task<IActionResult> List()
     {
-        var model = await _modelFactory.PrepareListModelAsync();
+        var model = await modelFactory.PrepareListModelAsync();
         return View(ListViewPath, model);
     }
 
     [HttpGet]
     public async Task<IActionResult> Create()
     {
-        var model = await _modelFactory.PrepareModelAsync(null);
+        var model = await modelFactory.PrepareModelAsync(null);
         return View(EditViewPath, model);
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(AkeneoFamilyVariantImportConfigurationModel model)
     {
-        ValidateModel(model);
+        await ValidateModelAsync(model);
 
         if (!ModelState.IsValid)
         {
-            model = await _modelFactory.PrepareModelAsync(model);
+            model = await modelFactory.PrepareModelAsync(model);
             return View(EditViewPath, model);
         }
 
@@ -72,11 +62,11 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
             DisplayOrder = model.DisplayOrder
         };
 
-        await _configurationService.InsertAsync(configuration);
+        await configurationService.InsertAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
 
-        _notificationService.SuccessNotification("Family variant import configuration created.");
+        notificationService.SuccessNotification("Family variant import configuration created.");
 
         return RedirectToAction(nameof(Edit), new { id = configuration.Id });
     }
@@ -84,12 +74,12 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
     [HttpGet]
     public async Task<IActionResult> Edit(int id)
     {
-        var configuration = await _configurationService.GetByIdAsync(id);
+        var configuration = await configurationService.GetByIdAsync(id);
 
         if (configuration == null)
             return RedirectToAction(nameof(List));
 
-        var model = await _modelFactory.PrepareModelAsync(null, configuration);
+        var model = await modelFactory.PrepareModelAsync(null, configuration);
 
         return View(EditViewPath, model);
     }
@@ -97,16 +87,16 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
     [HttpPost]
     public async Task<IActionResult> Edit(AkeneoFamilyVariantImportConfigurationModel model)
     {
-        var configuration = await _configurationService.GetByIdAsync(model.Id);
+        var configuration = await configurationService.GetByIdAsync(model.Id);
 
         if (configuration == null)
             return RedirectToAction(nameof(List));
 
-        ValidateModel(model);
+        await ValidateModelAsync(model);
 
         if (!ModelState.IsValid)
         {
-            model = await _modelFactory.PrepareModelAsync(model, configuration);
+            model = await modelFactory.PrepareModelAsync(model, configuration);
             return View(EditViewPath, model);
         }
 
@@ -119,23 +109,33 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
         configuration.DisplayOrder = model.DisplayOrder;
 
-        await _configurationService.UpdateAsync(configuration);
+        await configurationService.UpdateAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
 
-        _notificationService.SuccessNotification("Family variant import configuration updated.");
+        notificationService.SuccessNotification("Family variant import configuration updated.");
 
         return RedirectToAction(nameof(Edit), new { id = configuration.Id });
     }
 
-    private void ValidateModel(AkeneoFamilyVariantImportConfigurationModel model)
+    private async Task ValidateModelAsync(AkeneoFamilyVariantImportConfigurationModel model)
     {
         if (string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
         {
             ModelState.AddModelError(
                 nameof(model.AkeneoFamilyCode),
                 "Akeneo family is required.");
+            return;
         }
+
+        var existing = await configurationService.GetByFamilyCodeAsync(model.AkeneoFamilyCode);
+        if (existing != null && existing.Id != model.Id)
+        {
+            ModelState.AddModelError(
+                nameof(model.AkeneoFamilyCode),
+                "A configuration for this family already exists.");
+        }
+
 
         var mode = (AkeneoVariantRelationshipMode)model.VariantRelationshipModeId;
 
@@ -156,16 +156,19 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
                 nameof(model.AxisMappings),
                 "Product attribute combination mode requires at least one axis mapping.");
         }
+
+
+
     }
 
     private async Task SaveAxisMappingsAsync(
         int configurationId,
         IList<AkeneoFamilyVariantAxisMappingModel> models)
     {
-        var existing = await _configurationService.GetAxisMappingsAsync(configurationId);
+        var existing = await configurationService.GetAxisMappingsAsync(configurationId);
 
         foreach (var existingMapping in existing)
-            await _configurationService.DeleteAxisMappingAsync(existingMapping);
+            await configurationService.DeleteAxisMappingAsync(existingMapping);
 
         foreach (var model in models.Where(x =>
                      !string.IsNullOrWhiteSpace(x.AkeneoAttributeCode) &&
@@ -180,7 +183,7 @@ public class AkeneoFamilyVariantImportConfigurationController : BasePluginContro
                 DisplayOrder = model.DisplayOrder
             };
 
-            await _configurationService.InsertAxisMappingAsync(mapping);
+            await configurationService.InsertAxisMappingAsync(mapping);
         }
     }
 }

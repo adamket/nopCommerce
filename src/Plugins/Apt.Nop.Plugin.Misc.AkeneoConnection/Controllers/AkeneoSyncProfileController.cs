@@ -139,7 +139,6 @@ public class AkeneoSyncProfileController(
         profile.Enabled = model.Enabled;
         profile.AkeneoChannel = model.AkeneoChannel?.Trim();
 
-        // Multi-select posts to SelectedAkeneoLocaleCodes.
         profile.AkeneoLocales = model.SelectedAkeneoLocaleCodes.BuildCsv();
 
         profile.RootCategoryCode = model.RootCategoryCode?.Trim();
@@ -164,6 +163,14 @@ public class AkeneoSyncProfileController(
         profile.UpdatedSinceLastNDays = model.UpdatedSinceLastNDays;
         profile.ProductParentFilterModeId = model.ProductParentFilterModeId;
         profile.AdditionalSearchJson = model.AdditionalSearchJson?.Trim();
+
+        profile.AkeneoProductGroupCodes = model.SelectedAkeneoProductGroupCodes
+            ?.Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .BuildCsv();
+
+        profile.CategoryFilterModeId = model.CategoryFilterModeId;
 
         if (profile.Id <= 0)
             profile.CreatedOnUtc = now;

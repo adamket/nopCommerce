@@ -1,5 +1,4 @@
-﻿using System.Data;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
 using Nop.Core;
 using Nop.Data;
@@ -9,7 +8,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-06-21 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
+[NopMigration("2026-06-23 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
 public class AkeneoConnectionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()
@@ -23,8 +22,8 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         CreateTable<AkeneoSyncItemLog>();
         CreateTable<AkeneoSyncProfile>();
         CreateTable<AkeneoSyncRunRecord>();
-        Create.TableFor<AkeneoFamilyVariantImportConfiguration>();
-        Create.TableFor<AkeneoFamilyVariantAxisMapping>();
+        CreateTable<AkeneoFamilyVariantImportConfiguration>();
+        CreateTable<AkeneoFamilyVariantAxisMapping>();
 
         var configurationTable =
             NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantImportConfiguration));
@@ -60,26 +59,15 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
 
     private void CreateTable<T>() where T : BaseEntity
     {
-        var tableName = $"{AkeneoConstants.TablePrefix}{typeof(T).Name}";
-      //  var foreignKeyName = $"FK_{tableName}_Topic_TopicId";
+        var tableName = NameCompatibilityManager.GetTableName(typeof(T));
 
         if (!Schema.Table(tableName).Exists())
             Create.TableFor<T>();
-
-        //if (!Schema.Table(tableName).Constraint(foreignKeyName).Exists())
-        //{
-        //    Create.ForeignKey(foreignKeyName)
-        //        .FromTable(tableName)
-        //        .ForeignColumn("TopicId")
-        //        .ToTable("Topic")
-        //        .PrimaryColumn("Id")
-        //        .OnDelete(Rule.Cascade);
-        //}
     }
 
     private async Task DropTopicChildTableAsync<T>() where T : BaseEntity
     {
-        var tableName = $"{AkeneoConstants.TablePrefix}{typeof(T).Name}";
+        var tableName = $"{AkeneoConnectionConstants.TablePrefix}{typeof(T).Name}";
 
         if (!Schema.Table(tableName).Exists())
             return;

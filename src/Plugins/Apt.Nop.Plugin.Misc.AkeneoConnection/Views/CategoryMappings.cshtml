@@ -4,8 +4,8 @@
 @{
     Layout = "_ConfigurePlugin";
 
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddCssFileParts($"{AkeneoConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.CategoryMappings");
 
     ViewBag.PageTitle = "Akeneo Connection - Category Mappings";

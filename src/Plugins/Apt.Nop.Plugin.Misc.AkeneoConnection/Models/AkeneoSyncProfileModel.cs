@@ -71,6 +71,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public string ProductParentFilterModeName { get; set; }
 
     public string AdditionalSearchJson { get; set; }
+    public string AkeneoProductGroupCodes { get; set; }
+    public IList<string> SelectedAkeneoProductGroupCodes { get; set; } = new List<string>();
 
     public IList<SelectListItem> AvailableImportModes { get; set; } = new List<SelectListItem>();
 
@@ -81,4 +83,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableProductEnabledFilters { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductParentFilterModes { get; set; } = new List<SelectListItem>();
+
+ 
+
+    public IList<SelectListItem> AvailableAkeneoProductGroups { get; set; } = new List<SelectListItem>();
 }

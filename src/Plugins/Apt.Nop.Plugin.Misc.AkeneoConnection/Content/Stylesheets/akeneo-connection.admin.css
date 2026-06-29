@@ -695,6 +695,15 @@
   animation: akeneo-errors-in .18s ease both;
 }
 
+
+  .akeneo-mapping .akeneo-row-errors.validation-summary-valid {
+    display: none;
+  }
+
+  .akeneo-mapping .akeneo-row-errors.validation-summary-errors {
+    display: flex;
+  }
+
   /* colored left edge, matching the row status bars */
   .akeneo-mapping .akeneo-row-errors::before {
     content: "";

@@ -23,7 +23,7 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetFamiliesAsync(
+    Task<IReadOnlyList<AkeneoFamilyDefinition>> GetFamiliesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default);
 
@@ -59,6 +59,16 @@ public interface IAkeneoApiClient
         int limit = 100,
         string searchAfter = null,
         string searchJson = null,
+        CancellationToken cancellationToken = default);
+
+
+    Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesAsync(
+        string familyCode,
+        int limit = 100,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
+        int limit = 100,
         CancellationToken cancellationToken = default);
 
 }

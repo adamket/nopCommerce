@@ -1,10 +1,8 @@
 ﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using System.Text.Json.Serialization;
 
-public class AkeneoChannelDefinition
+public class AkeneoChannelDefinition : LocalizableDefinition
 {
-    [JsonPropertyName("code")]
-    public string Code { get; set; } = string.Empty;
 
     [JsonPropertyName("currencies")]
     public List<string> Currencies { get; set; } = new();
@@ -12,6 +10,4 @@ public class AkeneoChannelDefinition
     [JsonPropertyName("locales")]
     public List<string> Locales { get; set; } = new();
 
-    [JsonPropertyName("labels")]
-    public Dictionary<string, string> Labels { get; set; } = new();
 }

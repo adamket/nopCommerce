@@ -12,4 +12,6 @@ public class AkeneoFamilyVariantAxisMapping : BaseEntity
     public bool IsRequired { get; set; } = true;
 
     public int DisplayOrder { get; set; }
+
+    public int AkeneoVariantAxisLevel { get; set; } = 1;
 }

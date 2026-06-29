@@ -24,7 +24,7 @@ public class AkeneoSyncController(
     private const string DryRunViewPath =
         "~/Plugins/Apt.Misc.AkeneoConnection/Views/DryRun.cshtml";
 
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/dry-run")]
     public IActionResult DryRun()
     {
         return View(DryRunViewPath, new AkeneoProductMappingPreviewModel
@@ -35,7 +35,7 @@ public class AkeneoSyncController(
         });
     }
 
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/dry-run")]
     public async Task<IActionResult> DryRun(
         AkeneoProductMappingPreviewModel input,
         CancellationToken cancellationToken)

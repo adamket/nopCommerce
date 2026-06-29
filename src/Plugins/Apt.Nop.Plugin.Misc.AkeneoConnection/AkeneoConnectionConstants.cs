@@ -1,6 +1,6 @@
 ﻿
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
-public class AkeneoConstants
+public class AkeneoConnectionConstants
 {
     public const string SystemName = "Apt.Nop.Plugin.Misc.AkeneoConnection";
     public const string TablePrefix = "Apt_";

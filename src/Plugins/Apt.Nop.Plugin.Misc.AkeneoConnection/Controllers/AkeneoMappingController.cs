@@ -34,7 +34,7 @@ public class AkeneoMappingController(
     {
         var model = await attributeMappingModelFactory.PrepareAttributeMappingListModelAsync();
 
-        return View($"{AkeneoConstants.PathToPlugin}/Views/AttributeMappings.cshtml", model);
+        return View($"{AkeneoConnectionConstants.PathToPlugin}/Views/AttributeMappings.cshtml", model);
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]

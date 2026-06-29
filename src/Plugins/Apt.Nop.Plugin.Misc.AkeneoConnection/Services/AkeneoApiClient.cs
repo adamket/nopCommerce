@@ -43,7 +43,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         _staticCacheManager = staticCacheManager;
 
         // SystemName is "apt.nop.plugin.misc.akeneoconnection"
-        _httpClient = httpClientFactory.CreateClient(AkeneoConstants.SystemName);
+        _httpClient = httpClientFactory.CreateClient(AkeneoConnectionConstants.SystemName);
 
         if (!string.IsNullOrWhiteSpace(_settings.AkeneoConnectionBaseUrl))
             Configure(_settings.AkeneoConnectionBaseUrl);
@@ -138,13 +138,14 @@ public class AkeneoApiClient : IAkeneoApiClient
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync<AkeneoAttributeDefinition>("api/rest/v1/attributes", limit, cancellationToken);
 
-    public async Task<IReadOnlyList<JsonElement>> GetFamiliesAsync(
-        int limit = 100, CancellationToken cancellationToken = default)
-        => await GetSimpleCollectionAsync("api/rest/v1/families", limit, cancellationToken);
-
     public async Task<IReadOnlyList<JsonElement>> GetLocalesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/locales", limit, cancellationToken);
+
+
+    public async Task<IReadOnlyList<AkeneoFamilyDefinition>> GetFamiliesAsync(
+        int limit = 100, CancellationToken cancellationToken = default)
+        => await GetSimpleCollectionAsync<AkeneoFamilyDefinition>("api/rest/v1/families", limit, cancellationToken);
 
     public async Task<IReadOnlyList<AkeneoChannelDefinition>> GetChannelsAsync(
         int limit = 100,
@@ -170,6 +171,14 @@ public class AkeneoApiClient : IAkeneoApiClient
         apiCredentials ??= GetApiCredentialsFromSettings();
         await _staticCacheManager.RemoveAsync(CreateTokenCacheKey(apiCredentials));
     }
+
+    public async Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+        => await GetSimpleCollectionAsync<AkeneoProductGroupDefinition>(
+            "api/rest/v1/groups",
+            limit,
+            cancellationToken);
 
 
     public async Task<AkeneoProductPageResult> GetProductsPageAsync(
@@ -216,6 +225,37 @@ public class AkeneoApiClient : IAkeneoApiClient
         result.SearchAfter = ExtractQueryStringValue(nextPageUrl, "search_after");
 
         return result;
+    }
+
+    public async Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesAsync(
+        string familyCode,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(familyCode))
+            throw new ArgumentException("Family code is required.", nameof(familyCode));
+
+        var variants = await GetSimpleCollectionAsync<AkeneoFamilyVariantDefinition>(
+            $"api/rest/v1/families/{Uri.EscapeDataString(familyCode)}/variants",
+            limit, cancellationToken);
+
+        // A family can define several variants; union their axes across levels, then
+        // dedupe by code (keeping the lowest level if one repeats) so the caller gets
+        // one entry per axis attribute.
+        return variants
+            .SelectMany(variant => variant.VariantAttributeSets
+                .SelectMany(set => set.Axes
+                    .Where(axisCode => !string.IsNullOrWhiteSpace(axisCode))
+                    .Select(axisCode => new AkeneoFamilyAxis
+                    {
+                        AttributeCode = axisCode.Trim(),
+                        Level = set.Level
+                    })))
+            .GroupBy(axis => axis.AttributeCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderBy(axis => axis.Level).First())
+            .OrderBy(axis => axis.Level)
+            .ThenBy(axis => axis.AttributeCode, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     #endregion
@@ -580,7 +620,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         };
     }
 
-    private AkeneoApiCredentials GetApiCredentialsFromSettings()
+    private AkeneoApiCredentials GetApiCredentialsFromSettings(int? storeId = null)
         => new()
         {
             BaseUrl = _settings.AkeneoConnectionBaseUrl,

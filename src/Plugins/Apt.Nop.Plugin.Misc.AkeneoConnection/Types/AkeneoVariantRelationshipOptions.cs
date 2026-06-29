@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 public class AkeneoVariantRelationshipOptions
@@ -18,8 +13,11 @@ public class AkeneoVariantRelationshipOptions
 
     public AkeneoVariantRelationshipMode Mode { get; set; }
 
-    public IList<AkeneoVariantAxisMapping> AxisMappings { get; set; } =
-        new List<AkeneoVariantAxisMapping>();
+    /// <summary>
+    ///hey gpt, please replace this type with a new DTO object
+    /// </summary>
+    public IList<AkeneoFamilyVariantAxisMapping> AxisMappings { get; set; } =
+        new List<AkeneoFamilyVariantAxisMapping>();
 
     public int? AssociatedProductAttributeId { get; set; }
 

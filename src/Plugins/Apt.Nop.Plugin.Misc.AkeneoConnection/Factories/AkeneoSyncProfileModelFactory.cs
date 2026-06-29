@@ -49,7 +49,8 @@ public class AkeneoSyncProfileModelFactory(
 
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
             ProductEnabledFilterId = (int)AkeneoProductEnabledFilter.Any,
-            ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any
+            ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any,
+            SelectedAkeneoProductGroupCodes = new List<string>(),
         };
 
         if (profile != null)
@@ -83,6 +84,9 @@ public class AkeneoSyncProfileModelFactory(
             model.UpdatedSinceLastNDays = profile.UpdatedSinceLastNDays;
             model.ProductParentFilterModeId = profile.ProductParentFilterModeId;
             model.AdditionalSearchJson = profile.AdditionalSearchJson;
+
+            model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
+            model.SelectedAkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv();
         }
 
         PrepareDisplayNames(model);
@@ -99,8 +103,76 @@ public class AkeneoSyncProfileModelFactory(
 
         await PrepareAkeneoChannelOptionsAsync(model);
         await PrepareAkeneoLocaleOptionsAsync(model);
+        await PrepareAkeneoProductGroupOptionsAsync(model);
 
         PrepareDisplayNames(model);
+    }
+
+
+    private async Task PrepareAkeneoProductGroupOptionsAsync(
+    AkeneoSyncProfileModel model)
+    {
+        var selectedGroupCodes = model.SelectedAkeneoProductGroupCodes?.Any() == true
+            ? model.SelectedAkeneoProductGroupCodes
+            : model.AkeneoProductGroupCodes.SplitCsv();
+
+        selectedGroupCodes = selectedGroupCodes
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        model.SelectedAkeneoProductGroupCodes = selectedGroupCodes;
+
+     //   var labelLocale = model.L
+
+        var options = new List<SelectListItem>();
+
+        try
+        {
+            var groups = await akeneoApiClient.GetProductGroupsAsync();
+
+            foreach (var group in groups) //.OrderBy(group => GetGroupSortText(group, labelLocale))
+            {
+                if (string.IsNullOrWhiteSpace(group.Code))
+                    continue;
+
+                var code = group.Code.Trim();
+                var label = group.GetLabel();
+                var text = !string.IsNullOrWhiteSpace(label)
+                    ? $"{label} ({code})"
+                    : code;
+
+                options.Add(new SelectListItem
+                {
+                    Text = text,
+                    Value = code,
+                    Selected = selectedGroupCodes.Contains(code, StringComparer.OrdinalIgnoreCase)
+                });
+            }
+        }
+        catch
+        {
+            // If Akeneo is unavailable or this endpoint is not supported,
+            // fallback to selected/saved group codes below.
+        }
+
+        foreach (var selectedGroupCode in selectedGroupCodes)
+        {
+            if (options.Any(option => string.Equals(option.Value, selectedGroupCode, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            options.Add(new SelectListItem
+            {
+                Text = selectedGroupCode,
+                Value = selectedGroupCode,
+                Selected = true
+            });
+        }
+
+        model.AvailableAkeneoProductGroups = options
+            .OrderBy(option => option.Text)
+            .ToList();
     }
 
     private async Task PrepareAkeneoChannelOptionsAsync(
@@ -366,4 +438,6 @@ public class AkeneoSyncProfileModelFactory(
             _ => mode.ToString()
         };
     }
+
+
 }
