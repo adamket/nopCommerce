@@ -144,17 +144,15 @@ public class AkeneoMappingController(
         return errors;
     }
 
+    [HttpGet("admin/akeneo-connection/category-mappings")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> CategoryMappings()
     {
-        
-
         var model = await categoryMappingModelFactory.PrepareCategoryMappingListModelAsync();
-
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/CategoryMappings.cshtml", model);
     }
 
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/category-mappings")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> SaveCategoryMapping(AkeneoCategoryMappingModel model)
     {

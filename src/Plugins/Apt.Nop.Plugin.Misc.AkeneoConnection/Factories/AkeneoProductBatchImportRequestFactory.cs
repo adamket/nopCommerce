@@ -17,12 +17,6 @@ public class AkeneoProductBatchImportRequestFactory(
 
         var categoryCodes = profile.AkeneoCategoryCodes.SplitCsv();
 
-        if (!categoryCodes.Any() &&
-            !string.IsNullOrWhiteSpace(profile.RootCategoryCode))
-        {
-            categoryCodes.Add(profile.RootCategoryCode.Trim());
-        }
-
         var importMode = (AkeneoImportMode)profile.ImportModeId;
 
         var request = new AkeneoProductBatchImportRequest
@@ -59,6 +53,7 @@ public class AkeneoProductBatchImportRequestFactory(
             CategoryFilterMode = (AkeneoCategoryFilterMode)profile.CategoryFilterModeId,
 
             AkeneoFamilyCodes = profile.AkeneoFamilyCodes.SplitCsv(),
+            AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv(),
 
             ProductEnabledFilter =
                 (AkeneoProductEnabledFilter)profile.ProductEnabledFilterId,

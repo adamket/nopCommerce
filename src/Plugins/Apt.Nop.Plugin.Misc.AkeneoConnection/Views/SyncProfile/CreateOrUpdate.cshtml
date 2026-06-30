@@ -13,56 +13,26 @@
 }
 
 <style>
-    .control-label {
-        float: right;
-    }
-
-    .akeneo-token-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-        .akeneo-token-list:not(:empty) {
-            margin-top: 8px;
-        }
-
-    .akeneo-token-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 5px 9px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        background: #f8f9fa;
-    }
-
-    .akeneo-token-text {
-        line-height: 1.2;
-    }
-
-    .akeneo-token-remove {
-        border: 0;
-        background: transparent;
-        padding: 0;
-        line-height: 1;
-        font-size: 18px;
-        cursor: pointer;
-    }
+   
 </style>
 
-<form asp-action="@postAction" method="post" class="akeneo-mapping">
+<form asp-action="@postAction" method="post" class="akeneo-connection">
     @Html.AntiForgeryToken()
 
     <input asp-for="Id" type="hidden" />
 
     <div class="content-header clearfix">
         <h1 class="float-left">
-            @ViewBag.PageTitle
-            <small>
-                <i class="fas fa-arrow-circle-left"></i>
-                <a asp-action="List">back to sync profiles</a>
-            </small>
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+            <span>
+                @ViewBag.PageTitle
+                &nbsp;&nbsp;
+                <small>
+                   
+                    <a asp-action="List"><i class="fas fa-arrow-circle-left"></i> back to sync profile list</a>
+                </small>
+            </span>
+           
         </h1>
 
         <div class="float-right">
@@ -198,19 +168,6 @@
                             <span asp-validation-for="SelectedAkeneoLocaleCodes"></span>
                             <span class="form-text text-muted">
                                 Select one or more Akeneo locales. These will be saved as a comma-separated value on the sync profile.
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <div class="col-md-3">
-                            <label asp-for="RootCategoryCode" class="control-label">Root category code</label>
-                        </div>
-                        <div class="col-md-9">
-                            <nop-editor asp-for="RootCategoryCode" />
-                            <span asp-validation-for="RootCategoryCode"></span>
-                            <span class="form-text text-muted">
-                                Optional root category scope. Usually used with the In Children category filter.
                             </span>
                         </div>
                     </div>
@@ -374,7 +331,7 @@
                                         asp-multiple="true" />
                             <span asp-validation-for="SelectedAkeneoCategoryCodes"></span>
                             <span class="form-text text-muted">
-                                Optional. If selected, the chosen category filter mode will be applied to these Akeneo categories. Leave empty to use Root Category Code.
+                                Optional. If selected, the chosen category filter mode will be applied to these Akeneo categories.
                             </span>
                         </div>
                     </div>
@@ -681,10 +638,13 @@
 
             function setRunButtonLoading(isLoading) {
                 if (isLoading) {
+                    if (!runButton.data('original-html')) {
+                        runButton.data('original-html', runButton.html());
+                    }
+
                     runButton
-                        .data('original-html', runButton.html())
                         .prop('disabled', true)
-                        .html('<i class="fas fa-spinner fa-spin"></i> Running...');
+                        .html('<span class="akeneo-button-spinner" aria-hidden="true"></span>Running...');
                 } else {
                     runButton
                         .prop('disabled', false)

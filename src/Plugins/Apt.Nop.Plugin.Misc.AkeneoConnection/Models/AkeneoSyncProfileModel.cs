@@ -23,7 +23,7 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public IList<SelectListItem> AvailableAkeneoLocales { get; set; } = new List<SelectListItem>();
 
-    public string RootCategoryCode { get; set; }
+    //public string RootCategoryCode { get; set; }
 
     public int ImportModeId { get; set; }
 

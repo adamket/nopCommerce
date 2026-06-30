@@ -23,12 +23,12 @@
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
-<div class="akeneo-mapping">
+<div class="akeneo-connection">
     <div id="akeneo-family-variant-config-list-app" v-cloak>
         <div class="content-header clearfix">
             <h1 class="float-left">
-                <span class="akeneo-eyebrow">Akeneo Import</span>
-                Family variant import configurations
+                <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+               Family mappings
                 <small class="akeneo-dim">
                     Configure how Akeneo families create nopCommerce products, variants, combinations, or grouped products.
                 </small>
@@ -48,26 +48,17 @@
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-project-diagram"></i>
-                            Configured families
+                            Family mappings
                         </h3>
                     </div>
 
                     <div class="card-body">
                         <div v-if="orderedConfigurations.length === 0" class="alert alert-info">
-                            No family variant import configurations have been created yet.
+                            No family mappings have been created yet.
                         </div>
 
                         <div v-else class="akeneo-list">
-                            <div class="akeneo-group-row">
-                                <a href="#"
-                                   class="akeneo-attribute-group-toggle"
-                                   v-bind:aria-expanded="familiesOpen ? 'true' : 'false'"
-                                   v-on:click.prevent="familiesOpen = !familiesOpen">
-                                    <i class="fas fa-chevron-right chevron"></i>
-                                    Family configurations
-                                    <span class="akeneo-group-count" v-text="orderedConfigurations.length"></span>
-                                </a>
-                            </div>
+                            
 
                             <transition name="akeneo-detail-slide">
                                 <div v-show="familiesOpen" class="akeneo-group-items">

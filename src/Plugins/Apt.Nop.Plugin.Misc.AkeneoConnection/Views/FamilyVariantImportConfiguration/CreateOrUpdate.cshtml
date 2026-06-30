@@ -14,8 +14,8 @@
     var isCreate = Model.Id == 0;
 
     ViewBag.PageTitle = isCreate
-        ? "Create Akeneo family variant import configuration"
-        : "Edit Akeneo family variant import configuration";
+        ? "Create family mapping"
+        : "Edit family mapping";
 
 
 
@@ -54,7 +54,7 @@
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 
-<div class="akeneo-mapping">
+<div class="akeneo-connection">
     <div id="akeneo-family-variant-config-edit-app" v-cloak>
         <form asp-controller="AkeneoFamilyVariantImportConfiguration"
               asp-action="@(isCreate ? "Create" : "Edit")"
@@ -64,12 +64,13 @@
 
             <div class="content-header clearfix">
                 <h1 class="float-left">
-                    <span class="akeneo-eyebrow">Akeneo Import</span>
-                    @ViewBag.PageTitle
-                    <small>
-                        <i class="fas fa-arrow-circle-left"></i>
-                        <a asp-action="List">back to list</a>
-                    </small>
+                    <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+                    <span>
+                        @ViewBag.PageTitle    &nbsp;&nbsp;
+                        <small>
+                            <a asp-action="List"><i class="fas fa-arrow-circle-left"></i> back to family mapping list</a>
+                        </small>
+                    </span>
                 </h1>
 
                 <div class="float-right">
@@ -98,12 +99,12 @@
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="fas fa-sliders-h"></i>
-                                General configuration
+                                General 
                             </h3>
                         </div>
 
                         <div class="card-body">
-                            <div class="akeneo-mapping-detail">
+                            <div class="p-3">
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-group">

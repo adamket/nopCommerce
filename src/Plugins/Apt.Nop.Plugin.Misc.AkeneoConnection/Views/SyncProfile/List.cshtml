@@ -9,10 +9,10 @@
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncProfiles");
 }
 
-<div class="akeneo-mapping">
+<div class="akeneo-connection">
     <div class="content-header clearfix">
         <h1 class="float-left">
-            <span class="akeneo-eyebrow">Akeneo</span>
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
             Akeneo Sync Profiles
         </h1>
 
@@ -54,7 +54,6 @@
                                             <th>Enabled</th>
                                             <th>Channel</th>
                                             <th>Locales</th>
-                                            <th>Root Category</th>
                                             <th>Import Mode</th>
                                             <th>Unmapped Attributes</th>
                                             <th>Category Filter</th>
@@ -101,17 +100,6 @@
                                                     else
                                                     {
                                                         <span class="akeneo-dim">Not set</span>
-                                                    }
-                                                </td>
-
-                                                <td>
-                                                    @if (!string.IsNullOrWhiteSpace(profile.RootCategoryCode))
-                                                    {
-                                                        <span class="akeneo-type-chip">@profile.RootCategoryCode</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="akeneo-dim">None</span>
                                                     }
                                                 </td>
 

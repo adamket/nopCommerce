@@ -2,7 +2,7 @@
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoCategoryMappingListModel
 
 @{
-    Layout = "_ConfigurePlugin";
+    Layout = "_AdminLayout";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
@@ -33,7 +33,7 @@
     };
 }
 
-<div class="akeneo-mapping">
+<div class="akeneo-connection">
     @Html.AntiForgeryToken()
 
     <div class="content-header clearfix">

@@ -223,9 +223,9 @@ public class AkeneoConnectionConfigurationController(
             AkeneoConnectionClientSecret = akeneoConnectionSettings.AkeneoConnectionClientSecret,
             AkeneoConnectionUsername = akeneoConnectionSettings.AkeneoConnectionUsername,
             AkeneoConnectionPassword = akeneoConnectionSettings.AkeneoConnectionPassword,
-            DefaultChannelCode = akeneoConnectionSettings.DefaultChannelCode,
-            DefaultLocaleCode = akeneoConnectionSettings.DefaultLocaleCode,
-            DefaultCurrencyCode = akeneoConnectionSettings.DefaultCurrencyCode
+            //DefaultChannelCode = akeneoConnectionSettings.DefaultChannelCode,
+            //DefaultLocaleCode = akeneoConnectionSettings.DefaultLocaleCode,
+            //DefaultCurrencyCode = akeneoConnectionSettings.DefaultCurrencyCode
         };
 
         if (storeScope > 0)
@@ -235,9 +235,9 @@ public class AkeneoConnectionConfigurationController(
             model.AkeneoConnectionClientSecret_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, storeScope);
             model.AkeneoConnectionUsername_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, storeScope);
             model.AkeneoConnectionPassword_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, storeScope);
-            model.DefaultChannelCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, storeScope);
-            model.DefaultLocaleCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, storeScope);
-            model.DefaultCurrencyCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, storeScope);
+            //model.DefaultChannelCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, storeScope);
+            //model.DefaultLocaleCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, storeScope);
+            //model.DefaultCurrencyCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, storeScope);
         }
 
         await PrepareSyncContextOptionsAsync(model);
@@ -262,9 +262,9 @@ public class AkeneoConnectionConfigurationController(
         akeneoConnectionSettings.AkeneoConnectionClientSecret = model.AkeneoConnectionClientSecret;
         akeneoConnectionSettings.AkeneoConnectionUsername = model.AkeneoConnectionUsername;
         akeneoConnectionSettings.AkeneoConnectionPassword = model.AkeneoConnectionPassword;
-        akeneoConnectionSettings.DefaultLocaleCode = model.DefaultLocaleCode;
-        akeneoConnectionSettings.DefaultChannelCode = model.DefaultChannelCode;
-        akeneoConnectionSettings.DefaultCurrencyCode = model.DefaultCurrencyCode;
+        //akeneoConnectionSettings.DefaultLocaleCode = model.DefaultLocaleCode;
+        //akeneoConnectionSettings.DefaultChannelCode = model.DefaultChannelCode;
+        //akeneoConnectionSettings.DefaultCurrencyCode = model.DefaultCurrencyCode;
 
         /* We do not clear cache after each setting update.
          * This behavior can increase performance because cached settings will not be cleared
@@ -274,9 +274,9 @@ public class AkeneoConnectionConfigurationController(
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, model.AkeneoConnectionClientSecret_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, model.AkeneoConnectionUsername_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, model.AkeneoConnectionPassword_OverrideForStore, storeScope, false);
-        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
-        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
-        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);
+        //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
+        //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
+        //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);
 
         //now clear settings cache
         await settingService.ClearCacheAsync();

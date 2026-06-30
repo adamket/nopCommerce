@@ -13,12 +13,6 @@ public static class AkeneoConnectionExtensions
 
         var categoryCodes = SplitCsv(profile.AkeneoCategoryCodes);
 
-        if (!categoryCodes.Any() &&
-            !string.IsNullOrWhiteSpace(profile.RootCategoryCode))
-        {
-            categoryCodes.Add(profile.RootCategoryCode.Trim());
-        }
-
         var importMode = (AkeneoImportMode)profile.ImportModeId;
 
         return new AkeneoProductBatchImportRequest

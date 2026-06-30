@@ -80,7 +80,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
-    [HttpPost("admin/akeneo-connection/sync-profiles/edit")]
+    [HttpPost("admin/akeneo-connection/sync-profiles/edit/{id}")]
     public async Task<IActionResult> Edit(
         AkeneoSyncProfileModel model)
     {
@@ -141,7 +141,6 @@ public class AkeneoSyncProfileController(
 
         profile.AkeneoLocales = model.SelectedAkeneoLocaleCodes.BuildCsv();
 
-        profile.RootCategoryCode = model.RootCategoryCode?.Trim();
         profile.ImportModeId = model.ImportModeId;
         profile.UnmappedAttributeBehaviorId = model.UnmappedAttributeBehaviorId;
 

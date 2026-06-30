@@ -63,7 +63,6 @@ public class AkeneoSyncProfileModelFactory(
             model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
             model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
 
-            model.RootCategoryCode = profile.RootCategoryCode;
             model.ImportModeId = profile.ImportModeId;
             model.UnmappedAttributeBehaviorId = profile.UnmappedAttributeBehaviorId;
 

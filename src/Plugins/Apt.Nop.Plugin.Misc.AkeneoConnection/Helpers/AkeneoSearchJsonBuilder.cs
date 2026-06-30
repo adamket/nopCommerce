@@ -6,7 +6,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 
-public class AkeneoProductSearchJsonBuilder 
+public class AkeneoProductSearchJsonBuilder
 {
     public string Build(AkeneoProductBatchImportRequest request)
     {
@@ -17,6 +17,7 @@ public class AkeneoProductSearchJsonBuilder
 
         AddFamilySearch(search, request);
         AddCategorySearch(search, request);
+        AddProductGroupSearch(search, request);
         AddEnabledSearch(search, request);
         AddUpdatedSearch(search, request);
         AddParentSearch(search, request);
@@ -31,17 +32,23 @@ public class AkeneoProductSearchJsonBuilder
             });
     }
 
-    private static void AddFamilySearch(JsonObject search, AkeneoProductBatchImportRequest request)
+    private static void AddFamilySearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
     {
-        if (request.AkeneoFamilyCodes == null || !request.AkeneoFamilyCodes.Any())
+        var familyCodes = NormalizeCodes(request.AkeneoFamilyCodes);
+
+        if (!familyCodes.Any())
             return;
 
-        AddSearchCriterion(search, "family", "IN", request.AkeneoFamilyCodes);
+        AddSearchCriterion(search, "family", "IN", familyCodes);
     }
 
-    private static void AddCategorySearch(JsonObject search, AkeneoProductBatchImportRequest request)
+    private static void AddCategorySearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
     {
-        var categoryCodes = request.AkeneoCategoryCodes?.ToList() ?? new List<string>();
+        var categoryCodes = NormalizeCodes(request.AkeneoCategoryCodes);
 
         switch (request.CategoryFilterMode)
         {
@@ -74,7 +81,21 @@ public class AkeneoProductSearchJsonBuilder
         }
     }
 
-    private static void AddEnabledSearch(JsonObject search, AkeneoProductBatchImportRequest request)
+    private static void AddProductGroupSearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
+    {
+        var groupCodes = NormalizeCodes(request.AkeneoProductGroupCodes);
+
+        if (!groupCodes.Any())
+            return;
+
+        AddSearchCriterion(search, "groups", "IN", groupCodes);
+    }
+
+    private static void AddEnabledSearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
     {
         switch (request.ProductEnabledFilter)
         {
@@ -88,7 +109,9 @@ public class AkeneoProductSearchJsonBuilder
         }
     }
 
-    private static void AddUpdatedSearch(JsonObject search, AkeneoProductBatchImportRequest request)
+    private static void AddUpdatedSearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
     {
         var updatedAfterUtc = request.UpdatedAfterUtc;
 
@@ -114,7 +137,9 @@ public class AkeneoProductSearchJsonBuilder
                 .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
     }
 
-    private static void AddParentSearch(JsonObject search, AkeneoProductBatchImportRequest request)
+    private static void AddParentSearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
     {
         switch (request.ProductParentFilterMode)
         {
@@ -132,12 +157,14 @@ public class AkeneoProductSearchJsonBuilder
         JsonObject search,
         string fieldName,
         string operatorName,
-        IList<string> values)
+        IEnumerable<string> values)
     {
-        if (values == null || !values.Any())
+        var normalizedValues = NormalizeCodes(values);
+
+        if (!normalizedValues.Any())
             return;
 
-        AddSearchCriterion(search, fieldName, operatorName, values);
+        AddSearchCriterion(search, fieldName, operatorName, normalizedValues);
     }
 
     private static void AddSearchCriterion(
@@ -164,7 +191,9 @@ public class AkeneoProductSearchJsonBuilder
         criteria.Add(criterion);
     }
 
-    private static void MergeAdditionalSearchJson(JsonObject search, string additionalSearchJson)
+    private static void MergeAdditionalSearchJson(
+        JsonObject search,
+        string additionalSearchJson)
     {
         if (string.IsNullOrWhiteSpace(additionalSearchJson))
             return;
@@ -195,7 +224,18 @@ public class AkeneoProductSearchJsonBuilder
         }
     }
 
-    private static JsonNode CloneJsonNode(JsonNode node)
+    private static IList<string> NormalizeCodes(
+        IEnumerable<string> codes)
+    {
+        return codes?
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+    }
+
+    private static JsonNode CloneJsonNode(
+        JsonNode node)
     {
         return node == null
             ? null

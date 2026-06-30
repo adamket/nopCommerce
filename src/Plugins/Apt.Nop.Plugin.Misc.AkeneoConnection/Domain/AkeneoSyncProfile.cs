@@ -13,8 +13,7 @@ public class AkeneoSyncProfile : BaseEntity
     // CSV: en_US,fr_FR
     public string AkeneoLocales { get; set; }
 
-    // Optional root category scope. Usually used with IN CHILDREN.
-    public string RootCategoryCode { get; set; }
+   // public string RootCategoryCode { get; set; }
 
     public int ImportModeId { get; set; }
 

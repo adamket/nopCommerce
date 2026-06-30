@@ -15,12 +15,12 @@ public class AkeneoConnectionSettings : ISettings
     public string AkeneoConnectionUsername { get; set; }
     public string AkeneoConnectionPassword { get; set; }
 
-    public string DefaultChannelCode { get; set; } = string.Empty;
-    public string DefaultLocaleCode { get; set; } = string.Empty;
-    public string DefaultCurrencyCode { get; set; } = string.Empty;
+    //public string DefaultChannelCode { get; set; } = string.Empty;
+    //public string DefaultLocaleCode { get; set; } = string.Empty;
+    //public string DefaultCurrencyCode { get; set; } = string.Empty;
 
-    public int UnmappedAkeneoAttributeBehaviorId { get; set; }
-    public int CreateNewProductsOnImport { get; set; }
+    //public int UnmappedAkeneoAttributeBehaviorId { get; set; }
+    //public int CreateNewProductsOnImport { get; set; }
 
 
    

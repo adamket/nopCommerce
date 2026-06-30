@@ -37,14 +37,14 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
         {
             subAdminMenuItems.AddRange(new List<AdminMenuItem>
             {
-                new()
-                {
-                    IconClass = "far fa-circle",
-                    SystemName = "AkeneoIntegration.Metadata",
-                    Title = "Metadata",
-                    Url = eventMessage.GetMenuItemUrl("AkeneoMetadata", "Index"),
-                    Visible = true
-                },
+                //new()
+                //{
+                //    IconClass = "far fa-circle",
+                //    SystemName = "AkeneoIntegration.Metadata",
+                //    Title = "Metadata",
+                //    Url = eventMessage.GetMenuItemUrl("AkeneoMetadata", "Index"),
+                //    Visible = true
+                //},
                 new()
                 {
                     IconClass = "far fa-circle",
