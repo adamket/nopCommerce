@@ -50,7 +50,6 @@ public class AkeneoSyncProfileModelFactory(
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
             ProductEnabledFilterId = (int)AkeneoProductEnabledFilter.Any,
             ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any,
-            SelectedAkeneoProductGroupCodes = new List<string>(),
         };
 
         if (profile != null)
@@ -60,7 +59,9 @@ public class AkeneoSyncProfileModelFactory(
             model.Enabled = profile.Enabled;
             model.AkeneoChannel = profile.AkeneoChannel;
             model.AkeneoLocales = profile.AkeneoLocales;
-            model.SelectedAkeneoLocaleCodes = profile.AkeneoLocales.SplitCsv();
+            model.AkeneoFamilyCodes = profile.AkeneoFamilyCodes;
+            model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
+            model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
 
             model.RootCategoryCode = profile.RootCategoryCode;
             model.ImportModeId = profile.ImportModeId;
@@ -75,9 +76,7 @@ public class AkeneoSyncProfileModelFactory(
             model.AddMappedManufacturers = profile.AddMappedManufacturers;
             model.CreateMissingSpecificationAttributeOptions = profile.CreateMissingSpecificationAttributeOptions;
             model.CreateMissingProductAttributeValues = profile.CreateMissingProductAttributeValues;
-
-            model.AkeneoFamilyCodes = profile.AkeneoFamilyCodes;
-            model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
+          
             model.CategoryFilterModeId = profile.CategoryFilterModeId;
             model.ProductEnabledFilterId = profile.ProductEnabledFilterId;
             model.UpdatedAfterUtc = profile.UpdatedAfterUtc;
@@ -85,8 +84,10 @@ public class AkeneoSyncProfileModelFactory(
             model.ProductParentFilterModeId = profile.ProductParentFilterModeId;
             model.AdditionalSearchJson = profile.AdditionalSearchJson;
 
-            model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
             model.SelectedAkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv();
+            model.SelectedAkeneoLocaleCodes = profile.AkeneoLocales.SplitCsv();
+            model.SelectedAkeneoFamilyCodes = profile.AkeneoFamilyCodes.SplitCsv();
+            model.SelectedAkeneoCategoryCodes = profile.AkeneoCategoryCodes.SplitCsv();
         }
 
         PrepareDisplayNames(model);
@@ -103,14 +104,134 @@ public class AkeneoSyncProfileModelFactory(
 
         await PrepareAkeneoChannelOptionsAsync(model);
         await PrepareAkeneoLocaleOptionsAsync(model);
-        await PrepareAkeneoProductGroupOptionsAsync(model);
+        await PrepareAkeneoFamilyOptionsAsync(model);
+        await PrepareAkeneoCategoryOptionsAsync(model);
 
+        PrepareAkeneoProductGroupCodes(model);
         PrepareDisplayNames(model);
     }
 
-
-    private async Task PrepareAkeneoProductGroupOptionsAsync(
+    private async Task PrepareAkeneoFamilyOptionsAsync(
     AkeneoSyncProfileModel model)
+    {
+        var selectedFamilyCodes = model.SelectedAkeneoFamilyCodes?.Any() == true
+            ? model.SelectedAkeneoFamilyCodes
+            : model.AkeneoFamilyCodes.SplitCsv();
+
+        selectedFamilyCodes = selectedFamilyCodes
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        model.SelectedAkeneoFamilyCodes = selectedFamilyCodes;
+
+        var labelLocale = "en-US"; //ResolvePreferredLabelLocale(model); //TODO Use current store locale?
+        var options = new List<SelectListItem>();
+
+        try
+        {
+            var families = await akeneoApiClient.GetFamiliesAsync();
+
+            foreach (var family in families
+                         .Where(family => !string.IsNullOrWhiteSpace(family.Code))
+                         .OrderBy(family => family.GetDisplayName(labelLocale), StringComparer.OrdinalIgnoreCase))
+            {
+                var code = family.Code.Trim();
+
+                options.Add(new SelectListItem
+                {
+                    Text = family.GetDisplayName(labelLocale),
+                    Value = code,
+                    Selected = selectedFamilyCodes.Contains(code, StringComparer.OrdinalIgnoreCase)
+                });
+            }
+        }
+        catch
+        {
+            // If Akeneo is unavailable, preserve selected/saved values below.
+        }
+
+        foreach (var selectedFamilyCode in selectedFamilyCodes)
+        {
+            if (options.Any(option => string.Equals(option.Value, selectedFamilyCode, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            options.Add(new SelectListItem
+            {
+                Text = selectedFamilyCode,
+                Value = selectedFamilyCode,
+                Selected = true
+            });
+        }
+
+        model.AvailableAkeneoFamilies = options
+            .OrderBy(option => option.Text, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+
+    private async Task PrepareAkeneoCategoryOptionsAsync(
+    AkeneoSyncProfileModel model)
+    {
+        var selectedCategoryCodes = model.SelectedAkeneoCategoryCodes?.Any() == true
+            ? model.SelectedAkeneoCategoryCodes
+            : model.AkeneoCategoryCodes.SplitCsv();
+
+        selectedCategoryCodes = selectedCategoryCodes
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        model.SelectedAkeneoCategoryCodes = selectedCategoryCodes;
+
+        var labelLocale = "en-US"; //ResolvePreferredLabelLocale(model); //TODO Use current store locale?
+        var options = new List<SelectListItem>();
+
+        try
+        {
+            var categories = await akeneoApiClient.GetCategoriesAsync();
+
+            foreach (var category in categories
+                         .Where(category => !string.IsNullOrWhiteSpace(category.Code))
+                         .OrderBy(category => category.GetDisplayName(labelLocale), StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(category => category.Code, StringComparer.OrdinalIgnoreCase))
+            {
+                var code = category.Code.Trim();
+
+                options.Add(new SelectListItem
+                {
+                    Text = category.GetDisplayNameWithParent(labelLocale),
+                    Value = code,
+                    Selected = selectedCategoryCodes.Contains(code, StringComparer.OrdinalIgnoreCase)
+                });
+            }
+        }
+        catch
+        {
+            // If Akeneo is unavailable, preserve selected/saved values below.
+        }
+
+        foreach (var selectedCategoryCode in selectedCategoryCodes)
+        {
+            if (options.Any(option => string.Equals(option.Value, selectedCategoryCode, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            options.Add(new SelectListItem
+            {
+                Text = selectedCategoryCode,
+                Value = selectedCategoryCode,
+                Selected = true
+            });
+        }
+
+        model.AvailableAkeneoCategories = options
+            .OrderBy(option => option.Text, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+    private static void PrepareAkeneoProductGroupCodes(
+        AkeneoSyncProfileModel model)
     {
         var selectedGroupCodes = model.SelectedAkeneoProductGroupCodes?.Any() == true
             ? model.SelectedAkeneoProductGroupCodes
@@ -120,58 +241,19 @@ public class AkeneoSyncProfileModelFactory(
             .Where(code => !string.IsNullOrWhiteSpace(code))
             .Select(code => code.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         model.SelectedAkeneoProductGroupCodes = selectedGroupCodes;
 
-     //   var labelLocale = model.L
-
-        var options = new List<SelectListItem>();
-
-        try
-        {
-            var groups = await akeneoApiClient.GetProductGroupsAsync();
-
-            foreach (var group in groups) //.OrderBy(group => GetGroupSortText(group, labelLocale))
+        // Optional, only for compatibility if anything still reads this property.
+        model.AvailableAkeneoProductGroups = selectedGroupCodes
+            .Select(code => new SelectListItem
             {
-                if (string.IsNullOrWhiteSpace(group.Code))
-                    continue;
-
-                var code = group.Code.Trim();
-                var label = group.GetLabel();
-                var text = !string.IsNullOrWhiteSpace(label)
-                    ? $"{label} ({code})"
-                    : code;
-
-                options.Add(new SelectListItem
-                {
-                    Text = text,
-                    Value = code,
-                    Selected = selectedGroupCodes.Contains(code, StringComparer.OrdinalIgnoreCase)
-                });
-            }
-        }
-        catch
-        {
-            // If Akeneo is unavailable or this endpoint is not supported,
-            // fallback to selected/saved group codes below.
-        }
-
-        foreach (var selectedGroupCode in selectedGroupCodes)
-        {
-            if (options.Any(option => string.Equals(option.Value, selectedGroupCode, StringComparison.OrdinalIgnoreCase)))
-                continue;
-
-            options.Add(new SelectListItem
-            {
-                Text = selectedGroupCode,
-                Value = selectedGroupCode,
+                Text = code,
+                Value = code,
                 Selected = true
-            });
-        }
-
-        model.AvailableAkeneoProductGroups = options
-            .OrderBy(option => option.Text)
+            })
             .ToList();
     }
 
@@ -438,6 +520,4 @@ public class AkeneoSyncProfileModelFactory(
             _ => mode.ToString()
         };
     }
-
-
 }

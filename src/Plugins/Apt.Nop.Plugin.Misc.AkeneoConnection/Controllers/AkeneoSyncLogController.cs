@@ -15,6 +15,7 @@ public class AkeneoSyncLogController(
     private const int RunsPageSize = 15;
     private const int ItemsPageSize = 20;
 
+    [HttpGet("admin/akeneo-connection/sync-logs/list")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public IActionResult List()
     {

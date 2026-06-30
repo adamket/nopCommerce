@@ -11,23 +11,45 @@ public abstract class LocalizableDefinition
 
     public string GetLabel(string locale = "en_US")
     {
-        if (Labels.TryGetValue(locale, out var label) && !string.IsNullOrWhiteSpace(label))
-            return label;
-        if (Labels.TryGetValue("en_US", out var englishLabel) && !string.IsNullOrWhiteSpace(englishLabel))
-            return englishLabel;
-        return Code;
+        var normalizedLocale = string.IsNullOrWhiteSpace(locale)
+            ? "en_US"
+            : locale.Trim();
+
+        if (Labels != null &&
+            Labels.TryGetValue(normalizedLocale, out var label) &&
+            !string.IsNullOrWhiteSpace(label))
+        {
+            return label.Trim();
+        }
+
+        if (Labels != null &&
+            Labels.TryGetValue("en_US", out var englishLabel) &&
+            !string.IsNullOrWhiteSpace(englishLabel))
+        {
+            return englishLabel.Trim();
+        }
+
+        return Code?.Trim() ?? string.Empty;
     }
 
-    //private static string BuildOptionText(
-    //    string code,
-    //    string label)
-    //{
-    //    if (string.IsNullOrWhiteSpace(label))
-    //        return code;
+    public string GetDisplayName(string locale = "en_US", bool includeCode = true)
+    {
+        var code = Code?.Trim();
+        var label = GetLabel(locale)?.Trim();
 
-    //    if (string.Equals(label, code, StringComparison.OrdinalIgnoreCase))
-    //        return code;
+        if (string.IsNullOrWhiteSpace(code))
+            return label ?? string.Empty;
 
-    //    return $"{label} ({code})";
-    //}
+        if (string.IsNullOrWhiteSpace(label))
+            return code;
+
+        if (!includeCode)
+            return label;
+
+        if (string.Equals(code, label, StringComparison.OrdinalIgnoreCase))
+            return code;
+
+        return $"{label} ({code})";
+    }
+
 }

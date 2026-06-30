@@ -15,6 +15,9 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public string AkeneoLocales { get; set; }
 
     public IList<string> SelectedAkeneoLocaleCodes { get; set; } = new List<string>();
+    public IList<string> SelectedAkeneoFamilyCodes { get; set; } = new List<string>();
+    public IList<string> SelectedAkeneoCategoryCodes { get; set; } = new List<string>();
+    public IList<string> SelectedAkeneoProductGroupCodes { get; set; } = new List<string>();
 
     public IList<SelectListItem> AvailableAkeneoChannels { get; set; } = new List<SelectListItem>();
 
@@ -72,7 +75,6 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public string AdditionalSearchJson { get; set; }
     public string AkeneoProductGroupCodes { get; set; }
-    public IList<string> SelectedAkeneoProductGroupCodes { get; set; } = new List<string>();
 
     public IList<SelectListItem> AvailableImportModes { get; set; } = new List<SelectListItem>();
 
@@ -87,4 +89,6 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
  
 
     public IList<SelectListItem> AvailableAkeneoProductGroups { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableAkeneoCategories { get; set; } = new List<SelectListItem>();
 }

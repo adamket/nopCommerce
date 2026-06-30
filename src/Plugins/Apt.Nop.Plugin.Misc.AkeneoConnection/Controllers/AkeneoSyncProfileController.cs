@@ -26,7 +26,7 @@ public class AkeneoSyncProfileController(
     IAkeneoProductImportService productImportService)
     : BaseAdminController
 {
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/sync-profiles/list")]
     public async Task<IActionResult> List()
     {
         var model = await syncProfileModelFactory.PrepareListModelAsync();
@@ -34,7 +34,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/List.cshtml", model);
     }
 
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/sync-profiles/create")]
     public async Task<IActionResult> Create()
     {
         var model = await syncProfileModelFactory.PrepareModelAsync();
@@ -42,7 +42,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/sync-profiles/create")]
     public async Task<IActionResult> Create(
         AkeneoSyncProfileModel model)
     {
@@ -66,7 +66,7 @@ public class AkeneoSyncProfileController(
         return RedirectToAction(nameof(Edit), new { id = profile.Id });
     }
 
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/sync-profiles/edit/{id}")]
     public async Task<IActionResult> Edit(
         int id)
     {
@@ -80,7 +80,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/sync-profiles/edit")]
     public async Task<IActionResult> Edit(
         AkeneoSyncProfileModel model)
     {

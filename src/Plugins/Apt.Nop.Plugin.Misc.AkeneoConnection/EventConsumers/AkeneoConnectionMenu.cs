@@ -80,6 +80,14 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
                 new()
                 {
                     IconClass = "far fa-circle",
+                    SystemName = "AkeneoIntegration.SyncProfiles",
+                    Title = "Sync Profiles",
+                    Url = eventMessage.GetMenuItemUrl("AkeneoSyncProfile", "List"),
+                    Visible = true
+                },
+                new()
+                {
+                    IconClass = "far fa-circle",
                     SystemName = "AkeneoIntegration.SyncLogs",
                     Title = "Sync Logs",
                     Url = eventMessage.GetMenuItemUrl("AkeneoSyncLog", "List"),

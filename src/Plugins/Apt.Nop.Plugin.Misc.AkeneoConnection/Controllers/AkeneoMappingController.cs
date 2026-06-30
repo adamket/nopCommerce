@@ -28,7 +28,7 @@ public class AkeneoMappingController(
     : BasePluginController
 {
 
-
+    [HttpGet("admin/akeneo-connection/attribute-mappings")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> AttributeMappings()
     {

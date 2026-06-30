@@ -1,7 +1,7 @@
-﻿using System.Text.Json;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Services.Catalog;
 
@@ -76,11 +76,12 @@ public class AkeneoCategoryMappingModelFactory(
         return model;
     }
 
-    private static AkeneoCategoryMappingModel ParseAkeneoCategory(JsonElement category)
+    private static AkeneoCategoryMappingModel ParseAkeneoCategory(
+        AkeneoCategoryDefinition category)
     {
-        var code = GetStringProperty(category, "code");
-        var parent = GetStringProperty(category, "parent");
-        var label = GetLabel(category, "en_US");
+        var code = category.Code?.Trim();
+        var parent = category.Parent?.Trim();
+        var label = category.GetLabel()?.Trim();
 
         return new AkeneoCategoryMappingModel
         {
@@ -120,11 +121,11 @@ public class AkeneoCategoryMappingModelFactory(
             .ToList();
 
         foreach (var root in roots)
-            AddCategoryAndChildren(root, 0);
+            addCategoryAndChildren(root, 0);
 
         return result;
 
-        void AddCategoryAndChildren(AkeneoCategoryMappingModel category, int level)
+        void addCategoryAndChildren(AkeneoCategoryMappingModel category, int level)
         {
             category.Level = level;
             result.Add(category);
@@ -133,45 +134,7 @@ public class AkeneoCategoryMappingModelFactory(
                 return;
 
             foreach (var child in children)
-                AddCategoryAndChildren(child, level + 1);
+                addCategoryAndChildren(child, level + 1);
         }
-    }
-
-    private static string GetStringProperty(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out var property))
-            return null;
-
-        return property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
-    }
-
-    private static string GetLabel(JsonElement element, string preferredLocale)
-    {
-        if (!element.TryGetProperty("labels", out var labels) ||
-            labels.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(preferredLocale) &&
-            labels.TryGetProperty(preferredLocale, out var preferredLabel) &&
-            preferredLabel.ValueKind == JsonValueKind.String &&
-            !string.IsNullOrWhiteSpace(preferredLabel.GetString()))
-        {
-            return preferredLabel.GetString();
-        }
-
-        foreach (var label in labels.EnumerateObject())
-        {
-            if (label.Value.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(label.Value.GetString()))
-            {
-                return label.Value.GetString();
-            }
-        }
-
-        return null;
     }
 }

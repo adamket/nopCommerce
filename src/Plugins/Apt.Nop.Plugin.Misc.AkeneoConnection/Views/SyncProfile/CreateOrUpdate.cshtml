@@ -9,12 +9,45 @@
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
-    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncProfileList");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncProfiles");
 }
 
 <style>
-    .control-label{
-        float:right;
+    .control-label {
+        float: right;
+    }
+
+    .akeneo-token-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+        .akeneo-token-list:not(:empty) {
+            margin-top: 8px;
+        }
+
+    .akeneo-token-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 9px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background: #f8f9fa;
+    }
+
+    .akeneo-token-text {
+        line-height: 1.2;
+    }
+
+    .akeneo-token-remove {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        line-height: 1;
+        font-size: 18px;
+        cursor: pointer;
     }
 </style>
 
@@ -234,7 +267,7 @@
                         </div>
                     </div>
 
-                  
+
                 </div>
             </div>
 
@@ -318,25 +351,34 @@
                 <div class="card-body">
                     <div class="form-group row">
                         <div class="col-md-3">
-                            <label asp-for="AkeneoFamilyCodes" class="control-label">Akeneo family codes</label>
+                            <label asp-for="SelectedAkeneoFamilyCodes" class="control-label">Akeneo families</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-editor asp-for="AkeneoFamilyCodes" />
-                            <span asp-validation-for="AkeneoFamilyCodes"></span>
-                            <span class="form-text text-muted">Comma-separated. Example: shrub, tree, perennial</span>
+                            <nop-select asp-for="SelectedAkeneoFamilyCodes"
+                                        asp-items="Model.AvailableAkeneoFamilies"
+                                        asp-multiple="true" />
+                            <span asp-validation-for="SelectedAkeneoFamilyCodes"></span>
+                            <span class="form-text text-muted">
+                                Optional. If selected, only products assigned to one or more of these Akeneo families will be imported.
+                            </span>
                         </div>
                     </div>
 
                     <div class="form-group row">
                         <div class="col-md-3">
-                            <label asp-for="AkeneoCategoryCodes" class="control-label">Akeneo category codes</label>
+                            <label asp-for="SelectedAkeneoCategoryCodes" class="control-label">Akeneo categories</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-editor asp-for="AkeneoCategoryCodes" />
-                            <span asp-validation-for="AkeneoCategoryCodes"></span>
-                            <span class="form-text text-muted">Comma-separated. Leave empty to use Root Category Code.</span>
+                            <nop-select asp-for="SelectedAkeneoCategoryCodes"
+                                        asp-items="Model.AvailableAkeneoCategories"
+                                        asp-multiple="true" />
+                            <span asp-validation-for="SelectedAkeneoCategoryCodes"></span>
+                            <span class="form-text text-muted">
+                                Optional. If selected, the chosen category filter mode will be applied to these Akeneo categories. Leave empty to use Root Category Code.
+                            </span>
                         </div>
                     </div>
+
 
                     <div class="form-group row">
                         <div class="col-md-3">
@@ -345,6 +387,64 @@
                         <div class="col-md-9">
                             <nop-select asp-for="CategoryFilterModeId" asp-items="Model.AvailableCategoryFilterModes" />
                             <span asp-validation-for="CategoryFilterModeId"></span>
+                        </div>
+                    </div>
+
+                    @{
+                        var selectedProductGroupCodes = Model.SelectedAkeneoProductGroupCodes?
+                        .Where(groupCode => !string.IsNullOrWhiteSpace(groupCode))
+                        .Select(groupCode => groupCode.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList() ?? new List<string>();
+                    }
+
+                    <div class="form-group row">
+                        <div class="col-md-3">
+                            <label asp-for="SelectedAkeneoProductGroupCodes" class="control-label">Akeneo product groups</label>
+                        </div>
+
+                        <div class="col-md-9">
+                            <div id="akeneo-product-group-token-editor"
+                                 class="akeneo-token-editor"
+                                 data-input-name="SelectedAkeneoProductGroupCodes">
+
+                                <input type="text"
+                                       id="akeneo-product-group-input"
+                                       class="form-control"
+                                       autocomplete="off"
+                                       placeholder="Type an Akeneo group code and press Enter" />
+
+                                <div id="akeneo-product-group-token-list" class="akeneo-token-list">
+                                    @foreach (var groupCode in Model.SelectedAkeneoProductGroupCodes ?? new List<string>())
+                                    {
+                                        if (string.IsNullOrWhiteSpace(groupCode))
+                                        {
+                                            continue;
+                                        }
+
+                                        var trimmedGroupCode = groupCode.Trim();
+
+                                        <span class="akeneo-token-item" data-value="@trimmedGroupCode">
+                                            <span class="akeneo-token-text">@trimmedGroupCode</span>
+                                            <button type="button"
+                                                    class="akeneo-token-remove"
+                                                    aria-label="Remove @trimmedGroupCode">
+                                                &times;
+                                            </button>
+                                            <input type="hidden"
+                                                   name="SelectedAkeneoProductGroupCodes"
+                                                   value="@trimmedGroupCode" />
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <span asp-validation-for="SelectedAkeneoProductGroupCodes"></span>
+
+                            <span class="form-text text-muted">
+                                Optional. Type an Akeneo product group code and press Enter, or leave the field, to add it.
+                                If one or more group codes are entered, only products belonging to those groups will be imported.
+                            </span>
                         </div>
                     </div>
 
@@ -460,6 +560,83 @@
         </div>
     </div>
 }
+
+
+<script>
+        $(function () {
+        var editor = $('#akeneo-product-group-token-editor');
+
+        if (!editor.length) {
+            return;
+        }
+
+        var input = $('#akeneo-product-group-input');
+        var list = $('#akeneo-product-group-token-list');
+        var inputName = editor.data('input-name');
+
+        function normalizeValue(value) {
+            return $.trim(value || '');
+        }
+
+        function encodeHtml(value) {
+            return $('<div />').text(value || '').html();
+        }
+
+        function valueExists(value) {
+            var normalized = value.toLowerCase();
+            var exists = false;
+
+            list.find('.akeneo-token-item').each(function () {
+                var existingValue = normalizeValue($(this).data('value')).toLowerCase();
+
+                if (existingValue === normalized) {
+                    exists = true;
+                    return false;
+                }
+            });
+
+            return exists;
+        }
+
+        function addToken(value) {
+            value = normalizeValue(value);
+
+            if (!value || valueExists(value)) {
+                input.val('');
+                return;
+            }
+
+            var encodedValue = encodeHtml(value);
+
+            var token = $(
+                '<span class="akeneo-token-item" data-value="' + encodedValue + '">' +
+                    '<span class="akeneo-token-text">' + encodedValue + '</span>' +
+                    '<button type="button" class="akeneo-token-remove" aria-label="Remove ' + encodedValue + '">&times;</button>' +
+                    '<input type="hidden" name="' + inputName + '" value="' + encodedValue + '" />' +
+                '</span>'
+            );
+
+            list.append(token);
+            input.val('');
+        }
+
+        input.on('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addToken(input.val());
+            }
+        });
+
+        input.on('blur', function () {
+            addToken(input.val());
+        });
+
+        list.on('click', '.akeneo-token-remove', function () {
+            $(this).closest('.akeneo-token-item').remove();
+        });
+    });
+</script>
+
 
 @if (isEdit)
 {
@@ -670,4 +847,6 @@
             });
         });
     </script>
+
+
 }

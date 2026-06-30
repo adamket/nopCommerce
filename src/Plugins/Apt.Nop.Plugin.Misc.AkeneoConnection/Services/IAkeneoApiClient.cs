@@ -10,7 +10,7 @@ public interface IAkeneoApiClient
         string uuid,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetCategoriesAsync(
+    Task<IReadOnlyList<AkeneoCategoryDefinition>> GetCategoriesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default);
 
@@ -67,8 +67,8 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
-        int limit = 100,
-        CancellationToken cancellationToken = default);
+    //Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
+    //    int limit = 100,
+    //    CancellationToken cancellationToken = default);
 
 }

@@ -130,9 +130,13 @@ public class AkeneoApiClient : IAkeneoApiClient
         return await GetProductsAsync(searchJson, limit, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<JsonElement>> GetCategoriesAsync(
-        int limit = 100, CancellationToken cancellationToken = default)
-        => await GetSimpleCollectionAsync("api/rest/v1/categories", limit, cancellationToken);
+    public async Task<IReadOnlyList<AkeneoCategoryDefinition>> GetCategoriesAsync(
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+        => await GetSimpleCollectionAsync<AkeneoCategoryDefinition>(
+            "api/rest/v1/categories",
+            limit,
+            cancellationToken);
 
     public async Task<IReadOnlyList<AkeneoAttributeDefinition>> GetAttributesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
@@ -172,13 +176,13 @@ public class AkeneoApiClient : IAkeneoApiClient
         await _staticCacheManager.RemoveAsync(CreateTokenCacheKey(apiCredentials));
     }
 
-    public async Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
-        int limit = 100,
-        CancellationToken cancellationToken = default)
-        => await GetSimpleCollectionAsync<AkeneoProductGroupDefinition>(
-            "api/rest/v1/groups",
-            limit,
-            cancellationToken);
+    //public async Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
+    //    int limit = 100,
+    //    CancellationToken cancellationToken = default)
+    //    => await GetSimpleCollectionAsync<AkeneoProductGroupDefinition>(
+    //        "api/rest/v1/groups",
+    //        limit,
+    //        cancellationToken);
 
 
     public async Task<AkeneoProductPageResult> GetProductsPageAsync(
