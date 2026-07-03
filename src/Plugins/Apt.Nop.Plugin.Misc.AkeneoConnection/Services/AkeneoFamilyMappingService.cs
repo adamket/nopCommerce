@@ -4,17 +4,17 @@ using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
-public class AkeneoFamilyVariantImportConfigurationService(
-    IRepository<AkeneoFamilyVariantImportConfiguration> configurationRepository,
+public class AkeneoFamilyMappingService(
+    IRepository<AkeneoFamilyMapping> configurationRepository,
     IRepository<AkeneoFamilyVariantAxisMapping> axisMappingRepository)
-    : IAkeneoFamilyVariantImportConfigurationService
+    : IAkeneoFamilyMappingService
 {
-    public async Task<AkeneoFamilyVariantImportConfiguration> GetByIdAsync(int id)
+    public async Task<AkeneoFamilyMapping> GetByIdAsync(int id)
     {
         return await configurationRepository.GetByIdAsync(id);
     }
 
-    public async Task<AkeneoFamilyVariantImportConfiguration> GetByFamilyCodeAsync(string akeneoFamilyCode)
+    public async Task<AkeneoFamilyMapping> GetByFamilyCodeAsync(string akeneoFamilyCode)
     {
         if (string.IsNullOrWhiteSpace(akeneoFamilyCode))
             return null;
@@ -25,7 +25,7 @@ public class AkeneoFamilyVariantImportConfigurationService(
             .FirstOrDefaultAsync(x => x.AkeneoFamilyCode == akeneoFamilyCode);
     }
 
-    public async Task<IList<AkeneoFamilyVariantImportConfiguration>> GetAllAsync()
+    public async Task<IList<AkeneoFamilyMapping>> GetAllAsync()
     {
         return await configurationRepository.Table
             .OrderBy(x => x.DisplayOrder)
@@ -42,7 +42,7 @@ public class AkeneoFamilyVariantImportConfigurationService(
             .ToListAsync();
     }
 
-    public async Task InsertAsync(AkeneoFamilyVariantImportConfiguration configuration)
+    public async Task InsertAsync(AkeneoFamilyMapping configuration)
     {
         configuration.CreatedOnUtc = DateTime.UtcNow;
         configuration.UpdatedOnUtc = DateTime.UtcNow;
@@ -50,14 +50,14 @@ public class AkeneoFamilyVariantImportConfigurationService(
         await configurationRepository.InsertAsync(configuration);
     }
 
-    public async Task UpdateAsync(AkeneoFamilyVariantImportConfiguration configuration)
+    public async Task UpdateAsync(AkeneoFamilyMapping configuration)
     {
         configuration.UpdatedOnUtc = DateTime.UtcNow;
 
         await configurationRepository.UpdateAsync(configuration);
     }
 
-    public async Task DeleteAsync(AkeneoFamilyVariantImportConfiguration configuration)
+    public async Task DeleteAsync(AkeneoFamilyMapping configuration)
     {
         await configurationRepository.DeleteAsync(configuration);
     }

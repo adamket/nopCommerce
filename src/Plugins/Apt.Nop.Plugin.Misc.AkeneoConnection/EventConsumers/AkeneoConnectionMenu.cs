@@ -66,7 +66,7 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
                     IconClass = "far fa-circle",
                     SystemName = "AkeneoIntegration.FamilyMappings",
                     Title = "Family Mapping",
-                    Url = eventMessage.GetMenuItemUrl("AkeneoFamilyVariantImportConfiguration", "List"),
+                    Url = eventMessage.GetMenuItemUrl("AkeneoFamilyMapping", "List"),
                     Visible = true
                 },
                 new()

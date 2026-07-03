@@ -22,18 +22,18 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         CreateTable<AkeneoSyncItemLog>();
         CreateTable<AkeneoSyncProfile>();
         CreateTable<AkeneoSyncRunRecord>();
-        CreateTable<AkeneoFamilyVariantImportConfiguration>();
+        CreateTable<AkeneoFamilyMapping>();
         CreateTable<AkeneoFamilyVariantAxisMapping>();
 
         var configurationTable =
-            NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantImportConfiguration));
+            NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping));
 
         var axisMappingTable =
             NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantAxisMapping));
 
         Create.Index($"IX_{configurationTable}_AkeneoFamilyCode")
             .OnTable(configurationTable)
-            .OnColumn(nameof(AkeneoFamilyVariantImportConfiguration.AkeneoFamilyCode))
+            .OnColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyCode))
             .Ascending()
             .WithOptions()
             .Unique();
@@ -52,7 +52,7 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         DropTopicChildTableAsync<AkeneoSyncItemLog>().Wait();
         DropTopicChildTableAsync<AkeneoSyncProfile>().Wait();
         DropTopicChildTableAsync<AkeneoSyncRunRecord>().Wait();
-        DropTopicChildTableAsync<AkeneoFamilyVariantImportConfiguration>().Wait();
+        DropTopicChildTableAsync<AkeneoFamilyMapping>().Wait();
         DropTopicChildTableAsync<AkeneoFamilyVariantAxisMapping>().Wait();
     }
 

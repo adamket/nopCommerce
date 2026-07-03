@@ -2,22 +2,21 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-public interface IAkeneoFamilyVariantImportConfigurationService
+public interface IAkeneoFamilyMappingService
 {
-    Task<AkeneoFamilyVariantImportConfiguration> GetByIdAsync(int id);
+    Task<AkeneoFamilyMapping> GetByIdAsync(int id);
 
-    Task<AkeneoFamilyVariantImportConfiguration> GetByFamilyCodeAsync(string akeneoFamilyCode);
+    Task<AkeneoFamilyMapping> GetByFamilyCodeAsync(string akeneoFamilyCode);
 
-    Task<IList<AkeneoFamilyVariantImportConfiguration>> GetAllAsync();
+    Task<IList<AkeneoFamilyMapping>> GetAllAsync();
 
     Task<IList<AkeneoFamilyVariantAxisMapping>> GetAxisMappingsAsync(int configurationId);
 
-    Task InsertAsync(AkeneoFamilyVariantImportConfiguration configuration);
+    Task InsertAsync(AkeneoFamilyMapping configuration);
 
-    Task UpdateAsync(AkeneoFamilyVariantImportConfiguration configuration);
+    Task UpdateAsync(AkeneoFamilyMapping configuration);
 
-    Task DeleteAsync(AkeneoFamilyVariantImportConfiguration configuration);
-
+    Task DeleteAsync(AkeneoFamilyMapping configuration);
     Task InsertAxisMappingAsync(AkeneoFamilyVariantAxisMapping mapping);
 
     Task UpdateAxisMappingAsync(AkeneoFamilyVariantAxisMapping mapping);

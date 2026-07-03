@@ -6,6 +6,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public interface IAkeneoApiClient
 {
+    Task<JsonElement?> GetProductModelByCodeAsync(
+        string code,
+        CancellationToken cancellationToken = default);
+
     Task<JsonElement?> GetProductByUuidAsync(
         string uuid,
         CancellationToken cancellationToken = default);

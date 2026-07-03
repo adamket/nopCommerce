@@ -110,6 +110,18 @@ public class AkeneoApiClient : IAkeneoApiClient
             "api/rest/v1/products-uuid", query, cancellationToken, apiCredentials);
     }
 
+    public async Task<JsonElement?> GetProductModelByCodeAsync(
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("Product model code is required.", nameof(code));
+
+        return await GetJsonOrNullAsync(
+            $"api/rest/v1/product-models/{Uri.EscapeDataString(code)}?with_attribute_options=true",
+            cancellationToken);
+    }
+
     public async Task<JsonElement?> GetProductByUuidAsync(
         string uuid,
         CancellationToken cancellationToken = default)

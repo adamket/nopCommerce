@@ -35,13 +35,19 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
-        services.AddScoped<
-            IAkeneoFamilyVariantImportConfigurationService,
-            AkeneoFamilyVariantImportConfigurationService>();
+        services.AddScoped<IAkeneoProductImportExecutionService, AkeneoProductImportExecutionService>();
+        services.AddScoped<IAkeneoVariantRelationshipService, AkeneoVariantRelationshipService>();
+        services.AddScoped<IAkeneoVariantRelationshipResolver, AkeneoVariantRelationshipResolver>();
+        services.AddScoped<INopVariantStructureDetector, NopVariantStructureDetector>();
+        
 
         services.AddScoped<
-            IAkeneoFamilyVariantImportConfigurationModelFactory,
-            AkeneoFamilyVariantImportConfigurationModelFactory>();
+            IAkeneoFamilyMappingService,
+            AkeneoFamilyMappingService>();
+
+        services.AddScoped<
+            IAkeneoFamilyMappingModelFactory,
+            AkeneoFamilyMappingModelFactory>();
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();

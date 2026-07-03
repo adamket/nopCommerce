@@ -1,7 +1,7 @@
 ﻿using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
-public class AkeneoFamilyVariantImportConfiguration : BaseEntity
+public class AkeneoFamilyMapping : BaseEntity
 {
     public string AkeneoFamilyCode { get; set; }
 

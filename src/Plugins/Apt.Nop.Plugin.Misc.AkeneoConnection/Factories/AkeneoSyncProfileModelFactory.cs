@@ -331,7 +331,7 @@ public class AkeneoSyncProfileModelFactory(
 
             foreach (var locale in locales)
             {
-                var code = GetRootString(locale, "code");
+                var code = locale.GetRootString("code");
 
                 if (string.IsNullOrWhiteSpace(code))
                     continue;
@@ -448,17 +448,17 @@ public class AkeneoSyncProfileModelFactory(
 
 
 
-    private static string GetRootString(
-        JsonElement element,
-        string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out var property))
-            return null;
+    //private static string GetRootString(
+    //    JsonElement element,
+    //    string propertyName)
+    //{
+    //    if (!element.TryGetProperty(propertyName, out var property))
+    //        return null;
 
-        return property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
-    }
+    //    return property.ValueKind == JsonValueKind.String
+    //        ? property.GetString()
+    //        : null;
+    //}
 
     private static string GetImportModeText(AkeneoImportMode mode)
     {

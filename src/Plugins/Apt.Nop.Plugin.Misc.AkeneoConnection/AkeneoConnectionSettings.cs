@@ -1,11 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
-using Nop.Core.Configuration;
+﻿using Nop.Core.Configuration;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
-
-/// <summary>
-/// Represents settings of "Check money order" payment plugin
-/// </summary>
 public class AkeneoConnectionSettings : ISettings
 {
 
@@ -14,6 +9,7 @@ public class AkeneoConnectionSettings : ISettings
     public string AkeneoConnectionBaseUrl { get; set; }
     public string AkeneoConnectionUsername { get; set; }
     public string AkeneoConnectionPassword { get; set; }
+    public int? DefaultSyncProfileId { get; set; }
 
     //public string DefaultChannelCode { get; set; } = string.Empty;
     //public string DefaultLocaleCode { get; set; } = string.Empty;

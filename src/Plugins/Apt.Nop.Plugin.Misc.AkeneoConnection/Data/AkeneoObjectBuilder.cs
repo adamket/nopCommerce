@@ -3,10 +3,10 @@ using FluentMigrator.Builders.Create.Table;
 using Nop.Data.Mapping.Builders;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
-public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<AkeneoFamilyVariantImportConfiguration>
+public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<AkeneoFamilyMapping>
 {
     public override void MapEntity(CreateTableExpressionBuilder table)
     {
-        table.WithColumn(nameof(AkeneoFamilyVariantImportConfiguration.AkeneoFamilyCode)).AsString(100);
+        table.WithColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyCode)).AsString(100);
     }
 }

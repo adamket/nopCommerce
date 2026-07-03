@@ -13,7 +13,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data
             { typeof(AkeneoSyncItemLog), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncItemLog)}" },
             { typeof(AkeneoSyncProfile), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncProfile)}" },
             { typeof(AkeneoSyncRunRecord), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncRunRecord)}" },
-            { typeof(AkeneoFamilyVariantImportConfiguration), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyVariantImportConfiguration)}" },
+            { typeof(AkeneoFamilyMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyMapping)}" },
             { typeof(AkeneoFamilyVariantAxisMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyVariantAxisMapping)}" },
 
         };

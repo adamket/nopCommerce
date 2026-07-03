@@ -6,15 +6,15 @@ using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
-public class AkeneoFamilyVariantImportConfigurationModelFactory
-    : IAkeneoFamilyVariantImportConfigurationModelFactory
+public class AkeneoFamilyMappingModelFactory
+    : IAkeneoFamilyMappingModelFactory
 {
-    private readonly IAkeneoFamilyVariantImportConfigurationService _configurationService;
+    private readonly IAkeneoFamilyMappingService _configurationService;
     private readonly IAkeneoApiClient _akeneoApiClient;
     private readonly IProductAttributeService _productAttributeService;
 
-    public AkeneoFamilyVariantImportConfigurationModelFactory(
-        IAkeneoFamilyVariantImportConfigurationService configurationService,
+    public AkeneoFamilyMappingModelFactory(
+        IAkeneoFamilyMappingService configurationService,
         IAkeneoApiClient akeneoApiClient,
         IProductAttributeService productAttributeService)
     {
@@ -49,7 +49,7 @@ public class AkeneoFamilyVariantImportConfigurationModelFactory
 
     public async Task<AkeneoFamilyVariantImportConfigurationModel> PrepareModelAsync(
         AkeneoFamilyVariantImportConfigurationModel model = null,
-        AkeneoFamilyVariantImportConfiguration configuration = null)
+        AkeneoFamilyMapping configuration = null)
     {
         model ??= new AkeneoFamilyVariantImportConfigurationModel();
 

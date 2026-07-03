@@ -7,14 +7,10 @@ using Nop.Services.Plugins;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
 
-/// <summary>
-/// CheckMoneyOrder payment processor
-/// </summary>
 public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
 {
     #region Fields
 
-    protected readonly AkeneoConnectionSettings _checkMoneyOrderPaymentSettings;
     protected readonly ILocalizationService _localizationService;
     protected readonly IOrderTotalCalculationService _orderTotalCalculationService;
     protected readonly ISettingService _settingService;
@@ -25,14 +21,13 @@ public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
 
     #region Ctor
 
-    public AkeneoConnectionPlugin(AkeneoConnectionSettings checkMoneyOrderPaymentSettings,
+    public AkeneoConnectionPlugin(
         ILocalizationService localizationService,
         IOrderTotalCalculationService orderTotalCalculationService,
         ISettingService settingService,
         IShoppingCartService shoppingCartService,
         IWebHelper webHelper)
     {
-        _checkMoneyOrderPaymentSettings = checkMoneyOrderPaymentSettings;
         _localizationService = localizationService;
         _orderTotalCalculationService = orderTotalCalculationService;
         _settingService = settingService;

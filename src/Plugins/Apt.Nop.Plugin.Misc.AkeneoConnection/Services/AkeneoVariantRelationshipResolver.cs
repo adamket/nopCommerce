@@ -8,11 +8,11 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 public class AkeneoVariantRelationshipResolver : IAkeneoVariantRelationshipResolver
 {
     private readonly INopVariantStructureDetector _nopVariantStructureDetector;
-    private readonly IAkeneoFamilyVariantImportConfigurationService _familyConfigurationService;
+    private readonly IAkeneoFamilyMappingService _familyConfigurationService;
 
     public AkeneoVariantRelationshipResolver(
         INopVariantStructureDetector nopVariantStructureDetector,
-        IAkeneoFamilyVariantImportConfigurationService familyConfigurationService)
+        IAkeneoFamilyMappingService familyConfigurationService)
     {
         _nopVariantStructureDetector = nopVariantStructureDetector;
         _familyConfigurationService = familyConfigurationService;

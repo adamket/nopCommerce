@@ -1,50 +1,22 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Nop.Services.ScheduleTasks;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tasks;
+
 public class AkeneoProductImportScheduleTask(
-    IAkeneoProductImportService akeneoProductImportService,
-    IAkeneoSyncRunRecordService syncRunRecordService)
+    IAkeneoProductImportExecutionService productImportExecutionService,
+    AkeneoConnectionSettings akeneoConnectionSettings)
     : IScheduleTask
 {
     public async Task ExecuteAsync()
     {
-        var syncRun = new AkeneoSyncRunRecord
-        {
-            SyncTypeId = (int)SyncType.DeltaSync,
-            StartedOnUtc = DateTime.UtcNow,
-            SyncStatusId = (int)SyncStatus.Started
-        };
+        if (!akeneoConnectionSettings.DefaultSyncProfileId.HasValue)
+            return;
 
-        await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(syncRun);
-
-        var result = await akeneoProductImportService.ImportProductsAsync(
-            new AkeneoProductBatchImportRequest
-            {
-                SyncRunRecordId = syncRun.Id,
-                PageSize = 100,
-                CreateNewProducts = true,
-                UpdateExistingProducts = true,
-                AddMappedCategories = true,
-                AddMappedManufacturers = true,
-                CreateMissingSpecificationAttributeOptions = true,
-                CreateMissingProductAttributeValues = true,
-                SaveRawPayloadSnapshot = false
-            });
-
-        syncRun.FinishedOnUtc = DateTime.UtcNow;
-        syncRun.TotalRead = result.TotalRead;
-        syncRun.CreatedCount = result.CreatedCount;
-        syncRun.UpdatedCount = result.UpdatedCount;
-        syncRun.SkippedCount = result.SkippedCount;
-        syncRun.FailedCount = result.FailedCount;
-        syncRun.SyncStatusId = (int)result.SyncStatus;
-        syncRun.ErrorSummary = result.Errors.Any()
-            ? string.Join(" | ", result.Errors)
-            : null;
-
-        await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(syncRun);
+        await productImportExecutionService.ImportProductsByProfileAsync(
+            akeneoConnectionSettings.DefaultSyncProfileId.Value,
+            SyncType.DeltaSync,
+            CancellationToken.None);
     }
 }

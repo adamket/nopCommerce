@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -81,7 +82,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
 
         model.AkeneoProductFound = true;
-        model.AkeneoProductUuid = GetRootString(akeneoProduct.Value, "uuid");
+        model.AkeneoProductUuid = akeneoProduct.Value.GetRootString("uuid");
 
         if (string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
         {
@@ -355,15 +356,15 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
     }
 
-    private static string GetRootString(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out var property))
-            return null;
+    //private static string GetRootString(JsonElement element, string propertyName)
+    //{
+    //    if (!element.TryGetProperty(propertyName, out var property))
+    //        return null;
 
-        return property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
-    }
+    //    return property.ValueKind == JsonValueKind.String
+    //        ? property.GetString()
+    //        : null;
+    //}
 
     private static string Normalize(string value, string fallback)
     {

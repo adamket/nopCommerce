@@ -13,9 +13,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AuthorizeAdmin]
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
-public class AkeneoFamilyVariantImportConfigurationController(
-    IAkeneoFamilyVariantImportConfigurationService configurationService,
-    IAkeneoFamilyVariantImportConfigurationModelFactory modelFactory,
+public class AkeneoFamilyMappingController(
+    IAkeneoFamilyMappingService configurationService,
+    IAkeneoFamilyMappingModelFactory modelFactory,
     INotificationService notificationService)
     : BasePluginController
 {
@@ -50,7 +50,7 @@ public class AkeneoFamilyVariantImportConfigurationController(
             return View(EditViewPath, model);
         }
 
-        var configuration = new AkeneoFamilyVariantImportConfiguration
+        var configuration = new AkeneoFamilyMapping
         {
             AkeneoFamilyCode = model.AkeneoFamilyCode?.Trim(),
             Enabled = model.Enabled,

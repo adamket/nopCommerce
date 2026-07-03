@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
@@ -80,6 +81,17 @@ public static class AkeneoConnectionExtensions
 
         return items.Any()
             ? string.Join(",", items)
+            : null;
+    }
+
+
+    public static string GetRootString(this JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+            return null;
+
+        return property.ValueKind == JsonValueKind.String
+            ? property.GetString()
             : null;
     }
 
