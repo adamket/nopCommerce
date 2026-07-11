@@ -3,7 +3,7 @@ using Nop.Web.Framework.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 
-public record AkeneoFamilyVariantImportConfigurationModel : BaseNopEntityModel
+public record AkeneoFamilyMappingModel : BaseNopEntityModel
 {
     public string AkeneoFamilyCode { get; set; }
 
@@ -23,6 +23,9 @@ public record AkeneoFamilyVariantImportConfigurationModel : BaseNopEntityModel
 
     public IList<AkeneoFamilyVariantAxisMappingModel> AxisMappings { get; set; } =
         new List<AkeneoFamilyVariantAxisMappingModel>();
+
+
+    public IList<AkeneoFamilySubModelRuleModel> SubModelRules { get; set; } = new List<AkeneoFamilySubModelRuleModel>();
 
     public IList<SelectListItem> AvailableVariantRelationshipModes { get; set; } =
         new List<SelectListItem>();

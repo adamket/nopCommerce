@@ -1,10 +1,10 @@
-﻿using System.Text.Json;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 
 public class AkeneoProductPageResult
 {
-    public IList<JsonElement> Items { get; set; } = new List<JsonElement>();
+    public IList<AkeneoProductDefinition> Items { get; set; } = new List<AkeneoProductDefinition>();
 
     public string SearchAfter { get; set; }
 

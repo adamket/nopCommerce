@@ -15,6 +15,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data
             { typeof(AkeneoSyncRunRecord), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncRunRecord)}" },
             { typeof(AkeneoFamilyMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyMapping)}" },
             { typeof(AkeneoFamilyVariantAxisMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyVariantAxisMapping)}" },
+            { typeof(AkeneoFamilySubModelRule), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilySubModelRule)}" },
 
         };
 

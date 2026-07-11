@@ -1,5 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Filters;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -20,10 +21,10 @@ public class AkeneoFamilyMappingController(
     : BasePluginController
 {
     private const string ListViewPath =
-        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyVariantImportConfiguration/List.cshtml";
+        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyMapping/List.cshtml";
 
     private const string EditViewPath =
-        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyVariantImportConfiguration/CreateOrUpdate.cshtml";
+        $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyMapping/CreateOrUpdate.cshtml";
 
     [HttpGet("admin/akeneo-connection/family-mapping/list")]
     public async Task<IActionResult> List()
@@ -36,17 +37,25 @@ public class AkeneoFamilyMappingController(
     public async Task<IActionResult> Create()
     {
         var model = await modelFactory.PrepareModelAsync(null);
+
         return View(EditViewPath, model);
     }
 
+    [CheckAkeneoConnection]
     [HttpPost]
-    public async Task<IActionResult> Create(AkeneoFamilyVariantImportConfigurationModel model)
+    public async Task<IActionResult> Create(AkeneoFamilyMappingModel model, bool connectionValid)
     {
         await ValidateModelAsync(model);
 
         if (!ModelState.IsValid)
         {
             model = await modelFactory.PrepareModelAsync(model);
+            return View(EditViewPath, model);
+        }
+
+        if (!connectionValid)
+        {
+            notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
             return View(EditViewPath, model);
         }
 
@@ -85,7 +94,8 @@ public class AkeneoFamilyMappingController(
     }
 
     [HttpPost]
-    public async Task<IActionResult> Edit(AkeneoFamilyVariantImportConfigurationModel model)
+    [CheckAkeneoConnection]
+    public async Task<IActionResult> Edit(AkeneoFamilyMappingModel model, bool connectionValid)
     {
         var configuration = await configurationService.GetByIdAsync(model.Id);
 
@@ -97,6 +107,12 @@ public class AkeneoFamilyMappingController(
         if (!ModelState.IsValid)
         {
             model = await modelFactory.PrepareModelAsync(model, configuration);
+            return View(EditViewPath, model);
+        }
+
+        if (!connectionValid)
+        {
+            notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
             return View(EditViewPath, model);
         }
 
@@ -118,7 +134,7 @@ public class AkeneoFamilyMappingController(
         return RedirectToAction(nameof(Edit), new { id = configuration.Id });
     }
 
-    private async Task ValidateModelAsync(AkeneoFamilyVariantImportConfigurationModel model)
+    private async Task ValidateModelAsync(AkeneoFamilyMappingModel model)
     {
         if (string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
         {

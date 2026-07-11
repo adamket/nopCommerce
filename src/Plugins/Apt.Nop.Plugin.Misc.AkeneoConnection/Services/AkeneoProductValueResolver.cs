@@ -1,13 +1,13 @@
-﻿using System.Globalization;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 {
     public string GetValue(
-        JsonElement product,
+        AkeneoProductDefinition product,
         string attributeCode,
         string locale = null,
         string channel = null,
@@ -19,7 +19,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     }
 
     public bool TryGetValue(
-        JsonElement product,
+        AkeneoProductDefinition product,
         string attributeCode,
         out AkeneoResolvedProductValue resolvedValue,
         string locale = null,
@@ -28,7 +28,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     {
         resolvedValue = null;
 
-        if (string.IsNullOrWhiteSpace(attributeCode))
+        if (product == null || string.IsNullOrWhiteSpace(attributeCode))
             return false;
 
         attributeCode = attributeCode.Trim();
@@ -50,11 +50,10 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
             return true;
         }
 
-        if (!product.TryGetProperty("values", out var valuesElement) ||
-            valuesElement.ValueKind != JsonValueKind.Object)
-        {
+        var valuesElement = product.Values;
+
+        if (valuesElement.ValueKind != JsonValueKind.Object)
             return false;
-        }
 
         if (!valuesElement.TryGetProperty(attributeCode, out var attributeValuesElement) ||
             attributeValuesElement.ValueKind != JsonValueKind.Array)
@@ -98,31 +97,68 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     }
 
     private static bool TryGetRootValue(
-        JsonElement product,
+        AkeneoProductDefinition product,
         string attributeCode,
         out JsonElement value)
     {
         value = default;
 
-        if (product.ValueKind != JsonValueKind.Object)
+        if (product == null || string.IsNullOrWhiteSpace(attributeCode))
             return false;
 
-        if (product.TryGetProperty(attributeCode, out value))
-            return true;
+        if (IsIdentifierAttribute(attributeCode))
+            return TryCreateStringJsonValue(product.Identifier, out value);
 
-        if (IsIdentifierAttribute(attributeCode) &&
-            product.TryGetProperty("identifier", out value))
+        if (string.Equals(attributeCode, "uuid", StringComparison.OrdinalIgnoreCase))
+            return TryCreateStringJsonValue(product.Uuid, out value);
+
+        if (string.Equals(attributeCode, "identifier", StringComparison.OrdinalIgnoreCase))
+            return TryCreateStringJsonValue(product.Identifier, out value);
+
+        if (string.Equals(attributeCode, "code", StringComparison.OrdinalIgnoreCase))
+            return TryCreateStringJsonValue(product.Code, out value);
+
+        if (string.Equals(attributeCode, "family", StringComparison.OrdinalIgnoreCase))
+            return TryCreateStringJsonValue(product.Family, out value);
+
+        if (string.Equals(attributeCode, "family_variant", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(attributeCode, "familyVariant", StringComparison.OrdinalIgnoreCase))
         {
+            return TryCreateStringJsonValue(product.FamilyVariant, out value);
+        }
+
+        if (string.Equals(attributeCode, "parent", StringComparison.OrdinalIgnoreCase))
+            return TryCreateStringJsonValue(product.Parent, out value);
+
+        if (string.Equals(attributeCode, "enabled", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!product.Enabled.HasValue)
+                return false;
+
+            value = JsonSerializer.SerializeToElement(product.Enabled.Value);
             return true;
         }
 
-        if (string.Equals(attributeCode, "uuid", StringComparison.OrdinalIgnoreCase) &&
-            product.TryGetProperty("uuid", out value))
+        if (string.Equals(attributeCode, "categories", StringComparison.OrdinalIgnoreCase))
         {
+            value = JsonSerializer.SerializeToElement(product.Categories ?? new List<string>());
             return true;
         }
 
         return false;
+    }
+
+    private static bool TryCreateStringJsonValue(
+        string source,
+        out JsonElement value)
+    {
+        value = default;
+
+        if (string.IsNullOrWhiteSpace(source))
+            return false;
+
+        value = JsonSerializer.SerializeToElement(source);
+        return true;
     }
 
     private static bool IsIdentifierAttribute(string attributeCode)
@@ -178,7 +214,6 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         return score;
     }
 
-    //todo evaluate
     private static int ScoreContextValue(
         string actualValue,
         string requestedValue)
@@ -386,16 +421,15 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     }
 
     private static IReadOnlyList<string> ResolveDisplayValues(
-    JsonElement valueObject,
-    JsonElement dataElement,
-    string locale,
-    string currency)
+        JsonElement valueObject,
+        JsonElement dataElement,
+        string locale,
+        string currency)
     {
         var hasLinkedData =
             valueObject.TryGetProperty("linked_data", out var linkedData) &&
             linkedData.ValueKind == JsonValueKind.Object;
 
-        // Multi-select / collection: map each option code to its label.
         if (dataElement.ValueKind == JsonValueKind.Array)
         {
             var items = new List<string>();
@@ -411,7 +445,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
                     if (hasLinkedData && !string.IsNullOrWhiteSpace(code))
                         display = GetOptionLabel(linkedData, code, locale);
 
-                    display ??= code; // fall back to the code if there's no label
+                    display ??= code;
                 }
                 else
                 {
@@ -425,17 +459,17 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
             return items;
         }
 
-        // Single select: data is the option code, linked_data is keyed by it.
         if (dataElement.ValueKind == JsonValueKind.String && hasLinkedData)
         {
             var code = dataElement.GetString();
-            var label = string.IsNullOrWhiteSpace(code) ? null : GetOptionLabel(linkedData, code, locale);
+            var label = string.IsNullOrWhiteSpace(code)
+                ? null
+                : GetOptionLabel(linkedData, code, locale);
 
             if (!string.IsNullOrWhiteSpace(label))
                 return new[] { label.Trim() };
         }
 
-        // Everything else (text, number, price, metric, reference entity, ...).
         var single = FormatValueObject(valueObject, dataElement, locale, currency);
 
         return string.IsNullOrWhiteSpace(single)

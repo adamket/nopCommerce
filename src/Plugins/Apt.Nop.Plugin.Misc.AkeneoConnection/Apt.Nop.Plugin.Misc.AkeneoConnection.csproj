@@ -49,8 +49,7 @@
     <Folder Include="Components\" />
     <Folder Include="Content\Stylesheets\" />
     <Folder Include="Content\Scripts\" />
-    <Folder Include="ScheduleTasks\" />
-    <Folder Include="Views\FamilyVariantImportConfiguration\" />
+    <Folder Include="Views\FamilyMapping\" />
     <Folder Include="Views\SyncProfile\" />
   </ItemGroup>
 
@@ -79,10 +78,10 @@
     <None Update="Views\SyncProfile\List.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Views\FamilyVariantImportConfiguration\CreateOrUpdate.cshtml">
+    <None Update="Views\FamilyMapping\CreateOrUpdate.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Views\FamilyVariantImportConfiguration\List.cshtml">
+    <None Update="Views\FamilyMapping\List.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

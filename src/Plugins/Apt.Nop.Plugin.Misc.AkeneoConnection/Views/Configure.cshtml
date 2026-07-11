@@ -3,7 +3,7 @@
 @{
     Layout = "_AdminLayout";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.Configuration");
 }
 
@@ -101,13 +101,40 @@
                     </div>
 
 
+                    
+                    
 
 
 
                 </div>
 
+                
+                @if (!string.IsNullOrWhiteSpace(Model.AkeneoConnectionPassword) && !string.IsNullOrWhiteSpace(Model.AkeneoConnectionBaseUrl))
+                {
+                    <div class="card card-default">
+                        <div class="card-header">
 
+                            <div class="card-title float-left">
+                                <i class="fas fa-cogs"></i> General settings
 
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+
+                            <div class="form-group row">
+                                <div class="col-md-3">
+                                    <nop-override-store-checkbox asp-for="DefaultSyncProfileId_OverrideForStore" asp-input="DefaultSyncProfileId" asp-store-scope="@Model.ActiveStoreScopeConfiguration"/>
+                                    <nop-label asp-for="DefaultSyncProfileId"/>
+                                </div>
+                                <div class="col-md-9">
+                                    <nop-select asp-for="DefaultSyncProfileId" asp-items="Model.AvailableSyncProfiles"/>
+                                    <span asp-validation-for="DefaultSyncProfileId"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </form>
 

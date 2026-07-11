@@ -1,4 +1,4 @@
-@model AkeneoFamilyVariantImportConfigurationListModel
+@model AkeneoFamilyMappingListModel
 @using System.Text.Json
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
@@ -8,8 +8,8 @@
     ViewBag.PageTitle = "Akeneo family variant import configurations";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
-    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
     var configurationsJson = JsonSerializer.Serialize(
         Model.Configurations.Select(x => new
         {
@@ -181,7 +181,7 @@
                 },
 
                 editUrl(id) {
-                    return '@Url.Action("Edit", "AkeneoFamilyVariantImportConfiguration")/' + id;
+                    return '@Url.Action("Edit", "AkeneoFamilyMapping")/' + id;
                 }
             }
         }).mount('#akeneo-family-variant-config-list-app');

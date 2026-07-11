@@ -5,7 +5,7 @@
     ViewBag.PageTitle = "Akeneo Sync Logs";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncLogs");
 
     var appModel = new

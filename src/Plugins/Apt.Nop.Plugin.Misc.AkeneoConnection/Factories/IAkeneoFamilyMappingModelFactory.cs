@@ -1,13 +1,12 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 public interface IAkeneoFamilyMappingModelFactory
 {
-    Task<AkeneoFamilyVariantImportConfigurationListModel> PrepareListModelAsync();
+    Task<AkeneoFamilyMappingListModel> PrepareListModelAsync();
 
-    Task<AkeneoFamilyVariantImportConfigurationModel> PrepareModelAsync(
-        AkeneoFamilyVariantImportConfigurationModel model = null,
+    Task<AkeneoFamilyMappingModel> PrepareModelAsync(
+        AkeneoFamilyMappingModel model = null,
         AkeneoFamilyMapping configuration = null);
 }

@@ -14,21 +14,25 @@ public class AkeneoVariantRelationshipService(IAkeneoVariantRelationshipResolver
         AkeneoVariantImportContext context,
         Func<Task<Product>> upsertChildProductAsync)
     {
-        var resolution = await relationshipResolver.ResolveAsync(
-            parentProduct,
-            context.AkeneoFamilyCode);
+        var resolution = await relationshipResolver.ResolveAsync(parentProduct, context.AkeneoFamilyCode);
+
+        // Existing structure always wins; the override only applies when there's nothing to preserve.
+        var effectiveMode =
+            resolution.Source == AkeneoVariantRelationshipSource.ExistingNopParent
+                ? resolution.Mode
+                : context.VariantRelationshipModeOverride ?? resolution.Mode;
 
         context.Options = resolution.Options ?? new AkeneoVariantRelationshipOptions
         {
             Enabled = true,
             AkeneoFamilyCode = context.AkeneoFamilyCode,
-            Mode = resolution.Mode,
+            Mode = effectiveMode,
             PreserveExistingNopVariantStructure = true
         };
+        context.Options.Mode = effectiveMode;
 
-        await EnsureParentShapeAsync(parentProduct, resolution.Mode);
-
-        return resolution.Mode switch
+        await EnsureParentShapeAsync(parentProduct, effectiveMode);
+        return effectiveMode switch 
         {
             AkeneoVariantRelationshipMode.GroupedProducts =>
                 await ApplyGroupedProductAsync(

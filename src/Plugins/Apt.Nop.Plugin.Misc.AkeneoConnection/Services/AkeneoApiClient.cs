@@ -61,6 +61,47 @@ public class AkeneoApiClient : IAkeneoApiClient
 
     #region Public API
 
+    /// <summary>
+    /// Sends an unauthenticated request to the configured Akeneo API and
+    /// returns true only when Akeneo responds with HTTP 401 Unauthorized.
+    /// </summary>
+    public async Task<bool> KnockAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.AkeneoConnectionBaseUrl))
+            return false;
+
+        try
+        {
+            Configure(_settings.AkeneoConnectionBaseUrl);
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                BuildUri("api/rest/v1/channels?limit=1"));
+
+            request.Headers.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+
+            request.Headers.UserAgent.ParseAdd(
+                "Apt-NopCommerce-AkeneoConnection/1.0 HealthCheck");
+
+            using var response = await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            return response.StatusCode == HttpStatusCode.Unauthorized;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
+
     public async Task<AkeneoConnectionTestResult> TestConnectionAsync(
         AkeneoApiCredentials apiCredentials,
         CancellationToken cancellationToken = default)
@@ -90,7 +131,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         }
     }
 
-    public async Task<IReadOnlyList<JsonElement>> GetProductsAsync(
+    public async Task<IReadOnlyList<AkeneoProductDefinition>> GetProductsAsync(
         string searchJson = null,
         int limit = 100,
         CancellationToken cancellationToken = default,
@@ -106,34 +147,35 @@ public class AkeneoApiClient : IAkeneoApiClient
         if (!string.IsNullOrWhiteSpace(searchJson))
             query["search"] = searchJson;
 
-        return await GetPagedCollectionAsync(
+        return await GetPagedCollectionAsync<AkeneoProductDefinition>(
             "api/rest/v1/products-uuid", query, cancellationToken, apiCredentials);
     }
 
-    public async Task<JsonElement?> GetProductModelByCodeAsync(
+    public async Task<AkeneoProductDefinition> GetProductModelByCodeAsync(
         string code,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(code))
             throw new ArgumentException("Product model code is required.", nameof(code));
 
-        return await GetJsonOrNullAsync(
+        return await GetObjectOrNullAsync<AkeneoProductDefinition>(
             $"api/rest/v1/product-models/{Uri.EscapeDataString(code)}?with_attribute_options=true",
             cancellationToken);
     }
 
-    public async Task<JsonElement?> GetProductByUuidAsync(
+    public async Task<AkeneoProductDefinition> GetProductByUuidAsync(
         string uuid,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(uuid))
             throw new ArgumentException("Product UUID is required.", nameof(uuid));
 
-        return await GetJsonOrNullAsync(
-            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true", cancellationToken);
+        return await GetObjectOrNullAsync<AkeneoProductDefinition>(
+            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true",
+            cancellationToken);
     }
 
-    public async Task<IReadOnlyList<JsonElement>> GetChangedProductsAsync(
+    public async Task<IReadOnlyList<AkeneoProductDefinition>> GetChangedProductsAsync(
         DateTime updatedSinceUtc,
         int limit = 100,
         CancellationToken cancellationToken = default)
@@ -223,24 +265,17 @@ public class AkeneoApiClient : IAkeneoApiClient
 
         using var document = await GetJsonDocumentAsync(
             relativeUrl,
-            cancellationToken, null);
+            cancellationToken,
+            null);
 
-        var root = document.RootElement;
+        var page = document.RootElement.Deserialize<PagedCollection<AkeneoProductDefinition>>(
+            SnakeCaseJsonOptions);
 
-        var result = new AkeneoProductPageResult();
-
-        if (root.TryGetProperty("_embedded", out var embedded) &&
-            embedded.TryGetProperty("items", out var items) &&
-            items.ValueKind == JsonValueKind.Array)
+        return new AkeneoProductPageResult
         {
-            foreach (var item in items.EnumerateArray())
-                result.Items.Add(item.Clone());
-        }
-
-        var nextPageUrl = GetNextPageUrl(root);
-        result.SearchAfter = ExtractQueryStringValue(nextPageUrl, "search_after");
-
-        return result;
+            Items = page?.Embedded?.Items ?? new List<AkeneoProductDefinition>(),
+            SearchAfter = ExtractQueryStringValue(page?.Links?.Next?.Href, "search_after")
+        };
     }
 
     public async Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesAsync(
@@ -284,14 +319,20 @@ public class AkeneoApiClient : IAkeneoApiClient
         CancellationToken cancellationToken = default,
         AkeneoApiCredentials apiCredentials = null)
     {
-        var items = await GetSimpleCollectionAsync(endpoint, limit, cancellationToken, apiCredentials);
+        apiCredentials ??= GetApiCredentialsFromSettings();
 
-        return items
-            .Select(item => item.Deserialize<T>(SnakeCaseJsonOptions))
-            .Where(item => item is not null)
-            .Cast<T>()
-            .ToList();
+        var query = new Dictionary<string, string?>
+        {
+            ["limit"] = limit.ToString()
+        };
+
+        return await GetPagedCollectionAsync<T>(
+            endpoint,
+            query,
+            cancellationToken,
+            apiCredentials);
     }
+
 
     private async Task<IReadOnlyList<JsonElement>> GetSimpleCollectionAsync(
         string relativeUrl,
@@ -302,6 +343,33 @@ public class AkeneoApiClient : IAkeneoApiClient
         apiCredentials ??= GetApiCredentialsFromSettings();
         var query = new Dictionary<string, string?> { ["limit"] = limit.ToString() };
         return await GetPagedCollectionAsync(relativeUrl, query, cancellationToken, apiCredentials);
+    }
+
+
+    private async Task<IReadOnlyList<T>> GetPagedCollectionAsync<T>(
+        string relativeUrl,
+        Dictionary<string, string?> query,
+        CancellationToken cancellationToken = default,
+        AkeneoApiCredentials apiCredentials = null)
+    {
+        var results = new List<T>();
+        var nextUrl = relativeUrl + ToQueryString(query);
+
+        while (!string.IsNullOrWhiteSpace(nextUrl))
+        {
+            using var document = await GetJsonDocumentAsync(nextUrl, cancellationToken, apiCredentials);
+
+            var page = document.RootElement.Deserialize<PagedCollection<T>>(SnakeCaseJsonOptions);
+
+            if (page?.Embedded?.Items != null)
+            {
+                results.AddRange(page.Embedded.Items.Where(item => item is not null));
+            }
+
+            nextUrl = page?.Links?.Next?.Href;
+        }
+
+        return results;
     }
 
     private async Task<IReadOnlyList<JsonElement>> GetPagedCollectionAsync(
@@ -724,6 +792,28 @@ public class AkeneoApiClient : IAkeneoApiClient
                 new { @operator = ">", value = formattedDate }
             }
         });
+    }
+
+    private async Task<T> GetObjectOrNullAsync<T>(
+        string relativeUrl,
+        CancellationToken cancellationToken = default,
+        AkeneoApiCredentials apiCredentials = null)
+    {
+        using var response = await SendAuthenticatedGetAsync(
+            relativeUrl,
+            apiCredentials,
+            cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return default;
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        return JsonSerializer.Deserialize<T>(
+            body,
+            SnakeCaseJsonOptions);
     }
 
     private static string NormalizeBaseUrl(string baseUrl)

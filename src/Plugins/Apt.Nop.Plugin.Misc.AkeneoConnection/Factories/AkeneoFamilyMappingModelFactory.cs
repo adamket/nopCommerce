@@ -23,14 +23,14 @@ public class AkeneoFamilyMappingModelFactory
         _productAttributeService = productAttributeService;
     }
 
-    public async Task<AkeneoFamilyVariantImportConfigurationListModel> PrepareListModelAsync()
+    public async Task<AkeneoFamilyMappingListModel> PrepareListModelAsync()
     {
         var configurations = await _configurationService.GetAllAsync();
 
-        var model = new AkeneoFamilyVariantImportConfigurationListModel();
+        var model = new AkeneoFamilyMappingListModel();
 
         model.Configurations = configurations
-            .Select(x => new AkeneoFamilyVariantImportConfigurationModel
+            .Select(x => new AkeneoFamilyMappingModel
             {
                 Id = x.Id,
                 AkeneoFamilyCode = x.AkeneoFamilyCode,
@@ -47,11 +47,11 @@ public class AkeneoFamilyMappingModelFactory
         return model;
     }
 
-    public async Task<AkeneoFamilyVariantImportConfigurationModel> PrepareModelAsync(
-        AkeneoFamilyVariantImportConfigurationModel model = null,
+    public async Task<AkeneoFamilyMappingModel> PrepareModelAsync(
+        AkeneoFamilyMappingModel model = null,
         AkeneoFamilyMapping configuration = null)
     {
-        model ??= new AkeneoFamilyVariantImportConfigurationModel();
+        model ??= new AkeneoFamilyMappingModel();
 
         if (configuration != null)
         {
@@ -95,7 +95,7 @@ public class AkeneoFamilyMappingModelFactory
         };
 
 
-    private async Task PrepareSelectListsAsync(AkeneoFamilyVariantImportConfigurationModel model)
+    private async Task PrepareSelectListsAsync(AkeneoFamilyMappingModel model)
     {
         model.AvailableVariantRelationshipModes = BuildModeList();   // unchanged
 

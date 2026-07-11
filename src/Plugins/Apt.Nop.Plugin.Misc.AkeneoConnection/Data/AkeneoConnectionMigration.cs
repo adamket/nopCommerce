@@ -8,7 +8,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-06-23 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
+[NopMigration("2026-07-10 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
 public class AkeneoConnectionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()
@@ -24,12 +24,17 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         CreateTable<AkeneoSyncRunRecord>();
         CreateTable<AkeneoFamilyMapping>();
         CreateTable<AkeneoFamilyVariantAxisMapping>();
+        CreateTable<AkeneoFamilySubModelRule>();
 
         var configurationTable =
             NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping));
 
         var axisMappingTable =
             NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyVariantAxisMapping));
+
+        var subModelRuleTable =
+            NameCompatibilityManager.GetTableName(
+                typeof(AkeneoFamilySubModelRule));
 
         Create.Index($"IX_{configurationTable}_AkeneoFamilyCode")
             .OnTable(configurationTable)
@@ -43,10 +48,16 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
             .OnColumn(nameof(AkeneoFamilyVariantAxisMapping.FamilyVariantImportConfigurationId))
             .Ascending();
 
+        Create.Index($"IX_{subModelRuleTable}_FamilyMappingId")
+            .OnTable(subModelRuleTable)
+            .OnColumn(nameof(AkeneoFamilySubModelRule.FamilyMappingId))
+            .Ascending();
+
     }
 
     public override void Down()
     {
+        DropTopicChildTableAsync<AkeneoFamilySubModelRule>().Wait();
         DropTopicChildTableAsync<AkeneoAttributeMapping>().Wait();
         DropTopicChildTableAsync<AkeneoNopEntityMapping>().Wait();
         DropTopicChildTableAsync<AkeneoSyncItemLog>().Wait();

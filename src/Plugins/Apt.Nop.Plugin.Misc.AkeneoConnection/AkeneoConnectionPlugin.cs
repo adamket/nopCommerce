@@ -1,39 +1,31 @@
-﻿using Nop.Core;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
+using Nop.Core;
+using Nop.Core.Domain.ScheduleTasks;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Orders;
 using Nop.Services.Plugins;
+using Nop.Services.ScheduleTasks;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
 
-public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
+public class AkeneoConnectionPlugin(
+    ILocalizationService localizationService,
+    IOrderTotalCalculationService orderTotalCalculationService,
+    ISettingService settingService,
+    IShoppingCartService shoppingCartService,
+    IWebHelper webHelper,
+    IScheduleTaskService scheduleTaskService)
+    : BasePlugin, IMiscPlugin
 {
     #region Fields
 
-    protected readonly ILocalizationService _localizationService;
-    protected readonly IOrderTotalCalculationService _orderTotalCalculationService;
-    protected readonly ISettingService _settingService;
-    protected readonly IShoppingCartService _shoppingCartService;
-    protected readonly IWebHelper _webHelper;
+
 
     #endregion
 
     #region Ctor
-
-    public AkeneoConnectionPlugin(
-        ILocalizationService localizationService,
-        IOrderTotalCalculationService orderTotalCalculationService,
-        ISettingService settingService,
-        IShoppingCartService shoppingCartService,
-        IWebHelper webHelper)
-    {
-        _localizationService = localizationService;
-        _orderTotalCalculationService = orderTotalCalculationService;
-        _settingService = settingService;
-        _shoppingCartService = shoppingCartService;
-        _webHelper = webHelper;
-    }
 
     #endregion
 
@@ -46,7 +38,7 @@ public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
     /// </summary>
     public override string GetConfigurationPageUrl()
     {
-        return $"{_webHelper.GetStoreLocation()}Admin/AkeneoConnectionConfiguration/Configure";
+        return $"{webHelper.GetStoreLocation()}admin/akeneo-connection/configure";
     }
 
   
@@ -60,12 +52,29 @@ public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
         //settings
         var settings = new AkeneoConnectionSettings
         {
-       //     DescriptionText = "<p>Mail Personal or Business Check, Cashier's Check or money order to:</p><p><br /><b>COMPANY NAME</b> <br /><b>your address here,</b> <br /><b>New York, NY 10001 </b> <br /><b>USA</b></p><p>Notice that if you pay by Personal or Business Check, your order may be held for up to 10 days after we receive your check to allow enough time for the check to clear.  If you want us to ship faster upon receipt of your payment, then we recommend your send a money order or Cashier's check.</p><p>P.S. You can edit this text from admin panel.</p>"
+     
         };
-        await _settingService.SaveSettingAsync(settings);
+
+        var taskType = typeof(AkeneoProductImportScheduleTask).FullName
+                       ?? throw new InvalidOperationException("Unable to resolve schedule task type.");
+
+        var revisionCleanupTask = await scheduleTaskService.GetTaskByTypeAsync(taskType);
+        if (revisionCleanupTask == null)
+        {
+            var cleanupTask = new ScheduleTask
+            {
+                Enabled = true,
+                Seconds = 60 * 60 * 24, 
+                Type = taskType,
+                Name = "Akeneo Connection - Product Sync",
+
+            };
+            await scheduleTaskService.InsertTaskAsync(cleanupTask);
+        }
+        await settingService.SaveSettingAsync(settings);
 
         //locales
-        await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
+        await localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
         {
             //["Plugins.Payment.CheckMoneyOrder.AdditionalFee"] = "Additional fee",
             //["Plugins.Payment.CheckMoneyOrder.AdditionalFee.Hint"] = "The additional fee.",
@@ -88,7 +97,7 @@ public class AkeneoConnectionPlugin : BasePlugin, IMiscPlugin
     public override async Task UninstallAsync()
     {
         //settings
-        await _settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
+        await settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
 
         //locales
        // await _localizationService.DeleteLocaleResourcesAsync("Plugins.Payment.CheckMoneyOrder");

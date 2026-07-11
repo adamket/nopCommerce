@@ -2,7 +2,7 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Nop.Services.ScheduleTasks;
 
-namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tasks;
+namespace Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 
 public class AkeneoProductImportScheduleTask(
     IAkeneoProductImportExecutionService productImportExecutionService,

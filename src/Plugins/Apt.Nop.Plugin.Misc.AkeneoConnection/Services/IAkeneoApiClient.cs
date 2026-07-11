@@ -6,11 +6,11 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public interface IAkeneoApiClient
 {
-    Task<JsonElement?> GetProductModelByCodeAsync(
+    Task<AkeneoProductDefinition> GetProductModelByCodeAsync(
         string code,
         CancellationToken cancellationToken = default);
 
-    Task<JsonElement?> GetProductByUuidAsync(
+    Task<AkeneoProductDefinition> GetProductByUuidAsync(
         string uuid,
         CancellationToken cancellationToken = default);
 
@@ -35,7 +35,7 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetChangedProductsAsync(
+    Task<IReadOnlyList<AkeneoProductDefinition>> GetChangedProductsAsync(
         DateTime updatedSinceUtc,
         int limit = 100,
         CancellationToken cancellationToken = default);
@@ -44,7 +44,7 @@ public interface IAkeneoApiClient
         AkeneoApiCredentials apiCredentials = null,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetProductsAsync(
+    Task<IReadOnlyList<AkeneoProductDefinition>> GetProductsAsync(
         string searchJson = null,
         int limit = 100,
         CancellationToken cancellationToken = default,
@@ -71,8 +71,7 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    //Task<IReadOnlyList<AkeneoProductGroupDefinition>> GetProductGroupsAsync(
-    //    int limit = 100,
-    //    CancellationToken cancellationToken = default);
+    Task<bool> KnockAsync(
+        CancellationToken cancellationToken = default);
 
 }

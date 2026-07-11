@@ -6,7 +6,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoFamilyMappingService(
     IRepository<AkeneoFamilyMapping> configurationRepository,
-    IRepository<AkeneoFamilyVariantAxisMapping> axisMappingRepository)
+    IRepository<AkeneoFamilyVariantAxisMapping> axisMappingRepository, IRepository<AkeneoFamilySubModelRule> subModelRuleRepository)
     : IAkeneoFamilyMappingService
 {
     public async Task<AkeneoFamilyMapping> GetByIdAsync(int id)
@@ -103,5 +103,32 @@ public class AkeneoFamilyMappingService(
                 .ThenBy(x => x.Id)
                 .ToList()
         };
+    }
+
+    public async Task<IList<AkeneoFamilySubModelRule>> GetSubModelRulesAsync(int familyMappingId)
+    {
+        return await subModelRuleRepository.Table
+            .Where(x => x.FamilyMappingId == familyMappingId)
+            .OrderBy(x => x.DisplayOrder)
+            .ThenBy(x => x.Id)
+            .ToListAsync();
+    }
+
+    public async Task InsertSubModelRuleAsync(AkeneoFamilySubModelRule rule)
+    {
+        rule.CreatedOnUtc = DateTime.UtcNow;
+        rule.UpdatedOnUtc = DateTime.UtcNow;
+        await subModelRuleRepository.InsertAsync(rule);
+    }
+
+    public async Task UpdateSubModelRuleAsync(AkeneoFamilySubModelRule rule)
+    {
+        rule.UpdatedOnUtc = DateTime.UtcNow;
+        await subModelRuleRepository.UpdateAsync(rule);
+    }
+
+    public async Task DeleteSubModelRuleAsync(AkeneoFamilySubModelRule rule)
+    {
+        await subModelRuleRepository.DeleteAsync(rule);
     }
 }

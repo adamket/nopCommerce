@@ -1,16 +1,12 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
-using Nop.Services;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
-using Nop.Services.Plugins;
 using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
@@ -28,169 +24,20 @@ public class AkeneoConnectionConfigurationController(
     INotificationService notificationService,
     IPermissionService permissionService,
     ISettingService settingService,
-    IStoreContext storeContext)
+    IStoreContext storeContext,
+    IAkeneoSyncProfileService syncProfileService)
     : BasePluginController
 {
 
-
-    #region Ctor
-
-    #endregion
-
-    #region Utilities
-
     private async Task PrepareSyncContextOptionsAsync(AkeneoConfigurationModel model)
     {
-        model.AvailableChannelCodes = new List<SelectListItem>();
-        model.AvailableLocaleCodes = new List<SelectListItem>();
-        model.AvailableCurrencyCodes = new List<SelectListItem>();
-        model.AvailableUnmappedAkeneoAttributeBehaviors = (await UnmappedAkeneoAttributeBehavior.Ignore.ToSelectListAsync()).ToList();
-        IReadOnlyList<AkeneoChannelDefinition> channels;
+        var syncProfiles = await syncProfileService.GetAllAkeneoSyncProfilesAsync();
+        model.AvailableSyncProfiles = syncProfiles.Select(q=> new SelectListItem(q.Name, q.Id.ToString())).ToList();
+        model.AvailableSyncProfiles.Insert(0, new SelectListItem("None selected", ""));
 
-        try
-        {
-            channels = await akeneoApiClient.GetChannelsAsync();
-        }
-        catch (Exception ex)
-        {
-            AddEmptyOption(model.AvailableChannelCodes, "Unable to load Akeneo channels");
-            AddEmptyOption(model.AvailableLocaleCodes, "Unable to load Akeneo locales");
-            AddEmptyOption(model.AvailableCurrencyCodes, "Unable to load Akeneo currencies");
-            notificationService.WarningNotification($"Unable to load Akeneo sync context options. {ex.Message}");
-            return;
-        }
-
-        var validChannels = channels
-            .Where(channel => !string.IsNullOrWhiteSpace(channel.Code))
-            .OrderBy(channel => channel.Code)
-            .ToList();
-
-        if (!validChannels.Any())
-        {
-            AddEmptyOption(model.AvailableChannelCodes, "No Akeneo channels available");
-            AddEmptyOption(model.AvailableLocaleCodes, "No Akeneo locales available");
-            AddEmptyOption(model.AvailableCurrencyCodes, "No Akeneo currencies available");
-            notificationService.WarningNotification("No Akeneo channels were found. Verify your Akeneo connection and channel configuration.");
-            return;
-        }
-
-        model.DefaultChannelCode = ResolveSelectedCode(
-            model.DefaultChannelCode,
-            validChannels.Select(channel => channel.Code));
-
-        foreach (var channel in validChannels)
-        {
-            model.AvailableChannelCodes.Add(new SelectListItem
-            {
-                Text = GetChannelDisplayName(channel),
-                Value = channel.Code,
-                Selected = string.Equals(channel.Code, model.DefaultChannelCode, StringComparison.OrdinalIgnoreCase)
-            });
-        }
-
-        var selectedChannel = validChannels.First(channel =>
-            string.Equals(channel.Code, model.DefaultChannelCode, StringComparison.OrdinalIgnoreCase));
-
-        var localeCodes = NormalizeCodes(selectedChannel.Locales);
-        if (!localeCodes.Any())
-            localeCodes = NormalizeCodes(validChannels.SelectMany(c => c.Locales ?? Enumerable.Empty<string>()));
-
-        model.DefaultLocaleCode = PrepareCodeOptions(
-            model.AvailableLocaleCodes, localeCodes, model.DefaultLocaleCode, "No Akeneo locales available");
-
-        var currencyCodes = NormalizeCodes(selectedChannel.Currencies);
-        if (!currencyCodes.Any())
-            currencyCodes = NormalizeCodes(validChannels.SelectMany(c => c.Currencies ?? Enumerable.Empty<string>()));
-
-        model.DefaultCurrencyCode = PrepareCodeOptions(
-            model.AvailableCurrencyCodes, currencyCodes, model.DefaultCurrencyCode, "No Akeneo currencies available");
     }
-
-    private static string PrepareCodeOptions(
-        IList<SelectListItem> options, IEnumerable<string> codes, string selectedCode, string emptyText)
-    {
-        options.Clear();
-        var normalizedCodes = NormalizeCodes(codes);
-
-        if (!normalizedCodes.Any())
-        {
-            AddEmptyOption(options, emptyText);
-            return string.Empty;
-        }
-
-        var resolvedSelectedCode = ResolveSelectedCode(selectedCode, normalizedCodes);
-
-        foreach (var code in normalizedCodes)
-        {
-            options.Add(new SelectListItem
-            {
-                Text = code,
-                Value = code,
-                Selected = string.Equals(code, resolvedSelectedCode, StringComparison.OrdinalIgnoreCase)
-            });
-        }
-
-        return resolvedSelectedCode;
-    }
-
-    private static List<string> NormalizeCodes(IEnumerable<string> codes)
-    {
-        return (codes ?? [])
-            .Where(code => !string.IsNullOrWhiteSpace(code))
-            .Select(code => code.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(code => code)
-            .ToList();
-    }
-
-    private static string ResolveSelectedCode(string selectedCode, IEnumerable<string> validCodes)
-    {
-        var codes = NormalizeCodes(validCodes);
-        if (!codes.Any())
-            return string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(selectedCode))
-        {
-            var match = codes.FirstOrDefault(code =>
-                string.Equals(code, selectedCode, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrWhiteSpace(match))
-                return match;
-        }
-
-        return codes[0];
-    }
-
-    private static void AddEmptyOption(IList<SelectListItem> options, string text) =>
-        options.Add(new SelectListItem { Text = text, Value = "" });
-
-    private static string GetChannelDisplayName(AkeneoChannelDefinition channel)
-    {
-        var label = GetBestLabel(channel.Labels);
-        if (string.IsNullOrWhiteSpace(label) ||
-            string.Equals(label, channel.Code, StringComparison.OrdinalIgnoreCase))
-        {
-            return channel.Code;
-        }
-
-        return $"{label} ({channel.Code})";
-    }
-
-    private static string GetBestLabel(IDictionary<string, string> labels)
-    {
-        if (labels == null || !labels.Any())
-            return string.Empty;
-
-        if (labels.TryGetValue("en_US", out var englishLabel) && !string.IsNullOrWhiteSpace(englishLabel))
-            return englishLabel;
-
-        return labels.Values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
-    }
-
-    #endregion
 
     #region Methods
-
-
     [AuthorizeAdmin]
     [HttpPost("admin/akeneo-connection/test-connection")]
     public async Task<IActionResult> TestConnection(AkeneoApiCredentials apiCredentials, CancellationToken cancellationToken)
@@ -223,6 +70,7 @@ public class AkeneoConnectionConfigurationController(
             AkeneoConnectionClientSecret = akeneoConnectionSettings.AkeneoConnectionClientSecret,
             AkeneoConnectionUsername = akeneoConnectionSettings.AkeneoConnectionUsername,
             AkeneoConnectionPassword = akeneoConnectionSettings.AkeneoConnectionPassword,
+            DefaultSyncProfileId = akeneoConnectionSettings.DefaultSyncProfileId
             //DefaultChannelCode = akeneoConnectionSettings.DefaultChannelCode,
             //DefaultLocaleCode = akeneoConnectionSettings.DefaultLocaleCode,
             //DefaultCurrencyCode = akeneoConnectionSettings.DefaultCurrencyCode
@@ -235,6 +83,9 @@ public class AkeneoConnectionConfigurationController(
             model.AkeneoConnectionClientSecret_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, storeScope);
             model.AkeneoConnectionUsername_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, storeScope);
             model.AkeneoConnectionPassword_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, storeScope);
+            model.DefaultSyncProfileId_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultSyncProfileId, storeScope);
+            
+            
             //model.DefaultChannelCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, storeScope);
             //model.DefaultLocaleCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, storeScope);
             //model.DefaultCurrencyCode_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, storeScope);
@@ -262,6 +113,7 @@ public class AkeneoConnectionConfigurationController(
         akeneoConnectionSettings.AkeneoConnectionClientSecret = model.AkeneoConnectionClientSecret;
         akeneoConnectionSettings.AkeneoConnectionUsername = model.AkeneoConnectionUsername;
         akeneoConnectionSettings.AkeneoConnectionPassword = model.AkeneoConnectionPassword;
+        akeneoConnectionSettings.DefaultSyncProfileId = model.DefaultSyncProfileId;
         //akeneoConnectionSettings.DefaultLocaleCode = model.DefaultLocaleCode;
         //akeneoConnectionSettings.DefaultChannelCode = model.DefaultChannelCode;
         //akeneoConnectionSettings.DefaultCurrencyCode = model.DefaultCurrencyCode;
@@ -274,6 +126,7 @@ public class AkeneoConnectionConfigurationController(
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionClientSecret, model.AkeneoConnectionClientSecret_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, model.AkeneoConnectionUsername_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, model.AkeneoConnectionPassword_OverrideForStore, storeScope, false);
+        await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultSyncProfileId, model.DefaultSyncProfileId_OverrideForStore, storeScope, false);
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);

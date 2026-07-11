@@ -1,4 +1,4 @@
-@model AkeneoFamilyVariantImportConfigurationModel
+@model AkeneoFamilyMappingModel
 @using System.Text.Json
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
@@ -6,8 +6,8 @@
 @{
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/StyleSheets/akeneo-connection.admin.css");
-    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
 
     Layout = "_AdminLayout";
 
@@ -56,7 +56,7 @@
 
 <div class="akeneo-connection">
     <div id="akeneo-family-variant-config-edit-app" v-cloak>
-        <form asp-controller="AkeneoFamilyVariantImportConfiguration"
+        <form asp-controller="AkeneoFamilyMapping"
               asp-action="@(isCreate ? "Create" : "Edit")"
               method="post">
 
@@ -430,7 +430,7 @@
                  role="dialog"
                  aria-modal="true">
                 <div class="modal-dialog" role="document">
-                    <form asp-controller="AkeneoFamilyVariantImportConfiguration"
+                    <form asp-controller="AkeneoFamilyMapping"
                           asp-action="Delete"
                           asp-route-id="@Model.Id"
                           method="post">

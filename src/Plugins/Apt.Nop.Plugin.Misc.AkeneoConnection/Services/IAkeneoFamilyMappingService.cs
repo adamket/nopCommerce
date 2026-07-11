@@ -24,4 +24,11 @@ public interface IAkeneoFamilyMappingService
     Task DeleteAxisMappingAsync(AkeneoFamilyVariantAxisMapping mapping);
 
     Task<AkeneoVariantRelationshipOptions> BuildOptionsForFamilyAsync(string akeneoFamilyCode);
+
+    Task<IList<AkeneoFamilySubModelRule>> GetSubModelRulesAsync(int familyMappingId);
+    Task InsertSubModelRuleAsync(AkeneoFamilySubModelRule rule);
+    Task UpdateSubModelRuleAsync(AkeneoFamilySubModelRule rule);
+    Task DeleteSubModelRuleAsync(AkeneoFamilySubModelRule rule);
+
+
 }

@@ -32,17 +32,16 @@ public interface IAkeneoNopEntityMappingService
         string akeneoCode,
         NopEntityType nopEntityType);
 
-    Task<AkeneoNopEntityMapping> GetAkeneoNopEntityMappingAsync(
+    Task<AkeneoNopEntityMapping> GetMappedNopEntityByAkeneoUuidAsync(
         AkeneoEntityType akeneoEntityType,
-        string akeneoCode,
         string akeneoUuid,
         NopEntityType nopEntityType);
 
-    Task<int?> GetMappedNopEntityIdAsync(
+    Task<AkeneoNopEntityMapping> GetMappedNopEntityByAkeneoCodeAsync(
         AkeneoEntityType akeneoEntityType,
         string akeneoCode,
-        string akeneoUuid,
         NopEntityType nopEntityType);
+
 
     Task DeleteAkeneoNopEntityMappingByAkeneoUuidAsync(AkeneoEntityType akeneoEntityType,
         string akeneoUuid,

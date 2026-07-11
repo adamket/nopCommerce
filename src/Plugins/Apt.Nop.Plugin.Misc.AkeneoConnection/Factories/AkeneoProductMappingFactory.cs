@@ -4,6 +4,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
 using static Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoProductMappingPreviewModel;
@@ -74,7 +75,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
             akeneoIdentifier,
             cancellationToken);
 
-        if (!akeneoProduct.HasValue)
+        if (akeneoProduct == null)
         {
             model.AkeneoProductFound = false;
             model.Errors.Add($"No Akeneo product was found for identifier \"{akeneoIdentifier}\".");
@@ -82,7 +83,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
 
         model.AkeneoProductFound = true;
-        model.AkeneoProductUuid = akeneoProduct.Value.GetRootString("uuid");
+        model.AkeneoProductUuid = akeneoProduct.Values.GetRootString("uuid");
 
         if (string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
         {
@@ -116,7 +117,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         foreach (var mapping in activeMappings)
         {
             var value = _akeneoProductValueResolver.GetValue(
-                akeneoProduct.Value,
+                akeneoProduct,
                 mapping.AkeneoAttributeCode,
                 locale: !string.IsNullOrWhiteSpace(mapping.Locale) ? mapping.Locale : locale,
                 channel: !string.IsNullOrWhiteSpace(mapping.Channel) ? mapping.Channel : channel,
@@ -198,7 +199,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         return model;
     }
 
-    private async Task<JsonElement?> FindAkeneoProductByIdentifierAsync(
+    private async Task<AkeneoProductDefinition> FindAkeneoProductByIdentifierAsync(
         string akeneoIdentifier,
         CancellationToken cancellationToken)
     {
