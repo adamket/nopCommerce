@@ -38,7 +38,7 @@ public class AkeneoConnectionConfigurationController(
     }
 
     #region Methods
-    [AuthorizeAdmin]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost("admin/akeneo-connection/test-connection")]
     public async Task<IActionResult> TestConnection(AkeneoApiCredentials apiCredentials, CancellationToken cancellationToken)
     {

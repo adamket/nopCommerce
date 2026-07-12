@@ -1,5 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
+using LinqToDB.Reflection;
 using Nop.Core;
 using Nop.Data;
 using Nop.Data.Extensions;
@@ -57,14 +58,7 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
 
     public override void Down()
     {
-        DropTopicChildTableAsync<AkeneoFamilySubModelRule>().Wait();
-        DropTopicChildTableAsync<AkeneoAttributeMapping>().Wait();
-        DropTopicChildTableAsync<AkeneoNopEntityMapping>().Wait();
-        DropTopicChildTableAsync<AkeneoSyncItemLog>().Wait();
-        DropTopicChildTableAsync<AkeneoSyncProfile>().Wait();
-        DropTopicChildTableAsync<AkeneoSyncRunRecord>().Wait();
-        DropTopicChildTableAsync<AkeneoFamilyMapping>().Wait();
-        DropTopicChildTableAsync<AkeneoFamilyVariantAxisMapping>().Wait();
+        //do nothing
     }
 
 
@@ -76,13 +70,5 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
             Create.TableFor<T>();
     }
 
-    private async Task DropTopicChildTableAsync<T>() where T : BaseEntity
-    {
-        var tableName = $"{AkeneoConnectionConstants.TablePrefix}{typeof(T).Name}";
 
-        if (!Schema.Table(tableName).Exists())
-            return;
-
-        await dataProvider.ExecuteNonQueryAsync($"DROP TABLE [{tableName}]");
-    }
 }

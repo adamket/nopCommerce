@@ -3,10 +3,9 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
-using Humanizer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -25,6 +24,7 @@ public class AkeneoSyncController(
     private const string DryRunViewPath =
         "~/Plugins/Apt.Misc.AkeneoConnection/Views/DryRun.cshtml";
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/dry-run")]
     public IActionResult DryRun()
     {
@@ -36,6 +36,7 @@ public class AkeneoSyncController(
         });
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost("admin/akeneo-connection/dry-run")]
     public async Task<IActionResult> DryRun(
         AkeneoProductMappingPreviewModel input,
@@ -69,6 +70,7 @@ public class AkeneoSyncController(
         return View(DryRunViewPath, model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     public async Task<IActionResult> ImportProduct(
         AkeneoProductImportModel input,
@@ -132,7 +134,7 @@ public class AkeneoSyncController(
         });
     }
 
-
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     public async Task<IActionResult> ImportProductsByProfile(
         int id,

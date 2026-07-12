@@ -99,8 +99,14 @@ public class AkeneoConnectionPlugin(
         //settings
         await settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
 
+        var taskType = typeof(AkeneoProductImportScheduleTask).FullName;
+        var task = await scheduleTaskService.GetTaskByTypeAsync(taskType);
+
+        if (task != null)
+            await scheduleTaskService.DeleteTaskAsync(task);
+
         //locales
-       // await _localizationService.DeleteLocaleResourcesAsync("Plugins.Payment.CheckMoneyOrder");
+        // await _localizationService.DeleteLocaleResourcesAsync("Plugins.Payment.CheckMoneyOrder");
 
         await base.UninstallAsync();
     }

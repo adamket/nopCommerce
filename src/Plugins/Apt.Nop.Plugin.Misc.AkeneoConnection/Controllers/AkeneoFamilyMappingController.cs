@@ -5,6 +5,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -15,7 +16,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
 public class AkeneoFamilyMappingController(
-    IAkeneoFamilyMappingService configurationService,
+    IAkeneoFamilyMappingService familyMappingService,
     IAkeneoFamilyMappingModelFactory modelFactory,
     INotificationService notificationService)
     : BasePluginController
@@ -26,6 +27,7 @@ public class AkeneoFamilyMappingController(
     private const string EditViewPath =
         $"{AkeneoConnectionConstants.PathToPlugin}/Views/FamilyMapping/CreateOrUpdate.cshtml";
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/family-mapping/list")]
     public async Task<IActionResult> List()
     {
@@ -33,6 +35,7 @@ public class AkeneoFamilyMappingController(
         return View(ListViewPath, model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
     public async Task<IActionResult> Create()
     {
@@ -41,21 +44,21 @@ public class AkeneoFamilyMappingController(
         return View(EditViewPath, model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [CheckAkeneoConnection]
     [HttpPost]
     public async Task<IActionResult> Create(AkeneoFamilyMappingModel model, bool connectionValid)
     {
-        await ValidateModelAsync(model);
-
-        if (!ModelState.IsValid)
-        {
-            model = await modelFactory.PrepareModelAsync(model);
-            return View(EditViewPath, model);
-        }
-
         if (!connectionValid)
         {
             notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
+            return View(EditViewPath, model);
+        }
+
+        await ValidateModelAsync(model);
+        if (!ModelState.IsValid)
+        {
+            model = await modelFactory.PrepareModelAsync(model);
             return View(EditViewPath, model);
         }
 
@@ -71,7 +74,7 @@ public class AkeneoFamilyMappingController(
             DisplayOrder = model.DisplayOrder
         };
 
-        await configurationService.InsertAsync(configuration);
+        await familyMappingService.InsertAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
 
@@ -80,10 +83,18 @@ public class AkeneoFamilyMappingController(
         return RedirectToAction(nameof(Edit), new { id = configuration.Id });
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
-    public async Task<IActionResult> Edit(int id)
+    [CheckAkeneoConnection]
+    public async Task<IActionResult> Edit(int id, bool connectionValid)
     {
-        var configuration = await configurationService.GetByIdAsync(id);
+        if (!connectionValid)
+        {
+            notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
+            return View(EditViewPath, new AkeneoFamilyMappingModel());
+        }
+
+        var configuration = await familyMappingService.GetByIdAsync(id);
 
         if (configuration == null)
             return RedirectToAction(nameof(List));
@@ -93,12 +104,18 @@ public class AkeneoFamilyMappingController(
         return View(EditViewPath, model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     [CheckAkeneoConnection]
     public async Task<IActionResult> Edit(AkeneoFamilyMappingModel model, bool connectionValid)
     {
-        var configuration = await configurationService.GetByIdAsync(model.Id);
+        if (!connectionValid)
+        {
+            notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
+            return View(EditViewPath, model);
+        }
 
+        var configuration = await familyMappingService.GetByIdAsync(model.Id);
         if (configuration == null)
             return RedirectToAction(nameof(List));
 
@@ -107,12 +124,6 @@ public class AkeneoFamilyMappingController(
         if (!ModelState.IsValid)
         {
             model = await modelFactory.PrepareModelAsync(model, configuration);
-            return View(EditViewPath, model);
-        }
-
-        if (!connectionValid)
-        {
-            notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
             return View(EditViewPath, model);
         }
 
@@ -125,13 +136,51 @@ public class AkeneoFamilyMappingController(
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
         configuration.DisplayOrder = model.DisplayOrder;
 
-        await configurationService.UpdateAsync(configuration);
+        await familyMappingService.UpdateAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
 
         notificationService.SuccessNotification("Family variant import configuration updated.");
 
         return RedirectToAction(nameof(Edit), new { id = configuration.Id });
+    }
+
+    //   [CheckAkeneoConnection]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> Delete(int id, bool connectionValid)
+    {
+        var configuration = await familyMappingService.GetByIdAsync(id);
+
+        if (configuration == null)
+            return RedirectToAction(nameof(List));
+
+
+        //if (!connectionValid)
+        //{
+        //    notificationService.ErrorNotification("Unable to connect to the Akeneo instance. Please check your configuration.");
+        //    return View(EditViewPath, model);
+        //}
+
+
+        var axisMappings =
+            await familyMappingService.GetAxisMappingsAsync(configuration.Id);
+
+        foreach (var mapping in axisMappings)
+            await familyMappingService.DeleteAxisMappingAsync(mapping);
+
+        var subModelRules =
+            await familyMappingService.GetSubModelRulesAsync(configuration.Id);
+
+        foreach (var rule in subModelRules)
+            await familyMappingService.DeleteSubModelRuleAsync(rule);
+
+        await familyMappingService.DeleteAsync(configuration);
+
+        notificationService.SuccessNotification(
+            "Family variant import configuration deleted.");
+
+        return RedirectToAction(nameof(List));
     }
 
     private async Task ValidateModelAsync(AkeneoFamilyMappingModel model)
@@ -144,7 +193,7 @@ public class AkeneoFamilyMappingController(
             return;
         }
 
-        var existing = await configurationService.GetByFamilyCodeAsync(model.AkeneoFamilyCode);
+        var existing = await familyMappingService.GetByFamilyCodeAsync(model.AkeneoFamilyCode);
         if (existing != null && existing.Id != model.Id)
         {
             ModelState.AddModelError(
@@ -172,19 +221,16 @@ public class AkeneoFamilyMappingController(
                 nameof(model.AxisMappings),
                 "Product attribute combination mode requires at least one axis mapping.");
         }
-
-
-
     }
 
     private async Task SaveAxisMappingsAsync(
         int configurationId,
         IList<AkeneoFamilyVariantAxisMappingModel> models)
     {
-        var existing = await configurationService.GetAxisMappingsAsync(configurationId);
+        var existing = await familyMappingService.GetAxisMappingsAsync(configurationId);
 
         foreach (var existingMapping in existing)
-            await configurationService.DeleteAxisMappingAsync(existingMapping);
+            await familyMappingService.DeleteAxisMappingAsync(existingMapping);
 
         foreach (var model in models.Where(x =>
                      !string.IsNullOrWhiteSpace(x.AkeneoAttributeCode) &&
@@ -199,7 +245,7 @@ public class AkeneoFamilyMappingController(
                 DisplayOrder = model.DisplayOrder
             };
 
-            await configurationService.InsertAxisMappingAsync(mapping);
+            await familyMappingService.InsertAxisMappingAsync(mapping);
         }
     }
 }

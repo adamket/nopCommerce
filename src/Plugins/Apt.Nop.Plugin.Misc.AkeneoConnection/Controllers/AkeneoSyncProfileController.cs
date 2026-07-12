@@ -2,15 +2,12 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Models.SyncProfiles;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
-using Humanizer;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework;
-using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
@@ -26,6 +23,7 @@ public class AkeneoSyncProfileController(
     IAkeneoProductImportService productImportService)
     : BaseAdminController
 {
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/sync-profiles/list")]
     public async Task<IActionResult> List()
     {
@@ -34,6 +32,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/List.cshtml", model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/sync-profiles/create")]
     public async Task<IActionResult> Create()
     {
@@ -42,6 +41,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost("admin/akeneo-connection/sync-profiles/create")]
     public async Task<IActionResult> Create(
         AkeneoSyncProfileModel model)
@@ -66,6 +66,7 @@ public class AkeneoSyncProfileController(
         return RedirectToAction(nameof(Edit), new { id = profile.Id });
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/sync-profiles/edit/{id}")]
     public async Task<IActionResult> Edit(
         int id)
@@ -80,6 +81,7 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost("admin/akeneo-connection/sync-profiles/edit/{id}")]
     public async Task<IActionResult> Edit(
         AkeneoSyncProfileModel model)
@@ -107,6 +109,7 @@ public class AkeneoSyncProfileController(
         return RedirectToAction(nameof(Edit), new { id = profile.Id });
     }
 
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     public async Task<IActionResult> Delete(
         int id)

@@ -17,7 +17,7 @@ public class AkeneoSyncProfile : BaseEntity
 
     public int ImportModeId { get; set; }
 
-    public int UnmappedAttributeBehaviorId { get; set; }
+    public int UnmappedAttributeBehaviorId { get; set; } // currently unused (always ignore unmapped attributes)
 
     // Batch behavior
     public int PageSize { get; set; }

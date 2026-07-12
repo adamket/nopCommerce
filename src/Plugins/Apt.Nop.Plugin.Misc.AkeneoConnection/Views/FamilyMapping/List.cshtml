@@ -8,6 +8,7 @@
     ViewBag.PageTitle = "Akeneo family variant import configurations";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
     var configurationsJson = JsonSerializer.Serialize(
@@ -120,8 +121,6 @@
         </section>
     </div>
 </div>
-
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
 <script>
     (() => {

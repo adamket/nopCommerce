@@ -5,6 +5,7 @@
     ViewBag.PageTitle = "Akeneo Sync Logs";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncLogs");
 
@@ -159,9 +160,6 @@
 </div>
 
 <script id="akeneo-sync-log-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
-
-@* Self-host vue.global.prod.js for a locked-down admin, same as the mapping page. *@
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
 <script>
     (function () {

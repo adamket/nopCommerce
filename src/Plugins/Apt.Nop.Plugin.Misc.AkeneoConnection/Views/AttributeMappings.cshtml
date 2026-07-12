@@ -6,6 +6,7 @@
 @{
     Layout = "_AdminLayout";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
 
@@ -282,8 +283,6 @@
 <script id="akeneo-app-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
 <script id="akeneo-target-key-map" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NopTargetKeyMap))</script>
 
-@* Self-host instead for an offline/locked-down admin: drop vue.global.prod.js into the plugin and register it with NopHtml.AddScriptParts. *@
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
 <script>
     (function () {
