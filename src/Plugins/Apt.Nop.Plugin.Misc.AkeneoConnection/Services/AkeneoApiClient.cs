@@ -310,6 +310,38 @@ public class AkeneoApiClient : IAkeneoApiClient
             .ToList();
     }
 
+
+    public async Task<AkeneoFamilyDefinition> GetFamilyByCodeAsync(
+        string familyCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(familyCode))
+            throw new ArgumentException(
+                "Family code is required.",
+                nameof(familyCode));
+
+        return await GetObjectOrNullAsync<AkeneoFamilyDefinition>(
+            $"api/rest/v1/families/{Uri.EscapeDataString(familyCode)}",
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AkeneoAttributeOptionDefinition>>
+        GetAttributeOptionDefinitionsAsync(
+            string attributeCode,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(attributeCode))
+            throw new ArgumentException(
+                "Attribute code is required.",
+                nameof(attributeCode));
+
+        return await GetSimpleCollectionAsync<AkeneoAttributeOptionDefinition>(
+            $"api/rest/v1/attributes/{Uri.EscapeDataString(attributeCode)}/options",
+            limit,
+            cancellationToken);
+    }
+
     #endregion
 
     #region HTTP / paging

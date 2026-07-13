@@ -1738,6 +1738,10 @@ public class AkeneoProductImportService(
             AkeneoFamilyCode = familyCode,
             Sku = sku,
             StockQuantity = 0,
+            SourceProduct = akeneoProduct,
+            Locale = request.Locale,
+            Channel = request.Channel,
+            Currency = request.Currency
         };
 
         if (productValueResolver.TryGetValue(akeneoProduct, "price", out var priceValue,

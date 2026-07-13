@@ -67,7 +67,7 @@
                 text = x.Text,
                 value = x.Value
             }),
-            availableVariantAxisAttributes = Model.AvailableVariantAxisAttributes.Select(x => new
+            availableVariantAttributes = Model.AvailableVariantAxisAttributes.Select(x => new
             {
                 text = x.Text,
                 value = x.Value
@@ -77,7 +77,13 @@
                 text = x.Text,
                 value = x.Value
             }),
-            familyAxesUrl = Url.Action("GetFamilyAxes", "AkeneoFamilyMapping")
+            familyRuleFieldsUrl = Url.Action(
+                "GetFamilyRuleFields",
+                "AkeneoFamilyMapping"),
+
+            attributeOptionsUrl = Url.Action(
+                "GetAttributeOptions",
+                "AkeneoFamilyMapping")
         },
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
@@ -264,10 +270,15 @@
                                                 <label asp-for="AssociatedValueNameTemplate"></label>
                                                 <input asp-for="AssociatedValueNameTemplate"
                                                        class="form-control"
-                                                       v-model="form.associatedValueNameTemplate" />
+                                                       v-model="form.associatedValueNameTemplate"
+                                                       placeholder="{attribute:variant_name}" />
+
                                                 <span asp-validation-for="AssociatedValueNameTemplate"></span>
+
                                                 <div class="form-text">
-                                                    Supports {sku} and {axes}. Example: {sku} - {axes}
+                                                    Supports {sku}, {identifier}, {axes}, {axis:attribute_code},
+                                                    and {attribute:attribute_code}. Example:
+                                                    {attribute:variant_name} ({sku})
                                                 </div>
                                             </div>
                                         </div>
@@ -529,27 +540,55 @@
 
                                                 <div class="akeneo-col">
                                                     <div class="form-group mb-0">
-                                                        <label>Variant axis</label>
+                                                        <label>Variant attribute</label>
+
                                                         <select class="form-control"
                                                                 v-bind:name="subModelRuleName(index, 'VariantAxisAttributeCode')"
-                                                                v-model="row.variantAxisAttributeCode">
-                                                            <option v-for="attribute in availableVariantAxisAttributes"
+                                                                v-model="row.variantAxisAttributeCode"
+                                                                v-on:change="loadVariantAttributeOptions(row, true)">
+                                                            <option value="">No variant condition</option>
+
+                                                            <option v-for="attribute in availableVariantAttributes"
                                                                     v-bind:key="attribute.value || 'empty-variant'"
                                                                     v-bind:value="attribute.value">
                                                                 {{ attribute.text }}
                                                             </option>
                                                         </select>
+
+                                                      @*   <div class="form-text">
+                                                            Select a simple-select attribute stored on the leaf variant.
+                                                        </div> *@
                                                     </div>
                                                 </div>
 
                                                 <div class="akeneo-col">
                                                     <div class="form-group mb-0">
-                                                        <label>Variant trigger</label>
-                                                        <input type="text"
-                                                               class="form-control"
-                                                               v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
-                                                               v-model="row.variantTriggerValue"
-                                                               placeholder="1_gallon" />
+                                                        <label>Variant value</label>
+
+                                                        <select class="form-control"
+                                                                v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
+                                                                v-model="row.variantTriggerValue"
+                                                                v-bind:disabled="
+                                                            !row.variantAxisAttributeCode ||
+                                                            row.variantOptionsLoading">
+                                                            <option value="">
+                                                                {{
+                                                                row.variantOptionsLoading
+                                                                ? 'Loading values...'
+                                                                : 'Select a value'
+                                                                }}
+                                                            </option>
+
+                                                            <option v-for="option in row.variantOptions"
+                                                                    v-bind:key="option.value"
+                                                                    v-bind:value="option.value">
+                                                                {{ option.text }}
+                                                            </option>
+                                                        </select>
+
+                                                       @*  <div class="form-text">
+                                                            The Akeneo option code is saved, while the translated label is displayed.
+                                                        </div> *@
                                                     </div>
                                                 </div>
 
@@ -721,7 +760,7 @@
                     availableProductAttributes: initialModel.availableProductAttributes,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
                     availableSubModelAxisAttributes: initialModel.availableSubModelAxisAttributes,
-                    availableVariantAxisAttributes: initialModel.availableVariantAxisAttributes,
+                    availableVariantAttributes: initialModel.availableVariantAttributes,
                     availableVariantRelationshipModes: initialModel.availableVariantRelationshipModes,
                     form: {
                         ...initialModel,
@@ -735,7 +774,7 @@
                             isRequired: row.isRequired !== false,
                             displayOrder: row.displayOrder || index + 1
                         })),
-                        subModelRules: initialModel.subModelRules.map((row, index) => ({
+                            subModelRules: initialModel.subModelRules.map((row, index) => ({
                             uid: `${Date.now()}-rule-${index}`,
                             id: row.id || 0,
                             familyMappingId: row.familyMappingId || initialModel.id || 0,
@@ -743,9 +782,15 @@
                             triggerValue: row.triggerValue || '',
                             variantAxisAttributeCode: row.variantAxisAttributeCode || '',
                             variantTriggerValue: row.variantTriggerValue || '',
-                            variantRelationshipOverrideModeId: Number(row.variantRelationshipOverrideModeId ?? @((int)AkeneoVariantRelationshipMode.None)),
+                            variantRelationshipOverrideModeId:
+                                Number(row.variantRelationshipOverrideModeId ??
+                                    @((int)AkeneoVariantRelationshipMode.None)),
                             mergeAncestorValues: row.mergeAncestorValues !== false,
-                            displayOrder: row.displayOrder || index + 1
+                            displayOrder: row.displayOrder || index + 1,
+
+                            // UI-only properties
+                            variantOptions: [],
+                            variantOptionsLoading: false
                         }))
                     }
                 };
@@ -770,53 +815,73 @@
             },
 
             watch: {
-                'form.akeneoFamilyCode': function (newFamilyCode, oldFamilyCode) {
+                'form.akeneoFamilyCode': function (
+                    newFamilyCode,
+                    oldFamilyCode) {
+
                     if (newFamilyCode === oldFamilyCode)
                         return;
 
-                    this.loadFamilyAxes(newFamilyCode);
+                    this.loadFamilyRuleFields(newFamilyCode);
                 }
             },
 
-            mounted() {
+            async mounted() {
                 if (this.form.axisMappings.length === 0)
                     this.addAxisMapping();
+
+                if (this.form.akeneoFamilyCode) {
+                    await this.loadFamilyRuleFields(
+                        this.form.akeneoFamilyCode);
+                }
             },
 
             methods: {
                 newUid() {
                     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
                 },
-
-                async loadFamilyAxes(familyCode) {
+                async loadFamilyRuleFields(familyCode) {
                     const emptySubModelOption = {
                         text: 'No sub-model condition',
                         value: ''
                     };
-                    const emptyVariantOption = {
-                        text: 'No variant condition',
-                        value: ''
-                    };
 
                     if (!familyCode) {
-                        this.availableSubModelAxisAttributes = [emptySubModelOption];
-                        this.availableVariantAxisAttributes = [emptyVariantOption];
+                        this.availableSubModelAxisAttributes = [
+                            emptySubModelOption
+                        ];
+
+                        this.availableVariantAttributes = [];
+
+                        this.form.subModelRules.forEach(row => {
+                            row.variantOptions = [];
+                        });
+
                         return;
                     }
 
                     try {
-                        const separator = initialModel.familyAxesUrl.includes('?') ? '&' : '?';
+                        const separator =
+                            initialModel.familyRuleFieldsUrl.includes('?')
+                                ? '&'
+                                : '?';
+
                         const response = await fetch(
-                            `${initialModel.familyAxesUrl}${separator}familyCode=${encodeURIComponent(familyCode)}`,
+                            `${initialModel.familyRuleFieldsUrl}` +
+                            `${separator}familyCode=${encodeURIComponent(familyCode)}`,
                             {
                                 method: 'GET',
                                 headers: {
-                                    'Accept': 'application/json'
+                                    Accept: 'application/json'
                                 }
                             });
 
-                        if (!response.ok)
-                            throw new Error(`Unable to load family axes. HTTP ${response.status}.`);
+                        if (!response.ok) {
+                            throw new Error(
+                                `Unable to load family rule fields. ` +
+                                `HTTP ${response.status}.`
+                            );
+                        }
 
                         const result = await response.json();
 
@@ -824,32 +889,99 @@
                             emptySubModelOption,
                             ...(result.subModelAxes || [])
                         ];
-                        this.availableVariantAxisAttributes = [
-                            emptyVariantOption,
-                            ...(result.variantAxes || [])
-                        ];
 
-                        this.preserveSelectedRuleAxisOptions();
+                        this.availableVariantAttributes =
+                            result.variantAttributes || [];
+
+                        this.preserveSelectedRuleAttributeOptions();
+
+                        await Promise.all(
+                            this.form.subModelRules.map(row =>
+                                this.loadVariantAttributeOptions(row, false)
+                            )
+                        );
                     }
                     catch (error) {
-                        console.error('Unable to load Akeneo family axes.', error);
-                        this.preserveSelectedRuleAxisOptions();
+                        console.error(
+                            'Unable to load Akeneo family rule fields.',
+                            error);
+
+                        this.preserveSelectedRuleAttributeOptions();
                     }
                 },
+                    async loadVariantAttributeOptions(row, clearSelectedValue = false) {
 
-                preserveSelectedRuleAxisOptions() {
+                    if (clearSelectedValue)
+                        row.variantTriggerValue = '';
+
+                    row.variantOptions = [];
+
+                    if (!row.variantAxisAttributeCode)
+                        return;
+
+                    row.variantOptionsLoading = true;
+
+                    try {
+                        const separator =
+                            initialModel.attributeOptionsUrl.includes('?')
+                                ? '&'
+                                : '?';
+
+                        const response = await fetch(
+                            `${initialModel.attributeOptionsUrl}` +
+                            `${separator}attributeCode=` +
+                            `${encodeURIComponent(
+                                row.variantAxisAttributeCode)}`,
+                            {
+                                method: 'GET',
+                                headers: {
+                                    Accept: 'application/json'
+                                }
+                            });
+
+                        if (!response.ok) {
+                            throw new Error(
+                                `Unable to load attribute options. ` +
+                                `HTTP ${response.status}.`
+                            );
+                        }
+
+                        row.variantOptions = await response.json();
+
+                        this.preserveSelectedVariantValue(row);
+                    }
+                    catch (error) {
+                        console.error(
+                            'Unable to load Akeneo attribute options.',
+                            error);
+
+                        this.preserveSelectedVariantValue(row);
+                    }
+                    finally {
+                        row.variantOptionsLoading = false;
+                    }
+                },
+                preserveSelectedRuleAttributeOptions() {
                     this.form.subModelRules.forEach(row => {
-                        this.addMissingAxisOption(
+                        this.addMissingOption(
                             this.availableSubModelAxisAttributes,
                             row.akeneoAxisAttributeCode);
-                        this.addMissingAxisOption(
-                            this.availableVariantAxisAttributes,
+
+                        this.addMissingOption(
+                            this.availableVariantAttributes,
                             row.variantAxisAttributeCode);
                     });
                 },
 
-                addMissingAxisOption(options, code) {
-                    if (!code || options.some(option => option.value.toLowerCase() === code.toLowerCase()))
+                addMissingOption(options, code) {
+                    if (!code)
+                        return;
+
+                    const exists = options.some(option =>
+                        String(option.value).toLowerCase() ===
+                        String(code).toLowerCase());
+
+                    if (exists)
                         return;
 
                     options.push({
@@ -880,6 +1012,24 @@
                             row.displayOrder = rowIndex + 1;
                     });
                 },
+                preserveSelectedVariantValue(row) {
+                    const selectedValue = row.variantTriggerValue;
+
+                    if (!selectedValue)
+                        return;
+
+                    const exists = row.variantOptions.some(option =>
+                        String(option.value).toLowerCase() ===
+                        String(selectedValue).toLowerCase());
+
+                    if (exists)
+                        return;
+
+                    row.variantOptions.push({
+                        text: `${selectedValue} (not currently returned by Akeneo)`,
+                        value: selectedValue
+                    });
+                },
 
                 addSubModelRule() {
                     this.form.subModelRules.push({
@@ -892,7 +1042,10 @@
                         variantTriggerValue: '',
                         variantRelationshipOverrideModeId: this.modes.none,
                         mergeAncestorValues: true,
-                        displayOrder: this.form.subModelRules.length + 1
+                        displayOrder: this.form.subModelRules.length + 1,
+
+                        variantOptions: [],
+                        variantOptionsLoading: false
                     });
 
                     this.subModelRulesOpen = true;

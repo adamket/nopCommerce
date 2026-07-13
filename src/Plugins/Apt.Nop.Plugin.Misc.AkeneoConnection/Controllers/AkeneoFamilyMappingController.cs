@@ -3,6 +3,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Filters;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Services.Messages;
 using Nop.Services.Security;
@@ -38,35 +39,75 @@ public class AkeneoFamilyMappingController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
-    public async Task<IActionResult> GetFamilyAxes(string familyCode)
+    public async Task<IActionResult> GetAttributeOptions(
+        string attributeCode)
+    {
+        if (string.IsNullOrWhiteSpace(attributeCode))
+            return Json(Array.Empty<object>());
+
+        var options =
+            await akeneoApiClient.GetAttributeOptionDefinitionsAsync(
+                attributeCode.Trim());
+
+        return Json(options
+            .OrderBy(option => option.SortOrder)
+            .ThenBy(option => option.GetLabel())
+            .Select(option => new
+            {
+                text = option.GetDisplayName(),
+                value = option.Code
+            }));
+    }
+
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
+    public async Task<IActionResult> GetFamilyRuleFields(string familyCode)
     {
         if (string.IsNullOrWhiteSpace(familyCode))
         {
             return Json(new
             {
                 subModelAxes = Array.Empty<object>(),
-                variantAxes = Array.Empty<object>()
+                variantAttributes = Array.Empty<object>()
             });
         }
 
-        var axes = await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode.Trim());
+        familyCode = familyCode.Trim();
+
+        var family = await akeneoApiClient.GetFamilyByCodeAsync(familyCode);
+        var axes = await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode);
+        var attributes = await akeneoApiClient.GetAttributesAsync();
+
+        var familyAttributeCodes = family?.Attributes?
+                                       .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                                   ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var simpleSelectAttributes = attributes
+            .Where(attribute =>
+                familyAttributeCodes.Contains(attribute.Code) &&
+                string.Equals(
+                    attribute.Type,
+                    "pim_catalog_simpleselect",
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(attribute => attribute.GetLabel())
+            .Select(attribute => new
+            {
+                text = attribute.GetDisplayName(),
+                value = attribute.Code
+            });
 
         return Json(new
         {
             subModelAxes = axes
-                .Where(x => x.Level == 1)
-                .Select(x => new
+                .Where(axis => axis.Level == 1)
+                .Select(axis => new
                 {
-                    text = $"{x.AttributeCode} (level {x.Level})",
-                    value = x.AttributeCode
+                    text = $"{axis.AttributeCode} (level {axis.Level})",
+                    value = axis.AttributeCode
                 }),
-            variantAxes = axes
-                .Where(x => x.Level >= 1)
-                .Select(x => new
-                {
-                    text = $"{x.AttributeCode} (level {x.Level})",
-                    value = x.AttributeCode
-                })
+
+            variantAttributes = simpleSelectAttributes
         });
     }
 
@@ -120,7 +161,7 @@ public class AkeneoFamilyMappingController(
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
-    [HttpGet]
+    [HttpGet("admin/akeneo-connection/family-mapping/edit/{id}")]
     [CheckAkeneoConnection]
     public async Task<IActionResult> Edit(int id, bool connectionValid)
     {
@@ -141,7 +182,7 @@ public class AkeneoFamilyMappingController(
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/family-mapping/edit/{id}")]
     [CheckAkeneoConnection]
     public async Task<IActionResult> Edit(AkeneoFamilyMappingModel model, bool connectionValid)
     {
@@ -242,11 +283,13 @@ public class AkeneoFamilyMappingController(
         var mode = (AkeneoVariantRelationshipMode)model.VariantRelationshipModeId;
 
         if (mode == AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue &&
-            !model.AssociatedProductAttributeId.HasValue)
+            !AkeneoAssociatedValueNameTemplate.TryValidate(
+                model.AssociatedValueNameTemplate,
+                out var templateError))
         {
             ModelState.AddModelError(
-                nameof(model.AssociatedProductAttributeId),
-                "Associated-to-product mode requires a nopCommerce product attribute.");
+                nameof(model.AssociatedValueNameTemplate),
+                templateError);
         }
 
         model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();

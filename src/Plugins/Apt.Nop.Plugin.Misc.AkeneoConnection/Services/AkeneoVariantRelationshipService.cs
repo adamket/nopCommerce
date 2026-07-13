@@ -6,8 +6,11 @@ using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
-public class AkeneoVariantRelationshipService(IAkeneoVariantRelationshipResolver relationshipResolver, IProductService productService,
-     IProductAttributeService productAttributeService) : IAkeneoVariantRelationshipService
+public class AkeneoVariantRelationshipService(
+    IAkeneoVariantRelationshipResolver relationshipResolver,
+    IProductService productService,
+    IProductAttributeService productAttributeService,
+    IAkeneoProductValueResolver productValueResolver) : IAkeneoVariantRelationshipService
 {
     public async Task<AkeneoVariantImportResult> ApplyAsync(
         Product parentProduct,
@@ -32,7 +35,7 @@ public class AkeneoVariantRelationshipService(IAkeneoVariantRelationshipResolver
         context.Options.Mode = effectiveMode;
 
         await EnsureParentShapeAsync(parentProduct, effectiveMode);
-        return effectiveMode switch 
+        return effectiveMode switch
         {
             AkeneoVariantRelationshipMode.GroupedProducts =>
                 await ApplyGroupedProductAsync(
@@ -413,14 +416,31 @@ public class AkeneoVariantRelationshipService(IAkeneoVariantRelationshipResolver
         };
     }
 
-    private static string BuildAssociatedValueName(AkeneoVariantImportContext context)
+    private string BuildAssociatedValueName(AkeneoVariantImportContext context)
     {
-        var axes = string.Join(" / ", context.AxisValuesByAkeneoCode.Values.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var axisValues = context.AxisValuesByAkeneoCode
+            .Select(item => (AxisCode: item.Key, DisplayValue: item.Value))
+            .ToList();
 
-        return context.Options.AssociatedValueNameTemplate
-            .Replace("{sku}", context.Sku ?? string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("{axes}", axes, StringComparison.OrdinalIgnoreCase)
-            .Trim();
+        var valueName = AkeneoAssociatedValueNameTemplate.Render(
+            context.Options?.AssociatedValueNameTemplate,
+            axisValues,
+            context.Sku,
+            context.AkeneoIdentifier,
+            attributeCode => productValueResolver.GetValue(
+                context.SourceProduct,
+                attributeCode,
+                context.Locale,
+                context.Channel,
+                context.Currency));
+
+        if (!string.IsNullOrWhiteSpace(valueName))
+            return valueName.Trim();
+
+        return context.Sku
+            ?? context.AkeneoIdentifier
+            ?? axisValues.FirstOrDefault().DisplayValue
+            ?? string.Empty;
     }
 
     private static string BuildAttributesXml(IEnumerable<ProductAttributeSelection> selections)

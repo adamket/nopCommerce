@@ -74,4 +74,16 @@ public interface IAkeneoApiClient
     Task<bool> KnockAsync(
         CancellationToken cancellationToken = default);
 
+
+    Task<AkeneoFamilyDefinition> GetFamilyByCodeAsync(
+        string familyCode,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AkeneoAttributeOptionDefinition>>
+        GetAttributeOptionDefinitionsAsync(
+            string attributeCode,
+            int limit = 100,
+            CancellationToken cancellationToken = default);
+
+
 }
