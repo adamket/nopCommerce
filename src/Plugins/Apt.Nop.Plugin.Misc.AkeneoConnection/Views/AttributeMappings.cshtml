@@ -2,11 +2,11 @@
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoAttributeMappingListModel
-
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
+  //  NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
 
@@ -284,7 +284,7 @@
 <script id="akeneo-target-key-map" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NopTargetKeyMap))</script>
 
 
-<script>
+<script asp-location="Footer">
     (function () {
         var appData = JSON.parse(document.getElementById('akeneo-app-data').textContent);
         var targetKeyMap = JSON.parse(document.getElementById('akeneo-target-key-map').textContent);

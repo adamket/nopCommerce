@@ -47,7 +47,6 @@
 
   <ItemGroup>
     <Folder Include="Components\" />
-    <Folder Include="Content\Libraries\Vue\" />
     <Folder Include="Content\Stylesheets\" />
     <Folder Include="Content\Scripts\" />
     <Folder Include="Views\FamilyMapping\" />
@@ -55,7 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Content\Libraries\Vue\vue.global.prod.js">
+    <None Update="Content\Libraries\Vue\vue.global.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Content\Scripts\akeneo-connection.admin.js">

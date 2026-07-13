@@ -1,11 +1,11 @@
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncRunListModel
-
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo Sync Logs";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
+   // NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncLogs");
 
@@ -161,7 +161,7 @@
 
 <script id="akeneo-sync-log-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
 
-<script>
+<script asp-location="Footer">
     (function () {
         var appData = JSON.parse(document.getElementById('akeneo-sync-log-data').textContent);
 

@@ -27,22 +27,23 @@ public class AkeneoFamilyMappingModelFactory
     {
         var configurations = await _configurationService.GetAllAsync();
 
-        var model = new AkeneoFamilyMappingListModel();
-
-        model.Configurations = configurations
-            .Select(x => new AkeneoFamilyMappingModel
-            {
-                Id = x.Id,
-                AkeneoFamilyCode = x.AkeneoFamilyCode,
-                Enabled = x.Enabled,
-                VariantRelationshipModeId = x.VariantRelationshipModeId,
-                PreserveExistingNopVariantStructure = x.PreserveExistingNopVariantStructure,
-                AssociatedProductAttributeId = x.AssociatedProductAttributeId,
-                AssociatedValueNameTemplate = x.AssociatedValueNameTemplate,
-                HideChildProductsWhenRepresentedByParent = x.HideChildProductsWhenRepresentedByParent,
-                DisplayOrder = x.DisplayOrder
-            })
-            .ToList();
+        var model = new AkeneoFamilyMappingListModel
+        {
+            Configurations = configurations
+                .Select(x => new AkeneoFamilyMappingModel
+                {
+                    Id = x.Id,
+                    AkeneoFamilyCode = x.AkeneoFamilyCode,
+                    Enabled = x.Enabled,
+                    VariantRelationshipModeId = x.VariantRelationshipModeId,
+                    PreserveExistingNopVariantStructure = x.PreserveExistingNopVariantStructure,
+                    AssociatedProductAttributeId = x.AssociatedProductAttributeId,
+                    AssociatedValueNameTemplate = x.AssociatedValueNameTemplate,
+                    HideChildProductsWhenRepresentedByParent = x.HideChildProductsWhenRepresentedByParent,
+                    DisplayOrder = x.DisplayOrder
+                })
+                .ToList()
+        };
 
         return model;
     }
@@ -51,9 +52,12 @@ public class AkeneoFamilyMappingModelFactory
         AkeneoFamilyMappingModel model = null,
         AkeneoFamilyMapping configuration = null)
     {
+        // A null model means this is the initial GET and persisted values should be loaded.
+        // A non-null model is a POST-back and its submitted rows must be preserved.
+        var loadPersistedValues = model == null;
         model ??= new AkeneoFamilyMappingModel();
 
-        if (configuration != null)
+        if (configuration != null && loadPersistedValues)
         {
             model.Id = configuration.Id;
             model.AkeneoFamilyCode = configuration.AkeneoFamilyCode;
@@ -78,7 +82,27 @@ public class AkeneoFamilyMappingModelFactory
                     DisplayOrder = x.DisplayOrder
                 })
                 .ToList();
+
+            var subModelRules = await _configurationService.GetSubModelRulesAsync(configuration.Id);
+
+            model.SubModelRules = subModelRules
+                .Select(x => new AkeneoFamilySubModelRuleModel
+                {
+                    Id = x.Id,
+                    FamilyMappingId = x.FamilyMappingId,
+                    AkeneoAxisAttributeCode = x.AkeneoAxisAttributeCode,
+                    TriggerValue = x.TriggerValue,
+                    VariantAxisAttributeCode = x.VariantAxisAttributeCode,
+                    VariantTriggerValue = x.VariantTriggerValue,
+                    VariantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
+                    MergeAncestorValues = x.MergeAncestorValues,
+                    DisplayOrder = x.DisplayOrder
+                })
+                .ToList();
         }
+
+        model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();
+        model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
 
         await PrepareSelectListsAsync(model);
 
@@ -88,16 +112,15 @@ public class AkeneoFamilyMappingModelFactory
     private static IList<SelectListItem> BuildModeList() =>
         new List<SelectListItem>
         {
-            new("None", ((int)AkeneoVariantRelationshipMode.None).ToString()),
+            new("None / import as standalone product", ((int)AkeneoVariantRelationshipMode.None).ToString()),
             new("Product attribute combinations", ((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations).ToString()),
             new("Associated-to-product product attribute values", ((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue).ToString()),
             new("Grouped products", ((int)AkeneoVariantRelationshipMode.GroupedProducts).ToString())
         };
 
-
     private async Task PrepareSelectListsAsync(AkeneoFamilyMappingModel model)
     {
-        model.AvailableVariantRelationshipModes = BuildModeList();   // unchanged
+        model.AvailableVariantRelationshipModes = BuildModeList();
 
         var productAttributes = await _productAttributeService.GetAllProductAttributesAsync();
         model.AvailableProductAttributes = productAttributes
@@ -105,7 +128,6 @@ public class AkeneoFamilyMappingModelFactory
             .ToList();
         model.AvailableProductAttributes.Insert(0, new SelectListItem("Select product attribute", string.Empty));
 
-        // Families → dropdown instead of free text.
         var families = await _akeneoApiClient.GetFamiliesAsync();
         model.AvailableAkeneoFamilies = families
             .Select(f => new SelectListItem(
@@ -114,18 +136,60 @@ public class AkeneoFamilyMappingModelFactory
             .ToList();
         model.AvailableAkeneoFamilies.Insert(0, new SelectListItem("Select Akeneo family", string.Empty));
 
-        // Axis attributes scoped to the chosen family (edit case, or post-back with a family set).
-        if (!string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
+        model.AvailableAkeneoAttributes = new List<SelectListItem>();
+        model.AvailableSubModelAxisAttributes = new List<SelectListItem>
         {
-            var axes = await _akeneoApiClient.GetFamilyVariantAxesAsync(model.AkeneoFamilyCode);
-            model.AvailableAkeneoAttributes = axes
-                .Select(a => new SelectListItem($"{a.AttributeCode} (level {a.Level})", a.AttributeCode))
-                .ToList();
-            //model.AvailableAkeneoLevelCount = axes.Count == 0 ? 1 : axes.Max(a => a.Level);
-        }
-        else
+            new("No sub-model condition", string.Empty)
+        };
+        model.AvailableVariantAxisAttributes = new List<SelectListItem>
         {
-            model.AvailableAkeneoAttributes = new List<SelectListItem>();
+            new("No variant condition", string.Empty)
+        };
+
+        if (string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
+            return;
+
+        var axes = await _akeneoApiClient.GetFamilyVariantAxesAsync(model.AkeneoFamilyCode);
+
+        model.AvailableAkeneoAttributes = axes
+            .Select(a => new SelectListItem($"{a.AttributeCode} (level {a.Level})", a.AttributeCode))
+            .ToList();
+
+        foreach (var axis in axes.Where(x => x.Level == 1))
+        {
+            model.AvailableSubModelAxisAttributes.Add(
+                new SelectListItem($"{axis.AttributeCode} (level {axis.Level})", axis.AttributeCode));
         }
+
+        foreach (var axis in axes.Where(x => x.Level >= 1))
+        {
+            model.AvailableVariantAxisAttributes.Add(
+                new SelectListItem($"{axis.AttributeCode} (level {axis.Level})", axis.AttributeCode));
+        }
+
+        // Preserve a saved or posted code even if Akeneo no longer reports it as an axis.
+        foreach (var code in model.SubModelRules
+                     .Select(x => x.AkeneoAxisAttributeCode)
+                     .Where(x => !string.IsNullOrWhiteSpace(x))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AddMissingOption(model.AvailableSubModelAxisAttributes, code);
+        }
+
+        foreach (var code in model.SubModelRules
+                     .Select(x => x.VariantAxisAttributeCode)
+                     .Where(x => !string.IsNullOrWhiteSpace(x))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AddMissingOption(model.AvailableVariantAxisAttributes, code);
+        }
+    }
+
+    private static void AddMissingOption(IList<SelectListItem> options, string code)
+    {
+        if (options.Any(x => string.Equals(x.Value, code, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        options.Add(new SelectListItem($"{code} (not currently returned by Akeneo)", code));
     }
 }

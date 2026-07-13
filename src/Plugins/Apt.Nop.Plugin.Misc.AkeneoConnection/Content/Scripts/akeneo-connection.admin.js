@@ -1,4 +1,4 @@
-Element.prototype.loading = function (isLoading, options) {
+HTMLElement.prototype.loading = function (isLoading, options) {
   options = options || {};
 
   var element = this;

@@ -18,6 +18,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 public class AkeneoFamilyMappingController(
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoFamilyMappingModelFactory modelFactory,
+    IAkeneoApiClient akeneoApiClient,
     INotificationService notificationService)
     : BasePluginController
 {
@@ -37,6 +38,40 @@ public class AkeneoFamilyMappingController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
+    public async Task<IActionResult> GetFamilyAxes(string familyCode)
+    {
+        if (string.IsNullOrWhiteSpace(familyCode))
+        {
+            return Json(new
+            {
+                subModelAxes = Array.Empty<object>(),
+                variantAxes = Array.Empty<object>()
+            });
+        }
+
+        var axes = await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode.Trim());
+
+        return Json(new
+        {
+            subModelAxes = axes
+                .Where(x => x.Level == 1)
+                .Select(x => new
+                {
+                    text = $"{x.AttributeCode} (level {x.Level})",
+                    value = x.AttributeCode
+                }),
+            variantAxes = axes
+                .Where(x => x.Level >= 1)
+                .Select(x => new
+                {
+                    text = $"{x.AttributeCode} (level {x.Level})",
+                    value = x.AttributeCode
+                })
+        });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet("admin/akeneo-connection/family-mapping/create")]
     public async Task<IActionResult> Create()
     {
         var model = await modelFactory.PrepareModelAsync(null);
@@ -46,7 +81,7 @@ public class AkeneoFamilyMappingController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [CheckAkeneoConnection]
-    [HttpPost]
+    [HttpPost("admin/akeneo-connection/family-mapping/create")]
     public async Task<IActionResult> Create(AkeneoFamilyMappingModel model, bool connectionValid)
     {
         if (!connectionValid)
@@ -77,6 +112,7 @@ public class AkeneoFamilyMappingController(
         await familyMappingService.InsertAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
+        await SaveSubModelRulesAsync(configuration.Id, model.SubModelRules);
 
         notificationService.SuccessNotification("Family variant import configuration created.");
 
@@ -139,6 +175,7 @@ public class AkeneoFamilyMappingController(
         await familyMappingService.UpdateAsync(configuration);
 
         await SaveAxisMappingsAsync(configuration.Id, model.AxisMappings);
+        await SaveSubModelRulesAsync(configuration.Id, model.SubModelRules);
 
         notificationService.SuccessNotification("Family variant import configuration updated.");
 
@@ -212,6 +249,9 @@ public class AkeneoFamilyMappingController(
                 "Associated-to-product mode requires a nopCommerce product attribute.");
         }
 
+        model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();
+        model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
+
         if (mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
             !model.AxisMappings.Any(x =>
                 !string.IsNullOrWhiteSpace(x.AkeneoAttributeCode) &&
@@ -220,6 +260,49 @@ public class AkeneoFamilyMappingController(
             ModelState.AddModelError(
                 nameof(model.AxisMappings),
                 "Product attribute combination mode requires at least one axis mapping.");
+        }
+
+        ValidateSubModelRules(model.SubModelRules);
+    }
+
+    private void ValidateSubModelRules(IList<AkeneoFamilySubModelRuleModel> rules)
+    {
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var rule = rules[index];
+            var hasSubModelCode = !string.IsNullOrWhiteSpace(rule.AkeneoAxisAttributeCode);
+            var hasSubModelValue = !string.IsNullOrWhiteSpace(rule.TriggerValue);
+            var hasVariantCode = !string.IsNullOrWhiteSpace(rule.VariantAxisAttributeCode);
+            var hasVariantValue = !string.IsNullOrWhiteSpace(rule.VariantTriggerValue);
+
+            if (!hasSubModelCode && !hasSubModelValue && !hasVariantCode && !hasVariantValue)
+            {
+                ModelState.AddModelError(
+                    $"SubModelRules[{index}]",
+                    $"Sub-model rule {index + 1} must define at least one condition.");
+                continue;
+            }
+
+            if (hasSubModelCode != hasSubModelValue)
+            {
+                ModelState.AddModelError(
+                    $"SubModelRules[{index}].TriggerValue",
+                    $"Sub-model rule {index + 1} requires both a sub-model axis and trigger value.");
+            }
+
+            if (hasVariantCode != hasVariantValue)
+            {
+                ModelState.AddModelError(
+                    $"SubModelRules[{index}].VariantTriggerValue",
+                    $"Sub-model rule {index + 1} requires both a variant axis and trigger value.");
+            }
+
+            if (!Enum.IsDefined(typeof(AkeneoVariantRelationshipMode), rule.VariantRelationshipOverrideModeId))
+            {
+                ModelState.AddModelError(
+                    $"SubModelRules[{index}].VariantRelationshipOverrideModeId",
+                    $"Sub-model rule {index + 1} has an invalid relationship override mode.");
+            }
         }
     }
 
@@ -246,6 +329,43 @@ public class AkeneoFamilyMappingController(
             };
 
             await familyMappingService.InsertAxisMappingAsync(mapping);
+        }
+    }
+
+    private async Task SaveSubModelRulesAsync(
+        int familyMappingId,
+        IList<AkeneoFamilySubModelRuleModel> models)
+    {
+        var existing = await familyMappingService.GetSubModelRulesAsync(familyMappingId);
+
+        foreach (var existingRule in existing)
+            await familyMappingService.DeleteSubModelRuleAsync(existingRule);
+
+        models ??= new List<AkeneoFamilySubModelRuleModel>();
+
+        foreach (var item in models
+                     .Select((model, index) => new { Model = model, Index = index })
+                     .Where(x =>
+                         !string.IsNullOrWhiteSpace(x.Model.AkeneoAxisAttributeCode) ||
+                         !string.IsNullOrWhiteSpace(x.Model.VariantAxisAttributeCode)))
+        {
+            var model = item.Model;
+
+            var rule = new AkeneoFamilySubModelRule
+            {
+                FamilyMappingId = familyMappingId,
+                AkeneoAxisAttributeCode = model.AkeneoAxisAttributeCode?.Trim(),
+                TriggerValue = model.TriggerValue?.Trim(),
+                VariantAxisAttributeCode = model.VariantAxisAttributeCode?.Trim(),
+                VariantTriggerValue = model.VariantTriggerValue?.Trim(),
+                VariantRelationshipOverrideModeId = model.VariantRelationshipOverrideModeId,
+                MergeAncestorValues = model.MergeAncestorValues,
+                DisplayOrder = model.DisplayOrder > 0
+                    ? model.DisplayOrder
+                    : item.Index + 1
+            };
+
+            await familyMappingService.InsertSubModelRuleAsync(rule);
         }
     }
 }

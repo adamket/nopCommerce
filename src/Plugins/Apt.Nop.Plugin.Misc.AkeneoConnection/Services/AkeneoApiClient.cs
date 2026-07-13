@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Nop.Core.Caching;
@@ -77,7 +78,7 @@ public class AkeneoApiClient : IAkeneoApiClient
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                BuildUri("api/rest/v1/channels?limit=1"));
+                UrlHelper.BuildUri("api/rest/v1/channels?limit=1", _baseUrl));
 
             request.Headers.Accept.Add(
                 new MediaTypeWithQualityHeaderValue("application/json"));
@@ -458,7 +459,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         string accessToken,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(relativeOrAbsoluteUrl));
+        using var request = new HttpRequestMessage(HttpMethod.Get, UrlHelper.BuildUri(relativeOrAbsoluteUrl, _baseUrl));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -573,7 +574,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         var basicToken = Convert.ToBase64String(
             Encoding.UTF8.GetBytes($"{apiCredentials.ClientId}:{apiCredentials.ClientSecret}"));
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri("api/oauth/v1/token"))
+        using var request = new HttpRequestMessage(HttpMethod.Post, UrlHelper.BuildUri("api/oauth/v1/token", _baseUrl))
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
@@ -754,21 +755,6 @@ public class AkeneoApiClient : IAkeneoApiClient
         }
 
         return null;
-    }
-
-    private Uri BuildUri(string relativeOrAbsoluteUrl)
-    {
-        if (string.IsNullOrWhiteSpace(relativeOrAbsoluteUrl))
-            throw new ArgumentException("URL is required.", nameof(relativeOrAbsoluteUrl));
-
-        // Akeneo's paging "next" links come back absolute - use them verbatim.
-        if (Uri.TryCreate(relativeOrAbsoluteUrl, UriKind.Absolute, out var absolute))
-            return absolute;
-
-        if (string.IsNullOrWhiteSpace(_baseUrl))
-            throw new InvalidOperationException("Akeneo base URL has not been configured.");
-
-        return new Uri(new Uri(_baseUrl), relativeOrAbsoluteUrl.TrimStart('/'));
     }
 
     private static string ToQueryString(Dictionary<string, string?> query)

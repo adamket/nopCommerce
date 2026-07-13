@@ -104,7 +104,13 @@ public sealed class CheckAkeneoConnectionAttribute : TypeFilterAttribute
                         StringComparison.OrdinalIgnoreCase));
 
             if (connectionValidParameter == null)
+            {
                 return;
+                //I do not care about this
+                //throw new InvalidOperationException(
+                //    $"Actions annotated with {nameof(CheckAkeneoConnectionAttribute)} " +
+                //    "must declare a bool connectionValid parameter.");
+            }
 
             var connectionValid = false;
 

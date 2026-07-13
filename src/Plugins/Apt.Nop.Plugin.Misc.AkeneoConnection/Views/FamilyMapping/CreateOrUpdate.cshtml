@@ -2,11 +2,10 @@
 @using System.Text.Json
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
-
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
 
@@ -41,6 +40,18 @@
                 isRequired = x.IsRequired,
                 displayOrder = x.DisplayOrder
             }),
+            subModelRules = Model.SubModelRules.Select(x => new
+            {
+                id = x.Id,
+                familyMappingId = x.FamilyMappingId,
+                akeneoAxisAttributeCode = x.AkeneoAxisAttributeCode,
+                triggerValue = x.TriggerValue,
+                variantAxisAttributeCode = x.VariantAxisAttributeCode,
+                variantTriggerValue = x.VariantTriggerValue,
+                variantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
+                mergeAncestorValues = x.MergeAncestorValues,
+                displayOrder = x.DisplayOrder
+            }),
             availableProductAttributes = Model.AvailableProductAttributes.Select(x => new
             {
                 text = x.Text,
@@ -50,7 +61,23 @@
             {
                 text = x.Text,
                 value = x.Value
-            })
+            }),
+            availableSubModelAxisAttributes = Model.AvailableSubModelAxisAttributes.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            availableVariantAxisAttributes = Model.AvailableVariantAxisAttributes.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            availableVariantRelationshipModes = Model.AvailableVariantRelationshipModes.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            familyAxesUrl = Url.Action("GetFamilyAxes", "AkeneoFamilyMapping")
         },
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
@@ -100,7 +127,7 @@
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="fas fa-sliders-h"></i>
-                                General 
+                                General
                             </h3>
                         </div>
 
@@ -418,6 +445,206 @@
                             </div>
                         </div>
                     </transition>
+
+                    <div class="card akeneo-mapping-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-code-branch"></i>
+                                Sub-model override rules
+                            </h3>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                Rules are checked in display-order sequence. The first matching rule overrides the family's
+                                normal variant relationship mode. A sub-model condition is evaluated against the leaf product's
+                                parent product model; a variant condition is evaluated against the leaf variant itself.
+                            </div>
+
+                            <div class="akeneo-list">
+                                <div class="akeneo-group-row">
+                                    <a href="#"
+                                       class="akeneo-attribute-group-toggle"
+                                       v-bind:aria-expanded="subModelRulesOpen ? 'true' : 'false'"
+                                       v-on:click.prevent="subModelRulesOpen = !subModelRulesOpen">
+                                        <i class="fas fa-chevron-right chevron"></i>
+                                        Override rules
+                                        <span class="akeneo-group-count" v-text="form.subModelRules.length"></span>
+                                    </a>
+
+                                    <button type="button"
+                                            class="btn btn-default ml-auto"
+                                            v-on:click="addSubModelRule">
+                                        <i class="fas fa-plus-square"></i>
+                                        Add override rule
+                                    </button>
+                                </div>
+
+                                <transition name="akeneo-detail-slide">
+                                    <div v-show="subModelRulesOpen" class="akeneo-group-items">
+                                        <div v-if="form.subModelRules.length === 0"
+                                             class="alert alert-secondary mt-3 mb-0">
+                                            No sub-model overrides are configured. The family-level relationship mode will be used.
+                                        </div>
+
+                                        <div v-for="(row, index) in form.subModelRules"
+                                             v-bind:key="row.uid"
+                                             class="akeneo-row-shell">
+                                            <div class="akeneo-row"
+                                                 v-bind:class="subModelRuleRowClass(row)">
+                                                <div class="akeneo-col">
+                                                    <div class="form-group mb-0">
+                                                        <label>Sub-model axis</label>
+
+                                                        <input type="hidden"
+                                                               v-bind:name="subModelRuleName(index, 'Id')"
+                                                               v-bind:value="row.id" />
+
+                                                        <input type="hidden"
+                                                               v-bind:name="subModelRuleName(index, 'FamilyMappingId')"
+                                                               v-bind:value="row.familyMappingId" />
+
+                                                        <select class="form-control"
+                                                                v-bind:name="subModelRuleName(index, 'AkeneoAxisAttributeCode')"
+                                                                v-model="row.akeneoAxisAttributeCode">
+                                                            <option v-for="attribute in availableSubModelAxisAttributes"
+                                                                    v-bind:key="attribute.value || 'empty-submodel'"
+                                                                    v-bind:value="attribute.value">
+                                                                {{ attribute.text }}
+                                                            </option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col">
+                                                    <div class="form-group mb-0">
+                                                        <label>Sub-model trigger</label>
+                                                        <input type="text"
+                                                               class="form-control"
+                                                               v-bind:name="subModelRuleName(index, 'TriggerValue')"
+                                                               v-model="row.triggerValue"
+                                                               placeholder="potted" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col">
+                                                    <div class="form-group mb-0">
+                                                        <label>Variant axis</label>
+                                                        <select class="form-control"
+                                                                v-bind:name="subModelRuleName(index, 'VariantAxisAttributeCode')"
+                                                                v-model="row.variantAxisAttributeCode">
+                                                            <option v-for="attribute in availableVariantAxisAttributes"
+                                                                    v-bind:key="attribute.value || 'empty-variant'"
+                                                                    v-bind:value="attribute.value">
+                                                                {{ attribute.text }}
+                                                            </option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col">
+                                                    <div class="form-group mb-0">
+                                                        <label>Variant trigger</label>
+                                                        <input type="text"
+                                                               class="form-control"
+                                                               v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
+                                                               v-model="row.variantTriggerValue"
+                                                               placeholder="1_gallon" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-col akeneo-col-actions">
+                                                    <button type="button"
+                                                            class="btn btn-default"
+                                                            v-on:click="removeSubModelRule(index)">
+                                                        <i class="far fa-trash-alt"></i>
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="akeneo-mapping-detail">
+                                                <div class="row">
+                                                    <div class="col-md-5">
+                                                        <div class="form-group mb-0">
+                                                            <label>Relationship override</label>
+                                                            <select class="form-control"
+                                                                    v-bind:name="subModelRuleName(index, 'VariantRelationshipOverrideModeId')"
+                                                                    v-model.number="row.variantRelationshipOverrideModeId">
+                                                                <option v-for="mode in availableVariantRelationshipModes"
+                                                                        v-bind:key="mode.value"
+                                                                        v-bind:value="Number(mode.value)">
+                                                                    {{ mode.text }}
+                                                                </option>
+                                                            </select>
+                                                            <div class="form-text">
+                                                                None imports a matching leaf as a standalone product when no existing variant structure must be preserved.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-4">
+                                                        <div class="form-group mb-0">
+                                                            <label>Ancestor values</label>
+                                                            <div>
+                                                                <label class="akeneo-switch">
+                                                                    <input type="hidden"
+                                                                           v-bind:name="subModelRuleName(index, 'MergeAncestorValues')"
+                                                                           value="false" />
+                                                                    <input type="checkbox"
+                                                                           v-bind:name="subModelRuleName(index, 'MergeAncestorValues')"
+                                                                           value="true"
+                                                                           v-model="row.mergeAncestorValues" />
+                                                                    <span class="akeneo-switch-track">
+                                                                        <span class="akeneo-switch-thumb"></span>
+                                                                    </span>
+                                                                    <span class="akeneo-switch-text">
+                                                                        {{ row.mergeAncestorValues ? 'Merge ancestor values' : 'Leaf values only' }}
+                                                                    </span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <div class="form-group mb-0">
+                                                            <label>Display order</label>
+                                                            <input type="number"
+                                                                   class="form-control"
+                                                                   min="0"
+                                                                   v-bind:name="subModelRuleName(index, 'DisplayOrder')"
+                                                                   v-model.number="row.displayOrder" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div v-if="subModelRuleNeedsAttention(row)"
+                                                     class="akeneo-row-errors mt-3 mb-0">
+                                                    <i class="fas fa-exclamation-triangle akeneo-row-errors-icon"></i>
+                                                    <div>
+                                                        <div class="akeneo-row-errors-title">
+                                                            Override rule is incomplete
+                                                        </div>
+                                                        <ul>
+                                                            <li v-if="!hasAnySubModelRuleCondition(row)">
+                                                                Add at least one complete sub-model or variant condition.
+                                                            </li>
+                                                            <li v-if="Boolean(row.akeneoAxisAttributeCode) !== Boolean(row.triggerValue)">
+                                                                The sub-model axis and trigger value must be supplied together.
+                                                            </li>
+                                                            <li v-if="Boolean(row.variantAxisAttributeCode) !== Boolean(row.variantTriggerValue)">
+                                                                The variant axis and trigger value must be supplied together.
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </form>
@@ -484,6 +711,7 @@
                 return {
                     showDeleteModal: false,
                     axisMappingsOpen: true,
+                    subModelRulesOpen: true,
                     modes: {
                         none: @((int)AkeneoVariantRelationshipMode.None),
                         combinations: @((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations),
@@ -492,16 +720,31 @@
                     },
                     availableProductAttributes: initialModel.availableProductAttributes,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
+                    availableSubModelAxisAttributes: initialModel.availableSubModelAxisAttributes,
+                    availableVariantAxisAttributes: initialModel.availableVariantAxisAttributes,
+                    availableVariantRelationshipModes: initialModel.availableVariantRelationshipModes,
                     form: {
                         ...initialModel,
                         associatedProductAttributeId: initialModel.associatedProductAttributeId ?? '',
                         axisMappings: initialModel.axisMappings.map((row, index) => ({
-                            uid: this?.newUid ? this.newUid() : `${Date.now()}-${index}`,
+                            uid: `${Date.now()}-axis-${index}`,
                             id: row.id || 0,
                             familyVariantImportConfigurationId: row.familyVariantImportConfigurationId || initialModel.id || 0,
                             akeneoAttributeCode: row.akeneoAttributeCode || '',
                             nopProductAttributeId: row.nopProductAttributeId || '',
                             isRequired: row.isRequired !== false,
+                            displayOrder: row.displayOrder || index + 1
+                        })),
+                        subModelRules: initialModel.subModelRules.map((row, index) => ({
+                            uid: `${Date.now()}-rule-${index}`,
+                            id: row.id || 0,
+                            familyMappingId: row.familyMappingId || initialModel.id || 0,
+                            akeneoAxisAttributeCode: row.akeneoAxisAttributeCode || '',
+                            triggerValue: row.triggerValue || '',
+                            variantAxisAttributeCode: row.variantAxisAttributeCode || '',
+                            variantTriggerValue: row.variantTriggerValue || '',
+                            variantRelationshipOverrideModeId: Number(row.variantRelationshipOverrideModeId ?? @((int)AkeneoVariantRelationshipMode.None)),
+                            mergeAncestorValues: row.mergeAncestorValues !== false,
                             displayOrder: row.displayOrder || index + 1
                         }))
                     }
@@ -526,6 +769,15 @@
                 }
             },
 
+            watch: {
+                'form.akeneoFamilyCode': function (newFamilyCode, oldFamilyCode) {
+                    if (newFamilyCode === oldFamilyCode)
+                        return;
+
+                    this.loadFamilyAxes(newFamilyCode);
+                }
+            },
+
             mounted() {
                 if (this.form.axisMappings.length === 0)
                     this.addAxisMapping();
@@ -534,6 +786,76 @@
             methods: {
                 newUid() {
                     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                },
+
+                async loadFamilyAxes(familyCode) {
+                    const emptySubModelOption = {
+                        text: 'No sub-model condition',
+                        value: ''
+                    };
+                    const emptyVariantOption = {
+                        text: 'No variant condition',
+                        value: ''
+                    };
+
+                    if (!familyCode) {
+                        this.availableSubModelAxisAttributes = [emptySubModelOption];
+                        this.availableVariantAxisAttributes = [emptyVariantOption];
+                        return;
+                    }
+
+                    try {
+                        const separator = initialModel.familyAxesUrl.includes('?') ? '&' : '?';
+                        const response = await fetch(
+                            `${initialModel.familyAxesUrl}${separator}familyCode=${encodeURIComponent(familyCode)}`,
+                            {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json'
+                                }
+                            });
+
+                        if (!response.ok)
+                            throw new Error(`Unable to load family axes. HTTP ${response.status}.`);
+
+                        const result = await response.json();
+
+                        this.availableSubModelAxisAttributes = [
+                            emptySubModelOption,
+                            ...(result.subModelAxes || [])
+                        ];
+                        this.availableVariantAxisAttributes = [
+                            emptyVariantOption,
+                            ...(result.variantAxes || [])
+                        ];
+
+                        this.preserveSelectedRuleAxisOptions();
+                    }
+                    catch (error) {
+                        console.error('Unable to load Akeneo family axes.', error);
+                        this.preserveSelectedRuleAxisOptions();
+                    }
+                },
+
+                preserveSelectedRuleAxisOptions() {
+                    this.form.subModelRules.forEach(row => {
+                        this.addMissingAxisOption(
+                            this.availableSubModelAxisAttributes,
+                            row.akeneoAxisAttributeCode);
+                        this.addMissingAxisOption(
+                            this.availableVariantAxisAttributes,
+                            row.variantAxisAttributeCode);
+                    });
+                },
+
+                addMissingAxisOption(options, code) {
+                    if (!code || options.some(option => option.value.toLowerCase() === code.toLowerCase()))
+                        return;
+
+                    options.push({
+                        text: `${code} (not currently returned by Akeneo)`,
+                        value: code
+                    });
                 },
 
                 addAxisMapping() {
@@ -559,8 +881,38 @@
                     });
                 },
 
+                addSubModelRule() {
+                    this.form.subModelRules.push({
+                        uid: this.newUid(),
+                        id: 0,
+                        familyMappingId: this.form.id || 0,
+                        akeneoAxisAttributeCode: '',
+                        triggerValue: '',
+                        variantAxisAttributeCode: '',
+                        variantTriggerValue: '',
+                        variantRelationshipOverrideModeId: this.modes.none,
+                        mergeAncestorValues: true,
+                        displayOrder: this.form.subModelRules.length + 1
+                    });
+
+                    this.subModelRulesOpen = true;
+                },
+
+                removeSubModelRule(index) {
+                    this.form.subModelRules.splice(index, 1);
+
+                    this.form.subModelRules.forEach((row, rowIndex) => {
+                        if (!row.displayOrder)
+                            row.displayOrder = rowIndex + 1;
+                    });
+                },
+
                 axisName(index, propertyName) {
                     return `AxisMappings[${index}].${propertyName}`;
+                },
+
+                subModelRuleName(index, propertyName) {
+                    return `SubModelRules[${index}].${propertyName}`;
                 },
 
                 numberOrEmpty(value) {
@@ -579,6 +931,28 @@
                         return 'is-attention';
 
                     return 'is-mapped';
+                },
+
+                hasAnySubModelRuleCondition(row) {
+                    const hasSubModelCondition = Boolean(row.akeneoAxisAttributeCode) && Boolean(row.triggerValue);
+                    const hasVariantCondition = Boolean(row.variantAxisAttributeCode) && Boolean(row.variantTriggerValue);
+                    return hasSubModelCondition || hasVariantCondition;
+                },
+
+                subModelRuleNeedsAttention(row) {
+                    if (!this.hasAnySubModelRuleCondition(row))
+                        return true;
+
+                    if (Boolean(row.akeneoAxisAttributeCode) !== Boolean(row.triggerValue))
+                        return true;
+
+                    return Boolean(row.variantAxisAttributeCode) !== Boolean(row.variantTriggerValue);
+                },
+
+                subModelRuleRowClass(row) {
+                    return this.subModelRuleNeedsAttention(row)
+                        ? 'is-attention'
+                        : 'is-mapped';
                 }
             }
         }).mount('#akeneo-family-variant-config-edit-app');

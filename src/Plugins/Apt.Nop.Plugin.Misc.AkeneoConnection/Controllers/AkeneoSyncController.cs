@@ -115,7 +115,9 @@ public class AkeneoSyncController(
             cancellationToken);
 
         syncRunRecord.FinishedOnUtc = DateTime.UtcNow;
-        syncRunRecord.SyncStatusId = (int)SyncStatus.Completed;
+        syncRunRecord.SyncStatusId = syncRunRecord.SyncStatusId = result.Success
+            ? (int)SyncStatus.Completed
+            : (int)SyncStatus.CompletedWithErrors;
 
         await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(syncRunRecord);
         var action = result.Success ? result.ActionType.ToString() : "failed";

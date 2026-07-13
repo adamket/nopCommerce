@@ -38,4 +38,10 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public IList<SelectListItem> AvailableAkeneoAttributes { get; set; } =
         new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableSubModelAxisAttributes { get; set; } =
+        new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableVariantAxisAttributes { get; set; } =
+        new List<SelectListItem>();
 }

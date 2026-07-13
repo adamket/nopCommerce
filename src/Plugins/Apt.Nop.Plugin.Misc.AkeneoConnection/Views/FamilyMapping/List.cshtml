@@ -3,12 +3,13 @@
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
 
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo family variant import configurations";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
+ //   NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js", excludeFromBundle:true);
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
     var configurationsJson = JsonSerializer.Serialize(
@@ -122,7 +123,7 @@
     </div>
 </div>
 
-<script>
+<script asp-location="Footer">
     (() => {
         const { createApp } = Vue;
 

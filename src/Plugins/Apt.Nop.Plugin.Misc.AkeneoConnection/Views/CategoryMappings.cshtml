@@ -1,11 +1,12 @@
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoCategoryMappingListModel
 
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.prod.js");
+   // NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.CategoryMappings");
 
@@ -248,7 +249,7 @@
 </script>
 
 
-<script>
+<script asp-location="Footer">
     (function () {
         var appData = JSON.parse(document.getElementById('akeneo-category-app-data').textContent);
 
