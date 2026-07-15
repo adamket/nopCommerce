@@ -233,7 +233,7 @@ public class AkeneoProductSyncExecutionService(
 
     private async Task<AkeneoSyncRunRecord> GetActiveSyncRunAsync()
     {
-        var windowStartUtc = DateTime.UtcNow.AddMinutes(-120);
+        var windowStartUtc = DateTime.UtcNow.AddMinutes(-120); //TODO TODO - this is very random
 
         var candidates = await syncRunRecordService.SearchAkeneoSyncRunRecordsAsync(
             createdFromUtc: windowStartUtc,

@@ -33,7 +33,7 @@ public class AkeneoProductSpecificationSynchronizer(ISpecificationAttributeServi
                 continue;
             }
 
-            foreach (var optionItem in GetResolvedOptionItems(mappedValue))
+            foreach (var optionItem in AkeneoSyncValueHelper.GetOptionItems(mappedValue))
             {
                 var option = await GetOrCreateSpecificationAttributeOptionAsync(
                     specificationAttributeId,
@@ -94,120 +94,6 @@ public class AkeneoProductSpecificationSynchronizer(ISpecificationAttributeServi
         return true;
     }
 
-    private async Task<ProductAttributeValueChangeResult> GetOrCreateProductAttributeValueAsync(
-     int productAttributeMappingId,
-     string akeneoAttributeCode,
-     string akeneoProductKey,
-     string akeneoOptionCode,
-     string valueName,
-     bool createMissing)
-    {
-        if (string.IsNullOrWhiteSpace(valueName) &&
-            string.IsNullOrWhiteSpace(akeneoOptionCode))
-        {
-            return new ProductAttributeValueChangeResult();
-        }
-
-        akeneoAttributeCode = akeneoAttributeCode?.Trim();
-        akeneoProductKey = akeneoProductKey?.Trim();
-        akeneoOptionCode = akeneoOptionCode?.Trim();
-        valueName = valueName?.Trim() ?? akeneoOptionCode;
-
-        var akeneoValueMappingCode = BuildProductAttributeValueMappingCode(
-            akeneoProductKey,
-            akeneoAttributeCode,
-            akeneoOptionCode ?? valueName);
-
-        if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
-        {
-            var mappedValueId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
-                AkeneoEntityType.Option,
-                akeneoValueMappingCode,
-                NopEntityType.ProductAttributeValue);
-
-            if (mappedValueId.HasValue)
-            {
-                var mappedValue = await productAttributeService.GetProductAttributeValueByIdAsync(
-                    mappedValueId.Value);
-
-                if (mappedValue != null &&
-                    mappedValue.ProductAttributeMappingId == productAttributeMappingId)
-                {
-                    if (!string.Equals(mappedValue.Name, valueName, StringComparison.Ordinal))
-                    {
-                        mappedValue.Name = valueName;
-                        await productAttributeService.UpdateProductAttributeValueAsync(mappedValue);
-
-                        return new ProductAttributeValueChangeResult
-                        {
-                            Value = mappedValue,
-                            Changed = true
-                        };
-                    }
-
-                    return new ProductAttributeValueChangeResult
-                    {
-                        Value = mappedValue,
-                        Changed = false
-                    };
-                }
-            }
-        }
-
-        var existingValues = await productAttributeService.GetProductAttributeValuesAsync(
-            productAttributeMappingId);
-
-        var existingValue = existingValues.FirstOrDefault(value =>
-            string.Equals(value.Name, valueName, StringComparison.OrdinalIgnoreCase));
-
-        if (existingValue != null)
-        {
-            if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
-            {
-                await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
-                    AkeneoEntityType.Option,
-                    akeneoValueMappingCode,
-                    null,
-                    NopEntityType.ProductAttributeValue,
-                    existingValue.Id);
-            }
-
-            return new ProductAttributeValueChangeResult
-            {
-                Value = existingValue,
-                Changed = false
-            };
-        }
-
-        if (!createMissing)
-            return new ProductAttributeValueChangeResult();
-
-        var newValue = new ProductAttributeValue
-        {
-            ProductAttributeMappingId = productAttributeMappingId,
-            AttributeValueTypeId = (int)AttributeValueType.Simple,
-            Name = valueName,
-            DisplayOrder = 0
-        };
-
-        await productAttributeService.InsertProductAttributeValueAsync(newValue);
-
-        if (!string.IsNullOrWhiteSpace(akeneoValueMappingCode))
-        {
-            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
-                AkeneoEntityType.Option,
-                akeneoValueMappingCode,
-                null,
-                NopEntityType.ProductAttributeValue,
-                newValue.Id);
-        }
-
-        return new ProductAttributeValueChangeResult
-        {
-            Value = newValue,
-            Changed = true
-        };
-    }
 
     private async Task<SpecificationAttributeOption> GetOrCreateSpecificationAttributeOptionAsync(
       int specificationAttributeId,
@@ -299,64 +185,6 @@ public class AkeneoProductSpecificationSynchronizer(ISpecificationAttributeServi
         return newOption;
     }
 
-
-    private static string BuildProductAttributeValueMappingCode(
-        string akeneoProductKey,
-        string akeneoAttributeCode,
-        string akeneoOptionCodeOrValue)
-    {
-        if (string.IsNullOrWhiteSpace(akeneoProductKey) ||
-            string.IsNullOrWhiteSpace(akeneoAttributeCode) ||
-            string.IsNullOrWhiteSpace(akeneoOptionCodeOrValue))
-        {
-            return null;
-        }
-
-        return $"{akeneoProductKey.Trim()}:{akeneoAttributeCode.Trim()}:{akeneoOptionCodeOrValue.Trim()}";
-    }
-
-    private static IReadOnlyList<AkeneoResolvedOptionItem> GetResolvedOptionItems(AkeneoResolvedMappedValue mappedValue)
-    {
-        var value = mappedValue.Value;
-        if (value == null)
-            return Array.Empty<AkeneoResolvedOptionItem>();
-
-        // Codes and labels must be read in the same source order (no pre-distinct) so the
-        // index pairing is valid; dedupe only AFTER pairing.
-        var codes = ExtractRawValuesInOrder(value);
-        var labels = value.DisplayValues is { Count: > 0 }
-            ? value.DisplayValues
-            : (string.IsNullOrWhiteSpace(value.DisplayValue)
-                ? Array.Empty<string>()
-                : new[] { value.DisplayValue });
-
-        var maxCount = Math.Max(codes.Count, labels.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = new List<AkeneoResolvedOptionItem>();
-
-        for (var i = 0; i < maxCount; i++)
-        {
-            var code = i < codes.Count ? codes[i]?.Trim() : null;
-            var label = i < labels.Count ? labels[i]?.Trim() : null;
-            var displayName = !string.IsNullOrWhiteSpace(label) ? label : code;
-
-            if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(displayName))
-                continue;
-
-            var dedupeKey = code ?? displayName;
-            if (!seen.Add(dedupeKey))
-                continue;
-
-            items.Add(new AkeneoResolvedOptionItem
-            {
-                AkeneoOptionCode = code,
-                DisplayName = displayName
-            });
-        }
-
-        return items;
-    }
-
     private static string BuildAkeneoOptionMappingCode(
         string akeneoAttributeCode,
         string akeneoOptionCode)
@@ -368,38 +196,6 @@ public class AkeneoProductSpecificationSynchronizer(ISpecificationAttributeServi
         }
 
         return $"{akeneoAttributeCode.Trim()}:{akeneoOptionCode.Trim()}";
-    }
-
-    private static IReadOnlyList<string> ExtractRawValuesInOrder(AkeneoResolvedProductValue value)
-    {
-        if (value?.RawData == null)
-            return Array.Empty<string>();
-
-        var rawData = value.RawData.Value;
-        if (rawData.ValueKind == JsonValueKind.Array)
-        {
-            return rawData.EnumerateArray()
-                .Select(ConvertJsonElementToString)
-                .Select(v => v?.Trim())
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .ToList();
-        }
-
-        var single = ConvertJsonElementToString(rawData)?.Trim();
-        return string.IsNullOrWhiteSpace(single) ? Array.Empty<string>() : new[] { single };
-    }
-
-    private static string ConvertJsonElementToString(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Number => element.GetRawText(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            JsonValueKind.Object => element.GetRawText(),
-            _ => null
-        };
     }
 
 

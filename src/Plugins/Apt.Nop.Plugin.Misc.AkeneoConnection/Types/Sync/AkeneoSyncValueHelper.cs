@@ -96,8 +96,7 @@ public static class AkeneoSyncValueHelper
             : new[] { single };
     }
 
-    private static string ConvertToString(
-        JsonElement element)
+    private static string ConvertToString(JsonElement element)
     {
         return element.ValueKind switch
         {
@@ -105,6 +104,7 @@ public static class AkeneoSyncValueHelper
             JsonValueKind.Number => element.GetRawText(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
+            JsonValueKind.Object => element.GetRawText(),
             _ => null
         };
     }
