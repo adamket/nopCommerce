@@ -6,7 +6,7 @@
 @{
     Layout = "_AdminLayout";
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
-  //  NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
+    //  NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
 
@@ -14,7 +14,17 @@
 
     var appModel = new
     {
+        listUrl = Url.Action("AttributeMappings", "AkeneoMapping"),
         saveUrl = Url.Action("SaveAttributeMappingRow", "AkeneoMapping"),
+        deleteOverrideUrl = Url.Action("DeleteAttributeMappingOverride", "AkeneoMapping"),
+        selectedFamilyCode = Model.AkeneoFamilyCode ?? string.Empty,
+        availableFamilies = Model.AvailableAkeneoFamilies
+            .Where(f => !string.IsNullOrWhiteSpace(f.Value))
+            .Select(f => new
+            {
+                value = f.Value,
+                text = f.Text
+            }).ToList(),
         targetTypes = new
         {
             ignore = (int)NopTargetType.Ignore,
@@ -28,6 +38,8 @@
         {
             index = idx,
             id = m.Id,
+            akeneoFamilyCode = m.AkeneoFamilyCode ?? string.Empty,
+            isInherited = m.IsInherited,
             code = m.AkeneoAttributeCode,
             label = m.AkeneoAttributeLabel,
             type = m.AkeneoAttributeType,
@@ -69,9 +81,48 @@
                 </div>
 
                 <div class="card-body p-0">
+                    <div class="p-3 border-bottom bg-light">
+                        <div class="form-row align-items-end">
+                            <div class="form-group col-md-5 mb-0">
+                                <label class="font-weight-bold mb-1" for="akeneo-family-scope">
+                                    Mapping scope
+                                </label>
+                                <select id="akeneo-family-scope"
+                                        class="form-control"
+                                        v-model="selectedFamilyCode"
+                                        v-on:change="changeFamilyScope">
+                                    <option value="">Global defaults</option>
+                                    <option v-for="family in availableFamilies"
+                                            v-bind:key="family.value"
+                                            v-bind:value="family.value">
+                                        {{ family.text }}
+                                    </option>
+                                </select>
+                               @*  <div class="form-text">
+                                    Global mappings are used by every family unless the selected family defines an override.
+                                </div> *@
+                            </div>
+
+                            @* <div class="col-md-7">
+                                <div class="alert mb-0"
+                                     v-bind:class="selectedFamilyCode ? 'alert-info' : 'alert-secondary'">
+                                    <template v-if="selectedFamilyCode">
+                                        Editing mappings for <strong>{{ selectedFamilyLabel }}</strong>.
+                                        Rows marked <strong>Inherited</strong> currently use the global mapping.
+                                    </template>
+                                    <template v-else>
+                                        Editing the global default mappings.
+                                    </template>
+                                </div>
+                            </div> *@
+                        </div>
+                    </div>
+
                     <div class="p-4" v-if="!mappings.length">
                         <div class="alert alert-info mb-0">
-                            No Akeneo attributes were found. Check the Sync Context connection, then reload this page.
+                            {{ selectedFamilyCode
+                            ? 'No Akeneo attributes were found for the selected family.'
+                            : 'No Akeneo attributes were found. Check the Sync Context connection, then reload this page.' }}
                         </div>
                     </div>
 
@@ -126,6 +177,12 @@
 
                                                 <div class="akeneo-col akeneo-col-status">
                                                     <span class="akeneo-status">{{ statusFor(m).text }}</span>
+                                                    <div class="mt-1">
+                                                        <span class="badge"
+                                                              v-bind:class="scopeFor(m).badgeClass">
+                                                            {{ scopeFor(m).text }}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 <div class="akeneo-col akeneo-col-actions">
@@ -140,7 +197,14 @@
                                                                 v-on:click="edit(m)"
                                                                 v-show="!m.editing">
                                                             <i class="fas fa-pencil-alt"></i>
-                                                            Edit
+                                                            {{
+                                                            selectedFamilyCode &&
+                                                            (m.isInherited || Number(m.id) === 0)
+                                                            ? 'Create override'
+                                                            : Number(m.id) === 0
+                                                            ? 'Create mapping'
+                                                            : 'Edit'
+                                                            }}
                                                         </button>
 
                                                         <button type="button"
@@ -148,6 +212,16 @@
                                                                 v-on:click="cancel(m)"
                                                                 v-show="m.editing">
                                                             Cancel
+                                                        </button>
+
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-danger ml-1 mt-2"
+                                                                v-if="selectedFamilyCode && !m.isInherited && Number(m.id) > 0"
+                                                                v-show="!m.editing"
+                                                                v-on:click="removeFamilyOverride(m)"
+                                                                v-bind:disabled="m.deleting">
+                                                            <i class="fas fa-undo"></i>
+                                                            {{ m.deleting ? 'Reverting...' : 'Revert to global' }}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -227,7 +301,7 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="mb-3" v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
+                                                   @*  <div class="mb-3" v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
                                                         <button class="btn btn-sm btn-default" type="button" v-on:click="m.draft.showTransform = !m.draft.showTransform">
                                                             {{ m.draft.transformRuleJson ? 'Edit transform JSON' : 'Add transform JSON' }}
                                                         </button>
@@ -236,7 +310,7 @@
                                                         <div class="mt-2" v-show="m.draft.showTransform">
                                                             <textarea class="form-control akeneo-edit-transform-json" rows="3" placeholder="{ }" v-model="m.draft.transformRuleJson"></textarea>
                                                         </div>
-                                                    </div>
+                                                    </div> *@
 
                                                     <div>
                                                         <button type="button" class="btn btn-sm btn-primary akeneo-save-row" v-on:click="save(m)" v-bind:disabled="m.saving">
@@ -293,6 +367,7 @@
             return Object.assign({}, m, {
                 editing: false,
                 saving: false,
+                deleting: false,
                 errors: [],
                 draft: {
                     nopTargetTypeId: m.nopTargetTypeId,
@@ -309,6 +384,8 @@
             data: function () {
                 return {
                     mappings: mappings,
+                    selectedFamilyCode: appData.selectedFamilyCode || '',
+                    availableFamilies: appData.availableFamilies || [],
                     targetTypes: appData.targetTypes,
                     targetKeyMap: targetKeyMap,
                     expanded: {},
@@ -316,6 +393,16 @@
                 };
             },
             computed: {
+                selectedFamilyLabel: function () {
+                    if (!this.selectedFamilyCode)
+                        return 'Global defaults';
+
+                    var family = this.availableFamilies.find(function (item) {
+                        return item.value === this.selectedFamilyCode;
+                    }, this);
+
+                    return family ? family.text : this.selectedFamilyCode;
+                },
                 groups: function () {
                     var map = {};
                     this.mappings.forEach(function (m) {
@@ -388,9 +475,46 @@
                     if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
                         return { cls: 'is-ignored', text: 'Ignored' };
                     }
-                    return Number(m.id) > 0
+                    return Number(m.id) > 0 || m.isInherited
                         ? { cls: 'is-mapped', text: 'Mapped' }
                         : { cls: 'is-attention', text: 'Unsaved' };
+                },
+                scopeFor: function (m) {
+                    if (!this.selectedFamilyCode) {
+                        return {
+                            text: 'Global',
+                            badgeClass: 'badge-secondary'
+                        };
+                    }
+
+                    if (m.isInherited) {
+                        return {
+                            text: 'Inherited',
+                            badgeClass: 'badge-info'
+                        };
+                    }
+
+                    if (Number(m.id) > 0) {
+                        return {
+                            text: 'Family override',
+                            badgeClass: 'badge-primary'
+                        };
+                    }
+
+                    return {
+                        text: 'No mapping',
+                        badgeClass: 'badge-warning'
+                    };
+                },
+                changeFamilyScope: function () {
+                    var url = new URL(appData.listUrl, window.location.origin);
+
+                    if (this.selectedFamilyCode)
+                        url.searchParams.set('akeneoFamilyCode', this.selectedFamilyCode);
+                    else
+                        url.searchParams.delete('akeneoFamilyCode');
+
+                    window.location.assign(url.pathname + url.search);
                 },
                 edit: function (m) {
                     m.draft.nopTargetTypeId = m.nopTargetTypeId;
@@ -426,6 +550,44 @@
                 dismissToast: function (id) {
                     this.toasts = this.toasts.filter(function (t) { return t.id !== id; });
                 },
+                removeFamilyOverride: function (m) {
+                    var self = this;
+
+                    if (!this.selectedFamilyCode || m.isInherited || Number(m.id) <= 0)
+                        return;
+
+                    m.errors = [];
+                    m.deleting = true;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.deleteOverrideUrl,
+                        data: addAntiForgeryToken({
+                            id: m.id,
+                            akeneoFamilyCode: this.selectedFamilyCode,
+                            akeneoAttributeCode: m.code
+                        }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                m.errors = (res && res.errors)
+                                    ? res.errors
+                                    : ['Unable to remove the family override.'];
+                                return;
+                            }
+
+                            self.notify('Family override removed - ' + m.code);
+                            window.setTimeout(function () {
+                                window.location.reload();
+                            }, 300);
+                        },
+                        error: function () {
+                            m.errors = ['Unable to remove the family override due to a server error.'];
+                        },
+                        complete: function () {
+                            m.deleting = false;
+                        }
+                    });
+                },
                 save: function (m) {
                     var self = this;
                     var d = m.draft;
@@ -437,7 +599,8 @@
                         type: 'POST',
                         url: appData.saveUrl,
                         data: addAntiForgeryToken({
-                            Id: m.id,
+                            Id: m.isInherited ? 0 : m.id,
+                            AkeneoFamilyCode: self.selectedFamilyCode || '',
                             AkeneoAttributeCode: m.code,
                             AkeneoAttributeTypeId: m.attributeTypeId,
                             NopTargetTypeId: d.nopTargetTypeId,
@@ -453,6 +616,8 @@
                             }
 
                             m.id = res.id;
+                            m.akeneoFamilyCode = self.selectedFamilyCode || '';
+                            m.isInherited = false;
                             m.nopTargetTypeId = d.nopTargetTypeId;
                             m.nopTargetKey = d.nopTargetKey;
                             m.nopTargetEntityId = d.nopTargetEntityId;

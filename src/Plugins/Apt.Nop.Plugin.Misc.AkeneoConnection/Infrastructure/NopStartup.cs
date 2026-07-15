@@ -31,15 +31,30 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
-        services.AddScoped<IAkeneoProductImportService, AkeneoProductImportService>();
+        services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
-        services.AddScoped<IAkeneoProductImportExecutionService, AkeneoProductImportExecutionService>();
+        services.AddScoped<IAkeneoProductSyncExecutionService, AkeneoProductSyncExecutionService>();
         services.AddScoped<IAkeneoVariantRelationshipService, AkeneoVariantRelationshipService>();
         services.AddScoped<IAkeneoVariantRelationshipResolver, AkeneoVariantRelationshipResolver>();
         services.AddScoped<INopVariantStructureDetector, NopVariantStructureDetector>();
-        
+
+        services.AddScoped<
+            IAkeneoProductSyncService,
+            AkeneoProductSyncService>();
+
+        services.AddScoped<
+            IAkeneoProductSyncPipeline,
+            AkeneoProductSyncPipeline>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductCoreSynchronizer>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductCategorySynchronizer>();
 
         services.AddScoped<
             IAkeneoFamilyMappingService,
@@ -48,6 +63,23 @@ public class NopStartup : INopStartup
         services.AddScoped<
             IAkeneoFamilyMappingModelFactory,
             AkeneoFamilyMappingModelFactory>();
+
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductSeoSynchronizer>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductSpecificationSynchronizer>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductAttributeSynchronizer>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
+            AkeneoProductCustomPropertySynchronizer>();
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();

@@ -233,15 +233,15 @@
                 <div class="card-body">
                     <div class="form-group row">
                         <div class="col-md-3">
-                            <label asp-for="ImportModeId" class="control-label">Import mode</label>
+                            <label asp-for="ProductWriteModeId" class="control-label">Import mode</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-select asp-for="ImportModeId" asp-items="Model.AvailableImportModes" />
-                            <span asp-validation-for="ImportModeId"></span>
+                            <nop-select asp-for="ProductWriteModeId" asp-items="Model.AvailableProductWriteModes" />
+                            <span asp-validation-for="ProductWriteModeId"></span>
                         </div>
                     </div>
 
-                    <div class="form-group row">
+                  @*   <div class="form-group row">
                         <div class="col-md-3">
                             <label asp-for="UnmappedAttributeBehaviorId" class="control-label">Unmapped attribute behavior</label>
                         </div>
@@ -249,19 +249,19 @@
                             <nop-select asp-for="UnmappedAttributeBehaviorId" asp-items="Model.AvailableUnmappedAttributeBehaviors" />
                             <span asp-validation-for="UnmappedAttributeBehaviorId"></span>
                         </div>
-                    </div>
+                    </div> *@
 
                     <div class="form-group row">
                         <div class="col-md-3">
-                            <label asp-for="AddMappedCategories" class="control-label">Add mapped categories</label>
+                            <label asp-for="CategorySyncModeId" class="control-label">Category sync mode</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-editor asp-for="AddMappedCategories" />
-                            <span asp-validation-for="AddMappedCategories"></span>
+                            <nop-select asp-for="CategorySyncModeId" asp-items="Model.AvailableSyncModes" />
+                            <span asp-validation-for="CategorySyncModeId"></span>
                         </div>
                     </div>
 
-                    <div class="form-group row">
+                   @*  <div class="form-group row">
                         <div class="col-md-3">
                             <label asp-for="AddMappedManufacturers" class="control-label">Add mapped manufacturers</label>
                         </div>
@@ -269,7 +269,7 @@
                             <nop-editor asp-for="AddMappedManufacturers" />
                             <span asp-validation-for="AddMappedManufacturers"></span>
                         </div>
-                    </div>
+                    </div> *@
 
                     <div class="form-group row">
                         <div class="col-md-3">

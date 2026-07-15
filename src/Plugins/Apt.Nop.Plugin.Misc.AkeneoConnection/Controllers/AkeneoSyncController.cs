@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -16,9 +17,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
 public class AkeneoSyncController(
-    IAkeneoProductImportExecutionService productImportExecutionService,
+    AkeneoConnectionSettings akeneoConnectionSettings,
+    IAkeneoProductSyncExecutionService productSyncExecutionService,
     IAkeneoProductMappingFactory productMappingFactory,
-    IAkeneoProductImportService productImportService,
+    IAkeneoProductBatchSyncService productImportService,
     IAkeneoSyncRunRecordService syncRunRecordService, IAkeneoProductBatchImportRequestFactory productBatchImportRequestFactory, IAkeneoSyncProfileService syncProfileService) : BasePluginController
 {
     private const string DryRunViewPath =
@@ -42,11 +44,23 @@ public class AkeneoSyncController(
         AkeneoProductMappingPreviewModel input,
         CancellationToken cancellationToken)
     {
-        input ??= new AkeneoProductMappingPreviewModel();
+        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
+        if (profile == null && input?.Channel == null)
+        {
+            return Json(new
+            {
+                success = false,
+                action = "failed",
+                errors = new[] { "Please set a default Akeneo Connection sync profile." }
+            });
+        }
 
-        input.Locale = Normalize(input.Locale, "en_US");
-        input.Channel = Normalize(input.Channel, "ecommerce");
-        input.Currency = Normalize(input.Currency, "USD");
+        input ??= new AkeneoProductMappingPreviewModel
+        {
+            Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US",
+            Channel = profile.AkeneoChannel,
+            Currency = profile.CurrencyCode
+        };
 
         if (string.IsNullOrWhiteSpace(input.AkeneoIdentifier))
         {
@@ -95,21 +109,53 @@ public class AkeneoSyncController(
 
         await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(syncRunRecord);
 
-        var result = await productImportService.ImportProductByUuidAsync(
+        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
+        if (profile == null)
+        {
+            return Json(new
+            {
+                success = false,
+                action = "failed",
+                errors = new[] { "Please set a default Akeneo Connection sync profile." }
+            });
+        }
+
+        var result = await productImportService.SyncProductByUuidAsync(
             new AkeneoProductImportRequest
             {
                 SyncRunRecordId = syncRunRecord.Id,
                 AkeneoProductUuid = input.Uuid.Trim(),
-                Locale = Normalize(input.Locale, "en_US"),
-                Channel = Normalize(input.Channel, "ecommerce"),
-                Currency = Normalize(input.Currency, "USD"),
-
+                Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US",
+                Channel = profile.AkeneoChannel ?? "ecommerce",
+                Currency = profile.CurrencyCode ?? "USD",
                 CreateNewProducts = true,
                 UpdateExistingProducts = true,
                 CreateMissingSpecificationAttributeOptions = true,
                 CreateMissingProductAttributeValues = true,
-                AddMappedCategories = true,
-                AddMappedManufacturers = true,
+                ProductFieldMissingValueBehavior =
+                    (AkeneoMissingValueBehavior)
+                    profile.ProductFieldMissingValueBehaviorId,
+
+                SeoFieldMissingValueBehavior =
+                    (AkeneoMissingValueBehavior)
+                    profile.SeoFieldMissingValueBehaviorId,
+
+                CustomPropertyMissingValueBehavior =
+                    (AkeneoMissingValueBehavior)
+                    profile.CustomPropertyMissingValueBehaviorId,
+
+                CategorySyncMode =
+                    (AkeneoCollectionSyncMode)
+                    profile.CategorySyncModeId,
+
+                SpecificationAttributeSyncMode =
+                    (AkeneoCollectionSyncMode)
+                    profile.SpecificationAttributeSyncModeId,
+
+                ProductAttributeSyncMode =
+                    (AkeneoCollectionSyncMode)
+                    profile.ProductAttributeSyncModeId,
+                //AddMappedManufacturers = true,
                 SaveRawPayloadSnapshot = false
             },
             cancellationToken);
@@ -118,6 +164,10 @@ public class AkeneoSyncController(
         syncRunRecord.SyncStatusId = syncRunRecord.SyncStatusId = result.Success
             ? (int)SyncStatus.Completed
             : (int)SyncStatus.CompletedWithErrors;
+
+        syncRunRecord.TotalRead = 1;
+       // syncRunRecord.CreatedCount = result.
+       // syncRunRecord.SkippedCount = result.
 
         await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(syncRunRecord);
         var action = result.Success ? result.ActionType.ToString() : "failed";
@@ -142,7 +192,7 @@ public class AkeneoSyncController(
         int id,
         CancellationToken cancellationToken)
     {
-        var result = await productImportExecutionService.ImportProductsByProfileAsync(
+        var result = await productSyncExecutionService.ImportProductsByProfileAsync(
             id,
             SyncType.ManualProductSync,
             cancellationToken);

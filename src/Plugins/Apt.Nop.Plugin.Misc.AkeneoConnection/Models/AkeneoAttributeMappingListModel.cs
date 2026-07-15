@@ -5,6 +5,11 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 
 public class AkeneoAttributeMappingListModel
 {
+    public string AkeneoFamilyCode { get; set; }
+
+    public IList<SelectListItem> AvailableAkeneoFamilies { get; set; }
+        = new List<SelectListItem>();
+
     public string SelectedChannelCode { get; set; } = string.Empty;
     public string SelectedLocaleCode { get; set; } = string.Empty;
     public string SelectedCurrencyCode { get; set; } = string.Empty;

@@ -2,14 +2,12 @@
 @using System.Text.Json
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
-
 <!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo family variant import configurations";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
- //   NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js", excludeFromBundle:true);
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
     var configurationsJson = JsonSerializer.Serialize(
@@ -30,7 +28,7 @@
         <div class="content-header clearfix">
             <h1 class="float-left">
                 <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
-               Family mappings
+                Family mappings
                 <small class="akeneo-dim">
                     Configure how Akeneo families create nopCommerce products, variants, combinations, or grouped products.
                 </small>
@@ -60,7 +58,7 @@
                         </div>
 
                         <div v-else class="akeneo-list">
-                            
+
 
                             <transition name="akeneo-detail-slide">
                                 <div v-show="familiesOpen" class="akeneo-group-items">
@@ -123,7 +121,7 @@
     </div>
 </div>
 
-<script asp-location="Footer">
+<script>
     (() => {
         const { createApp } = Vue;
 
@@ -181,7 +179,7 @@
                 },
 
                 editUrl(id) {
-                    return '/admin/akeneo-connection/family-mapping/edit/'+id;
+                     return '/admin/akeneo-connection/family-mapping/edit/'+id;
                 }
             }
         }).mount('#akeneo-family-variant-config-list-app');

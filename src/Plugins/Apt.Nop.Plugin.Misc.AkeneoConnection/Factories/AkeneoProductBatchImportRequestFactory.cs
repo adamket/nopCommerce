@@ -9,37 +9,67 @@ public class AkeneoProductBatchImportRequestFactory(
     : IAkeneoProductBatchImportRequestFactory
 {
     public AkeneoProductBatchImportRequest CreateFromProfile(
-        AkeneoSyncProfile profile,
-        int syncRunRecordId)
+     AkeneoSyncProfile profile,
+     int syncRunRecordId,
+     DateTime? lastSuccessfulRunStartedOnUtc = null)
     {
-        if (profile == null)
-            throw new ArgumentNullException(nameof(profile));
+        ArgumentNullException.ThrowIfNull(profile);
 
-        var categoryCodes = profile.AkeneoCategoryCodes.SplitCsv();
-
-        var importMode = (AkeneoImportMode)profile.ImportModeId;
+        var productWriteMode =
+            (AkeneoProductWriteMode)profile.ProductWriteModeId;
 
         var request = new AkeneoProductBatchImportRequest
         {
             SyncRunRecordId = syncRunRecordId,
 
             Channel = profile.AkeneoChannel,
-            Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault(),
 
-            PageSize = profile.PageSize <= 0 ? 100 : profile.PageSize,
+            Locale = profile.AkeneoLocales
+                .SplitCsv()
+                .FirstOrDefault() ?? "en_US",
+
+            Currency = string.IsNullOrWhiteSpace(profile.CurrencyCode)
+                ? "USD"
+                : profile.CurrencyCode.Trim(),
+
+            PageSize = profile.PageSize <= 0
+                ? 100
+                : profile.PageSize,
+
             MaxProducts = profile.MaxProducts,
             ContinueOnError = profile.ContinueOnError,
 
             CreateNewProducts =
-                importMode == AkeneoImportMode.CreateAndUpdate ||
-                importMode == AkeneoImportMode.CreateOnly,
+                productWriteMode == AkeneoProductWriteMode.CreateAndUpdate ||
+                productWriteMode == AkeneoProductWriteMode.CreateOnly,
 
             UpdateExistingProducts =
-                importMode == AkeneoImportMode.CreateAndUpdate ||
-                importMode == AkeneoImportMode.UpdateOnly,
+                productWriteMode == AkeneoProductWriteMode.CreateAndUpdate ||
+                productWriteMode == AkeneoProductWriteMode.UpdateOnly,
 
-            AddMappedCategories = profile.AddMappedCategories,
-            AddMappedManufacturers = profile.AddMappedManufacturers,
+            ProductFieldMissingValueBehavior =
+                (AkeneoMissingValueBehavior)
+                    profile.ProductFieldMissingValueBehaviorId,
+
+            SeoFieldMissingValueBehavior =
+                (AkeneoMissingValueBehavior)
+                    profile.SeoFieldMissingValueBehaviorId,
+
+            CustomPropertyMissingValueBehavior =
+                (AkeneoMissingValueBehavior)
+                    profile.CustomPropertyMissingValueBehaviorId,
+
+            CategorySyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.CategorySyncModeId,
+
+            SpecificationAttributeSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.SpecificationAttributeSyncModeId,
+
+            ProductAttributeSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.ProductAttributeSyncModeId,
 
             CreateMissingSpecificationAttributeOptions =
                 profile.CreateMissingSpecificationAttributeOptions,
@@ -47,31 +77,64 @@ public class AkeneoProductBatchImportRequestFactory(
             CreateMissingProductAttributeValues =
                 profile.CreateMissingProductAttributeValues,
 
-            SaveRawPayloadSnapshot = profile.SaveRawPayloadSnapshot,
+            SaveRawPayloadSnapshot =
+                profile.SaveRawPayloadSnapshot,
 
-            AkeneoCategoryCodes = categoryCodes,
-            CategoryFilterMode = (AkeneoCategoryFilterMode)profile.CategoryFilterModeId,
+            AkeneoCategoryCodes =
+                profile.AkeneoCategoryCodes.SplitCsv(),
 
-            AkeneoFamilyCodes = profile.AkeneoFamilyCodes.SplitCsv(),
-            AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv(),
+            CategoryFilterMode =
+                (AkeneoCategoryFilterMode)
+                    profile.CategoryFilterModeId,
+
+            AkeneoFamilyCodes =
+                profile.AkeneoFamilyCodes.SplitCsv(),
+
+            AkeneoProductGroupCodes =
+                profile.AkeneoProductGroupCodes.SplitCsv(),
 
             ProductEnabledFilter =
-                (AkeneoProductEnabledFilter)profile.ProductEnabledFilterId,
+                (AkeneoProductEnabledFilter)
+                    profile.ProductEnabledFilterId,
 
-            UpdatedAfterUtc = profile.UpdatedAfterUtc,
-            UpdatedSinceLastNDays = profile.UpdatedSinceLastNDays,
+            UpdatedAfterUtc =
+                ResolveUpdatedAfterUtc(profile, lastSuccessfulRunStartedOnUtc),
 
             ProductParentFilterMode =
-                (AkeneoProductParentFilterMode)profile.ProductParentFilterModeId,
+                (AkeneoProductParentFilterMode)
+                    profile.ProductParentFilterModeId,
 
-            AdditionalSearchJson = profile.AdditionalSearchJson,
+            AdditionalSearchJson =
+                profile.AdditionalSearchJson,
 
             UnmappedAttributeBehavior =
-                (UnmappedAkeneoAttributeBehavior)profile.UnmappedAttributeBehaviorId
+                (UnmappedAkeneoAttributeBehavior)
+                    profile.UnmappedAttributeBehaviorId,
+                
         };
 
         request.SearchJson = searchJsonBuilder.Build(request);
 
         return request;
+    }
+
+    private static DateTime? ResolveUpdatedAfterUtc(
+        AkeneoSyncProfile profile,
+        DateTime? lastSuccessfulRunStartedOnUtc)
+    {
+        return (AkeneoUpdatedFilterMode)profile.UpdatedFilterModeId switch
+        {
+            AkeneoUpdatedFilterMode.FixedDate =>
+                profile.UpdatedAfterUtc,
+
+            AkeneoUpdatedFilterMode.RollingDays
+                when profile.UpdatedSinceLastNDays > 0 =>
+                DateTime.UtcNow.AddDays(-profile.UpdatedSinceLastNDays.Value),
+
+            AkeneoUpdatedFilterMode.SinceLastSuccessfulRun =>
+                lastSuccessfulRunStartedOnUtc,   // null on first run => full sync, correct
+
+            _ => null
+        };
     }
 }

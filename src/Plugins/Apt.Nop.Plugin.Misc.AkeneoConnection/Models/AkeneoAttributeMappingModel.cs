@@ -1,11 +1,12 @@
 ﻿
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Web.Framework.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
-public class AkeneoAttributeMappingModel
+public record AkeneoAttributeMappingModel : BaseNopEntityModel
 {
-    public int Id { get; set; }
-
+    public bool IsInherited { get; set; }
+    public string AkeneoFamilyCode { get; set; }
     public string AkeneoAttributeCode { get; set; }
     public string AkeneoAttributeLabel { get; set; }
     public string AkeneoAttributeType { get; set; }

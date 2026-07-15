@@ -8,7 +8,7 @@ public class AkeneoVariantImportContext
     public string AkeneoIdentifier { get; set; }
     public string AkeneoFamilyCode { get; set; }
     public string Sku { get; set; }
-    public int StockQuantity { get; set; }
+    public int? StockQuantity { get; set; }
     public decimal? Price { get; set; }
 
     public AkeneoProductDefinition SourceProduct { get; set; }

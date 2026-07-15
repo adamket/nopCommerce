@@ -3,6 +3,7 @@
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 public class AkeneoAttributeMapping : BaseEntity
 {
+    public string AkeneoFamilyCode { get; set; }
     public string AkeneoAttributeCode { get; set; }
     public int AkeneoAttributeTypeId { get; set; }
     public int NopTargetTypeId { get; set; } 

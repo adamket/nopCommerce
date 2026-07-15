@@ -13,6 +13,9 @@ public interface IAkeneoAttributeMappingService
 
     Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByIdAsync(int id);
 
-    Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByCodeAsync(string code);
+    Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByCodeAsync(string code, string familyCode = null);
+
+    Task<IList<AkeneoAttributeMapping>>
+        GetEffectiveMappingsAsync(string familyCode);
 
 }

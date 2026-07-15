@@ -54,6 +54,43 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
             .OnColumn(nameof(AkeneoFamilySubModelRule.FamilyMappingId))
             .Ascending();
 
+
+        var mappingTable = NameCompatibilityManager.GetTableName(typeof(AkeneoNopEntityMapping));
+        var itemLogTable = NameCompatibilityManager.GetTableName(typeof(AkeneoSyncItemLog));
+
+        // nvarchar(max) can't participate in an index — constrain first.
+        // Option mapping codes are "{productKey}:{attributeCode}:{option}", so 400 is generous.
+        Alter.Table(mappingTable)
+            .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoCode)).AsString(400).Nullable();
+
+        Alter.Table(mappingTable)
+            .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoUuid)).AsString(64).Nullable();
+
+        if (!Schema.Table(mappingTable).Index($"IX_{mappingTable}_TypeCode").Exists())
+        {
+            Create.Index($"IX_{mappingTable}_TypeCode")
+                .OnTable(mappingTable)
+                .OnColumn(nameof(AkeneoNopEntityMapping.AkeneoEntityTypeId)).Ascending()
+                .OnColumn(nameof(AkeneoNopEntityMapping.NopEntityTypeId)).Ascending()
+                .OnColumn(nameof(AkeneoNopEntityMapping.AkeneoCode)).Ascending();
+        }
+
+        if (!Schema.Table(mappingTable).Index($"IX_{mappingTable}_TypeUuid").Exists())
+        {
+            Create.Index($"IX_{mappingTable}_TypeUuid")
+                .OnTable(mappingTable)
+                .OnColumn(nameof(AkeneoNopEntityMapping.AkeneoEntityTypeId)).Ascending()
+                .OnColumn(nameof(AkeneoNopEntityMapping.NopEntityTypeId)).Ascending()
+                .OnColumn(nameof(AkeneoNopEntityMapping.AkeneoUuid)).Ascending();
+        }
+
+        if (!Schema.Table(itemLogTable).Index($"IX_{itemLogTable}_SyncRunRecordId").Exists())
+        {
+            Create.Index($"IX_{itemLogTable}_SyncRunRecordId")
+                .OnTable(itemLogTable)
+                .OnColumn(nameof(AkeneoSyncItemLog.SyncRunRecordId)).Ascending();
+        }
+
     }
 
     public override void Down()

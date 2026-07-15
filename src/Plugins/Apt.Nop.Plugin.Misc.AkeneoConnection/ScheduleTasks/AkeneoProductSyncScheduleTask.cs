@@ -4,8 +4,8 @@ using Nop.Services.ScheduleTasks;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 
-public class AkeneoProductImportScheduleTask(
-    IAkeneoProductImportExecutionService productImportExecutionService,
+public class AkeneoProductSyncScheduleTask(
+    IAkeneoProductSyncExecutionService productSyncExecutionService,
     AkeneoConnectionSettings akeneoConnectionSettings)
     : IScheduleTask
 {
@@ -14,7 +14,7 @@ public class AkeneoProductImportScheduleTask(
         if (!akeneoConnectionSettings.DefaultSyncProfileId.HasValue)
             return;
 
-        await productImportExecutionService.ImportProductsByProfileAsync(
+        await productSyncExecutionService.ImportProductsByProfileAsync(
             akeneoConnectionSettings.DefaultSyncProfileId.Value,
             SyncType.DeltaSync,
             CancellationToken.None);

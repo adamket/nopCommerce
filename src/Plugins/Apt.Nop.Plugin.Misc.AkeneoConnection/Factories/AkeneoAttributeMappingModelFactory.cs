@@ -18,9 +18,9 @@ public class AkeneoAttributeMappingModelFactory(
     IAkeneoTargetTypeResolver targetTypeResolver)
     : IAkeneoAttributeMappingModelFactory
 {
-    public async Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync()
+    public async Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync(string akeneoFamilyCode = null)
     {
-        return await PrepareAttributeMappingListModelAsync(new AkeneoAttributeMappingListModel());
+        return await PrepareAttributeMappingListModelAsync(new AkeneoAttributeMappingListModel{AkeneoFamilyCode = akeneoFamilyCode});
     }
 
     public async Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync(
@@ -29,9 +29,48 @@ public class AkeneoAttributeMappingModelFactory(
         ArgumentNullException.ThrowIfNull(model);
 
         IReadOnlyList<AkeneoAttributeDefinition> akeneoAttributes;
+        IReadOnlyList<AkeneoFamilyDefinition> akeneoFamilies;
+
         try
         {
             akeneoAttributes = await akeneoApiClient.GetAttributesAsync();
+            if (!string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
+            {
+                var selectedFamily = await akeneoApiClient
+                    .GetFamilyByCodeAsync(model.AkeneoFamilyCode);
+
+                if (selectedFamily == null)
+                {
+                    model.Warnings.Add(
+                        $"Akeneo family '{model.AkeneoFamilyCode}' was not found.");
+
+                    model.Mappings.Clear();
+                    return model;
+                }
+
+                var familyAttributeCodes = selectedFamily.Attributes
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                akeneoAttributes = akeneoAttributes
+                    .Where(attribute =>
+                        familyAttributeCodes.Contains(attribute.Code))
+                    .ToList();
+            }
+
+            akeneoFamilies = await akeneoApiClient.GetFamiliesAsync();
+
+            model.AvailableAkeneoFamilies = akeneoFamilies
+                .OrderBy(family => family.GetLabel())
+                .Select(family => new SelectListItem
+                {
+                    Text = family.GetLabel(),
+                    Value = family.Code,
+                    Selected = string.Equals(
+                        family.Code,
+                        model.AkeneoFamilyCode,
+                        StringComparison.OrdinalIgnoreCase)
+                })
+                .ToList();
         }
         catch (Exception)
         {
@@ -40,7 +79,7 @@ public class AkeneoAttributeMappingModelFactory(
         }
 
         var existingAttributeMappings =
-            await akeneoAttributeMappingService.GetAllAkeneoAttributeMappingsAsync();
+            await akeneoAttributeMappingService.GetEffectiveMappingsAsync(model.AkeneoFamilyCode);
 
         var existingEntityMappings =
             await akeneoNopEntityMappingService.GetAkeneoNopEntityMappingsAsync(
@@ -80,6 +119,16 @@ public class AkeneoAttributeMappingModelFactory(
 
             var defaultNopTargetType = targetTypeResolver.ResolveDefaultTargetType(akeneoAttribute);
 
+
+            var isFamilyScope =
+                !string.IsNullOrWhiteSpace(model.AkeneoFamilyCode);
+
+            var isInherited =
+                isFamilyScope &&
+                existingAttributeMapping != null &&
+                string.IsNullOrWhiteSpace(
+                    existingAttributeMapping.AkeneoFamilyCode);
+
             var mappingModel = new AkeneoAttributeMappingModel
             {
                 Id = existingAttributeMapping?.Id ?? 0,
@@ -110,7 +159,11 @@ public class AkeneoAttributeMappingModelFactory(
 
                 // Backed by AkeneoNopEntityMapping
                 NopTargetEntityId = existingAttributeMapping?.NopTargetEntityId,
+                AkeneoFamilyCode = existingAttributeMapping?.AkeneoFamilyCode,
+                IsInherited = isInherited
             };
+
+       
 
             PrepareTargetTypeOptions(mappingModel, akeneoAttribute);
             PrepareNopTargetKeyOptions(mappingModel);
@@ -267,21 +320,21 @@ public class AkeneoAttributeMappingModelFactory(
             model.Warnings.Add("No Akeneo attribute is mapped to Product Name.");
         }
 
-        if (!activeMappings.Any(mapping =>
-                mapping.NopTargetTypeId == (int)NopTargetType.ProductField &&
-                string.Equals(mapping.NopTargetKey, "Price", StringComparison.OrdinalIgnoreCase)))
-        {
-            model.Warnings.Add("No Akeneo attribute is mapped to Product Price.");
-        }
+        //if (!activeMappings.Any(mapping =>
+        //        mapping.NopTargetTypeId == (int)NopTargetType.ProductField &&
+        //        string.Equals(mapping.NopTargetKey, "Price", StringComparison.OrdinalIgnoreCase)))
+        //{
+        //    model.Warnings.Add("No Akeneo attribute is mapped to Product Price.");
+        //}
 
         foreach (var mapping in activeMappings)
         {
-            if (mapping.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute &&
-                !mapping.NopTargetEntityId.HasValue)
-            {
-                model.Warnings.Add(
-                    $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a specification attribute, but no nopCommerce specification attribute is selected.");
-            }
+            //if (mapping.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute &&
+            //    !mapping.NopTargetEntityId.HasValue)
+            //{
+            //    model.Warnings.Add(
+            //        $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a specification attribute, but no nopCommerce specification attribute is selected.");
+            //}
 
             if (mapping.NopTargetTypeId == (int)NopTargetType.ProductAttribute &&
                 !mapping.NopTargetEntityId.HasValue)

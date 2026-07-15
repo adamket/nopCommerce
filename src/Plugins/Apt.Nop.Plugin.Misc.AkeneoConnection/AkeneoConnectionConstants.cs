@@ -20,7 +20,8 @@ public static class AkeneoConnectionConstants
     /// <summary>
     /// {0}: Akeneo attribute code
     /// </summary>
-    public static CacheKey AttributeMappingsByCodeCacheKey => new($"{EntityName}.bycode.{{0}}");
+    public static CacheKey AttributeMappingsByCodeCacheKey =>
+        new($"{EntityName}.bycode.{{0}}.{{1}}");
 
     public static string AttributeMappingPrefix => $"{EntityName}.";
     public static CacheKey EntityMappingByCodeCacheKey =>

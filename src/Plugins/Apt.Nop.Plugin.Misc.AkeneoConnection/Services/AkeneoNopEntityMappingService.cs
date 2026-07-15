@@ -306,4 +306,38 @@ public class AkeneoNopEntityMappingService(
 
         return null;
     }
+
+    public async Task<IList<AkeneoNopEntityMapping>>
+        GetMappingsByNopEntityAsync(
+            NopEntityType nopEntityType,
+            int nopEntityId)
+    {
+        return await nopEntityMappingRepository.Table
+            .Where(mapping =>
+                mapping.NopEntityTypeId == (int)nopEntityType &&
+                mapping.NopEntityId == nopEntityId)
+            .ToListAsync();
+    }
+
+    public async Task DeleteMappingsByNopEntityAsync(
+        NopEntityType nopEntityType,
+        int nopEntityId)
+    {
+        var mappings = await GetMappingsByNopEntityAsync(
+            nopEntityType,
+            nopEntityId);
+
+        if (!mappings.Any())
+            return;
+
+        await nopEntityMappingRepository.DeleteAsync(mappings);
+
+        foreach (var entityTypeId in mappings
+                     .Select(mapping => mapping.AkeneoEntityTypeId)
+                     .Distinct())
+        {
+            await InvalidateAkeneoEntityTypeCacheAsync(
+                entityTypeId);
+        }
+    }
 }

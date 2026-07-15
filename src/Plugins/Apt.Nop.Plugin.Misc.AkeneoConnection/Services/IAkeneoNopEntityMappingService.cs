@@ -56,4 +56,13 @@ public interface IAkeneoNopEntityMappingService
         AkeneoEntityType akeneoEntityType,
         string akeneoCode,
         NopEntityType nopEntityType);
+
+    Task<IList<AkeneoNopEntityMapping>>
+        GetMappingsByNopEntityAsync(
+            NopEntityType nopEntityType,
+            int nopEntityId);
+
+    Task DeleteMappingsByNopEntityAsync(
+        NopEntityType nopEntityType,
+        int nopEntityId);
 }

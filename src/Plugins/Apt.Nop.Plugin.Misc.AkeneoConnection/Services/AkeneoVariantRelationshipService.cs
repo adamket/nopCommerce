@@ -12,7 +12,7 @@ public class AkeneoVariantRelationshipService(
     IProductAttributeService productAttributeService,
     IAkeneoProductValueResolver productValueResolver) : IAkeneoVariantRelationshipService
 {
-    public async Task<AkeneoVariantImportResult> ApplyAsync(
+    public async Task<AkeneoVariantSyncResult> ApplyAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
         Func<Task<Product>> upsertChildProductAsync)
@@ -108,7 +108,7 @@ public class AkeneoVariantRelationshipService(
             await productService.UpdateProductAsync(parentProduct);
     }
 
-    private async Task<AkeneoVariantImportResult> ApplyGroupedProductAsync(
+    private async Task<AkeneoVariantSyncResult> ApplyGroupedProductAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
         AkeneoVariantRelationshipSource source,
@@ -141,7 +141,7 @@ public class AkeneoVariantRelationshipService(
         if (changed)
             await productService.UpdateProductAsync(childProduct);
 
-        return new AkeneoVariantImportResult
+        return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.GroupedProducts,
             Source = source,
@@ -149,7 +149,7 @@ public class AkeneoVariantRelationshipService(
         };
     }
 
-    private async Task<AkeneoVariantImportResult> ApplyAssociatedToProductAttributeValueAsync(
+    private async Task<AkeneoVariantSyncResult> ApplyAssociatedToProductAttributeValueAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
         AkeneoVariantRelationshipSource source,
@@ -202,7 +202,7 @@ public class AkeneoVariantRelationshipService(
             await productAttributeService.UpdateProductAttributeValueAsync(existingValue);
         }
 
-        return new AkeneoVariantImportResult
+        return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue,
             Source = source,
@@ -210,7 +210,7 @@ public class AkeneoVariantRelationshipService(
         };
     }
 
-    private async Task<AkeneoVariantImportResult> ApplyProductAttributeCombinationAsync(
+    private async Task<AkeneoVariantSyncResult> ApplyProductAttributeCombinationAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
         AkeneoVariantRelationshipSource source)
@@ -268,7 +268,7 @@ public class AkeneoVariantRelationshipService(
                 ProductId = parentProduct.Id,
                 AttributesXml = attributesXml,
                 Sku = context.Sku,
-                StockQuantity = context.StockQuantity,
+                StockQuantity = context.StockQuantity ?? 0,
                 OverriddenPrice = context.Price
             };
 
@@ -284,9 +284,17 @@ public class AkeneoVariantRelationshipService(
                 changed = true;
             }
 
-            if (existingCombination.StockQuantity != context.StockQuantity)
+            if (context.StockQuantity.HasValue &&
+                existingCombination.StockQuantity != context.StockQuantity.Value)
             {
-                existingCombination.StockQuantity = context.StockQuantity;
+                existingCombination.StockQuantity = context.StockQuantity.Value;
+                changed = true;
+            }
+
+            if (context.Price.HasValue &&
+                existingCombination.OverriddenPrice != context.Price)
+            {
+                existingCombination.OverriddenPrice = context.Price;
                 changed = true;
             }
 
@@ -300,7 +308,7 @@ public class AkeneoVariantRelationshipService(
                 await productAttributeService.UpdateProductAttributeCombinationAsync(existingCombination);
         }
 
-        return new AkeneoVariantImportResult
+        return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.ProductAttributeCombinations,
             Source = source,
@@ -362,7 +370,7 @@ public class AkeneoVariantRelationshipService(
         return value;
     }
 
-    private async Task<AkeneoVariantImportResult> ApplyStandaloneProductAsync(
+    private async Task<AkeneoVariantSyncResult> ApplyStandaloneProductAsync(
         AkeneoVariantImportContext context,
         AkeneoVariantRelationshipResolution resolution,
         Func<Task<Product>> upsertChildProductAsync)
@@ -406,7 +414,7 @@ public class AkeneoVariantRelationshipService(
         if (changed)
             await productService.UpdateProductAsync(product);
 
-        return new AkeneoVariantImportResult
+        return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.None,
             Source = resolution.Source,

@@ -83,7 +83,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
 
         model.AkeneoProductFound = true;
-        model.AkeneoProductUuid = akeneoProduct.Values.GetRootString("uuid");
+        model.AkeneoProductUuid = akeneoProduct.Uuid;
 
         if (string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
         {
@@ -92,7 +92,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
 
         var savedMappings = await _akeneoAttributeMappingService
-            .GetAllAkeneoAttributeMappingsAsync();
+            .GetEffectiveMappingsAsync(akeneoProduct.Family);
 
         var activeMappings = savedMappings
             .Where(mapping => mapping.NopTargetTypeId != (int)NopTargetType.Ignore)

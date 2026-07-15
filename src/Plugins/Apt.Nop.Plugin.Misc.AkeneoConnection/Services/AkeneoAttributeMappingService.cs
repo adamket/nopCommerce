@@ -49,20 +49,69 @@ public class AkeneoAttributeMappingService(
             await attributeMappingRepository.GetByIdAsync(id));
     }
 
-    public async Task<AkeneoAttributeMapping> GetAkeneoAttributeMappingByCodeAsync(string code)
+    public async Task<AkeneoAttributeMapping>
+        GetAkeneoAttributeMappingByCodeAsync(
+            string attributeCode,
+            string familyCode = null)
     {
-        if (string.IsNullOrWhiteSpace(code))
+        if (string.IsNullOrWhiteSpace(attributeCode))
             return null;
 
-        code = code.Trim();
+        attributeCode = attributeCode.Trim();
+        familyCode = string.IsNullOrWhiteSpace(familyCode)
+            ? null
+            : familyCode.Trim();
 
         var cacheKey = staticCacheManager.PrepareKeyForDefaultCache(
             AkeneoConnectionConstants.AttributeMappingsByCodeCacheKey,
-            code.ToLowerInvariant());
+            familyCode?.ToLowerInvariant() ?? "global",
+            attributeCode.ToLowerInvariant());
 
-        return await staticCacheManager.GetAsync(cacheKey, async () =>
-            await attributeMappingRepository.Table
-                .FirstOrDefaultAsync(q => q.AkeneoAttributeCode == code));
+        return await staticCacheManager.GetAsync(
+            cacheKey,
+            async () => await attributeMappingRepository.Table
+                .FirstOrDefaultAsync(mapping =>
+                    mapping.AkeneoAttributeCode == attributeCode &&
+                    mapping.AkeneoFamilyCode == familyCode));
+    }
+
+    public async Task<IList<AkeneoAttributeMapping>>
+        GetEffectiveMappingsAsync(string familyCode)
+    {
+        var mappings = await GetAllAkeneoAttributeMappingsAsync();
+
+        familyCode = string.IsNullOrWhiteSpace(familyCode)
+            ? null
+            : familyCode.Trim();
+
+        var effectiveMappings = mappings
+            .Where(mapping =>
+                string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode))
+            .ToDictionary(
+                mapping => mapping.AkeneoAttributeCode,
+                mapping => mapping,
+                StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(familyCode))
+        {
+            var familyMappings = mappings.Where(mapping =>
+                string.Equals(
+                    mapping.AkeneoFamilyCode,
+                    familyCode,
+                    StringComparison.OrdinalIgnoreCase));
+
+            foreach (var familyMapping in familyMappings)
+            {
+                // Family mapping replaces global mapping, including an
+                // explicit Ignore mapping.
+                effectiveMappings[familyMapping.AkeneoAttributeCode] =
+                    familyMapping;
+            }
+        }
+
+        return effectiveMappings.Values
+            .OrderBy(mapping => mapping.AkeneoAttributeCode)
+            .ToList();
     }
 
     public async Task ClearCacheAsync()

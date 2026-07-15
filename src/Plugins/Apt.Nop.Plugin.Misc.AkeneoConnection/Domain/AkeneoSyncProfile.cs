@@ -4,22 +4,43 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
 public class AkeneoSyncProfile : BaseEntity
 {
+    // Identity
     public string Name { get; set; }
 
     public bool Enabled { get; set; }
 
+    // Akeneo value context
     public string AkeneoChannel { get; set; }
 
-    // CSV: en_US,fr_FR
     public string AkeneoLocales { get; set; }
 
-   // public string RootCategoryCode { get; set; }
+    public string CurrencyCode { get; set; }
 
-    public int ImportModeId { get; set; }
+    // Product write policy
+    public int ProductWriteModeId { get; set; }
 
-    public int UnmappedAttributeBehaviorId { get; set; } // currently unused (always ignore unmapped attributes)
+    public int UnmappedAttributeBehaviorId { get; set; }
 
-    // Batch behavior
+    // Missing scalar value policy
+    public int ProductFieldMissingValueBehaviorId { get; set; }
+
+    public int SeoFieldMissingValueBehaviorId { get; set; }
+
+    public int CustomPropertyMissingValueBehaviorId { get; set; }
+
+    // Collection synchronization policy
+    public int CategorySyncModeId { get; set; }
+
+    public int SpecificationAttributeSyncModeId { get; set; }
+
+    public int ProductAttributeSyncModeId { get; set; }
+
+    // Destination metadata creation
+    public bool CreateMissingSpecificationAttributeOptions { get; set; }
+
+    public bool CreateMissingProductAttributeValues { get; set; }
+
+    // Batch execution
     public int PageSize { get; set; }
 
     public int? MaxProducts { get; set; }
@@ -28,16 +49,7 @@ public class AkeneoSyncProfile : BaseEntity
 
     public bool SaveRawPayloadSnapshot { get; set; }
 
-    // Import behavior
-    public bool AddMappedCategories { get; set; }
-
-    public bool AddMappedManufacturers { get; set; }
-
-    public bool CreateMissingSpecificationAttributeOptions { get; set; }
-
-    public bool CreateMissingProductAttributeValues { get; set; }
-
-    // Akeneo product filters
+    // Akeneo filters
     public string AkeneoFamilyCodes { get; set; }
 
     public string AkeneoCategoryCodes { get; set; }
@@ -48,22 +60,23 @@ public class AkeneoSyncProfile : BaseEntity
 
     public int ProductEnabledFilterId { get; set; }
 
+    public int ProductParentFilterModeId { get; set; }
+
+    public int UpdatedFilterModeId { get; set; }
+
     public DateTime? UpdatedAfterUtc { get; set; }
 
     public int? UpdatedSinceLastNDays { get; set; }
 
-    public int ProductParentFilterModeId { get; set; }
-
-    // Advanced override for users who know Akeneo search JSON.
     public string AdditionalSearchJson { get; set; }
 
+    // Audit
     public DateTime CreatedOnUtc { get; set; }
 
     public DateTime UpdatedOnUtc { get; set; }
 }
 
-
-public enum AkeneoImportMode
+public enum AkeneoProductWriteMode
 {
     CreateAndUpdate = 10,
     CreateOnly = 20,
@@ -113,4 +126,34 @@ public enum AkeneoProductParentFilterMode
     Any = 0,
     SimpleProductsOnly = 10,
     VariantProductsOnly = 20
+}
+
+
+public enum AkeneoUpdatedFilterMode
+{
+    None = 0,
+    FixedDate = 10,
+    RollingDays = 20,
+    SinceLastSuccessfulRun = 30
+}
+
+public enum AkeneoCollectionSyncMode
+{
+    Disabled = 0,
+
+    /// <summary>
+    /// Add missing Akeneo values but preserve additional nopCommerce values.
+    /// </summary>
+    Merge = 10,
+
+    /// <summary>
+    /// Make the relevant nopCommerce collection match Akeneo.
+    /// </summary>
+    Replace = 20
+}
+
+public enum AkeneoMissingValueBehavior
+{
+    PreserveExisting = 0,
+    ClearExisting = 10
 }

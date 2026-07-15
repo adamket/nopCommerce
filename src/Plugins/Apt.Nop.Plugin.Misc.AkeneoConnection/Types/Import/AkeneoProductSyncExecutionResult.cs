@@ -2,7 +2,7 @@
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
-public class AkeneoProductImportExecutionResult
+public class AkeneoProductSyncExecutionResult
 {
     public bool Success { get; set; }
 
@@ -37,4 +37,6 @@ public class AkeneoProductImportExecutionResult
     public IList<string> Errors { get; set; } = new List<string>();
 
     public IList<string> Messages { get; set; } = new List<string>();
+
+    public bool AlreadyRunning { get; set; }
 }

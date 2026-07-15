@@ -25,9 +25,9 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     //public string RootCategoryCode { get; set; }
 
-    public int ImportModeId { get; set; }
+    public int ProductWriteModeId { get; set; }
 
-    public string ImportModeName { get; set; }
+    public string ProductWriteModeName { get; set; }
 
     public int UnmappedAttributeBehaviorId { get; set; }
 
@@ -42,9 +42,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public bool SaveRawPayloadSnapshot { get; set; }
 
-    public bool AddMappedCategories { get; set; }
 
-    public bool AddMappedManufacturers { get; set; }
+   // public bool AddMappedManufacturers { get; set; }
 
     public bool CreateMissingSpecificationAttributeOptions { get; set; }
 
@@ -76,7 +75,7 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public string AdditionalSearchJson { get; set; }
     public string AkeneoProductGroupCodes { get; set; }
 
-    public IList<SelectListItem> AvailableImportModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableProductWriteModes { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableUnmappedAttributeBehaviors { get; set; } = new List<SelectListItem>();
 
@@ -85,10 +84,52 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableProductEnabledFilters { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductParentFilterModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableSyncModes { get; set; } = new List<SelectListItem>();
 
  
 
     public IList<SelectListItem> AvailableAkeneoProductGroups { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableAkeneoCategories { get; set; } = new List<SelectListItem>();
+
+    public string CurrencyCode { get; set; }
+
+    public int ProductFieldMissingValueBehaviorId { get; set; }
+
+    public int SeoFieldMissingValueBehaviorId { get; set; }
+
+    public int CustomPropertyMissingValueBehaviorId { get; set; }
+
+    public int CategorySyncModeId { get; set; }
+
+    public int SpecificationAttributeSyncModeId { get; set; }
+
+    public int ProductAttributeSyncModeId { get; set; }
+
+    public int UpdatedFilterModeId { get; set; }
+
+    public IList<SelectListItem>
+        AvailableProductFieldMissingValueBehaviors
+    { get; set; }
+        = new List<SelectListItem>();
+
+    public IList<SelectListItem>
+        AvailableSeoFieldMissingValueBehaviors
+    { get; set; }
+        = new List<SelectListItem>();
+
+    public IList<SelectListItem>
+        AvailableCustomPropertyMissingValueBehaviors
+    { get; set; }
+        = new List<SelectListItem>();
+
+   
+   
+
+    public IList<SelectListItem>
+        AvailableUpdatedFilterModes
+    { get; set; }
+        = new List<SelectListItem>();
+
+
 }

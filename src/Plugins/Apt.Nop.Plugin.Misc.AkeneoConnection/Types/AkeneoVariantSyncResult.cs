@@ -1,7 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
-public class AkeneoVariantImportResult
+public class AkeneoVariantSyncResult
 {
     public AkeneoVariantRelationshipMode Mode { get; set; }
 
@@ -12,4 +12,5 @@ public class AkeneoVariantImportResult
     public int? NopProductId { get; set; }
 
     public int? NopProductAttributeCombinationId { get; set; }
+    public bool Changed { get; set; }
 }

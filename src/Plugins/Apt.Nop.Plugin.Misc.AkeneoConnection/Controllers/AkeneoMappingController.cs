@@ -18,8 +18,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [Area(AreaNames.ADMIN)]
 [AutoValidateAntiforgeryToken]
 public class AkeneoMappingController(
+    IWorkContext workContext,
     IAkeneoAttributeMappingModelFactory attributeMappingModelFactory,
-    IAkeneoAttributeMappingService akeneoAttributeMappingService,
+    IAkeneoAttributeMappingService attributeMappingService,
     INotificationService notificationService,
     IAkeneoNopEntityMappingService entityMappingService,
     IStoreContext storeContext,
@@ -30,9 +31,13 @@ public class AkeneoMappingController(
 
     [HttpGet("admin/akeneo-connection/attribute-mappings")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
-    public async Task<IActionResult> AttributeMappings()
+    public async Task<IActionResult> AttributeMappings(string akeneoFamilyCode = null)
     {
-        var model = await attributeMappingModelFactory.PrepareAttributeMappingListModelAsync();
+        akeneoFamilyCode = string.IsNullOrWhiteSpace(akeneoFamilyCode)
+            ? null
+            : akeneoFamilyCode.Trim();
+
+        var model = await attributeMappingModelFactory.PrepareAttributeMappingListModelAsync(akeneoFamilyCode);
 
         return View($"{AkeneoConnectionConstants.PathToPlugin}/Views/AttributeMappings.cshtml", model);
     }
@@ -52,12 +57,67 @@ public class AkeneoMappingController(
             });
         }
 
-        var mapping = model.Id > 0
-            ? await akeneoAttributeMappingService.GetAkeneoAttributeMappingByIdAsync(model.Id)
-            : null;
+        var requestedFamilyCode =
+            string.IsNullOrWhiteSpace(model.AkeneoFamilyCode)
+                ? null
+                : model.AkeneoFamilyCode.Trim();
 
-        mapping ??= await akeneoAttributeMappingService
-            .GetAkeneoAttributeMappingByCodeAsync(model.AkeneoAttributeCode);
+
+        AkeneoAttributeMapping mapping = null;
+        if (model.Id > 0)
+        {
+            mapping = await attributeMappingService
+                .GetAkeneoAttributeMappingByIdAsync(model.Id);
+
+            if (mapping == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    errors = new[] { "The mapping could not be found." }
+                });
+            }
+
+            var storedFamilyCode =
+                string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode)
+                    ? null
+                    : mapping.AkeneoFamilyCode.Trim();
+
+            if (!string.Equals(
+                    storedFamilyCode,
+                    requestedFamilyCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new
+                {
+                    success = false,
+                    errors = new[]
+                    {
+                        "The mapping does not belong to the selected family scope."
+                    }
+                });
+            }
+
+            if (!string.Equals(
+                    mapping.AkeneoAttributeCode,
+                    model.AkeneoAttributeCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new
+                {
+                    success = false,
+                    errors = new[]
+                    {
+                        "The mapping does not belong to the requested Akeneo attribute."
+                    }
+                });
+            }
+        }
+
+        mapping ??= await attributeMappingService
+            .GetAkeneoAttributeMappingByCodeAsync(
+                model.AkeneoAttributeCode,
+                requestedFamilyCode);
 
         var isNew = mapping == null;
 
@@ -67,6 +127,8 @@ public class AkeneoMappingController(
         };
 
         mapping.AkeneoAttributeTypeId = model.AkeneoAttributeTypeId;
+        mapping.AkeneoFamilyCode = requestedFamilyCode;
+        
         mapping.NopTargetTypeId = model.NopTargetTypeId;
         mapping.NopTargetKey = model.NopTargetKey;
 
@@ -78,15 +140,17 @@ public class AkeneoMappingController(
                 ? model.NopTargetEntityId
                 : null;
 
-        mapping.Locale = model.Locale;
-        mapping.Channel = model.Channel;
+       // var store = await storeContext.GetCurrentStoreAsync();
+        var language = await workContext.GetWorkingLanguageAsync();
+        mapping.Locale = language.LanguageCulture;
+        //mapping.Channel = model.Channel;
         mapping.TransformRuleJson = model.TransformRuleJson;
         mapping.IsRequired = model.IsRequired;
 
         if (isNew)
-            await akeneoAttributeMappingService.InsertAkeneoAttributeMappingAsync(mapping);
+            await attributeMappingService.InsertAkeneoAttributeMappingAsync(mapping);
         else
-            await akeneoAttributeMappingService.UpdateAkeneoAttributeMappingAsync(mapping);
+            await attributeMappingService.UpdateAkeneoAttributeMappingAsync(mapping);
 
         return Json(new
         {
@@ -214,6 +278,63 @@ public class AkeneoMappingController(
         {
             success = true,
             message = "Category mapping cleared."
+        });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> DeleteAttributeMappingOverride(
+        int id,
+        string akeneoFamilyCode,
+        string akeneoAttributeCode)
+    {
+        if (id <= 0 || string.IsNullOrWhiteSpace(akeneoFamilyCode))
+        {
+            return Json(new
+            {
+                success = false,
+                errors = new[] { "A family override is required." }
+            });
+        }
+
+        var mapping = await attributeMappingService
+            .GetAkeneoAttributeMappingByIdAsync(id);
+
+        if (mapping == null)
+        {
+            return Json(new
+            {
+                success = false,
+                errors = new[] { "The mapping could not be found." }
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode) ||
+            !string.Equals(
+                mapping.AkeneoFamilyCode,
+                akeneoFamilyCode,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                mapping.AkeneoAttributeCode,
+                akeneoAttributeCode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Json(new
+            {
+                success = false,
+                errors = new[]
+                {
+                    "The requested mapping is not a family override."
+                }
+            });
+        }
+
+        await attributeMappingService
+            .DeleteAkeneoAttributeMappingAsync(mapping);
+
+        return Json(new
+        {
+            success = true
         });
     }
 }

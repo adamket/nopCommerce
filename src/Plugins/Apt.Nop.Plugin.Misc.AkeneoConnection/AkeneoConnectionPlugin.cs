@@ -55,7 +55,7 @@ public class AkeneoConnectionPlugin(
      
         };
 
-        var taskType = typeof(AkeneoProductImportScheduleTask).FullName
+        var taskType = typeof(AkeneoProductSyncScheduleTask).FullName
                        ?? throw new InvalidOperationException("Unable to resolve schedule task type.");
 
         var revisionCleanupTask = await scheduleTaskService.GetTaskByTypeAsync(taskType);
@@ -99,7 +99,7 @@ public class AkeneoConnectionPlugin(
         //settings
         await settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
 
-        var taskType = typeof(AkeneoProductImportScheduleTask).FullName;
+        var taskType = typeof(AkeneoProductSyncScheduleTask).FullName;
         var task = await scheduleTaskService.GetTaskByTypeAsync(taskType);
 
         if (task != null)

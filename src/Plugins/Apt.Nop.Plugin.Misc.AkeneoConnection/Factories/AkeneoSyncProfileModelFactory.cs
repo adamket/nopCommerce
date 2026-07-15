@@ -5,6 +5,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models.SyncProfiles;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Services;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
@@ -35,21 +36,41 @@ public class AkeneoSyncProfileModelFactory(
             AkeneoLocales = "en_US",
             SelectedAkeneoLocaleCodes = new List<string> { "en_US" },
 
-            ImportModeId = (int)AkeneoImportMode.CreateAndUpdate,
+            ProductWriteModeId = (int)AkeneoProductWriteMode .CreateAndUpdate,
             UnmappedAttributeBehaviorId = (int)UnmappedAkeneoAttributeBehavior.Ignore,
 
             PageSize = 100,
             ContinueOnError = true,
             SaveRawPayloadSnapshot = false,
-
-            AddMappedCategories = true,
-            AddMappedManufacturers = false,
+         //   AddMappedManufacturers = false,
             CreateMissingSpecificationAttributeOptions = true,
             CreateMissingProductAttributeValues = true,
 
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
             ProductEnabledFilterId = (int)AkeneoProductEnabledFilter.Any,
             ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any,
+            CurrencyCode = "USD",
+
+            ProductFieldMissingValueBehaviorId =
+                (int)AkeneoMissingValueBehavior.PreserveExisting,
+
+            SeoFieldMissingValueBehaviorId =
+                (int)AkeneoMissingValueBehavior.PreserveExisting,
+
+            CustomPropertyMissingValueBehaviorId =
+                (int)AkeneoMissingValueBehavior.PreserveExisting,
+
+            CategorySyncModeId =
+                (int)AkeneoCollectionSyncMode.Disabled,
+
+            SpecificationAttributeSyncModeId =
+                (int)AkeneoCollectionSyncMode.Merge,
+
+            ProductAttributeSyncModeId =
+                (int)AkeneoCollectionSyncMode.Merge,
+
+            UpdatedFilterModeId =
+                (int)AkeneoUpdatedFilterMode.None,
         };
 
         if (profile != null)
@@ -58,12 +79,12 @@ public class AkeneoSyncProfileModelFactory(
             model.Name = profile.Name;
             model.Enabled = profile.Enabled;
             model.AkeneoChannel = profile.AkeneoChannel;
-            model.AkeneoLocales = profile.AkeneoLocales;
+            model.AkeneoLocales = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US";
             model.AkeneoFamilyCodes = profile.AkeneoFamilyCodes;
             model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
             model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
 
-            model.ImportModeId = profile.ImportModeId;
+            model.ProductWriteModeId = profile.ProductWriteModeId;
             model.UnmappedAttributeBehaviorId = profile.UnmappedAttributeBehaviorId;
 
             model.PageSize = profile.PageSize;
@@ -71,8 +92,8 @@ public class AkeneoSyncProfileModelFactory(
             model.ContinueOnError = profile.ContinueOnError;
             model.SaveRawPayloadSnapshot = profile.SaveRawPayloadSnapshot;
 
-            model.AddMappedCategories = profile.AddMappedCategories;
-            model.AddMappedManufacturers = profile.AddMappedManufacturers;
+            model.CategorySyncModeId = profile.CategorySyncModeId;
+          //  model.AddMappedManufacturers = profile.AddMappedManufacturers;
             model.CreateMissingSpecificationAttributeOptions = profile.CreateMissingSpecificationAttributeOptions;
             model.CreateMissingProductAttributeValues = profile.CreateMissingProductAttributeValues;
           
@@ -87,6 +108,30 @@ public class AkeneoSyncProfileModelFactory(
             model.SelectedAkeneoLocaleCodes = profile.AkeneoLocales.SplitCsv();
             model.SelectedAkeneoFamilyCodes = profile.AkeneoFamilyCodes.SplitCsv();
             model.SelectedAkeneoCategoryCodes = profile.AkeneoCategoryCodes.SplitCsv();
+
+            model.CurrencyCode = profile.CurrencyCode;
+
+            model.ProductFieldMissingValueBehaviorId =
+                profile.ProductFieldMissingValueBehaviorId;
+
+            model.SeoFieldMissingValueBehaviorId =
+                profile.SeoFieldMissingValueBehaviorId;
+
+            model.CustomPropertyMissingValueBehaviorId =
+                profile.CustomPropertyMissingValueBehaviorId;
+
+            model.CategorySyncModeId =
+                profile.CategorySyncModeId;
+
+            model.SpecificationAttributeSyncModeId =
+                profile.SpecificationAttributeSyncModeId;
+
+            model.ProductAttributeSyncModeId =
+                profile.ProductAttributeSyncModeId;
+
+            model.UpdatedFilterModeId =
+                profile.UpdatedFilterModeId;
+
         }
 
         PrepareDisplayNames(model);
@@ -167,6 +212,51 @@ public class AkeneoSyncProfileModelFactory(
         model.AvailableAkeneoFamilies = options
             .OrderBy(option => option.Text, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        model.AvailableProductFieldMissingValueBehaviors =
+            BuildSelectList(
+                Enum.GetValues<AkeneoMissingValueBehavior>(),
+                model.ProductFieldMissingValueBehaviorId,
+                GetMissingValueBehaviorText);
+
+        model.AvailableSeoFieldMissingValueBehaviors =
+            BuildSelectList(
+                Enum.GetValues<AkeneoMissingValueBehavior>(),
+                model.SeoFieldMissingValueBehaviorId,
+                GetMissingValueBehaviorText);
+
+        model.AvailableCustomPropertyMissingValueBehaviors =
+            BuildSelectList(
+                Enum.GetValues<AkeneoMissingValueBehavior>(),
+                model.CustomPropertyMissingValueBehaviorId,
+                GetMissingValueBehaviorText);
+
+        model.AvailableSyncModes = (await AkeneoCollectionSyncMode.Disabled.ToSelectListAsync()).ToList();
+
+        //model.AvailableCategorySyncModes =
+        //    BuildSelectList(
+        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
+        //        model.CategorySyncModeId,
+        //        GetCollectionSyncModeText);
+
+        //model.AvailableSpecificationAttributeSyncModes =
+        //    BuildSelectList(
+        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
+        //        model.SpecificationAttributeSyncModeId,
+        //        GetCollectionSyncModeText);
+
+        //model.AvailableProductAttributeSyncModes =
+        //    BuildSelectList(
+        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
+        //        model.ProductAttributeSyncModeId,
+        //        GetCollectionSyncModeText);
+
+        model.AvailableUpdatedFilterModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoUpdatedFilterMode>(),
+                model.UpdatedFilterModeId,
+                GetUpdatedFilterModeText);
+
     }
 
 
@@ -370,10 +460,10 @@ public class AkeneoSyncProfileModelFactory(
     private static void PrepareStaticDropdowns(
         AkeneoSyncProfileModel model)
     {
-        model.AvailableImportModes = BuildSelectList(
-            Enum.GetValues<AkeneoImportMode>(),
-            model.ImportModeId,
-            GetImportModeText);
+        model.AvailableProductWriteModes = BuildSelectList(
+            Enum.GetValues<AkeneoProductWriteMode>(),
+            model.ProductWriteModeId,
+            GetProductWriteModeText);
 
         model.AvailableUnmappedAttributeBehaviors = BuildSelectList(
             Enum.GetValues<UnmappedAkeneoAttributeBehavior>(),
@@ -399,10 +489,10 @@ public class AkeneoSyncProfileModelFactory(
     private static void PrepareDisplayNames(
         AkeneoSyncProfileModel model)
     {
-        model.ImportModeName = GetImportModeText(
-            Enum.IsDefined(typeof(AkeneoImportMode), model.ImportModeId)
-                ? (AkeneoImportMode)model.ImportModeId
-                : AkeneoImportMode.CreateAndUpdate);
+        model.ProductWriteModeName = GetProductWriteModeText(
+            Enum.IsDefined(typeof(AkeneoProductWriteMode), model.ProductWriteModeId)
+                ? (AkeneoProductWriteMode)model.ProductWriteModeId
+                : AkeneoProductWriteMode.CreateAndUpdate);
 
         model.UnmappedAttributeBehaviorName = GetUnmappedAttributeBehaviorText(
             Enum.IsDefined(typeof(UnmappedAkeneoAttributeBehavior), model.UnmappedAttributeBehaviorId)
@@ -460,13 +550,13 @@ public class AkeneoSyncProfileModelFactory(
     //        : null;
     //}
 
-    private static string GetImportModeText(AkeneoImportMode mode)
+    private static string GetProductWriteModeText(AkeneoProductWriteMode mode)
     {
         return mode switch
         {
-            AkeneoImportMode.CreateAndUpdate => "Create and update",
-            AkeneoImportMode.CreateOnly => "Create only",
-            AkeneoImportMode.UpdateOnly => "Update only",
+            AkeneoProductWriteMode.CreateAndUpdate => "Create and update",
+            AkeneoProductWriteMode.CreateOnly => "Create only",
+            AkeneoProductWriteMode.UpdateOnly => "Update only",
             _ => mode.ToString()
         };
     }
@@ -516,6 +606,59 @@ public class AkeneoSyncProfileModelFactory(
             AkeneoProductParentFilterMode.Any => "Any",
             AkeneoProductParentFilterMode.SimpleProductsOnly => "Simple products only",
             AkeneoProductParentFilterMode.VariantProductsOnly => "Variant products only",
+            _ => mode.ToString()
+        };
+    }
+    private static string GetMissingValueBehaviorText(
+        AkeneoMissingValueBehavior behavior)
+    {
+        return behavior switch
+        {
+            AkeneoMissingValueBehavior.PreserveExisting =>
+                "Preserve existing nopCommerce value",
+
+            AkeneoMissingValueBehavior.ClearExisting =>
+                "Clear existing nopCommerce value",
+
+            _ => behavior.ToString()
+        };
+    }
+
+    private static string GetCollectionSyncModeText(
+        AkeneoCollectionSyncMode mode)
+    {
+        return mode switch
+        {
+            AkeneoCollectionSyncMode.Disabled =>
+                "Disabled",
+
+            AkeneoCollectionSyncMode.Merge =>
+                "Merge with existing nopCommerce values",
+
+            AkeneoCollectionSyncMode.Replace =>
+                "Replace existing nopCommerce values",
+
+            _ => mode.ToString()
+        };
+    }
+
+    private static string GetUpdatedFilterModeText(
+        AkeneoUpdatedFilterMode mode)
+    {
+        return mode switch
+        {
+            AkeneoUpdatedFilterMode.None =>
+                "No updated-date filter",
+
+            AkeneoUpdatedFilterMode.FixedDate =>
+                "Updated after a fixed date",
+
+            AkeneoUpdatedFilterMode.RollingDays =>
+                "Updated within rolling days",
+
+            AkeneoUpdatedFilterMode.SinceLastSuccessfulRun =>
+                "Since last successful run",
+
             _ => mode.ToString()
         };
     }

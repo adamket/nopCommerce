@@ -6,5 +6,6 @@ public interface IAkeneoProductBatchImportRequestFactory
 {
     AkeneoProductBatchImportRequest CreateFromProfile(
         AkeneoSyncProfile profile,
-        int syncRunRecordId);
+        int syncRunRecordId,
+        DateTime? lastSuccessfulRunStartedOnUtc = null);
 }

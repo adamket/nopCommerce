@@ -20,7 +20,7 @@ public class AkeneoSyncProfileController(
     IAkeneoSyncProfileModelFactory syncProfileModelFactory,
     INotificationService notificationService,
     IAkeneoSyncRunRecordService syncRunRecordService,
-    IAkeneoProductImportService productImportService)
+    IAkeneoProductBatchSyncService productImportService)
     : BaseAdminController
 {
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
@@ -144,7 +144,7 @@ public class AkeneoSyncProfileController(
 
         profile.AkeneoLocales = model.SelectedAkeneoLocaleCodes.BuildCsv();
 
-        profile.ImportModeId = model.ImportModeId;
+        profile.ProductWriteModeId = model.ProductWriteModeId;
         profile.UnmappedAttributeBehaviorId = model.UnmappedAttributeBehaviorId;
 
         profile.PageSize = model.PageSize <= 0 ? 100 : model.PageSize;
@@ -152,13 +152,19 @@ public class AkeneoSyncProfileController(
         profile.ContinueOnError = model.ContinueOnError;
         profile.SaveRawPayloadSnapshot = model.SaveRawPayloadSnapshot;
 
-        profile.AddMappedCategories = model.AddMappedCategories;
-        profile.AddMappedManufacturers = model.AddMappedManufacturers;
+        //profile.AddMappedCategories = model.AddMappedCategories;
+        
+        profile.CategorySyncModeId = model.CategorySyncModeId;
+       // profile.AddMappedManufacturers = model.AddMappedManufacturers;
         profile.CreateMissingSpecificationAttributeOptions = model.CreateMissingSpecificationAttributeOptions;
         profile.CreateMissingProductAttributeValues = model.CreateMissingProductAttributeValues;
 
-        profile.AkeneoFamilyCodes = model.AkeneoFamilyCodes?.Trim();
-        profile.AkeneoCategoryCodes = model.AkeneoCategoryCodes?.Trim();
+        profile.AkeneoFamilyCodes =
+            model.SelectedAkeneoFamilyCodes.BuildCsv();
+
+        profile.AkeneoCategoryCodes =
+            model.SelectedAkeneoCategoryCodes.BuildCsv();
+
         profile.CategoryFilterModeId = model.CategoryFilterModeId;
         profile.ProductEnabledFilterId = model.ProductEnabledFilterId;
         profile.UpdatedAfterUtc = model.UpdatedAfterUtc;
@@ -173,6 +179,36 @@ public class AkeneoSyncProfileController(
             .BuildCsv();
 
         profile.CategoryFilterModeId = model.CategoryFilterModeId;
+
+
+        profile.AkeneoLocales =
+            model.SelectedAkeneoLocaleCodes.BuildCsv();
+
+        profile.CurrencyCode =
+            string.IsNullOrWhiteSpace(model.CurrencyCode)
+                ? "USD"
+                : model.CurrencyCode.Trim().ToUpperInvariant();
+
+        profile.ProductFieldMissingValueBehaviorId =
+            model.ProductFieldMissingValueBehaviorId;
+
+        profile.SeoFieldMissingValueBehaviorId =
+            model.SeoFieldMissingValueBehaviorId;
+
+        profile.CustomPropertyMissingValueBehaviorId =
+            model.CustomPropertyMissingValueBehaviorId;
+
+        profile.CategorySyncModeId =
+            model.CategorySyncModeId;
+
+        profile.SpecificationAttributeSyncModeId =
+            model.SpecificationAttributeSyncModeId;
+
+        profile.ProductAttributeSyncModeId =
+            model.ProductAttributeSyncModeId;
+
+        profile.UpdatedFilterModeId =
+            model.UpdatedFilterModeId;
 
         if (profile.Id <= 0)
             profile.CreatedOnUtc = now;
