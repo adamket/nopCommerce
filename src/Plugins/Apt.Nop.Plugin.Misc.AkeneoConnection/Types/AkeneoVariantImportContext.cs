@@ -6,10 +6,24 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 public class AkeneoVariantImportContext
 {
     public string AkeneoIdentifier { get; set; }
+
+    public string AkeneoUuid { get; set; }
+
     public string AkeneoFamilyCode { get; set; }
+
     public string Sku { get; set; }
+
     public int? StockQuantity { get; set; }
+
     public decimal? Price { get; set; }
+
+    public int? SyncProfileId { get; set; }
+
+    public int SyncRunRecordId { get; set; }
+
+    public int? ExistingProductAttributeCombinationId { get; set; }
+
+    public int? ExistingAssociatedProductAttributeValueId { get; set; }
 
     public AkeneoProductDefinition SourceProduct { get; set; }
 
@@ -19,12 +33,11 @@ public class AkeneoVariantImportContext
 
     public string Currency { get; set; }
 
-    // Null => resolver decides (existing structure, else family default).
-    // Set => force this mode when CREATING a new product.
+    // Null means the resolver decides from existing structure and family defaults.
     public AkeneoVariantRelationshipMode? VariantRelationshipModeOverride { get; set; }
 
-    public IDictionary<string, string> AxisValuesByAkeneoCode { get; set; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IDictionary<string, AkeneoVariantAxisValue> AxisValuesByAkeneoCode { get; set; } =
+        new Dictionary<string, AkeneoVariantAxisValue>(StringComparer.OrdinalIgnoreCase);
 
     public AkeneoVariantRelationshipOptions Options { get; set; }
 }

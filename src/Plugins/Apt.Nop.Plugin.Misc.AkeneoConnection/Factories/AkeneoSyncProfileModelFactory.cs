@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -69,6 +69,9 @@ public class AkeneoSyncProfileModelFactory(
             ProductAttributeSyncModeId =
                 (int)AkeneoCollectionSyncMode.Merge,
 
+            MissingProductBehaviorId =
+                (int)AkeneoMissingProductBehavior.Ignore,
+
             UpdatedFilterModeId =
                 (int)AkeneoUpdatedFilterMode.None,
         };
@@ -128,6 +131,9 @@ public class AkeneoSyncProfileModelFactory(
 
             model.ProductAttributeSyncModeId =
                 profile.ProductAttributeSyncModeId;
+
+            model.MissingProductBehaviorId =
+                profile.MissingProductBehaviorId;
 
             model.UpdatedFilterModeId =
                 profile.UpdatedFilterModeId;
@@ -231,25 +237,29 @@ public class AkeneoSyncProfileModelFactory(
                 model.CustomPropertyMissingValueBehaviorId,
                 GetMissingValueBehaviorText);
 
-        model.AvailableSyncModes = (await AkeneoCollectionSyncMode.Disabled.ToSelectListAsync()).ToList();
+        model.AvailableCategorySyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.CategorySyncModeId,
+                GetCollectionSyncModeText);
 
-        //model.AvailableCategorySyncModes =
-        //    BuildSelectList(
-        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
-        //        model.CategorySyncModeId,
-        //        GetCollectionSyncModeText);
+        model.AvailableSpecificationAttributeSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.SpecificationAttributeSyncModeId,
+                GetCollectionSyncModeText);
 
-        //model.AvailableSpecificationAttributeSyncModes =
-        //    BuildSelectList(
-        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
-        //        model.SpecificationAttributeSyncModeId,
-        //        GetCollectionSyncModeText);
+        model.AvailableProductAttributeSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.ProductAttributeSyncModeId,
+                GetCollectionSyncModeText);
 
-        //model.AvailableProductAttributeSyncModes =
-        //    BuildSelectList(
-        //        Enum.GetValues<AkeneoCollectionSyncMode>(),
-        //        model.ProductAttributeSyncModeId,
-        //        GetCollectionSyncModeText);
+        model.AvailableMissingProductBehaviors =
+            BuildSelectList(
+                Enum.GetValues<AkeneoMissingProductBehavior>(),
+                model.MissingProductBehaviorId,
+                GetMissingProductBehaviorText);
 
         model.AvailableUpdatedFilterModes =
             BuildSelectList(
@@ -635,10 +645,29 @@ public class AkeneoSyncProfileModelFactory(
             AkeneoCollectionSyncMode.Merge =>
                 "Merge with existing nopCommerce values",
 
-            AkeneoCollectionSyncMode.Replace =>
-                "Replace existing nopCommerce values",
+            AkeneoCollectionSyncMode.ReplaceManaged =>
+                "Replace plugin-managed values",
+
+            AkeneoCollectionSyncMode.ReplaceAll =>
+                "Replace all values (destructive)",
 
             _ => mode.ToString()
+        };
+    }
+
+
+    private static string GetMissingProductBehaviorText(
+        AkeneoMissingProductBehavior behavior)
+    {
+        return behavior switch
+        {
+            AkeneoMissingProductBehavior.Ignore => "Ignore missing products",
+            AkeneoMissingProductBehavior.Unpublish => "Unpublish missing products",
+            AkeneoMissingProductBehavior.DisablePurchasing => "Disable purchasing",
+            AkeneoMissingProductBehavior.DetachFromParent => "Detach from parent",
+            AkeneoMissingProductBehavior.SoftDelete => "Soft delete",
+            AkeneoMissingProductBehavior.Delete => "Delete (destructive)",
+            _ => behavior.ToString()
         };
     }
 

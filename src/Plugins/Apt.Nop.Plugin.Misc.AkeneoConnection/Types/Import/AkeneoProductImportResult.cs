@@ -1,10 +1,19 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 public class AkeneoProductImportResult
 {
     public int NopProductId { get; set; }
+
+    public int? NopParentProductId { get; set; }
+
+    public int? NopProductAttributeCombinationId { get; set; }
+
+    public int? NopProductAttributeValueId { get; set; }
+
+    public AkeneoProductDestinationKind DestinationKind { get; set; } =
+        AkeneoProductDestinationKind.NopProduct;
 
     public string AkeneoProductUuid { get; set; }
 

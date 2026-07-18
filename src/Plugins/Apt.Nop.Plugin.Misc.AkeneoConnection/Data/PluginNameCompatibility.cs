@@ -16,6 +16,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data
             { typeof(AkeneoFamilyMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyMapping)}" },
             { typeof(AkeneoFamilyVariantAxisMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilyVariantAxisMapping)}" },
             { typeof(AkeneoFamilySubModelRule), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoFamilySubModelRule)}" },
+            { typeof(AkeneoSyncLease), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncLease)}" },
+            { typeof(AkeneoProductSyncState), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoProductSyncState)}" },
+            { typeof(AkeneoManagedRelation), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoManagedRelation)}" },
 
         };
 

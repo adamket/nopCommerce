@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
@@ -11,7 +11,8 @@ public class AkeneoProductBatchImportRequestFactory(
     public AkeneoProductBatchImportRequest CreateFromProfile(
      AkeneoSyncProfile profile,
      int syncRunRecordId,
-     DateTime? lastSuccessfulRunStartedOnUtc = null)
+     DateTime? previousSuccessfulWatermarkUtc = null,
+     AkeneoRunMode runMode = AkeneoRunMode.Delta)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -21,6 +22,9 @@ public class AkeneoProductBatchImportRequestFactory(
         var request = new AkeneoProductBatchImportRequest
         {
             SyncRunRecordId = syncRunRecordId,
+            SyncProfileId = profile.Id,
+            RunMode = runMode,
+            ScopeHash = AkeneoSyncScopeHasher.Build(profile),
 
             Channel = profile.AkeneoChannel,
 
@@ -97,8 +101,9 @@ public class AkeneoProductBatchImportRequestFactory(
                 (AkeneoProductEnabledFilter)
                     profile.ProductEnabledFilterId,
 
-            UpdatedAfterUtc =
-                ResolveUpdatedAfterUtc(profile, lastSuccessfulRunStartedOnUtc),
+            UpdatedAfterUtc = runMode == AkeneoRunMode.Full
+                ? null
+                : ResolveUpdatedAfterUtc(profile, previousSuccessfulWatermarkUtc),
 
             ProductParentFilterMode =
                 (AkeneoProductParentFilterMode)
@@ -110,6 +115,10 @@ public class AkeneoProductBatchImportRequestFactory(
             UnmappedAttributeBehavior =
                 (UnmappedAkeneoAttributeBehavior)
                     profile.UnmappedAttributeBehaviorId,
+
+            MissingProductBehavior =
+                (AkeneoMissingProductBehavior)
+                    profile.MissingProductBehaviorId,
                 
         };
 
@@ -120,7 +129,7 @@ public class AkeneoProductBatchImportRequestFactory(
 
     private static DateTime? ResolveUpdatedAfterUtc(
         AkeneoSyncProfile profile,
-        DateTime? lastSuccessfulRunStartedOnUtc)
+        DateTime? previousSuccessfulWatermarkUtc)
     {
         return (AkeneoUpdatedFilterMode)profile.UpdatedFilterModeId switch
         {
@@ -132,7 +141,7 @@ public class AkeneoProductBatchImportRequestFactory(
                 DateTime.UtcNow.AddDays(-profile.UpdatedSinceLastNDays.Value),
 
             AkeneoUpdatedFilterMode.SinceLastSuccessfulRun =>
-                lastSuccessfulRunStartedOnUtc,   // null on first run => full sync, correct
+                previousSuccessfulWatermarkUtc?.AddMinutes(-2),
 
             _ => null
         };

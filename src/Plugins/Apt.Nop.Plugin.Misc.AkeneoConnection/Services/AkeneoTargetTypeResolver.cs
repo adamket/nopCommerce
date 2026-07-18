@@ -16,6 +16,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 new("FullDescription", "Full description"),
                 new("Sku", "SKU"),
                 new("Price", "Price"),
+                new("StockQuantity", "Stock quantity"),
                 new("Gtin", "GTIN"),
                 new("ManufacturerPartNumber", "Manufacturer part number"),
                 new("Published", "Published")
@@ -194,6 +195,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 "short_description" or "summary" => "ShortDescription",
                 "description" or "full_description" => "FullDescription",
                 "sku" => "Sku",
+                "stock" or "stock_quantity" or "quantity" => "StockQuantity",
                 "gtin" or "barcode" => "Gtin",
                 "mpn" or "manufacturer_part_number" => "ManufacturerPartNumber",
                 "enabled" or "published" => "Published",

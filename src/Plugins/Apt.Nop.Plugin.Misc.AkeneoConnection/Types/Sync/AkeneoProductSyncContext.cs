@@ -30,6 +30,8 @@ public sealed class AkeneoProductSyncContext
 
     public Product ExistingProduct { get; init; }
 
+    public AkeneoProductSyncState ExistingSyncState { get; init; }
+
     public Product Product { get; set; }
 
     public bool ProductCreated { get; set; }

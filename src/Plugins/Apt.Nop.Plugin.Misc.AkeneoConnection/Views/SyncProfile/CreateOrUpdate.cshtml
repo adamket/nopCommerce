@@ -1,4 +1,4 @@
-@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncProfileModel
+﻿@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncProfileModel
 
 @{
     Layout = "_AdminLayout";
@@ -46,6 +46,16 @@
                         title="Runs the saved version of this profile. Save changes first if you changed any settings.">
                     <i class="fas fa-play"></i>
                     Run Profile
+                </button>
+
+                <button type="button"
+                        id="run-akeneo-full-sync-profile"
+                        class="btn btn-warning"
+                        data-run-url="@Url.Action("ImportProductsByProfile", "AkeneoSync", new { id = Model.Id, fullSync = true })"
+                        @(Model.Enabled ? null : "disabled")
+                        title="Runs a complete authoritative profile pass. Missing-product lifecycle rules are applied only if every page completes successfully.">
+                    <i class="fas fa-sync-alt"></i>
+                    Run Full Reconciliation
                 </button>
 
                 <button type="button"
@@ -104,7 +114,7 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="Name" class="control-label">Profile name</label>
                         </div>
                         <div class="col-md-9">
@@ -114,7 +124,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="Enabled" class="control-label">Enabled</label>
                         </div>
                         <div class="col-md-9">
@@ -140,7 +150,7 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="AkeneoChannel" class="control-label">Akeneo channel</label>
                         </div>
                         <div class="col-md-9">
@@ -153,7 +163,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="SelectedAkeneoLocaleCodes" class="control-label">Akeneo locales</label>
                         </div>
                         <div class="col-md-9">
@@ -178,7 +188,7 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="PageSize" class="control-label">Page size</label>
                         </div>
                         <div class="col-md-9">
@@ -189,7 +199,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="MaxProducts" class="control-label">Max products</label>
                         </div>
                         <div class="col-md-9">
@@ -200,7 +210,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="ContinueOnError" class="control-label">Continue on error</label>
                         </div>
                         <div class="col-md-9">
@@ -210,7 +220,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="SaveRawPayloadSnapshot" class="control-label">Save raw payload snapshot</label>
                         </div>
                         <div class="col-md-9">
@@ -227,13 +237,13 @@
                 <div class="card-header">
                     <div class="card-title">
                         <i class="fas fa-cogs"></i>
-                        Import Behavior
+                        Synchronization Behavior
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
-                            <label asp-for="ProductWriteModeId" class="control-label">Import mode</label>
+                        <div class="col-md-3 text-right">
+                            <label asp-for="ProductWriteModeId" class="control-label">Product write mode</label>
                         </div>
                         <div class="col-md-9">
                             <nop-select asp-for="ProductWriteModeId" asp-items="Model.AvailableProductWriteModes" />
@@ -241,38 +251,61 @@
                         </div>
                     </div>
 
-                  @*   <div class="form-group row">
-                        <div class="col-md-3">
+                    <div class="form-group row">
+                        <div class="col-md-3 text-right">
                             <label asp-for="UnmappedAttributeBehaviorId" class="control-label">Unmapped attribute behavior</label>
                         </div>
                         <div class="col-md-9">
                             <nop-select asp-for="UnmappedAttributeBehaviorId" asp-items="Model.AvailableUnmappedAttributeBehaviors" />
                             <span asp-validation-for="UnmappedAttributeBehaviorId"></span>
                         </div>
-                    </div> *@
+                    </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="CategorySyncModeId" class="control-label">Category sync mode</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-select asp-for="CategorySyncModeId" asp-items="Model.AvailableSyncModes" />
+                            <nop-select asp-for="CategorySyncModeId" asp-items="Model.AvailableCategorySyncModes" />
                             <span asp-validation-for="CategorySyncModeId"></span>
                         </div>
                     </div>
 
-                   @*  <div class="form-group row">
-                        <div class="col-md-3">
-                            <label asp-for="AddMappedManufacturers" class="control-label">Add mapped manufacturers</label>
+                    <div class="form-group row">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="SpecificationAttributeSyncModeId" class="control-label">Specification sync mode</label>
                         </div>
                         <div class="col-md-9">
-                            <nop-editor asp-for="AddMappedManufacturers" />
-                            <span asp-validation-for="AddMappedManufacturers"></span>
+                            <nop-select asp-for="SpecificationAttributeSyncModeId" asp-items="Model.AvailableSpecificationAttributeSyncModes" />
+                            <span asp-validation-for="SpecificationAttributeSyncModeId"></span>
                         </div>
-                    </div> *@
+                    </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="ProductAttributeSyncModeId" class="control-label">Product attribute sync mode</label>
+                        </div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="ProductAttributeSyncModeId" asp-items="Model.AvailableProductAttributeSyncModes" />
+                            <span asp-validation-for="ProductAttributeSyncModeId"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="MissingProductBehaviorId" class="control-label">Missing product behavior</label>
+                        </div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="MissingProductBehaviorId" asp-items="Model.AvailableMissingProductBehaviors" />
+                            <span asp-validation-for="MissingProductBehaviorId"></span>
+                            <span class="form-text text-muted">
+                                Applied only after a complete, successful full run. Delta, canceled, failed, and MaxProducts-limited runs never reconcile missing products.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <div class="col-md-3 text-right">
                             <label asp-for="CreateMissingSpecificationAttributeOptions" class="control-label">Create missing specification attribute options</label>
                         </div>
                         <div class="col-md-9">
@@ -282,7 +315,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="CreateMissingProductAttributeValues" class="control-label">Create missing product attribute values</label>
                         </div>
                         <div class="col-md-9">
@@ -302,7 +335,7 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="SelectedAkeneoFamilyCodes" class="control-label">Akeneo families</label>
                         </div>
                         <div class="col-md-9">
@@ -317,7 +350,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="SelectedAkeneoCategoryCodes" class="control-label">Akeneo categories</label>
                         </div>
                         <div class="col-md-9">
@@ -333,7 +366,7 @@
 
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="CategoryFilterModeId" class="control-label">Category filter mode</label>
                         </div>
                         <div class="col-md-9">
@@ -351,7 +384,7 @@
                     }
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="SelectedAkeneoProductGroupCodes" class="control-label">Akeneo product groups</label>
                         </div>
 
@@ -401,7 +434,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="ProductEnabledFilterId" class="control-label">Product enabled filter</label>
                         </div>
                         <div class="col-md-9">
@@ -411,7 +444,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="UpdatedAfterUtc" class="control-label">Updated after UTC</label>
                         </div>
                         <div class="col-md-9">
@@ -422,7 +455,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="UpdatedSinceLastNDays" class="control-label">Updated since last N days</label>
                         </div>
                         <div class="col-md-9">
@@ -433,7 +466,7 @@
                     </div>
 
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="ProductParentFilterModeId" class="control-label">Product parent filter mode</label>
                         </div>
                         <div class="col-md-9">
@@ -453,7 +486,7 @@
                 </div>
                 <div class="card-body">
                     <div class="form-group row">
-                        <div class="col-md-3">
+                        <div class="col-md-3 text-right">
                             <label asp-for="AdditionalSearchJson" class="control-label">Additional search JSON</label>
                         </div>
                         <div class="col-md-9">
@@ -595,6 +628,7 @@
     <script>
         $(function () {
             var runButton = $('#run-akeneo-sync-profile');
+            var fullRunButton = $('#run-akeneo-full-sync-profile');
             var deleteButton = $('#delete-akeneo-sync-profile');
 
             var resultContainer = $('#akeneo-run-profile-result');
@@ -631,19 +665,19 @@
                 confirmModal.modal('show');
             }
 
-            function setRunButtonLoading(isLoading) {
+            function setRunButtonLoading(button, isLoading) {
                 if (isLoading) {
-                    if (!runButton.data('original-html')) {
-                        runButton.data('original-html', runButton.html());
+                    if (!button.data('original-html')) {
+                        button.data('original-html', button.html());
                     }
 
-                    runButton
-                        .prop('disabled', true)
-                        .html('<span class="akeneo-button-spinner" aria-hidden="true"></span>Running...');
+                    runButton.prop('disabled', true);
+                    fullRunButton.prop('disabled', true);
+                    button.html('<span class="akeneo-button-spinner" aria-hidden="true"></span>Running...');
                 } else {
-                    runButton
-                        .prop('disabled', false)
-                        .html(runButton.data('original-html'));
+                    button.html(button.data('original-html'));
+                    runButton.prop('disabled', false);
+                    fullRunButton.prop('disabled', false);
                 }
             }
 
@@ -688,22 +722,37 @@
                                 '<div class="col-md-2"><strong>Skipped:</strong> ' + encodeHtml(response.counts.skipped) + '</div>' +
                                 '<div class="col-md-2"><strong>Failed:</strong> ' + encodeHtml(response.counts.failed) + '</div>' +
                                 '<div class="col-md-2"><strong>Warnings:</strong> ' + encodeHtml(response.counts.warnings) + '</div>' +
+                                '<div class="col-md-2"><strong>Reconciled:</strong> ' + encodeHtml(response.counts.reconciled) + '</div>' +
                             '</div>'
                         )
                         .show();
                 }
 
-                if (response.errors && response.errors.length) {
-                    var errorHtml = '<strong>Errors:</strong><ul class="mb-0">';
+                var issueHtml = '';
 
-                    $.each(response.errors, function (_, error) {
-                        errorHtml += '<li>' + encodeHtml(error) + '</li>';
+                if (response.warnings && response.warnings.length) {
+                    issueHtml += '<strong>Warnings:</strong><ul>';
+
+                    $.each(response.warnings, function (_, warning) {
+                        issueHtml += '<li>' + encodeHtml(warning) + '</li>';
                     });
 
-                    errorHtml += '</ul>';
+                    issueHtml += '</ul>';
+                }
 
+                if (response.errors && response.errors.length) {
+                    issueHtml += '<strong>Errors:</strong><ul class="mb-0">';
+
+                    $.each(response.errors, function (_, error) {
+                        issueHtml += '<li>' + encodeHtml(error) + '</li>';
+                    });
+
+                    issueHtml += '</ul>';
+                }
+
+                if (issueHtml) {
                     errorsContainer
-                        .html(errorHtml)
+                        .html(issueHtml)
                         .show();
                 }
 
@@ -726,8 +775,8 @@
                 resultContainer.show();
             }
 
-            function runProfile() {
-                var runUrl = runButton.data('run-url');
+            function runProfile(button) {
+                var runUrl = button.data('run-url');
 
                 if (!runUrl) {
                     showRunError({
@@ -739,7 +788,7 @@
                 }
 
                 resetRunResult();
-                setRunButtonLoading(true);
+                setRunButtonLoading(button, true);
 
                 $.ajax({
                     type: 'POST',
@@ -752,7 +801,7 @@
                         showRunError(xhr);
                     },
                     complete: function () {
-                        setRunButtonLoading(false);
+                        setRunButtonLoading(button, false);
                     }
                 });
             }
@@ -787,7 +836,17 @@
                     message: 'Run this Akeneo sync profile now? This will import products using the saved profile settings.',
                     confirmButtonText: '<i class="fas fa-play"></i> Run Profile',
                     confirmButtonClass: 'btn-success',
-                    onConfirm: runProfile
+                    onConfirm: function () { runProfile(runButton); }
+                });
+            });
+
+            fullRunButton.on('click', function () {
+                showConfirmModal({
+                    title: 'Run Full Akeneo Reconciliation',
+                    message: 'Run a complete authoritative sync now? Updated-date filters are ignored. If every page succeeds, configured missing-product lifecycle rules will be applied.',
+                    confirmButtonText: '<i class="fas fa-sync-alt"></i> Run Full Reconciliation',
+                    confirmButtonClass: 'btn-warning',
+                    onConfirm: function () { runProfile(fullRunButton); }
                 });
             });
 

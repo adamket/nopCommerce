@@ -1,58 +1,59 @@
 ﻿using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Humanizer;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Data;
 using Nop.Services.Catalog;
-using Nop.Services.Common;
-using Nop.Services.Seo;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
+/// <summary>
+/// Coordinates source paging and one transactional reconciliation unit per
+/// Akeneo leaf. Destination-specific behavior remains in focused services.
+/// </summary>
 public class AkeneoProductBatchSyncService(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoProductValueResolver productValueResolver,
-    IAkeneoAttributeMappingService attributeMappingService,
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoSyncItemLogService syncItemLogService,
     IProductService productService,
-    ICategoryService categoryService,
-    IManufacturerService manufacturerService,
-    ISpecificationAttributeService specificationAttributeService,
     IProductAttributeService productAttributeService,
-    IGenericAttributeService genericAttributeService,
-    IUrlRecordService urlRecordService,
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoVariantRelationshipService variantRelationshipService,
     IRepository<ProductAttributeValue> productAttributeValueRepository,
-    IAkeneoProductSyncService productSyncService)
+    IAkeneoProductSyncService productSyncService,
+    IAkeneoProductSyncStateService syncStateService,
+    IAkeneoVariantRepresentationCleanupService representationCleanupService,
+    IAkeneoCatalogReconciliationService catalogReconciliationService,
+    IAkeneoSyncLeaseService syncLeaseService)
     : IAkeneoProductBatchSyncService
 {
+    private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
+    {
+        WriteIndented = false
+    };
+
+    private static readonly TimeSpan LeaseRenewalInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
 
     public async Task<AkeneoProductBatchImportResult> SyncProductsAsync(
-    AkeneoProductBatchImportRequest request,
-    CancellationToken cancellationToken = default)
+        AkeneoProductBatchImportRequest request,
+        CancellationToken cancellationToken = default)
     {
         request ??= new AkeneoProductBatchImportRequest();
+        ValidateRequest(request);
 
-        if (request.SyncRunRecordId <= 0)
-        {
-            throw new ArgumentException(
-                "SyncRunRecordId must be provided in the request.",
-                nameof(request));
-        }
-
-        var batchResult = new AkeneoProductBatchImportResult
+        var result = new AkeneoProductBatchImportResult
         {
             SyncRunRecordId = request.SyncRunRecordId
         };
@@ -60,146 +61,170 @@ public class AkeneoProductBatchSyncService(
         var pageSize = request.PageSize <= 0 ? 100 : request.PageSize;
         var searchAfter = request.SearchAfter;
         var parentProductCache = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
-        var subModelDefinitionCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
+        var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
+        var lastLeaseRenewalUtc = DateTime.MinValue;
+
         try
         {
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (request.MaxProducts.HasValue &&
-                    batchResult.TotalRead >= request.MaxProducts.Value)
+                lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(
+                    request,
+                    lastLeaseRenewalUtc);
+
+                if (HasReachedLimit(request, result))
                 {
-                    batchResult.AddMessage(
-                        $"Stopped after reaching MaxProducts limit of {request.MaxProducts.Value}.");
-
-                    return batchResult;
-                }
-
-                var effectivePageSize = pageSize;
-
-                if (request.MaxProducts.HasValue)
-                {
-                    var remaining = request.MaxProducts.Value - batchResult.TotalRead;
-                    effectivePageSize = Math.Min(pageSize, remaining);
+                    MarkTruncated(request, result);
+                    break;
                 }
 
                 var page = await akeneoApiClient.GetProductsPageAsync(
-                    effectivePageSize,
+                    GetEffectivePageSize(request, result, pageSize),
                     searchAfter,
                     request.SearchJson,
                     cancellationToken);
 
-                if (page?.Items == null || !page.Items.Any())
+                if (page?.Items == null || page.Items.Count == 0)
+                {
+                    result.CompletedAllPages = true;
                     break;
+                }
 
-                foreach (var akeneoProduct in page.Items)
+                foreach (var source in page.Items)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (request.MaxProducts.HasValue &&
-                        batchResult.TotalRead >= request.MaxProducts.Value)
-                    {
-                        batchResult.AddMessage(
-                            $"Stopped after reaching MaxProducts limit of {request.MaxProducts.Value}.");
+                    lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(
+                        request,
+                        lastLeaseRenewalUtc);
 
-                        return batchResult;
+                    if (HasReachedLimit(request, result))
+                    {
+                        MarkTruncated(request, result);
+                        break;
                     }
 
-                    batchResult.TotalRead++;
-
-                    var itemResult = new AkeneoProductImportResult
-                    {
-                        AkeneoProductUuid = akeneoProduct.Uuid,
-                        AkeneoIdentifier = akeneoProduct.Identifier,
-                        AkeneoProductKey =
-                            akeneoProduct.Uuid ??
-                            akeneoProduct.Identifier,
-                        ActionType = SyncItemActionType.Skipped
-                    };
-
-                    string rawPayloadSnapshot = null;
+                    result.TotalRead++;
+                    var itemResult = CreateInitialResult(source);
+                    var snapshot = request.SaveRawPayloadSnapshot
+                        ? SerializeSnapshot(source)
+                        : null;
 
                     try
                     {
-                        if (request.SaveRawPayloadSnapshot)
-                            rawPayloadSnapshot = akeneoProduct.Values.GetRawText().Truncate(12000);
+                        // Warm the model cache BEFORE opening the transaction so no Akeneo
+                        // HTTP call happens inside it. After this, every
+                        // GetProductModelCachedAsync call for this item is a cache hit.
+                        await PrefetchProductModelsAsync(
+                            source,
+                            productModelCache,
+                            cancellationToken);
 
-
-                        using (var scope = CreateUnitTransaction())
+                        using (var transaction = CreateUnitTransaction())
                         {
-                            itemResult = await ImportProductAsync(akeneoProduct, request, itemResult, parentProductCache, subModelDefinitionCache);
+                            itemResult = await ReconcileProductUnitAsync(
+                                source,
+                                request,
+                                itemResult,
+                                parentProductCache,
+                                productModelCache,
+                                cancellationToken);
 
-                            if (!itemResult.Errors.Any() && itemResult.ActionType != SyncItemActionType.Failed)
-                                scope.Complete();
+                            if (itemResult.Success &&
+                                itemResult.ActionType != SyncItemActionType.Failed)
+                            {
+                                transaction.Complete();
+                            }
                         }
 
-                        // Unit rolled back if it didn't complete — don't report a stale product id.
-                        if (itemResult.Errors.Any() || itemResult.ActionType == SyncItemActionType.Failed)
-                            itemResult.NopProductId = 0;
-
-                        ApplyItemResultToBatchResult(batchResult, itemResult);
-
-                        // Logged outside the scope so the item log survives a rolled-back import.
-                        await SaveBatchItemLogIfNeededAsync(request, itemResult, rawPayloadSnapshot);
-
-                        if (ShouldKeepItemResultInMemory(itemResult))
-                            batchResult.LoggedItemResults.Add(itemResult);
+                        if (!itemResult.Success ||
+                            itemResult.ActionType == SyncItemActionType.Failed)
+                        {
+                            ClearRolledBackDestination(itemResult);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
-                        // Exception inside the using already disposed the scope → rolled back.
                         itemResult.AddError(ex.Message);
                         itemResult.ActionType = SyncItemActionType.Failed;
-                        itemResult.NopProductId = 0;
+                        ClearRolledBackDestination(itemResult);
+                    }
 
-                        ApplyItemResultToBatchResult(batchResult, itemResult);
-                        await SaveBatchItemLogIfNeededAsync(request, itemResult, rawPayloadSnapshot);
-                        batchResult.LoggedItemResults.Add(itemResult);
+                    ApplyItemResultToBatchResult(result, itemResult);
+                    await SaveBatchItemLogIfNeededAsync(request, itemResult, snapshot);
 
-                        if (!request.ContinueOnError)
-                            throw;
+                    if (ShouldKeepItemResultInMemory(itemResult))
+                        result.LoggedItemResults.Add(itemResult);
+
+                    if (!itemResult.Success && !request.ContinueOnError)
+                    {
+                        result.AddError(
+                            $"Synchronization stopped after product '{GetIdentity(itemResult)}' failed.");
+                        break;
                     }
                 }
 
-                if (!page.HasNextPage)
+                if (!request.ContinueOnError && result.FailedCount > 0)
                     break;
+
+                if (result.WasTruncated)
+                    break;
+
+                if (!page.HasNextPage)
+                {
+                    result.CompletedAllPages = true;
+                    break;
+                }
 
                 searchAfter = page.SearchAfter;
             }
 
-            batchResult.AddMessage(
-                $"Product import completed. Read: {batchResult.TotalRead}, Created: {batchResult.CreatedCount}, Updated: {batchResult.UpdatedCount}, Skipped: {batchResult.SkippedCount}, Failed: {batchResult.FailedCount}.");
+            if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
+            {
+                result.ReconciledCount = await catalogReconciliationService
+                    .ReconcileUnseenAsync(request, result, cancellationToken);
+            }
 
-            return batchResult;
+            result.AddMessage(
+                $"Product synchronization completed. Read: {result.TotalRead}, " +
+                $"Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, " +
+                $"Skipped: {result.SkippedCount}, Failed: {result.FailedCount}, " +
+                $"Reconciled: {result.ReconciledCount}.");
+
+            return result;
         }
         catch (OperationCanceledException)
         {
-            batchResult.Canceled = true;
-            batchResult.AddError("Product import was canceled.");
-            return batchResult;
+            result.Canceled = true;
+            result.AddError("Product synchronization was canceled.");
+            return result;
         }
         catch (Exception ex)
         {
-            batchResult.AddError(ex.Message);
-            return batchResult;
+            result.AddError(ex.Message);
+            return result;
         }
     }
 
-
     public async Task<AkeneoProductImportResult> SyncProductByUuidAsync(
-      AkeneoProductImportRequest request,
-      CancellationToken cancellationToken = default)
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var result = new AkeneoProductImportResult();
-
         request ??= new AkeneoProductImportRequest();
-        if (request.SyncRunRecordId <= 0)
-            throw new ArgumentException("SyncRunRecordId must be provided in the request.", nameof(request));
+        ValidateRequest(request);
 
-        result.AkeneoProductUuid = request.AkeneoProductUuid;
+        var result = new AkeneoProductImportResult
+        {
+            AkeneoProductUuid = request.AkeneoProductUuid
+        };
 
-        string rawPayloadSnapshot = null;
+        string snapshot = null;
 
         try
         {
@@ -210,107 +235,160 @@ public class AkeneoProductBatchSyncService(
                 return await SaveLogAndReturnAsync(request, result, null);
             }
 
-            var akeneoProduct = await akeneoApiClient.GetProductByUuidAsync(
+            var source = await akeneoApiClient.GetProductByUuidAsync(
                 request.AkeneoProductUuid,
                 cancellationToken);
 
-            if (akeneoProduct == null)
+            if (source == null)
             {
-                result.AddError($"Akeneo product was not found. UUID: {request.AkeneoProductUuid}");
+                result.AddError(
+                    $"Akeneo product was not found. UUID: {request.AkeneoProductUuid}");
                 result.ActionType = SyncItemActionType.Failed;
                 return await SaveLogAndReturnAsync(request, result, null);
             }
 
-            result.AkeneoProductUuid = akeneoProduct.Uuid;
-            result.AkeneoIdentifier = akeneoProduct.Identifier;
-
-            if (request.SaveRawPayloadSnapshot)
-                rawPayloadSnapshot = akeneoProduct.Values.GetRawText().Truncate(12000);
+            result = CreateInitialResult(source);
+            snapshot = request.SaveRawPayloadSnapshot
+                ? SerializeSnapshot(source)
+                : null;
 
             var parentProductCache = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
-            var subModelDefinitionCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
-            using (var scope = CreateUnitTransaction())
-            {
-                result = await ImportProductAsync(akeneoProduct, request, result, parentProductCache, subModelDefinitionCache);
+            var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
 
-                if (!result.Errors.Any() && result.ActionType != SyncItemActionType.Failed)
-                    scope.Complete();
+            // Warm the model cache BEFORE the transaction so the reconcile unit
+            // performs no Akeneo HTTP call while a DB transaction is open.
+            await PrefetchProductModelsAsync(
+                source,
+                productModelCache,
+                cancellationToken);
+
+            using (var transaction = CreateUnitTransaction())
+            {
+                result = await ReconcileProductUnitAsync(
+                    source,
+                    request,
+                    result,
+                    parentProductCache,
+                    productModelCache,
+                    cancellationToken);
+
+                if (result.Success && result.ActionType != SyncItemActionType.Failed)
+                    transaction.Complete();
             }
 
-            if (result.Errors.Any() || result.ActionType == SyncItemActionType.Failed)
-                result.NopProductId = 0;
-
-            return await SaveLogAndReturnAsync(request, result, rawPayloadSnapshot);
+            if (!result.Success || result.ActionType == SyncItemActionType.Failed)
+                ClearRolledBackDestination(result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             result.AddError(ex.Message);
             result.ActionType = SyncItemActionType.Failed;
-            result.NopProductId = 0;
-
-            return await SaveLogAndReturnAsync(request, result, rawPayloadSnapshot);
+            ClearRolledBackDestination(result);
         }
+
+        return await SaveLogAndReturnAsync(request, result, snapshot);
     }
 
-
-    private async Task<AkeneoProductDefinition?> GetProductModelCachedAsync(
-        string code,
-        IDictionary<string, AkeneoProductDefinition> subModelJsonCache)
+    private async Task<AkeneoProductImportResult> ReconcileProductUnitAsync(
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        IDictionary<string, Product> parentProductCache,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(code))
-            return null;
+        var previousState = request.SyncProfileId.HasValue
+            ? await syncStateService.GetBySourceAsync(
+                request.SyncProfileId.Value,
+                AkeneoEntityType.Product,
+                source.Identifier,
+                source.Uuid)
+            : null;
 
-        if (subModelJsonCache.TryGetValue(code, out var cached))
-            return cached;
+        result = await ImportProductAsync(
+            source,
+            request,
+            result,
+            previousState,
+            parentProductCache,
+            productModelCache,
+            cancellationToken);
 
-        var model = await akeneoApiClient.GetProductModelByCodeAsync(code);
-        if (model != null)
-            subModelJsonCache[code] = model;
+        if (!result.Success || result.ActionType == SyncItemActionType.Failed)
+            return result;
 
-        return model;
+        await representationCleanupService.CleanupPreviousRepresentationAsync(
+            previousState,
+            result,
+            cancellationToken);
+
+        if (request.SyncProfileId.HasValue)
+        {
+            await syncStateService.MarkSeenAsync(
+                request.SyncProfileId.Value,
+                request.SyncRunRecordId,
+                AkeneoEntityType.Product,
+                source.Identifier,
+                source.Uuid,
+                source.Parent,
+                result,
+                ComputeDesiredStateHash(source));
+        }
+
+        return result;
     }
 
     private async Task<AkeneoProductImportResult> ImportProductAsync(
-    AkeneoProductDefinition akeneoProduct,
-    AkeneoProductImportRequest request,
-    AkeneoProductImportResult result,
-    IDictionary<string, Product> parentProductCache,
-    IDictionary<string, AkeneoProductDefinition> subModelDefinitionCache)
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        AkeneoProductSyncState previousState,
+        IDictionary<string, Product> parentProductCache,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
     {
-        var akeneoUuid = akeneoProduct.Uuid?.Trim();
-        var akeneoIdentifier = akeneoProduct.Identifier?.Trim();
+        var akeneoUuid = source.Uuid?.Trim();
+        var akeneoIdentifier = source.Identifier?.Trim();
 
-        if (string.IsNullOrWhiteSpace(akeneoUuid) && string.IsNullOrWhiteSpace(akeneoIdentifier))
+        if (string.IsNullOrWhiteSpace(akeneoUuid) &&
+            string.IsNullOrWhiteSpace(akeneoIdentifier))
         {
-            result.AddError("Akeneo product does not contain a uuid or identifier.");
+            result.AddError("Akeneo product does not contain a UUID or identifier.");
             result.ActionType = SyncItemActionType.Failed;
             return result;
         }
 
-        var parentCode = akeneoProduct.Parent?.Trim();
+        var parentCode = source.Parent?.Trim();
 
-        // Standalone (not part of a variant family) — existing flat behavior, unchanged.
         if (string.IsNullOrWhiteSpace(parentCode))
         {
-            var syncContext = await productSyncService.PrepareAsync(
-                akeneoProduct,
+            var standaloneContext = await productSyncService.PrepareAsync(
+                source,
                 AkeneoEntityType.Product,
                 request,
-                result);
+                result,
+                cancellationToken);
 
             await productSyncService.SynchronizeAsync(
-                syncContext);
+                standaloneContext,
+                cancellationToken);
+
+            result.DestinationKind = AkeneoProductDestinationKind.NopProduct;
             return result;
         }
 
-        var familyCode = akeneoProduct.Family?.Trim();
-
-        // Resolve the leaf ONCE for the whole variant path.
+        var familyCode = source.Family?.Trim();
         var leafContext = await productSyncService.PrepareAsync(
-            akeneoProduct,
+            source,
             AkeneoEntityType.Product,
             request,
-            result );
+            result,
+            cancellationToken);
+
         if (!result.Success)
         {
             result.ActionType = SyncItemActionType.Failed;
@@ -318,31 +396,52 @@ public class AkeneoProductBatchSyncService(
         }
 
         AkeneoVariantRelationshipMode? forcedMode = null;
+        var subModel = await GetProductModelCachedAsync(
+            parentCode,
+            productModelCache,
+            cancellationToken);
 
-        var subModel = await GetProductModelCachedAsync(parentCode, subModelDefinitionCache);
         if (subModel != null)
         {
-            var overrideRule = await ResolveSubModelOverrideAsync(familyCode, akeneoProduct, subModel);
+            var overrideRule = await ResolveSubModelOverrideAsync(
+                familyCode,
+                source,
+                subModel);
+
             if (overrideRule != null)
             {
-                if (overrideRule.VariantRelationshipOverrideMode == AkeneoVariantRelationshipMode.None)
+                if (overrideRule.VariantRelationshipOverrideMode ==
+                    AkeneoVariantRelationshipMode.None)
                 {
-                    var existingMode = await ClassifyExistingLeafStructureAsync(leafContext.ExistingProduct, leafContext.Sku);
+                    var existingMode = await ClassifyExistingLeafStructureAsync(
+                        leafContext.ExistingProduct,
+                        leafContext.Sku);
 
                     if (existingMode is null or AkeneoVariantRelationshipMode.None)
                     {
-                        var standaloneContext = leafContext;
+                        var effectiveContext = leafContext;
 
                         if (overrideRule.MergeAncestorValues)
                         {
                             var flattenedLeaf = await BuildFlattenedLeafAsync(
-                                akeneoProduct, subModel, subModelDefinitionCache);
+                                source,
+                                subModel,
+                                productModelCache,
+                                cancellationToken);
 
-                            standaloneContext = await productSyncService.PrepareAsync(
-                                flattenedLeaf, AkeneoEntityType.Product, request, result);
+                            effectiveContext = await productSyncService.PrepareAsync(
+                                flattenedLeaf,
+                                AkeneoEntityType.Product,
+                                request,
+                                result,
+                                cancellationToken);
                         }
 
-                        await productSyncService.SynchronizeAsync(standaloneContext);
+                        await productSyncService.SynchronizeAsync(
+                            effectiveContext,
+                            cancellationToken);
+
+                        result.DestinationKind = AkeneoProductDestinationKind.NopProduct;
                         return result;
                     }
                 }
@@ -354,22 +453,28 @@ public class AkeneoProductBatchSyncService(
         }
 
         var parentProduct = await ResolveOrCreateParentProductAsync(
-            parentCode, request, result, parentProductCache, subModelDefinitionCache);
+            parentCode,
+            request,
+            result,
+            parentProductCache,
+            productModelCache,
+            cancellationToken);
+
         if (parentProduct == null)
         {
             result.ActionType = SyncItemActionType.Failed;
             return result;
         }
 
-        var context = await BuildVariantImportContextAsync(
-            akeneoProduct, akeneoIdentifier, familyCode, request, result, leafContext.Sku);
-        if (!result.Success)
-        {
-            result.ActionType = SyncItemActionType.Failed;
-            return result;
-        }
+        var variantContext = await BuildVariantImportContextAsync(
+            source,
+            familyCode,
+            request,
+            leafContext,
+            previousState,
+            cancellationToken);
 
-        context.VariantRelationshipModeOverride = forcedMode;
+        variantContext.VariantRelationshipModeOverride = forcedMode;
 
         AkeneoVariantSyncResult variantResult;
 
@@ -377,15 +482,11 @@ public class AkeneoProductBatchSyncService(
         {
             variantResult = await variantRelationshipService.ApplyAsync(
                 parentProduct,
-                context,
+                variantContext,
                 upsertChildProductAsync: () =>
                     productSyncService.SynchronizeAsync(
-                        leafContext));
-            if (variantResult.Changed &&
-                result.ActionType == SyncItemActionType.Skipped)
-            {
-                result.ActionType = SyncItemActionType.Updated;
-            }
+                        leafContext,
+                        cancellationToken));
         }
         catch (NopException ex)
         {
@@ -394,189 +495,235 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
-        if (variantResult.Mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+        ApplyVariantResult(result, variantResult, previousState);
+
+        if (variantResult.Mode ==
+            AkeneoVariantRelationshipMode.ProductAttributeCombinations)
         {
-            result.NopProductId = parentProduct.Id;
-            result.ActionType = result.ActionType == SyncItemActionType.Failed
-                ? result.ActionType
-                : SyncItemActionType.Updated;
-
-            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
-                AkeneoEntityType.Product, akeneoIdentifier, akeneoUuid,
-                NopEntityType.Product, parentProduct.Id);
-        }
-        else if (variantResult.NopProductId.HasValue)
-        {
-            result.NopProductId = variantResult.NopProductId.Value;
-        }
-
-        return result;
-    }
-
-
-    private async Task<AkeneoVariantRelationshipMode?> ClassifyExistingLeafStructureAsync(Product product, string sku)
-    {
-        if (product == null)
-            return null;   // new product
-
-        // Grouped child: it points at a parent grouped product.
-        if (product.ParentGroupedProductId != 0)
-            return AkeneoVariantRelationshipMode.GroupedProducts;
-
-        // Combination child: its SKU is registered as a ProductAttributeCombination.
-        if (!string.IsNullOrWhiteSpace(sku))
-        {
-            var combination = await productAttributeService.GetProductAttributeCombinationBySkuAsync(sku);
-            if (combination != null)
-                return AkeneoVariantRelationshipMode.ProductAttributeCombinations;
-        }
-
-        // Associated child: this product is referenced as an AssociatedToProduct attribute value.
-        var isAssociated = await productAttributeValueRepository.Table.AnyAsync(v =>
-            v.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
-            v.AssociatedProductId == product.Id);
-
-        if (isAssociated)
-            return AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue;
-
-        // Plain simple — no parent structure. Safe to keep/flatten as standalone.
-        return AkeneoVariantRelationshipMode.None;
-    }
-
-   
-
-    private async Task<AkeneoProductImportResult> SaveLogAndReturnAsync(
-        AkeneoProductImportRequest request,
-        AkeneoProductImportResult result,
-        string rawPayloadSnapshot)
-    {
-
-        var shouldWriteItemLog =
-            result.ActionType != SyncItemActionType.Skipped;
-
-        if (!shouldWriteItemLog)
-            return result;
-
-        await syncItemLogService.InsertAkeneoSyncItemLogAsync(
-            new AkeneoSyncItemLog
+            // Legacy versions mapped a combination leaf UUID to the parent
+            // product. Remove that ambiguous mapping; ProductSyncState now owns
+            // the stable leaf-to-combination binding.
+            if (!string.IsNullOrWhiteSpace(akeneoUuid))
             {
-                SyncRunRecordId = request.SyncRunRecordId,
-                AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
-                AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
-                NopProductId = result.NopProductId,
-                ActionTypeId = (int)result.ActionType,
-                Message = BuildLogMessage(result),
-                RawPayloadSnapshot = rawPayloadSnapshot,
-                CreatedOnUtc = DateTime.UtcNow
-            });
+                await entityMappingService
+                    .DeleteAkeneoNopEntityMappingByAkeneoUuidAsync(
+                        AkeneoEntityType.Product,
+                        akeneoUuid,
+                        NopEntityType.Product);
+            }
+
+            if (!string.IsNullOrWhiteSpace(akeneoIdentifier))
+            {
+                await entityMappingService.DeleteAkeneoNopEntityMappingAsync(
+                    AkeneoEntityType.Product,
+                    akeneoIdentifier,
+                    NopEntityType.Product);
+            }
+        }
 
         return result;
     }
 
-    private static string BuildLogMessage(
-        AkeneoProductImportResult result)
+    private static void ApplyVariantResult(
+        AkeneoProductImportResult result,
+        AkeneoVariantSyncResult variantResult,
+        AkeneoProductSyncState previousState)
     {
-        var parts = new List<string>();
+        result.NopProductId = variantResult.NopProductId ?? 0;
+        result.NopParentProductId = variantResult.NopParentProductId;
+        result.NopProductAttributeCombinationId =
+            variantResult.NopProductAttributeCombinationId;
+        result.NopProductAttributeValueId =
+            variantResult.NopProductAttributeValueId;
 
-        if (result.Messages.Any())
-            parts.Add("Messages: " + string.Join(" | ", result.Messages));
+        result.DestinationKind = variantResult.Mode switch
+        {
+            AkeneoVariantRelationshipMode.GroupedProducts =>
+                AkeneoProductDestinationKind.GroupedChildProduct,
+            AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue =>
+                AkeneoProductDestinationKind.AssociatedProduct,
+            AkeneoVariantRelationshipMode.ProductAttributeCombinations =>
+                AkeneoProductDestinationKind.ProductAttributeCombination,
+            _ => AkeneoProductDestinationKind.NopProduct
+        };
 
-        if (result.Warnings.Any())
-            parts.Add("Warnings: " + string.Join(" | ", result.Warnings));
+        var bindingChanged = previousState == null ||
+            previousState.DestinationKindId != (int)result.DestinationKind ||
+            previousState.NopProductId != result.NopProductId ||
+            previousState.NopProductAttributeCombinationId !=
+                result.NopProductAttributeCombinationId ||
+            previousState.NopProductAttributeValueId !=
+                result.NopProductAttributeValueId;
 
-        if (result.Errors.Any())
-            parts.Add("Errors: " + string.Join(" | ", result.Errors));
-
-        return string.Join(Environment.NewLine, parts).Truncate(4000);
+        if (variantResult.DestinationCreated && previousState == null)
+        {
+            result.ActionType = SyncItemActionType.Created;
+        }
+        else if ((variantResult.Changed || bindingChanged) &&
+                 result.ActionType == SyncItemActionType.Skipped)
+        {
+            result.ActionType = SyncItemActionType.Updated;
+        }
     }
-
-
-
 
     private async Task<AkeneoVariantImportContext> BuildVariantImportContextAsync(
-        AkeneoProductDefinition akeneoProduct,
-        string akeneoIdentifier,
+        AkeneoProductDefinition source,
         string familyCode,
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result,
-        string sku)                        
+        AkeneoProductSyncContext leafContext,
+        AkeneoProductSyncState previousState,
+        CancellationToken cancellationToken)
     {
         var context = new AkeneoVariantImportContext
         {
-            AkeneoIdentifier = akeneoIdentifier,
+            AkeneoIdentifier = source.Identifier?.Trim(),
+            AkeneoUuid = source.Uuid?.Trim(),
             AkeneoFamilyCode = familyCode,
-            Sku = sku,
-            SourceProduct = akeneoProduct,
+            Sku = leafContext.Sku,
+            SyncProfileId = request.SyncProfileId,
+            SyncRunRecordId = request.SyncRunRecordId,
+            ExistingProductAttributeCombinationId =
+                previousState?.NopProductAttributeCombinationId,
+            ExistingAssociatedProductAttributeValueId =
+                previousState?.NopProductAttributeValueId,
+            SourceProduct = source,
             Locale = request.Locale,
             Channel = request.Channel,
             Currency = request.Currency
         };
 
-        if (productValueResolver.TryGetValue(akeneoProduct, "price", out var priceValue,
-                request.Locale, request.Channel, request.Currency) &&
-            decimal.TryParse(priceValue.DisplayValue, out var price))
-        {
-            context.Price = price;
-        }
+        context.Price = TryResolveDecimalTarget(
+            leafContext,
+            "CombinationPrice",
+            "Price");
 
-        var familyConfig = await familyMappingService.GetByFamilyCodeAsync(familyCode);
-        if (familyConfig == null)
-            return context; // resolver will fall back to existing-nop-parent-structure detection
+        context.StockQuantity = TryResolveIntTarget(
+            leafContext,
+            "CombinationStockQuantity",
+            "StockQuantity");
 
-        var axisMappings = await familyMappingService.GetAxisMappingsAsync(familyConfig.Id);
+        var familyConfiguration = await familyMappingService
+            .GetByFamilyCodeAsync(familyCode);
+
+        if (familyConfiguration == null)
+            return context;
+
+        var axisMappings = await familyMappingService
+            .GetAxisMappingsAsync(familyConfiguration.Id);
 
         foreach (var axis in axisMappings)
         {
-            if (productValueResolver.TryGetValue(akeneoProduct, axis.AkeneoAttributeCode, out var axisResolved,
-                    request.Locale, request.Channel, request.Currency) &&
-                !string.IsNullOrWhiteSpace(axisResolved.DisplayValue))
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!productValueResolver.TryGetValue(
+                    source,
+                    axis.AkeneoAttributeCode,
+                    out var resolved,
+                    request.Locale,
+                    request.Channel,
+                    request.Currency))
             {
-                context.AxisValuesByAkeneoCode[axis.AkeneoAttributeCode] = axisResolved.DisplayValue;
+                continue;
+            }
+
+            var axisValue = CreateAxisValue(
+                axis.AkeneoAttributeCode,
+                resolved);
+
+            if (axisValue != null)
+            {
+                context.AxisValuesByAkeneoCode[axis.AkeneoAttributeCode] =
+                    axisValue;
             }
         }
 
         return context;
     }
-    private static void ApplyItemResultToBatchResult(
-        AkeneoProductBatchImportResult batchResult,
-        AkeneoProductImportResult itemResult)
+
+    private static AkeneoVariantAxisValue CreateAxisValue(
+        string attributeCode,
+        AkeneoResolvedProductValue resolved)
     {
-        if (itemResult.Errors.Any() ||
-            itemResult.ActionType == SyncItemActionType.Failed)
+        if (resolved == null)
+            return null;
+
+        string optionCode = null;
+
+        if (resolved.RawData.HasValue)
         {
-            batchResult.FailedCount++;
-            return;
+            var data = resolved.RawData.Value;
+            optionCode = data.ValueKind switch
+            {
+                JsonValueKind.String => data.GetString(),
+                JsonValueKind.Number => data.GetRawText(),
+                JsonValueKind.Array => data.EnumerateArray()
+                    .Select(item => item.ValueKind == JsonValueKind.String
+                        ? item.GetString()
+                        : item.GetRawText())
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)),
+                _ => null
+            };
         }
 
-        if (itemResult.Warnings.Any())
-            batchResult.WarningCount++;
+        var displayName = resolved.DisplayValues?.FirstOrDefault(value =>
+                              !string.IsNullOrWhiteSpace(value))
+                          ?? resolved.DisplayValue
+                          ?? optionCode;
 
-        switch (itemResult.ActionType)
+        if (string.IsNullOrWhiteSpace(displayName) &&
+            string.IsNullOrWhiteSpace(optionCode))
         {
-            case SyncItemActionType.Created:
-                batchResult.CreatedCount++;
-                break;
-
-            case SyncItemActionType.Updated:
-                batchResult.UpdatedCount++;
-                break;
-
-            case SyncItemActionType.Skipped:
-            default:
-                batchResult.SkippedCount++;
-
-                if (batchResult.SkippedSkuSample.Count < 50)
-                {
-                    var sku = itemResult.Sku ??
-                              itemResult.AkeneoIdentifier ??
-                              itemResult.AkeneoProductUuid;
-
-                    if (!string.IsNullOrWhiteSpace(sku))
-                        batchResult.SkippedSkuSample.Add(sku);
-                }
-
-                break;
+            return null;
         }
+
+        return new AkeneoVariantAxisValue
+        {
+            AkeneoAttributeCode = attributeCode,
+            AkeneoOptionCode = optionCode?.Trim(),
+            DisplayName = displayName?.Trim()
+        };
+    }
+
+    private static decimal? TryResolveDecimalTarget(
+        AkeneoProductSyncContext context,
+        params string[] targetKeys)
+    {
+        var mapped = context.MappedValues.FirstOrDefault(value =>
+            value.HasValue &&
+            value.TargetType == NopTargetType.ProductField &&
+            targetKeys.Any(key => string.Equals(
+                value.Mapping.NopTargetKey,
+                key,
+                StringComparison.OrdinalIgnoreCase)));
+
+        return decimal.TryParse(
+            mapped?.DisplayValue,
+            NumberStyles.Any,
+            CultureInfo.InvariantCulture,
+            out var value)
+            ? value
+            : null;
+    }
+
+    private static int? TryResolveIntTarget(
+        AkeneoProductSyncContext context,
+        params string[] targetKeys)
+    {
+        var mapped = context.MappedValues.FirstOrDefault(value =>
+            value.HasValue &&
+            value.TargetType == NopTargetType.ProductField &&
+            targetKeys.Any(key => string.Equals(
+                value.Mapping.NopTargetKey,
+                key,
+                StringComparison.OrdinalIgnoreCase)));
+
+        return int.TryParse(
+            mapped?.DisplayValue,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var value)
+            ? value
+            : null;
     }
 
     private async Task<Product> ResolveOrCreateParentProductAsync(
@@ -584,35 +731,46 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IDictionary<string, Product> parentProductCache,
-        IDictionary<string, AkeneoProductDefinition> subModelDefinitionCache)
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
     {
-        //TODO RE-EVALUATE POSSIBLY?
         if (parentProductCache.TryGetValue(parentCode, out var cached))
         {
             var fresh = await productService.GetProductByIdAsync(cached.Id);
             if (fresh != null)
                 return fresh;
 
-            // Cached parent was rolled back by a failed sibling's unit transaction — re-resolve.
             parentProductCache.Remove(parentCode);
         }
 
-        var mappedParentId = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
-            AkeneoEntityType.ProductModel, parentCode, NopEntityType.Product);
+        var mappedParentId = await entityMappingService
+            .GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.ProductModel,
+                parentCode,
+                NopEntityType.Product);
 
         if (mappedParentId.HasValue)
         {
-            var existingParent = await productService.GetProductByIdAsync(mappedParentId.Value);
+            var existingParent = await productService
+                .GetProductByIdAsync(mappedParentId.Value);
+
             if (existingParent != null)
             {
                 parentProductCache[parentCode] = existingParent;
                 return existingParent;
             }
 
-            result.AddWarning($"Product model mapping exists for '{parentCode}' but nopCommerce product ID {mappedParentId.Value} was not found. Re-creating.");
+            result.AddWarning(
+                $"Product model mapping exists for '{parentCode}' but nopCommerce product ID {mappedParentId.Value} was not found. Re-creating.");
         }
 
-        var productModel = await akeneoApiClient.GetProductModelByCodeAsync(parentCode);
+        // Warmed by PrefetchProductModelsAsync before the transaction opened,
+        // so this is a cache hit and performs no HTTP inside the scope.
+        var productModel = await GetProductModelCachedAsync(
+            parentCode,
+            productModelCache,
+            cancellationToken);
+
         if (productModel == null)
         {
             result.AddError($"Akeneo product model '{parentCode}' was not found.");
@@ -629,85 +787,85 @@ public class AkeneoProductBatchSyncService(
             productModel,
             AkeneoEntityType.ProductModel,
             request,
-            parentResult );
+            parentResult,
+            cancellationToken);
 
         var parentProduct = await productSyncService.SynchronizeAsync(
-            parentContext);
+            parentContext,
+            cancellationToken);
 
-        foreach (var warning in parentResult.Warnings)
-        {
-            result.AddWarning(
-                $"Product model '{parentCode}': {warning}");
-        }
-
-        foreach (var error in parentResult.Errors)
-        {
-            result.AddError(
-                $"Product model '{parentCode}': {error}");
-        }
-
-        foreach (var message in parentResult.Messages)
-        {
-            result.AddMessage(
-                $"Product model '{parentCode}': {message}");
-        }
+        CopyMessages(parentResult, result, $"Product model '{parentCode}'");
 
         if (parentProduct == null)
             return null;
 
         parentProductCache[parentCode] = parentProduct;
-
         return parentProduct;
     }
 
-    private async Task SaveBatchItemLogIfNeededAsync(
-        AkeneoProductBatchImportRequest request,
-        AkeneoProductImportResult result,
-        string rawPayloadSnapshot)
+    private static void CopyMessages(
+        AkeneoProductImportResult source,
+        AkeneoProductImportResult destination,
+        string prefix)
     {
-        var shouldWriteItemLog =
-            result.ActionType == SyncItemActionType.Created ||
-            result.ActionType == SyncItemActionType.Updated ||
-            result.ActionType == SyncItemActionType.Failed ||
-            result.Errors.Any();
+        foreach (var warning in source.Warnings)
+            destination.AddWarning($"{prefix}: {warning}");
 
-        if (!shouldWriteItemLog)
-            return;
+        foreach (var error in source.Errors)
+            destination.AddError($"{prefix}: {error}");
 
-        await syncItemLogService.InsertAkeneoSyncItemLogAsync(
-            new AkeneoSyncItemLog
-            {
-                SyncRunRecordId = request.SyncRunRecordId,
-                AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
-                AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
-                NopProductId = result.NopProductId,
-                ActionTypeId = (int)result.ActionType,
-                Message = BuildLogMessage(result),
-                RawPayloadSnapshot = rawPayloadSnapshot,
-                CreatedOnUtc = DateTime.UtcNow
-            });
+        foreach (var message in source.Messages)
+            destination.AddMessage($"{prefix}: {message}");
     }
 
 
-    private static bool ShouldKeepItemResultInMemory(
-        AkeneoProductImportResult result)
+    // Walks the leaf's parent chain (sub-model -> root model, Akeneo's max depth is 2)
+    // and warms the batch-scoped cache OUTSIDE any transaction. After this runs,
+    // every GetProductModelCachedAsync call for this item is a pure cache hit.
+    private async Task PrefetchProductModelsAsync(
+        AkeneoProductDefinition source,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken = default)
     {
-        return result.ActionType == SyncItemActionType.Created ||
-               result.ActionType == SyncItemActionType.Updated ||
-               result.ActionType == SyncItemActionType.Failed ||
-               result.Errors.Any() ||
-               result.Warnings.Any();
+        var parentCode = source.Parent?.Trim();
+        if (string.IsNullOrWhiteSpace(parentCode))
+            return; // standalone product — no model fetches happen inside the scope
+
+        var subModel = await GetProductModelCachedAsync(
+            parentCode,
+            productModelCache,
+            cancellationToken);
+
+        var rootCode = subModel?.Parent?.Trim();
+        if (!string.IsNullOrWhiteSpace(rootCode))
+        {
+            await GetProductModelCachedAsync(
+                rootCode,
+                productModelCache,
+                cancellationToken);
+        }
     }
 
-    private static TransactionScope CreateUnitTransaction() =>
-        new(
-            TransactionScopeOption.Required,
-            new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
-            TransactionScopeAsyncFlowOption.Enabled);
+    private async Task<AkeneoProductDefinition> GetProductModelCachedAsync(
+        string code,
+        IDictionary<string, AkeneoProductDefinition> cache,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return null;
 
+        if (cache.TryGetValue(code, out var cached))
+            return cached;
 
+        var model = await akeneoApiClient
+            .GetProductModelByCodeAsync(code, cancellationToken);
 
-    // Returns the matching override rule if this sub-model's axis value triggers one; else null.
+        if (model != null)
+            cache[code] = model;
+
+        return model;
+    }
+
     private async Task<AkeneoFamilySubModelRule> ResolveSubModelOverrideAsync(
         string familyCode,
         AkeneoProductDefinition leaf,
@@ -718,44 +876,53 @@ public class AkeneoProductBatchSyncService(
             return null;
 
         var rules = await familyMappingService.GetSubModelRulesAsync(family.Id);
-
         return rules.FirstOrDefault(rule => RuleMatches(rule, leaf, subModel));
     }
 
-    private static bool RuleMatches(AkeneoFamilySubModelRule rule, AkeneoProductDefinition leaf, AkeneoProductDefinition subModel)
+    private static bool RuleMatches(
+        AkeneoFamilySubModelRule rule,
+        AkeneoProductDefinition leaf,
+        AkeneoProductDefinition subModel)
     {
-        var hasSubModelCondition = !string.IsNullOrWhiteSpace(rule.AkeneoAxisAttributeCode);
-        var hasVariantCondition = !string.IsNullOrWhiteSpace(rule.VariantAxisAttributeCode);
+        var hasSubModelCondition =
+            !string.IsNullOrWhiteSpace(rule.AkeneoAxisAttributeCode);
+        var hasVariantCondition =
+            !string.IsNullOrWhiteSpace(rule.VariantAxisAttributeCode);
 
-        // No conditions => matches nothing (guards against flattening a whole family by accident).
         if (!hasSubModelCondition && !hasVariantCondition)
             return false;
 
         if (hasSubModelCondition &&
-            !ValueMatches(GetAkeneoAttributeValue(subModel, rule.AkeneoAxisAttributeCode), rule.TriggerValue))
+            !ValueMatches(
+                GetAkeneoAttributeValue(subModel, rule.AkeneoAxisAttributeCode),
+                rule.TriggerValue))
+        {
             return false;
+        }
 
-        if (hasVariantCondition &&
-            !ValueMatches(GetAkeneoAttributeValue(leaf, rule.VariantAxisAttributeCode), rule.VariantTriggerValue))
-            return false;
-
-        return true;
+        return !hasVariantCondition || ValueMatches(
+            GetAkeneoAttributeValue(leaf, rule.VariantAxisAttributeCode),
+            rule.VariantTriggerValue);
     }
 
     private static bool ValueMatches(string actual, string trigger) =>
         !string.IsNullOrWhiteSpace(actual) &&
-        string.Equals(actual.Trim(), trigger?.Trim(), StringComparison.OrdinalIgnoreCase);
+        string.Equals(
+            actual.Trim(),
+            trigger?.Trim(),
+            StringComparison.OrdinalIgnoreCase);
 
-
-    private static string GetAkeneoAttributeValue(AkeneoProductDefinition item, string attributeCode)
+    private static string GetAkeneoAttributeValue(
+        AkeneoProductDefinition item,
+        string attributeCode)
     {
         if (string.IsNullOrWhiteSpace(attributeCode) ||
-            item?.Values.ValueKind != JsonValueKind.Object)
-            return null;
-
-        if (!item.Values.TryGetProperty(attributeCode, out var entries) ||
+            item?.Values.ValueKind != JsonValueKind.Object ||
+            !item.Values.TryGetProperty(attributeCode, out var entries) ||
             entries.ValueKind != JsonValueKind.Array)
+        {
             return null;
+        }
 
         foreach (var entry in entries.EnumerateArray())
         {
@@ -776,22 +943,28 @@ public class AkeneoProductBatchSyncService(
     private async Task<AkeneoProductDefinition> BuildFlattenedLeafAsync(
         AkeneoProductDefinition leaf,
         AkeneoProductDefinition subModel,
-        IDictionary<string, AkeneoProductDefinition> subModelDefinitionCache)
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
     {
         var ancestors = new List<AkeneoProductDefinition> { subModel };
-
         var rootCode = subModel.Parent?.Trim();
+
         if (!string.IsNullOrWhiteSpace(rootCode))
         {
-            var root = await GetProductModelCachedAsync(rootCode, subModelDefinitionCache);
+            var root = await GetProductModelCachedAsync(
+                rootCode,
+                productModelCache,
+                cancellationToken);
+
             if (root != null)
                 ancestors.Add(root);
         }
 
-        return WithMergedValues(leaf, MergeAkeneoValues(leaf.Values, ancestors));
+        return WithMergedValues(
+            leaf,
+            MergeAkeneoValues(leaf.Values, ancestors));
     }
 
-    // Leaf values win; nearer ancestor beats farther. Only fills attributes the leaf didn't carry.
     private static JsonElement MergeAkeneoValues(
         JsonElement leafValues,
         IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst)
@@ -805,29 +978,263 @@ public class AkeneoProductBatchSyncService(
             if (ancestor?.Values.ValueKind != JsonValueKind.Object)
                 continue;
 
-            foreach (var prop in ancestor.Values.EnumerateObject())
+            foreach (var property in ancestor.Values.EnumerateObject())
             {
-                if (!merged.ContainsKey(prop.Name))
-                    merged[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
+                if (!merged.ContainsKey(property.Name))
+                {
+                    merged[property.Name] =
+                        JsonNode.Parse(property.Value.GetRawText());
+                }
             }
         }
 
         return JsonSerializer.SerializeToElement(merged);
     }
 
+    private static AkeneoProductDefinition WithMergedValues(
+        AkeneoProductDefinition leaf,
+        JsonElement mergedValues) => new()
+        {
+            Uuid = leaf.Uuid,
+            Identifier = leaf.Identifier,
+            Code = leaf.Code,
+            Family = leaf.Family,
+            FamilyVariant = leaf.FamilyVariant,
+            Parent = leaf.Parent,
+            Enabled = leaf.Enabled,
+            Categories = leaf.Categories,
+            Values = mergedValues
+        };
 
-
-    private static AkeneoProductDefinition WithMergedValues(AkeneoProductDefinition leaf, JsonElement mergedValues) => new()
+    private async Task<AkeneoVariantRelationshipMode?> ClassifyExistingLeafStructureAsync(
+        Product product,
+        string sku)
     {
-        Uuid = leaf.Uuid,
-        Identifier = leaf.Identifier,
-        Code = leaf.Code,
-        Family = leaf.Family,
-        FamilyVariant = leaf.FamilyVariant,
-        Parent = leaf.Parent,
-        Enabled = leaf.Enabled,
-        Categories = leaf.Categories,
-        Values = mergedValues
-    };
+        if (product == null)
+            return null;
 
+        if (product.ParentGroupedProductId != 0)
+            return AkeneoVariantRelationshipMode.GroupedProducts;
+
+        if (!string.IsNullOrWhiteSpace(sku))
+        {
+            var combination = await productAttributeService
+                .GetProductAttributeCombinationBySkuAsync(sku);
+
+            if (combination != null)
+                return AkeneoVariantRelationshipMode.ProductAttributeCombinations;
+        }
+
+        var isAssociated = await productAttributeValueRepository.Table.AnyAsync(value =>
+            value.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
+            value.AssociatedProductId == product.Id);
+
+        return isAssociated
+            ? AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue
+            : AkeneoVariantRelationshipMode.None;
+    }
+
+    private static AkeneoProductImportResult CreateInitialResult(
+        AkeneoProductDefinition source) => new()
+        {
+            AkeneoProductUuid = source.Uuid,
+            AkeneoIdentifier = source.Identifier,
+            AkeneoProductKey = source.Uuid ?? source.Identifier,
+            ActionType = SyncItemActionType.Skipped
+        };
+
+    private static void ValidateRequest(AkeneoProductImportRequest request)
+    {
+        if (request.SyncRunRecordId <= 0)
+        {
+            throw new ArgumentException(
+                "SyncRunRecordId must be provided in the request.",
+                nameof(request));
+        }
+    }
+
+    private static bool HasReachedLimit(
+        AkeneoProductBatchImportRequest request,
+        AkeneoProductBatchImportResult result) =>
+        request.MaxProducts.HasValue &&
+        result.TotalRead >= request.MaxProducts.Value;
+
+    private static int GetEffectivePageSize(
+        AkeneoProductBatchImportRequest request,
+        AkeneoProductBatchImportResult result,
+        int pageSize)
+    {
+        if (!request.MaxProducts.HasValue)
+            return pageSize;
+
+        return Math.Max(
+            1,
+            Math.Min(pageSize, request.MaxProducts.Value - result.TotalRead));
+    }
+
+    private static void MarkTruncated(
+        AkeneoProductBatchImportRequest request,
+        AkeneoProductBatchImportResult result)
+    {
+        result.WasTruncated = true;
+        result.CompletedAllPages = false;
+        result.AddMessage(
+            $"Stopped after reaching MaxProducts limit of {request.MaxProducts}.");
+    }
+
+    private static void ApplyItemResultToBatchResult(
+        AkeneoProductBatchImportResult batchResult,
+        AkeneoProductImportResult itemResult)
+    {
+        if (itemResult.Warnings.Any())
+            batchResult.WarningCount++;
+
+        if (!itemResult.Success ||
+            itemResult.ActionType == SyncItemActionType.Failed)
+        {
+            batchResult.FailedCount++;
+
+            foreach (var error in itemResult.Errors)
+            {
+                if (batchResult.Errors.Count >= 100)
+                    break;
+
+                batchResult.AddError($"{GetIdentity(itemResult)}: {error}");
+            }
+
+            return;
+        }
+
+        switch (itemResult.ActionType)
+        {
+            case SyncItemActionType.Created:
+                batchResult.CreatedCount++;
+                break;
+            case SyncItemActionType.Updated:
+                batchResult.UpdatedCount++;
+                break;
+            default:
+                batchResult.SkippedCount++;
+
+                if (batchResult.SkippedSkuSample.Count < 50)
+                {
+                    var identity = GetIdentity(itemResult);
+                    if (!string.IsNullOrWhiteSpace(identity))
+                        batchResult.SkippedSkuSample.Add(identity);
+                }
+                break;
+        }
+    }
+
+    private async Task SaveBatchItemLogIfNeededAsync(
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        string rawPayloadSnapshot)
+    {
+        var shouldWrite =
+            result.ActionType != SyncItemActionType.Skipped ||
+            result.Errors.Any() ||
+            result.Warnings.Any();
+
+        if (!shouldWrite)
+            return;
+
+        await syncItemLogService.InsertAkeneoSyncItemLogAsync(
+            new AkeneoSyncItemLog
+            {
+                SyncRunRecordId = request.SyncRunRecordId,
+                AkeneoProductUuid = result.AkeneoProductUuid ?? request.AkeneoProductUuid,
+                AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
+                NopProductId = result.NopProductId,
+                ActionTypeId = (int)result.ActionType,
+                Message = BuildLogMessage(result),
+                RawPayloadSnapshot = rawPayloadSnapshot,
+                CreatedOnUtc = DateTime.UtcNow
+            });
+    }
+
+    private async Task<AkeneoProductImportResult> SaveLogAndReturnAsync(
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        string rawPayloadSnapshot)
+    {
+        await SaveBatchItemLogIfNeededAsync(request, result, rawPayloadSnapshot);
+        return result;
+    }
+
+    private static string BuildLogMessage(AkeneoProductImportResult result)
+    {
+        var parts = new List<string>();
+
+        if (result.Messages.Any())
+            parts.Add("Messages: " + string.Join(" | ", result.Messages));
+
+        if (result.Warnings.Any())
+            parts.Add("Warnings: " + string.Join(" | ", result.Warnings));
+
+        if (result.Errors.Any())
+            parts.Add("Errors: " + string.Join(" | ", result.Errors));
+
+        return string.Join(Environment.NewLine, parts).Truncate(4000);
+    }
+
+    private static bool ShouldKeepItemResultInMemory(
+        AkeneoProductImportResult result) =>
+        result.ActionType != SyncItemActionType.Skipped ||
+        result.Errors.Any() ||
+        result.Warnings.Any();
+
+    private static void ClearRolledBackDestination(
+        AkeneoProductImportResult result)
+    {
+        result.NopProductId = 0;
+        result.NopParentProductId = null;
+        result.NopProductAttributeCombinationId = null;
+        result.NopProductAttributeValueId = null;
+    }
+
+    private static string GetIdentity(AkeneoProductImportResult result) =>
+        result.Sku ??
+        result.AkeneoIdentifier ??
+        result.AkeneoProductUuid ??
+        "(unknown product)";
+
+    private static string SerializeSnapshot(AkeneoProductDefinition source) =>
+        JsonSerializer.Serialize(source, SnapshotSerializerOptions).Truncate(12000);
+
+    private static string ComputeDesiredStateHash(
+        AkeneoProductDefinition source)
+    {
+        var bytes = SHA256.HashData(
+            Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(source, SnapshotSerializerOptions)));
+
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private async Task<DateTime> RenewLeaseIfDueAsync(
+        AkeneoProductImportRequest request,
+        DateTime lastRenewalUtc)
+    {
+        if (!request.SyncLeaseId.HasValue || request.SyncLeaseId.Value <= 0)
+            return lastRenewalUtc;
+
+        var now = DateTime.UtcNow;
+        if (now - lastRenewalUtc < LeaseRenewalInterval)
+            return lastRenewalUtc;
+
+        await syncLeaseService.RenewByIdAsync(
+            request.SyncLeaseId.Value,
+            LeaseDuration);
+
+        return now;
+    }
+
+    private static TransactionScope CreateUnitTransaction() => new(
+        TransactionScopeOption.Required,
+        new TransactionOptions
+        {
+            IsolationLevel = IsolationLevel.ReadCommitted
+        },
+        TransactionScopeAsyncFlowOption.Enabled);
 }

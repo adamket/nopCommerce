@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Models;
 
@@ -84,7 +84,10 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableProductEnabledFilters { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductParentFilterModes { get; set; } = new List<SelectListItem>();
-    public IList<SelectListItem> AvailableSyncModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableCategorySyncModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableSpecificationAttributeSyncModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableProductAttributeSyncModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableMissingProductBehaviors { get; set; } = new List<SelectListItem>();
 
  
 
@@ -105,6 +108,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public int SpecificationAttributeSyncModeId { get; set; }
 
     public int ProductAttributeSyncModeId { get; set; }
+
+    public int MissingProductBehaviorId { get; set; }
 
     public int UpdatedFilterModeId { get; set; }
 

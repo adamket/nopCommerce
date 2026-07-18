@@ -9,8 +9,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoProductSyncService(
     IAkeneoProductValueResolver productValueResolver,
+    IAkeneoValueTransformationService transformationService,
     IAkeneoAttributeMappingService attributeMappingService,
     IAkeneoNopEntityMappingService entityMappingService,
+    IAkeneoProductSyncStateService syncStateService,
     IProductService productService,
     IAkeneoProductSyncPipeline syncPipeline)
     : IAkeneoProductSyncService
@@ -25,6 +27,8 @@ public class AkeneoProductSyncService(
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(result);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var sourceCode = sourceEntityType == AkeneoEntityType.ProductModel
             ? source.Code?.Trim()
@@ -57,6 +61,13 @@ public class AkeneoProductSyncService(
             request,
             result);
 
+        AppendUnmappedAttributeValues(
+            source,
+            mappings,
+            request,
+            result,
+            mappedValues);
+
         var sku = ResolveSku(
             source,
             sourceEntityType,
@@ -65,14 +76,17 @@ public class AkeneoProductSyncService(
         result.Sku = sku;
 
         Product existingProduct = null;
+        AkeneoProductSyncState existingState = null;
 
         if (result.Success)
         {
-            existingProduct = await ResolveNopProductAsync(
+            (existingProduct, existingState) = await ResolveNopProductAsync(
                 sourceEntityType,
                 sourceCode,
                 sourceUuid,
                 sku,
+                !string.IsNullOrWhiteSpace(source.Parent),
+                request,
                 result);
         }
 
@@ -87,7 +101,8 @@ public class AkeneoProductSyncService(
             SourceUuid = sourceUuid,
             ProductKey = productKey,
             Sku = sku,
-            ExistingProduct = existingProduct
+            ExistingProduct = existingProduct,
+            ExistingSyncState = existingState
         };
     }
 
@@ -123,6 +138,9 @@ public class AkeneoProductSyncService(
                 context.Product.Id);
 
             context.Result.NopProductId = context.Product.Id;
+            context.Result.DestinationKind = context.Product.ParentGroupedProductId > 0
+                ? AkeneoProductDestinationKind.GroupedChildProduct
+                : AkeneoProductDestinationKind.NopProduct;
         }
 
         if (context.ProductCreated)
@@ -162,36 +180,56 @@ public class AkeneoProductSyncService(
             if (targetType == NopTargetType.Ignore)
                 continue;
 
-            var resolvedSuccessfully =
-                productValueResolver.TryGetValue(
-                    source,
-                    mapping.AkeneoAttributeCode,
-                    out var value,
-                    !string.IsNullOrWhiteSpace(mapping.Locale)
-                        ? mapping.Locale
-                        : request.Locale,
-                    !string.IsNullOrWhiteSpace(mapping.Channel)
-                        ? mapping.Channel
-                        : request.Channel,
-                    request.Currency);
+            var resolvedSuccessfully = productValueResolver.TryGetValue(
+                source,
+                mapping.AkeneoAttributeCode,
+                out var value,
+                !string.IsNullOrWhiteSpace(mapping.Locale)
+                    ? mapping.Locale
+                    : request.Locale,
+                !string.IsNullOrWhiteSpace(mapping.Channel)
+                    ? mapping.Channel
+                    : request.Channel,
+                request.Currency);
+
+            if (resolvedSuccessfully && value != null &&
+                !string.IsNullOrWhiteSpace(mapping.TransformRuleJson))
+            {
+                var transformed = transformationService.Transform(value, mapping);
+
+                if (!transformed.Success)
+                {
+                    var message =
+                        $"Transform failed for Akeneo attribute '{mapping.AkeneoAttributeCode}': {transformed.Error}";
+
+                    if (mapping.IsRequired)
+                        result.AddError(message);
+                    else
+                        result.AddWarning(message);
+
+                    resolvedSuccessfully = false;
+                    value = null;
+                }
+                else
+                {
+                    value = transformed.Value;
+                }
+            }
 
             var hasDisplayValue =
                 !string.IsNullOrWhiteSpace(value?.DisplayValue) ||
                 value?.DisplayValues is { Count: > 0 };
 
-            var hasValue =
-                resolvedSuccessfully &&
-                hasDisplayValue;
+            var hasValue = resolvedSuccessfully && hasDisplayValue;
 
             if (!hasValue && mapping.IsRequired)
             {
                 result.AddError(
-                    $"Required Akeneo attribute is missing a value: " +
-                    mapping.AkeneoAttributeCode);
+                    $"Required Akeneo attribute is missing a value: {mapping.AkeneoAttributeCode}");
             }
 
-            // Keep missing optional mappings. The section synchronizers need
-            // these to know when an existing value should be cleared.
+            // Missing optional mappings are retained so destination sections can
+            // apply PreserveExisting or ClearExisting consistently.
             resolved.Add(new AkeneoResolvedMappedValue
             {
                 Mapping = mapping,
@@ -201,6 +239,88 @@ public class AkeneoProductSyncService(
         }
 
         return resolved;
+    }
+
+    private void AppendUnmappedAttributeValues(
+        AkeneoProductDefinition source,
+        IList<AkeneoAttributeMapping> effectiveMappings,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        IList<AkeneoResolvedMappedValue> mappedValues)
+    {
+        if (request is not AkeneoProductBatchImportRequest batchRequest ||
+            batchRequest.UnmappedAttributeBehavior == UnmappedAkeneoAttributeBehavior.Ignore ||
+            source.Values.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var handledCodes = effectiveMappings
+            .Where(mapping => !string.IsNullOrWhiteSpace(mapping.AkeneoAttributeCode))
+            .Select(mapping => mapping.AkeneoAttributeCode.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var unmappedCodes = source.Values
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .Where(code => !handledCodes.Contains(code))
+            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (unmappedCodes.Count == 0)
+            return;
+
+        if (batchRequest.UnmappedAttributeBehavior == UnmappedAkeneoAttributeBehavior.Log)
+        {
+            result.AddWarning(
+                "Unmapped Akeneo attributes: " + string.Join(", ", unmappedCodes.Take(25)) +
+                (unmappedCodes.Count > 25 ? $" (+{unmappedCodes.Count - 25} more)" : string.Empty));
+            return;
+        }
+
+        if (batchRequest.UnmappedAttributeBehavior ==
+            UnmappedAkeneoAttributeBehavior.ImportAsSpecificationAttribute)
+        {
+            result.AddWarning(
+                "Import-as-specification requires explicit destination attribute provisioning. " +
+                "The unmapped attributes were preserved but not imported: " +
+                string.Join(", ", unmappedCodes.Take(25)));
+            return;
+        }
+
+        foreach (var code in unmappedCodes)
+        {
+            if (!productValueResolver.TryGetValue(
+                    source,
+                    code,
+                    out var value,
+                    request.Locale,
+                    request.Channel,
+                    request.Currency))
+            {
+                continue;
+            }
+
+            var hasValue =
+                !string.IsNullOrWhiteSpace(value?.DisplayValue) ||
+                value?.DisplayValues is { Count: > 0 };
+
+            if (!hasValue)
+                continue;
+
+            mappedValues.Add(new AkeneoResolvedMappedValue
+            {
+                Mapping = new AkeneoAttributeMapping
+                {
+                    AkeneoFamilyCode = source.Family,
+                    AkeneoAttributeCode = code,
+                    NopTargetTypeId = (int)NopTargetType.CustomProperty,
+                    NopTargetKey = $"Apt.Akeneo.CustomProperty.{code}"
+                },
+                HasValue = true,
+                Value = value
+            });
+        }
     }
 
     private static string ResolveSku(
@@ -226,13 +346,48 @@ public class AkeneoProductSyncService(
             : source.Identifier?.Trim();
     }
 
-    private async Task<Product> ResolveNopProductAsync(
+    private async Task<(Product Product, AkeneoProductSyncState State)> ResolveNopProductAsync(
         AkeneoEntityType sourceEntityType,
         string sourceCode,
         string sourceUuid,
         string sku,
+        bool isVariantLeaf,
+        AkeneoProductImportRequest request,
         AkeneoProductImportResult result)
     {
+        AkeneoProductSyncState state = null;
+
+        if (sourceEntityType == AkeneoEntityType.Product &&
+            request.SyncProfileId.HasValue)
+        {
+            state = await syncStateService.GetBySourceAsync(
+                request.SyncProfileId.Value,
+                sourceEntityType,
+                sourceCode,
+                sourceUuid);
+
+            if (state != null)
+            {
+                var destinationKind =
+                    (AkeneoProductDestinationKind)state.DestinationKindId;
+
+                // A combination is not a child nop product. Do not return its
+                // parent as the leaf product, but continue through legacy mapping
+                // and SKU fallback so a previously hidden child can be restored if
+                // the representation changes back to grouped/associated/standalone.
+                if (destinationKind != AkeneoProductDestinationKind.ProductAttributeCombination)
+                {
+                    var stateProduct = await GetMappedProductOrWarnAsync(
+                        state.NopProductId,
+                        $"profile state for Akeneo product {sourceUuid ?? sourceCode}",
+                        result);
+
+                    if (stateProduct != null)
+                        return (stateProduct, state);
+                }
+            }
+        }
+
         if (sourceEntityType == AkeneoEntityType.Product &&
             !string.IsNullOrWhiteSpace(sourceUuid))
         {
@@ -248,7 +403,19 @@ public class AkeneoProductSyncService(
                 result);
 
             if (product != null)
-                return product;
+            {
+                if (isVariantLeaf &&
+                    !string.IsNullOrWhiteSpace(sku) &&
+                    !string.Equals(product.Sku, sku, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.AddWarning(
+                        $"Ignored legacy UUID mapping to product ID {product.Id} because it does not match variant SKU '{sku}'. The profile sync-state binding will replace it.");
+                }
+                else
+                {
+                    return (product, state);
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(sourceCode))
@@ -265,13 +432,24 @@ public class AkeneoProductSyncService(
                 result);
 
             if (product != null)
-                return product;
+            {
+                if (isVariantLeaf &&
+                    !string.IsNullOrWhiteSpace(sku) &&
+                    !string.Equals(product.Sku, sku, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.AddWarning(
+                        $"Ignored legacy code mapping to product ID {product.Id} because it does not match variant SKU '{sku}'.");
+                }
+                else
+                {
+                    return (product, state);
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(sku))
         {
-            var product = await productService
-                .GetProductBySkuAsync(sku);
+            var product = await productService.GetProductBySkuAsync(sku);
 
             if (product != null)
             {
@@ -279,10 +457,10 @@ public class AkeneoProductSyncService(
                     $"Matched existing nopCommerce product by SKU '{sku}'.");
             }
 
-            return product;
+            return (product, state);
         }
 
-        return null;
+        return (null, state);
     }
 
     private async Task<Product> GetMappedProductOrWarnAsync(
@@ -290,11 +468,10 @@ public class AkeneoProductSyncService(
         string mappingDescription,
         AkeneoProductImportResult result)
     {
-        if (!mappedProductId.HasValue)
+        if (!mappedProductId.HasValue || mappedProductId.Value <= 0)
             return null;
 
-        var product = await productService
-            .GetProductByIdAsync(mappedProductId.Value);
+        var product = await productService.GetProductByIdAsync(mappedProductId.Value);
 
         if (product != null)
             return product;

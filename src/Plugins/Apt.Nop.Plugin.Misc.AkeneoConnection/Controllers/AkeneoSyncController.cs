@@ -96,21 +96,20 @@ public class AkeneoSyncController(
             {
                 success = false,
                 action = "failed",
-                errors = new[] { "Akeneo product UUID is required. Run the dry run first, then import from the preview result." }
+                errors = new[]
+                {
+                    "Akeneo product UUID is required. Run the dry run first, then synchronize from the preview result."
+                }
             });
         }
 
-        var syncRunRecord = new AkeneoSyncRunRecord
-        {
-            StartedOnUtc = DateTime.UtcNow,
-            SyncTypeId = (int)SyncType.ManualProductSync,
-            SyncStatusId = (int)SyncStatus.Started
-        };
+        var profileId = akeneoConnectionSettings.DefaultSyncProfileId ?? 0;
+        var execution = await productSyncExecutionService.SyncProductByUuidAsync(
+            profileId,
+            input.Uuid.Trim(),
+            cancellationToken);
 
-        await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(syncRunRecord);
-
-        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
-        if (profile == null)
+        if (execution.ProfileNotFound)
         {
             return Json(new
             {
@@ -120,69 +119,17 @@ public class AkeneoSyncController(
             });
         }
 
-        var result = await productImportService.SyncProductByUuidAsync(
-            new AkeneoProductImportRequest
-            {
-                SyncRunRecordId = syncRunRecord.Id,
-                AkeneoProductUuid = input.Uuid.Trim(),
-                Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US",
-                Channel = profile.AkeneoChannel ?? "ecommerce",
-                Currency = profile.CurrencyCode ?? "USD",
-                CreateNewProducts = true,
-                UpdateExistingProducts = true,
-                CreateMissingSpecificationAttributeOptions = true,
-                CreateMissingProductAttributeValues = true,
-                ProductFieldMissingValueBehavior =
-                    (AkeneoMissingValueBehavior)
-                    profile.ProductFieldMissingValueBehaviorId,
-
-                SeoFieldMissingValueBehavior =
-                    (AkeneoMissingValueBehavior)
-                    profile.SeoFieldMissingValueBehaviorId,
-
-                CustomPropertyMissingValueBehavior =
-                    (AkeneoMissingValueBehavior)
-                    profile.CustomPropertyMissingValueBehaviorId,
-
-                CategorySyncMode =
-                    (AkeneoCollectionSyncMode)
-                    profile.CategorySyncModeId,
-
-                SpecificationAttributeSyncMode =
-                    (AkeneoCollectionSyncMode)
-                    profile.SpecificationAttributeSyncModeId,
-
-                ProductAttributeSyncMode =
-                    (AkeneoCollectionSyncMode)
-                    profile.ProductAttributeSyncModeId,
-                //AddMappedManufacturers = true,
-                SaveRawPayloadSnapshot = false
-            },
-            cancellationToken);
-
-        syncRunRecord.FinishedOnUtc = DateTime.UtcNow;
-        syncRunRecord.SyncStatusId = syncRunRecord.SyncStatusId = result.Success
-            ? (int)SyncStatus.Completed
-            : (int)SyncStatus.CompletedWithErrors;
-
-        syncRunRecord.TotalRead = 1;
-       // syncRunRecord.CreatedCount = result.
-       // syncRunRecord.SkippedCount = result.
-
-        await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(syncRunRecord);
-        var action = result.Success ? result.ActionType.ToString() : "failed";
-      
         return Json(new
         {
-            success = result.Success,
-            syncRunRecordId = syncRunRecord.Id,
-            action = action.ToString(),
-            productId = result.NopProductId,
-            akeneoProductUuid = result.AkeneoProductUuid,
-            akeneoIdentifier = result.AkeneoIdentifier,
-            messages = result.Messages,
-            warnings = result.Warnings,
-            errors = result.Errors
+            success = execution.Success,
+            syncRunRecordId = execution.SyncRunRecordId,
+            action = execution.ItemActionType?.ToString() ?? "failed",
+            productId = execution.NopProductId,
+            akeneoProductUuid = execution.AkeneoProductUuid,
+            akeneoIdentifier = execution.AkeneoIdentifier,
+            messages = execution.Messages,
+            warnings = execution.Warnings,
+            errors = execution.Errors
         });
     }
 
@@ -190,11 +137,14 @@ public class AkeneoSyncController(
     [HttpPost]
     public async Task<IActionResult> ImportProductsByProfile(
         int id,
+        bool fullSync,
         CancellationToken cancellationToken)
     {
         var result = await productSyncExecutionService.ImportProductsByProfileAsync(
             id,
-            SyncType.ManualProductSync,
+            fullSync
+                ? SyncType.ManualFullProfileSync
+                : SyncType.ManualProfileSync,
             cancellationToken);
 
         if (result.ProfileNotFound)
@@ -247,8 +197,10 @@ public class AkeneoSyncController(
                 updated = result.UpdatedCount,
                 skipped = result.SkippedCount,
                 failed = result.FailedCount,
-                warnings = result.WarningCount
+                warnings = result.WarningCount,
+                reconciled = result.ReconciledCount
             },
+            warnings = result.Warnings,
             errors = result.Errors,
             messages = result.Messages
         });

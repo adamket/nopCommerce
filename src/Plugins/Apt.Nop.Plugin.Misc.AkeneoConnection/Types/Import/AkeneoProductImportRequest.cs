@@ -6,6 +6,19 @@ public class AkeneoProductImportRequest
 {
     public int SyncRunRecordId { get; set; }
 
+    /// <summary>
+    /// Database lease associated with this execution. Batch orchestration
+    /// renews it at safe page/item boundaries so long-running jobs cannot be
+    /// overtaken by another application instance.
+    /// </summary>
+    public int? SyncLeaseId { get; set; }
+
+    public int? SyncProfileId { get; set; }
+
+    public AkeneoRunMode RunMode { get; set; } = AkeneoRunMode.SingleProduct;
+
+    public string ScopeHash { get; set; }
+
     public string AkeneoProductUuid { get; set; }
 
     public string Locale { get; set; }
@@ -36,9 +49,17 @@ public class AkeneoProductImportRequest
     public AkeneoCollectionSyncMode ProductAttributeSyncMode { get; set; }
         = AkeneoCollectionSyncMode.Merge;
 
+    public AkeneoMissingProductBehavior MissingProductBehavior { get; set; }
+        = AkeneoMissingProductBehavior.Ignore;
+
     public bool CreateMissingSpecificationAttributeOptions { get; set; } = true;
 
     public bool CreateMissingProductAttributeValues { get; set; } = true;
 
     public bool SaveRawPayloadSnapshot { get; set; }
+
+    public bool IsAuthoritativeFullRun =>
+        SyncProfileId.HasValue &&
+        SyncProfileId.Value > 0 &&
+        RunMode == AkeneoRunMode.Full;
 }

@@ -40,7 +40,15 @@ public class AkeneoProductCoreSynchronizer(
 
         product ??= CreateBaseProduct(context);
 
-        var changed = ApplyProductFields(
+        var changed = RestoreManagedLifecycleIfNeeded(
+            context,
+            product);
+
+        changed |= RestoreProductRepresentationIfNeeded(
+            context,
+            product);
+
+        changed |= ApplyProductFields(
             context,
             product);
 
@@ -89,6 +97,99 @@ public class AkeneoProductCoreSynchronizer(
             CreatedOnUtc = DateTime.UtcNow,
             UpdatedOnUtc = DateTime.UtcNow
         };
+    }
+
+    private static bool RestoreManagedLifecycleIfNeeded(
+        AkeneoProductSyncContext context,
+        Product product)
+    {
+        if (context.ExistingSyncState == null)
+            return false;
+
+        var lifecycleStatus =
+            (AkeneoProductLifecycleStatus)context.ExistingSyncState.LifecycleStatusId;
+
+        if (lifecycleStatus == AkeneoProductLifecycleStatus.Active)
+            return false;
+
+        var changed = false;
+
+        if (lifecycleStatus == AkeneoProductLifecycleStatus.PurchasingDisabled)
+        {
+            changed |= AkeneoMappingHelper.SetIfChanged(
+                product.DisableBuyButton,
+                false,
+                value => product.DisableBuyButton = value);
+        }
+
+        if (lifecycleStatus == AkeneoProductLifecycleStatus.SoftDeleted)
+        {
+            changed |= AkeneoMappingHelper.SetIfChanged(
+                product.Deleted,
+                false,
+                value => product.Deleted = value);
+        }
+
+        var wasPublicationChangedByLifecycle =
+            lifecycleStatus is AkeneoProductLifecycleStatus.Unpublished or
+                AkeneoProductLifecycleStatus.SoftDeleted;
+
+        var hasPublishedMapping = context
+            .GetMappings(NopTargetType.ProductField)
+            .Any(mapped => string.Equals(
+                mapped.Mapping.NopTargetKey,
+                "Published",
+                StringComparison.OrdinalIgnoreCase));
+
+        if (wasPublicationChangedByLifecycle && !hasPublishedMapping)
+        {
+            changed |= AkeneoMappingHelper.SetIfChanged(
+                product.Published,
+                context.Source.Enabled ?? true,
+                value => product.Published = value);
+        }
+
+        return changed;
+    }
+
+    private static bool RestoreProductRepresentationIfNeeded(
+        AkeneoProductSyncContext context,
+        Product product)
+    {
+        if (context.ExistingSyncState == null ||
+            (AkeneoProductDestinationKind)context.ExistingSyncState.DestinationKindId !=
+                AkeneoProductDestinationKind.ProductAttributeCombination ||
+            product.Id == context.ExistingSyncState.NopProductId)
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        // The previous combination representation may have hidden and disabled
+        // an older child product. Re-enable that child before applying the new
+        // grouped/associated/standalone representation.
+        changed |= AkeneoMappingHelper.SetIfChanged(
+            product.DisableBuyButton,
+            false,
+            value => product.DisableBuyButton = value);
+
+        var hasPublishedMapping = context
+            .GetMappings(NopTargetType.ProductField)
+            .Any(mapped => string.Equals(
+                mapped.Mapping.NopTargetKey,
+                "Published",
+                StringComparison.OrdinalIgnoreCase));
+
+        if (!hasPublishedMapping && context.Source.Enabled.HasValue)
+        {
+            changed |= AkeneoMappingHelper.SetIfChanged(
+                product.Published,
+                context.Source.Enabled.Value,
+                value => product.Published = value);
+        }
+
+        return changed;
     }
 
     private static bool ApplyProductFields(
@@ -181,6 +282,34 @@ public class AkeneoProductCoreSynchronizer(
                     {
                         context.Result.AddWarning(
                             $"Could not parse price value '{value}' from " +
+                            $"{mapped.Mapping.AkeneoAttributeCode}.");
+                    }
+
+                    break;
+
+                case "StockQuantity":
+                    if (!mapped.HasValue)
+                    {
+                        changed |= AkeneoMappingHelper.SetIfChanged(
+                            product.StockQuantity,
+                            0,
+                            newValue => product.StockQuantity = newValue);
+                    }
+                    else if (int.TryParse(
+                                 value,
+                                 NumberStyles.Integer,
+                                 CultureInfo.InvariantCulture,
+                                 out var stockQuantity))
+                    {
+                        changed |= AkeneoMappingHelper.SetIfChanged(
+                            product.StockQuantity,
+                            stockQuantity,
+                            newValue => product.StockQuantity = newValue);
+                    }
+                    else
+                    {
+                        context.Result.AddWarning(
+                            $"Could not parse stock quantity '{value}' from " +
                             $"{mapped.Mapping.AkeneoAttributeCode}.");
                     }
 

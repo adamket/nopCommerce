@@ -6,20 +6,28 @@ using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+
 public class AkeneoVariantRelationshipService(
     IAkeneoVariantRelationshipResolver relationshipResolver,
     IProductService productService,
     IProductAttributeService productAttributeService,
-    IAkeneoProductValueResolver productValueResolver) : IAkeneoVariantRelationshipService
+    IAkeneoProductValueResolver productValueResolver,
+    IAkeneoNopEntityMappingService entityMappingService,
+    IAkeneoManagedRelationService managedRelationService)
+    : IAkeneoVariantRelationshipService
 {
     public async Task<AkeneoVariantSyncResult> ApplyAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
         Func<Task<Product>> upsertChildProductAsync)
     {
-        var resolution = await relationshipResolver.ResolveAsync(parentProduct, context.AkeneoFamilyCode);
+        ArgumentNullException.ThrowIfNull(parentProduct);
+        ArgumentNullException.ThrowIfNull(context);
 
-        // Existing structure always wins; the override only applies when there's nothing to preserve.
+        var resolution = await relationshipResolver.ResolveAsync(
+            parentProduct,
+            context.AkeneoFamilyCode);
+
         var effectiveMode =
             resolution.Source == AkeneoVariantRelationshipSource.ExistingNopParent
                 ? resolution.Mode
@@ -34,8 +42,9 @@ public class AkeneoVariantRelationshipService(
         };
         context.Options.Mode = effectiveMode;
 
-        await EnsureParentShapeAsync(parentProduct, effectiveMode);
-        return effectiveMode switch
+        var parentChanged = await EnsureParentShapeAsync(parentProduct, effectiveMode);
+
+        var result = effectiveMode switch
         {
             AkeneoVariantRelationshipMode.GroupedProducts =>
                 await ApplyGroupedProductAsync(
@@ -64,11 +73,15 @@ public class AkeneoVariantRelationshipService(
                     upsertChildProductAsync),
 
             _ => throw new NopException(
-                $"Unsupported Akeneo variant relationship mode: {resolution.Mode}")
+                $"Unsupported Akeneo variant relationship mode: {effectiveMode}")
         };
+
+        result.ParentChanged = parentChanged;
+        result.NopParentProductId ??= parentProduct.Id;
+        return result;
     }
 
-    private async Task EnsureParentShapeAsync(
+    private async Task<bool> EnsureParentShapeAsync(
         Product parentProduct,
         AkeneoVariantRelationshipMode mode)
     {
@@ -88,13 +101,10 @@ public class AkeneoVariantRelationshipService(
                 changed = true;
             }
         }
-        else
+        else if (parentProduct.ProductType != ProductType.SimpleProduct)
         {
-            if (parentProduct.ProductType != ProductType.SimpleProduct)
-            {
-                parentProduct.ProductType = ProductType.SimpleProduct;
-                changed = true;
-            }
+            parentProduct.ProductType = ProductType.SimpleProduct;
+            changed = true;
         }
 
         if (mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
@@ -103,9 +113,23 @@ public class AkeneoVariantRelationshipService(
             parentProduct.ManageInventoryMethod = ManageInventoryMethod.ManageStockByAttributes;
             changed = true;
         }
+        else if (mode != AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
+                 parentProduct.ManageInventoryMethod == ManageInventoryMethod.ManageStockByAttributes)
+        {
+            // Attribute-combination inventory is representation-specific. Do
+            // not leave the parent in an invalid stock mode after switching to
+            // grouped, associated-product, or standalone representation.
+            parentProduct.ManageInventoryMethod = ManageInventoryMethod.DontManageStock;
+            changed = true;
+        }
 
         if (changed)
+        {
+            parentProduct.UpdatedOnUtc = DateTime.UtcNow;
             await productService.UpdateProductAsync(parentProduct);
+        }
+
+        return changed;
     }
 
     private async Task<AkeneoVariantSyncResult> ApplyGroupedProductAsync(
@@ -114,7 +138,9 @@ public class AkeneoVariantRelationshipService(
         AkeneoVariantRelationshipSource source,
         Func<Task<Product>> upsertChildProductAsync)
     {
-        var childProduct = await upsertChildProductAsync();
+        var childProduct = await RequireChildProductAsync(
+            context,
+            upsertChildProductAsync);
 
         var changed = false;
 
@@ -139,13 +165,29 @@ public class AkeneoVariantRelationshipService(
         }
 
         if (changed)
+        {
+            childProduct.UpdatedOnUtc = DateTime.UtcNow;
             await productService.UpdateProductAsync(childProduct);
+        }
+
+        if (context.SyncProfileId.HasValue)
+        {
+            await managedRelationService.UpsertAsync(
+                context.SyncProfileId.Value,
+                context.SyncRunRecordId,
+                childProduct.Id,
+                AkeneoManagedRelationType.GroupedProductRelationship,
+                childProduct.Id,
+                akeneoValueCode: parentProduct.Id.ToString());
+        }
 
         return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.GroupedProducts,
             Source = source,
-            NopProductId = childProduct.Id
+            NopProductId = childProduct.Id,
+            NopParentProductId = parentProduct.Id,
+            RelationshipChanged = changed
         };
     }
 
@@ -158,36 +200,66 @@ public class AkeneoVariantRelationshipService(
         if (!context.Options.AssociatedProductAttributeId.HasValue)
         {
             throw new NopException(
-                "Associated-to-product variant import requires AssociatedProductAttributeId.");
+                "Associated-to-product variant synchronization requires AssociatedProductAttributeId.");
         }
 
-        var childProduct = await upsertChildProductAsync();
+        var childProduct = await RequireChildProductAsync(
+            context,
+            upsertChildProductAsync);
 
-        if (context.Options.HideChildProductsWhenRepresentedByParent &&
-            childProduct.VisibleIndividually)
+        var changed = false;
+
+        var desiredVisibility = !context.Options.HideChildProductsWhenRepresentedByParent;
+        if (childProduct.VisibleIndividually != desiredVisibility)
         {
-            childProduct.VisibleIndividually = false;
+            childProduct.VisibleIndividually = desiredVisibility;
+            childProduct.UpdatedOnUtc = DateTime.UtcNow;
             await productService.UpdateProductAsync(childProduct);
+            changed = true;
         }
 
-        var mapping = await EnsureProductAttributeMappingAsync(
+        var mappingResult = await EnsureProductAttributeMappingAsync(
             parentProduct.Id,
             context.Options.AssociatedProductAttributeId.Value,
             isRequired: true);
 
-        var values = await productAttributeService.GetProductAttributeValuesAsync(mapping.Id);
+        changed |= mappingResult.Changed;
+
+        if (context.SyncProfileId.HasValue)
+        {
+            await managedRelationService.UpsertAsync(
+                context.SyncProfileId.Value,
+                context.SyncRunRecordId,
+                parentProduct.Id,
+                AkeneoManagedRelationType.ProductAttributeMapping,
+                mappingResult.Mapping.Id,
+                akeneoAttributeCode: "__associated_product");
+        }
+
+        var values = await productAttributeService
+            .GetProductAttributeValuesAsync(mappingResult.Mapping.Id);
 
         var valueName = BuildAssociatedValueName(context);
+        ProductAttributeValue existingValue = null;
 
-        var existingValue = values.FirstOrDefault(x =>
-            x.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
-            x.AssociatedProductId == childProduct.Id);
+        if (context.ExistingAssociatedProductAttributeValueId.HasValue)
+        {
+            existingValue = await productAttributeService.GetProductAttributeValueByIdAsync(
+                context.ExistingAssociatedProductAttributeValueId.Value);
+
+            if (existingValue?.ProductAttributeMappingId != mappingResult.Mapping.Id)
+                existingValue = null;
+        }
+
+        existingValue ??= values.FirstOrDefault(value =>
+            value.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
+            value.AssociatedProductId == childProduct.Id);
 
         if (existingValue == null)
         {
             existingValue = new ProductAttributeValue
             {
-                ProductAttributeMappingId = mapping.Id,
+                ProductAttributeMappingId = mappingResult.Mapping.Id,
                 AttributeValueTypeId = (int)AttributeValueType.AssociatedToProduct,
                 AssociatedProductId = childProduct.Id,
                 Name = valueName,
@@ -195,18 +267,50 @@ public class AkeneoVariantRelationshipService(
             };
 
             await productAttributeService.InsertProductAttributeValueAsync(existingValue);
+            changed = true;
         }
-        else if (!string.Equals(existingValue.Name, valueName, StringComparison.Ordinal))
+        else
         {
-            existingValue.Name = valueName;
-            await productAttributeService.UpdateProductAttributeValueAsync(existingValue);
+            var valueChanged = false;
+
+            if (existingValue.AssociatedProductId != childProduct.Id)
+            {
+                existingValue.AssociatedProductId = childProduct.Id;
+                valueChanged = true;
+            }
+
+            if (!string.Equals(existingValue.Name, valueName, StringComparison.Ordinal))
+            {
+                existingValue.Name = valueName;
+                valueChanged = true;
+            }
+
+            if (valueChanged)
+            {
+                await productAttributeService.UpdateProductAttributeValueAsync(existingValue);
+                changed = true;
+            }
+        }
+
+        if (context.SyncProfileId.HasValue)
+        {
+            await managedRelationService.UpsertAsync(
+                context.SyncProfileId.Value,
+                context.SyncRunRecordId,
+                parentProduct.Id,
+                AkeneoManagedRelationType.AssociatedProductAttributeValue,
+                existingValue.Id,
+                akeneoValueCode: context.AkeneoUuid ?? context.AkeneoIdentifier);
         }
 
         return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue,
             Source = source,
-            NopProductId = childProduct.Id
+            NopProductId = childProduct.Id,
+            NopParentProductId = parentProduct.Id,
+            NopProductAttributeValueId = existingValue.Id,
+            RelationshipChanged = changed
         };
     }
 
@@ -216,14 +320,20 @@ public class AkeneoVariantRelationshipService(
         AkeneoVariantRelationshipSource source)
     {
         if (context.Options.AxisMappings.Count == 0)
-            throw new NopException("Product attribute combination import requires at least one axis mapping.");
+        {
+            throw new NopException(
+                "Product attribute combination synchronization requires at least one axis mapping.");
+        }
 
         var selections = new List<ProductAttributeSelection>();
+        var changed = false;
 
         foreach (var axis in context.Options.AxisMappings)
         {
-            if (!context.AxisValuesByAkeneoCode.TryGetValue(axis.AkeneoAttributeCode, out var axisValue) ||
-                string.IsNullOrWhiteSpace(axisValue))
+            if (!context.AxisValuesByAkeneoCode.TryGetValue(
+                    axis.AkeneoAttributeCode,
+                    out var axisValue) ||
+                string.IsNullOrWhiteSpace(axisValue.DisplayName))
             {
                 if (axis.IsRequired)
                 {
@@ -234,36 +344,77 @@ public class AkeneoVariantRelationshipService(
                 continue;
             }
 
-            var mapping = await EnsureProductAttributeMappingAsync(
+            var mappingResult = await EnsureProductAttributeMappingAsync(
                 parentProduct.Id,
                 axis.NopProductAttributeId,
                 axis.IsRequired);
 
-            var attributeValue = await EnsureSimpleProductAttributeValueAsync(
-                mapping.Id,
+            changed |= mappingResult.Changed;
+
+            var valueResult = await EnsureAxisValueAsync(
+                parentProduct.Id,
+                mappingResult.Mapping.Id,
                 axisValue);
+
+            changed |= valueResult.Changed;
 
             selections.Add(new ProductAttributeSelection
             {
-                ProductAttributeMappingId = mapping.Id,
-                ProductAttributeValueId = attributeValue.Id
+                ProductAttributeMappingId = mappingResult.Mapping.Id,
+                ProductAttributeValueId = valueResult.Value.Id
             });
+
+            if (context.SyncProfileId.HasValue)
+            {
+                await managedRelationService.UpsertAsync(
+                    context.SyncProfileId.Value,
+                    context.SyncRunRecordId,
+                    parentProduct.Id,
+                    AkeneoManagedRelationType.ProductAttributeMapping,
+                    mappingResult.Mapping.Id,
+                    axis.AkeneoAttributeCode);
+
+                await managedRelationService.UpsertAsync(
+                    context.SyncProfileId.Value,
+                    context.SyncRunRecordId,
+                    parentProduct.Id,
+                    AkeneoManagedRelationType.ProductAttributeValue,
+                    valueResult.Value.Id,
+                    axis.AkeneoAttributeCode,
+                    axisValue.AkeneoOptionCode ?? axisValue.DisplayName);
+            }
         }
 
         if (selections.Count == 0)
-            throw new NopException($"No product attribute selections were created for Akeneo variant SKU '{context.Sku}'.");
+        {
+            throw new NopException(
+                $"No product attribute selections were created for Akeneo variant SKU '{context.Sku}'.");
+        }
 
         var attributesXml = BuildAttributesXml(selections);
+        var combinations = await productAttributeService
+            .GetAllProductAttributeCombinationsAsync(parentProduct.Id);
 
-        var combinations =
-            await productAttributeService.GetAllProductAttributeCombinationsAsync(parentProduct.Id);
+        ProductAttributeCombination combination = null;
 
-        var existingCombination = combinations.FirstOrDefault(x =>
-            string.Equals(x.AttributesXml, attributesXml, StringComparison.OrdinalIgnoreCase));
-
-        if (existingCombination == null)
+        if (context.ExistingProductAttributeCombinationId.HasValue)
         {
-            existingCombination = new ProductAttributeCombination
+            combination = await productAttributeService
+                .GetProductAttributeCombinationByIdAsync(
+                    context.ExistingProductAttributeCombinationId.Value);
+
+            if (combination?.ProductId != parentProduct.Id)
+                combination = null;
+        }
+
+        combination ??= combinations.FirstOrDefault(item =>
+            string.Equals(item.AttributesXml, attributesXml, StringComparison.OrdinalIgnoreCase));
+
+        var combinationCreated = combination == null;
+
+        if (combinationCreated)
+        {
+            combination = new ProductAttributeCombination
             {
                 ProductId = parentProduct.Id,
                 AttributesXml = attributesXml,
@@ -272,61 +423,102 @@ public class AkeneoVariantRelationshipService(
                 OverriddenPrice = context.Price
             };
 
-            await productAttributeService.InsertProductAttributeCombinationAsync(existingCombination);
+            await productAttributeService.InsertProductAttributeCombinationAsync(combination);
+            changed = true;
         }
         else
         {
-            var changed = false;
+            var combinationChanged = false;
 
-            if (!string.Equals(existingCombination.Sku, context.Sku, StringComparison.Ordinal))
+            if (!string.Equals(combination.AttributesXml, attributesXml, StringComparison.Ordinal))
             {
-                existingCombination.Sku = context.Sku;
-                changed = true;
+                combination.AttributesXml = attributesXml;
+                combinationChanged = true;
+            }
+
+            if (!string.Equals(combination.Sku, context.Sku, StringComparison.Ordinal))
+            {
+                combination.Sku = context.Sku;
+                combinationChanged = true;
             }
 
             if (context.StockQuantity.HasValue &&
-                existingCombination.StockQuantity != context.StockQuantity.Value)
+                combination.StockQuantity != context.StockQuantity.Value)
             {
-                existingCombination.StockQuantity = context.StockQuantity.Value;
-                changed = true;
+                combination.StockQuantity = context.StockQuantity.Value;
+                combinationChanged = true;
             }
 
             if (context.Price.HasValue &&
-                existingCombination.OverriddenPrice != context.Price)
+                combination.OverriddenPrice != context.Price.Value)
             {
-                existingCombination.OverriddenPrice = context.Price;
-                changed = true;
+                combination.OverriddenPrice = context.Price.Value;
+                combinationChanged = true;
             }
 
-            if (existingCombination.OverriddenPrice != context.Price)
+            if (combinationChanged)
             {
-                existingCombination.OverriddenPrice = context.Price;
+                await productAttributeService
+                    .UpdateProductAttributeCombinationAsync(combination);
                 changed = true;
             }
+        }
 
-            if (changed)
-                await productAttributeService.UpdateProductAttributeCombinationAsync(existingCombination);
+        if (context.SyncProfileId.HasValue)
+        {
+            await managedRelationService.UpsertAsync(
+                context.SyncProfileId.Value,
+                context.SyncRunRecordId,
+                parentProduct.Id,
+                AkeneoManagedRelationType.ProductAttributeCombination,
+                combination.Id,
+                akeneoValueCode: context.AkeneoUuid ?? context.AkeneoIdentifier);
         }
 
         return new AkeneoVariantSyncResult
         {
             Mode = AkeneoVariantRelationshipMode.ProductAttributeCombinations,
             Source = source,
-            NopProductAttributeCombinationId = existingCombination.Id
+            NopProductId = parentProduct.Id,
+            NopParentProductId = parentProduct.Id,
+            NopProductAttributeCombinationId = combination.Id,
+            DestinationChanged = changed,
+            DestinationCreated = combinationCreated
         };
     }
 
-    private async Task<ProductAttributeMapping> EnsureProductAttributeMappingAsync(
+    private async Task<ProductAttributeMappingResult> EnsureProductAttributeMappingAsync(
         int productId,
         int productAttributeId,
         bool isRequired)
     {
-        var mappings = await productAttributeService.GetProductAttributeMappingsByProductIdAsync(productId);
+        var mappings = await productAttributeService
+            .GetProductAttributeMappingsByProductIdAsync(productId);
 
-        var existing = mappings.FirstOrDefault(x => x.ProductAttributeId == productAttributeId);
+        var existing = mappings.FirstOrDefault(item =>
+            item.ProductAttributeId == productAttributeId);
 
         if (existing != null)
-            return existing;
+        {
+            var changed = false;
+
+            if (existing.AttributeControlTypeId != (int)AttributeControlType.DropdownList)
+            {
+                existing.AttributeControlTypeId = (int)AttributeControlType.DropdownList;
+                changed = true;
+            }
+
+            if (existing.IsRequired != isRequired)
+            {
+                existing.IsRequired = isRequired;
+                changed = true;
+            }
+
+            if (changed)
+                await productAttributeService.UpdateProductAttributeMappingAsync(existing);
+
+            return new ProductAttributeMappingResult(existing, changed);
+        }
 
         var mapping = new ProductAttributeMapping
         {
@@ -338,36 +530,71 @@ public class AkeneoVariantRelationshipService(
         };
 
         await productAttributeService.InsertProductAttributeMappingAsync(mapping);
-
-        return mapping;
+        return new ProductAttributeMappingResult(mapping, true);
     }
 
-    private async Task<ProductAttributeValue> EnsureSimpleProductAttributeValueAsync(
+    private async Task<AxisValueResult> EnsureAxisValueAsync(
+        int parentProductId,
         int productAttributeMappingId,
-        string valueName)
+        AkeneoVariantAxisValue axisValue)
     {
-        valueName = valueName.Trim();
+        var optionIdentity = axisValue.AkeneoOptionCode ?? axisValue.DisplayName;
+        var mappingCode =
+            $"variant-axis:{parentProductId}:{axisValue.AkeneoAttributeCode}:{optionIdentity}";
 
-        var values = await productAttributeService.GetProductAttributeValuesAsync(productAttributeMappingId);
+        var mappedValueId = await entityMappingService
+            .GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.Option,
+                mappingCode,
+                NopEntityType.ProductAttributeValue);
 
-        var existing = values.FirstOrDefault(x =>
-            x.AttributeValueTypeId == (int)AttributeValueType.Simple &&
-            string.Equals(x.Name, valueName, StringComparison.OrdinalIgnoreCase));
-
-        if (existing != null)
-            return existing;
-
-        var value = new ProductAttributeValue
+        if (mappedValueId.HasValue)
         {
-            ProductAttributeMappingId = productAttributeMappingId,
-            AttributeValueTypeId = (int)AttributeValueType.Simple,
-            Name = valueName,
-            DisplayOrder = values.Count + 1
-        };
+            var mapped = await productAttributeService
+                .GetProductAttributeValueByIdAsync(mappedValueId.Value);
 
-        await productAttributeService.InsertProductAttributeValueAsync(value);
+            if (mapped != null &&
+                mapped.ProductAttributeMappingId == productAttributeMappingId)
+            {
+                if (!string.Equals(mapped.Name, axisValue.DisplayName, StringComparison.Ordinal))
+                {
+                    mapped.Name = axisValue.DisplayName;
+                    await productAttributeService.UpdateProductAttributeValueAsync(mapped);
+                    return new AxisValueResult(mapped, true);
+                }
 
-        return value;
+                return new AxisValueResult(mapped, false);
+            }
+        }
+
+        var values = await productAttributeService
+            .GetProductAttributeValuesAsync(productAttributeMappingId);
+
+        var existing = values.FirstOrDefault(value =>
+            value.AttributeValueTypeId == (int)AttributeValueType.Simple &&
+            string.Equals(value.Name, axisValue.DisplayName, StringComparison.OrdinalIgnoreCase));
+
+        if (existing == null)
+        {
+            existing = new ProductAttributeValue
+            {
+                ProductAttributeMappingId = productAttributeMappingId,
+                AttributeValueTypeId = (int)AttributeValueType.Simple,
+                Name = axisValue.DisplayName,
+                DisplayOrder = values.Count + 1
+            };
+
+            await productAttributeService.InsertProductAttributeValueAsync(existing);
+        }
+
+        await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+            AkeneoEntityType.Option,
+            mappingCode,
+            null,
+            NopEntityType.ProductAttributeValue,
+            existing.Id);
+
+        return new AxisValueResult(existing, true);
     }
 
     private async Task<AkeneoVariantSyncResult> ApplyStandaloneProductAsync(
@@ -375,36 +602,30 @@ public class AkeneoVariantRelationshipService(
         AkeneoVariantRelationshipResolution resolution,
         Func<Task<Product>> upsertChildProductAsync)
     {
-        if (upsertChildProductAsync == null)
-            throw new ArgumentNullException(nameof(upsertChildProductAsync));
-
-        var product = await upsertChildProductAsync();
+        var product = await RequireChildProductAsync(
+            context,
+            upsertChildProductAsync);
 
         var changed = false;
 
-        // Standalone mode means this Akeneo item should exist as a normal simple product.
         if (product.ProductType != ProductType.SimpleProduct)
         {
             product.ProductType = ProductType.SimpleProduct;
             changed = true;
         }
 
-        // If this product was previously imported as a grouped child, detach it.
         if (product.ParentGroupedProductId != 0)
         {
             product.ParentGroupedProductId = 0;
             changed = true;
         }
 
-        // Standalone products should normally be visible individually.
-        // If your import mapping intentionally controls this elsewhere, remove this block.
         if (!product.VisibleIndividually)
         {
             product.VisibleIndividually = true;
             changed = true;
         }
 
-        // Standalone products should not be forced into attribute-combination inventory mode.
         if (product.ManageInventoryMethod == ManageInventoryMethod.ManageStockByAttributes)
         {
             product.ManageInventoryMethod = ManageInventoryMethod.ManageStock;
@@ -412,7 +633,10 @@ public class AkeneoVariantRelationshipService(
         }
 
         if (changed)
+        {
+            product.UpdatedOnUtc = DateTime.UtcNow;
             await productService.UpdateProductAsync(product);
+        }
 
         return new AkeneoVariantSyncResult
         {
@@ -420,14 +644,34 @@ public class AkeneoVariantRelationshipService(
             Source = resolution.Source,
             FamilyVariantImportConfigurationId = resolution.Options?.FamilyVariantImportConfigurationId,
             NopProductId = product.Id,
-            NopProductAttributeCombinationId = null
+            DestinationChanged = changed
         };
+    }
+
+    private static async Task<Product> RequireChildProductAsync(
+        AkeneoVariantImportContext context,
+        Func<Task<Product>> upsertChildProductAsync)
+    {
+        if (upsertChildProductAsync == null)
+            throw new ArgumentNullException(nameof(upsertChildProductAsync));
+
+        var product = await upsertChildProductAsync();
+
+        if (product == null)
+        {
+            throw new NopException(
+                $"Akeneo variant '{context.AkeneoUuid ?? context.AkeneoIdentifier}' could not be synchronized as a child product.");
+        }
+
+        return product;
     }
 
     private string BuildAssociatedValueName(AkeneoVariantImportContext context)
     {
-        var axisValues = context.AxisValuesByAkeneoCode
-            .Select(item => (AxisCode: item.Key, DisplayValue: item.Value))
+        var axisValues = context.AxisValuesByAkeneoCode.Values
+            .Select(item => (
+                AxisCode: item.AkeneoAttributeCode,
+                DisplayValue: item.DisplayName))
             .ToList();
 
         var valueName = AkeneoAssociatedValueNameTemplate.Render(
@@ -451,10 +695,11 @@ public class AkeneoVariantRelationshipService(
             ?? string.Empty;
     }
 
-    private static string BuildAttributesXml(IEnumerable<ProductAttributeSelection> selections)
+    private static string BuildAttributesXml(
+        IEnumerable<ProductAttributeSelection> selections)
     {
         var ordered = selections
-            .OrderBy(x => x.ProductAttributeMappingId)
+            .OrderBy(item => item.ProductAttributeMappingId)
             .ToList();
 
         var document = new XDocument(
@@ -468,11 +713,18 @@ public class AkeneoVariantRelationshipService(
         return document.ToString(SaveOptions.DisableFormatting);
     }
 
-    private class ProductAttributeSelection
+    private sealed class ProductAttributeSelection
     {
-        public int ProductAttributeMappingId { get; set; }
+        public int ProductAttributeMappingId { get; init; }
 
-        public int ProductAttributeValueId { get; set; }
+        public int ProductAttributeValueId { get; init; }
     }
-}
 
+    private sealed record ProductAttributeMappingResult(
+        ProductAttributeMapping Mapping,
+        bool Changed);
+
+    private sealed record AxisValueResult(
+        ProductAttributeValue Value,
+        bool Changed);
+}

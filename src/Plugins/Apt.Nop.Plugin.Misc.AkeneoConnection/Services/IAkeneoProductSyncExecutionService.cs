@@ -10,6 +10,11 @@ public interface IAkeneoProductSyncExecutionService
         SyncType syncType,
         CancellationToken cancellationToken = default);
 
+    Task<AkeneoProductSyncExecutionResult> SyncProductByUuidAsync(
+        int profileId,
+        string akeneoProductUuid,
+        CancellationToken cancellationToken = default);
+
     Task<AkeneoProductSyncExecutionResult> ImportProductsAsync(
         AkeneoProductBatchImportRequest request,
         SyncType syncType,

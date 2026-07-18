@@ -1,4 +1,4 @@
-﻿
+﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Services.Common;
@@ -25,7 +25,12 @@ public class AkeneoProductCustomPropertySynchronizer(
             var key = mapped.Mapping.NopTargetKey?.Trim();
 
             if (string.IsNullOrWhiteSpace(key))
-                key = mapped.Mapping.AkeneoAttributeCode?.Trim();
+            {
+                var attributeCode = mapped.Mapping.AkeneoAttributeCode?.Trim();
+                key = string.IsNullOrWhiteSpace(attributeCode)
+                    ? null
+                    : $"Apt.Akeneo.CustomProperty.{attributeCode}";
+            }
 
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -57,7 +62,9 @@ public class AkeneoProductCustomPropertySynchronizer(
                 continue;
             }
 
-            var desired = mapped.DisplayValue?.Trim() ?? string.Empty;
+            var desired = mapped.Value?.DisplayValues is { Count: > 1 } values
+                ? JsonSerializer.Serialize(values)
+                : mapped.DisplayValue?.Trim() ?? string.Empty;
 
             if (string.Equals(existing, desired, StringComparison.Ordinal))
                 continue;

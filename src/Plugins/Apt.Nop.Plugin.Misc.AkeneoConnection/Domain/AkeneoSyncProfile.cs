@@ -1,4 +1,4 @@
-﻿using Nop.Core;
+using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
@@ -34,6 +34,9 @@ public class AkeneoSyncProfile : BaseEntity
     public int SpecificationAttributeSyncModeId { get; set; }
 
     public int ProductAttributeSyncModeId { get; set; }
+
+    // Authoritative full-run lifecycle policy
+    public int MissingProductBehaviorId { get; set; }
 
     // Destination metadata creation
     public bool CreateMissingSpecificationAttributeOptions { get; set; }
@@ -147,13 +150,29 @@ public enum AkeneoCollectionSyncMode
     Merge = 10,
 
     /// <summary>
-    /// Make the relevant nopCommerce collection match Akeneo.
+    /// Remove only stale relationships previously created and owned by this plugin.
     /// </summary>
-    Replace = 20
+    ReplaceManaged = 20,
+
+    /// <summary>
+    /// Make the whole nopCommerce collection match Akeneo, including deleting
+    /// manually maintained relationships. This is intentionally explicit.
+    /// </summary>
+    ReplaceAll = 30
 }
 
 public enum AkeneoMissingValueBehavior
 {
     PreserveExisting = 0,
     ClearExisting = 10
+}
+
+public enum AkeneoMissingProductBehavior
+{
+    Ignore = 0,
+    Unpublish = 10,
+    DisablePurchasing = 20,
+    DetachFromParent = 30,
+    SoftDelete = 40,
+    Delete = 50
 }

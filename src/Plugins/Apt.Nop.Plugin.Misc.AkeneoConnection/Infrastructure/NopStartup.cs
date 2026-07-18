@@ -1,6 +1,8 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+﻿using System.Net;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +31,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncProfileService, AkeneoSyncProfileService>();
         services.AddScoped<IAkeneoSyncItemLogService, AkeneoSyncItemLogService>();
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
+        services.AddScoped<IAkeneoValueTransformationService, AkeneoValueTransformationService>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();
@@ -39,6 +42,12 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoVariantRelationshipService, AkeneoVariantRelationshipService>();
         services.AddScoped<IAkeneoVariantRelationshipResolver, AkeneoVariantRelationshipResolver>();
         services.AddScoped<INopVariantStructureDetector, NopVariantStructureDetector>();
+        services.AddScoped<IAkeneoProductSyncStateService, AkeneoProductSyncStateService>();
+        services.AddScoped<IAkeneoManagedRelationService, AkeneoManagedRelationService>();
+        services.AddScoped<IAkeneoSyncLeaseService, AkeneoSyncLeaseService>();
+        services.AddScoped<IAkeneoCatalogReconciliationService, AkeneoCatalogReconciliationService>();
+        services.AddScoped<IAkeneoVariantRepresentationCleanupService, AkeneoVariantRepresentationCleanupService>();
+        services.AddScoped<IAkeneoManagedVariantCleanupService, AkeneoManagedVariantCleanupService>();
 
         services.AddScoped<
             IAkeneoProductSyncService,
@@ -84,7 +93,26 @@ public class NopStartup : INopStartup
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
 
-        
+        services.AddTransient<AkeneoTransientRetryHandler>();
+
+        services.AddHttpClient(AkeneoConnectionConstants.SystemName, client =>
+            {
+                // Generous overall ceiling; the retry handler applies a shorter PER-ATTEMPT
+                // timeout so a single hung request can't consume the whole budget.
+                client.Timeout = TimeSpan.FromSeconds(100);
+                client.DefaultRequestHeaders.Accept.Add(
+                    new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    "Apt-NopCommerce-AkeneoConnection/1.0");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                MaxConnectionsPerServer = 20
+            })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(5))
+            .AddHttpMessageHandler<AkeneoTransientRetryHandler>();
     }
 
     /// <summary>

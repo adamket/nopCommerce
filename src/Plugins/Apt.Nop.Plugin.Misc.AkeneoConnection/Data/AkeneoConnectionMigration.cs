@@ -1,6 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
-using LinqToDB.Reflection;
 using Nop.Core;
 using Nop.Data;
 using Nop.Data.Extensions;
@@ -9,7 +8,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-07-10 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
+[NopMigration("2026-07-12 00:00:00", "AkeneoConnection: Create tables", MigrationProcessType.Installation)]
 public class AkeneoConnectionMigration(INopDataProvider dataProvider) : MigrationBase
 {
     public override void Up()
@@ -26,6 +25,9 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
         CreateTable<AkeneoFamilyMapping>();
         CreateTable<AkeneoFamilyVariantAxisMapping>();
         CreateTable<AkeneoFamilySubModelRule>();
+        CreateTable<AkeneoProductSyncState>();
+        CreateTable<AkeneoManagedRelation>();
+        CreateTable<AkeneoSyncLease>();
 
         var configurationTable =
             NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping));
@@ -90,6 +92,73 @@ public class AkeneoConnectionMigration(INopDataProvider dataProvider) : Migratio
                 .OnTable(itemLogTable)
                 .OnColumn(nameof(AkeneoSyncItemLog.SyncRunRecordId)).Ascending();
         }
+
+
+        var syncStateTable = NameCompatibilityManager.GetTableName(typeof(AkeneoProductSyncState));
+        var managedRelationTable = NameCompatibilityManager.GetTableName(typeof(AkeneoManagedRelation));
+        var syncLeaseTable = NameCompatibilityManager.GetTableName(typeof(AkeneoSyncLease));
+        var runRecordTable = NameCompatibilityManager.GetTableName(typeof(AkeneoSyncRunRecord));
+
+        Alter.Table(syncStateTable)
+            .AlterColumn(nameof(AkeneoProductSyncState.AkeneoCode)).AsString(255).Nullable();
+        Alter.Table(syncStateTable)
+            .AlterColumn(nameof(AkeneoProductSyncState.AkeneoUuid)).AsString(64).Nullable();
+        Alter.Table(syncStateTable)
+            .AlterColumn(nameof(AkeneoProductSyncState.AkeneoParentCode)).AsString(255).Nullable();
+        Alter.Table(syncStateTable)
+            .AlterColumn(nameof(AkeneoProductSyncState.LastDesiredStateHash)).AsString(64).Nullable();
+
+        Create.Index($"IX_{syncStateTable}_ProfileUuid")
+            .OnTable(syncStateTable)
+            .OnColumn(nameof(AkeneoProductSyncState.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoProductSyncState.AkeneoEntityTypeId)).Ascending()
+            .OnColumn(nameof(AkeneoProductSyncState.AkeneoUuid)).Ascending();
+
+        Create.Index($"IX_{syncStateTable}_ProfileCode")
+            .OnTable(syncStateTable)
+            .OnColumn(nameof(AkeneoProductSyncState.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoProductSyncState.AkeneoEntityTypeId)).Ascending()
+            .OnColumn(nameof(AkeneoProductSyncState.AkeneoCode)).Ascending();
+
+        Create.Index($"IX_{syncStateTable}_LastSeen")
+            .OnTable(syncStateTable)
+            .OnColumn(nameof(AkeneoProductSyncState.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoProductSyncState.LastSeenRunRecordId)).Ascending();
+
+        Alter.Table(managedRelationTable)
+            .AlterColumn(nameof(AkeneoManagedRelation.AkeneoAttributeCode)).AsString(255).Nullable();
+        Alter.Table(managedRelationTable)
+            .AlterColumn(nameof(AkeneoManagedRelation.AkeneoValueCode)).AsString(255).Nullable();
+
+        Create.Index($"IX_{managedRelationTable}_ProductType")
+            .OnTable(managedRelationTable)
+            .OnColumn(nameof(AkeneoManagedRelation.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoManagedRelation.NopProductId)).Ascending()
+            .OnColumn(nameof(AkeneoManagedRelation.RelationTypeId)).Ascending();
+
+        Create.Index($"IX_{managedRelationTable}_RelationEntity")
+            .OnTable(managedRelationTable)
+            .OnColumn(nameof(AkeneoManagedRelation.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoManagedRelation.RelationTypeId)).Ascending()
+            .OnColumn(nameof(AkeneoManagedRelation.NopRelationEntityId)).Ascending()
+            .WithOptions().Unique();
+
+        Alter.Table(syncLeaseTable)
+            .AlterColumn(nameof(AkeneoSyncLease.LockKey)).AsString(200).NotNullable();
+
+        Create.Index($"IX_{syncLeaseTable}_LockKey")
+            .OnTable(syncLeaseTable)
+            .OnColumn(nameof(AkeneoSyncLease.LockKey)).Ascending()
+            .WithOptions().Unique();
+
+        Alter.Table(runRecordTable)
+            .AlterColumn(nameof(AkeneoSyncRunRecord.ScopeHash)).AsString(64).Nullable();
+
+        Create.Index($"IX_{runRecordTable}_ProfileStatus")
+            .OnTable(runRecordTable)
+            .OnColumn(nameof(AkeneoSyncRunRecord.SyncProfileId)).Ascending()
+            .OnColumn(nameof(AkeneoSyncRunRecord.SyncStatusId)).Ascending()
+            .OnColumn(nameof(AkeneoSyncRunRecord.StartedOnUtc)).Descending();
 
     }
 

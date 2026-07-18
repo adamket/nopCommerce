@@ -1,77 +1,217 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Humanizer;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoProductSyncExecutionService(
-    IAkeneoProductBatchSyncService productImportService,
+    IAkeneoProductBatchSyncService productSyncService,
     IAkeneoSyncRunRecordService syncRunRecordService,
-    IAkeneoProductBatchImportRequestFactory productBatchImportRequestFactory,
-    IAkeneoSyncProfileService syncProfileService)
+    IAkeneoProductBatchImportRequestFactory requestFactory,
+    IAkeneoSyncProfileService syncProfileService,
+    IAkeneoSyncLeaseService syncLeaseService)
     : IAkeneoProductSyncExecutionService
 {
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
+
     public async Task<AkeneoProductSyncExecutionResult> ImportProductsByProfileAsync(
         int profileId,
         SyncType syncType,
         CancellationToken cancellationToken = default)
     {
-        var activeRun = await GetActiveSyncRunAsync();
+        var validation = await ValidateProfileAsync(profileId);
+        if (validation.Result != null)
+            return validation.Result;
 
-        if (activeRun != null)
-            return BuildAlreadyRunningResult(profileId, activeRun.Id);
+        var profile = validation.Profile;
+        var lease = await syncLeaseService.TryAcquireAsync(
+            BuildLockKey(profile.Id),
+            LeaseDuration);
 
-        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(profileId);
+        if (lease == null)
+        {
+            var activeRun = await syncRunRecordService.GetActiveRunAsync(null);
+            return BuildAlreadyRunningResult(profile.Id, activeRun?.Id);
+        }
 
-        if (profile == null)
+        try
+        {
+            var runMode = ResolveRunMode(syncType);
+            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            DateTime? previousWatermarkUtc = null;
+
+            if (runMode == AkeneoRunMode.Delta &&
+                (AkeneoUpdatedFilterMode)profile.UpdatedFilterModeId ==
+                AkeneoUpdatedFilterMode.SinceLastSuccessfulRun)
+            {
+                var previousRun = await syncRunRecordService.GetLastSuccessfulRunAsync(
+                    profile.Id,
+                    scopeHash);
+
+                previousWatermarkUtc = previousRun?.WatermarkUtc;
+            }
+
+            var runRecord = CreateRunRecord(
+                profile.Id,
+                syncType,
+                runMode,
+                scopeHash,
+                JsonSerializer.Serialize(profile).Truncate(4000));
+
+            await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
+            await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+
+            var request = requestFactory.CreateFromProfile(
+                profile,
+                runRecord.Id,
+                previousWatermarkUtc,
+                runMode);
+
+            request.SyncLeaseId = lease.Id;
+            runRecord.SearchJsonSnapshot = request.SearchJson?.Truncate(4000);
+            await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+            return await SyncProductsCoreAsync(
+                request,
+                runRecord,
+                profile.Id,
+                cancellationToken);
+        }
+        finally
+        {
+            await syncLeaseService.ReleaseAsync(lease);
+        }
+    }
+
+    public async Task<AkeneoProductSyncExecutionResult> SyncProductByUuidAsync(
+        int profileId,
+        string akeneoProductUuid,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = await ValidateProfileAsync(profileId);
+        if (validation.Result != null)
+            return validation.Result;
+
+        if (string.IsNullOrWhiteSpace(akeneoProductUuid))
         {
             return new AkeneoProductSyncExecutionResult
             {
                 Success = false,
-                ProfileNotFound = true,
                 ProfileId = profileId,
                 SyncStatus = SyncStatus.Failed,
-                Message = "Akeneo sync profile was not found."
+                Message = "Akeneo product UUID is required.",
+                Errors = new List<string> { "Akeneo product UUID is required." }
             };
         }
 
-        if (!profile.Enabled)
+        var profile = validation.Profile;
+        var lease = await syncLeaseService.TryAcquireAsync(
+            BuildLockKey(profile.Id),
+            LeaseDuration);
+
+        if (lease == null)
         {
-            return new AkeneoProductSyncExecutionResult
+            var activeRun = await syncRunRecordService.GetActiveRunAsync(null);
+            return BuildAlreadyRunningResult(profile.Id, activeRun?.Id);
+        }
+
+        try
+        {
+            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            var runRecord = CreateRunRecord(
+                profile.Id,
+                SyncType.ManualProductSync,
+                AkeneoRunMode.SingleProduct,
+                scopeHash,
+                JsonSerializer.Serialize(profile).Truncate(4000));
+
+            await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
+            await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+
+            var request = requestFactory.CreateFromProfile(
+                profile,
+                runRecord.Id,
+                runMode: AkeneoRunMode.SingleProduct);
+
+            request.SyncLeaseId = lease.Id;
+            request.AkeneoProductUuid = akeneoProductUuid.Trim();
+
+            try
             {
-                Success = false,
-                ProfileDisabled = true,
-                ProfileId = profile.Id,
-                SyncStatus = SyncStatus.Failed,
-                Message = "This Akeneo sync profile is disabled."
-            };
+                var itemResult = await productSyncService.SyncProductByUuidAsync(
+                    request,
+                    cancellationToken);
+
+                ApplyItemResultToRunRecord(runRecord, itemResult);
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = itemResult.Success,
+                    CompletedWithErrors = !itemResult.Success,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = (SyncStatus)runRecord.SyncStatusId,
+                    Message = itemResult.Success
+                        ? $"Akeneo product synchronization {itemResult.ActionType.ToString().ToLowerInvariant()}."
+                        : "Akeneo product synchronization failed.",
+                    TotalRead = 1,
+                    CreatedCount = itemResult.ActionType == SyncItemActionType.Created ? 1 : 0,
+                    UpdatedCount = itemResult.ActionType == SyncItemActionType.Updated ? 1 : 0,
+                    SkippedCount = itemResult.ActionType == SyncItemActionType.Skipped ? 1 : 0,
+                    FailedCount = itemResult.Success ? 0 : 1,
+                    WarningCount = itemResult.Warnings.Any() ? 1 : 0,
+                    ItemActionType = itemResult.ActionType,
+                    NopProductId = itemResult.NopProductId,
+                    AkeneoProductUuid = itemResult.AkeneoProductUuid,
+                    AkeneoIdentifier = itemResult.AkeneoIdentifier,
+                    Errors = itemResult.Errors.ToList(),
+                    Warnings = itemResult.Warnings.ToList(),
+                    Messages = itemResult.Messages.ToList()
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                runRecord.FinishedOnUtc = DateTime.UtcNow;
+                runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
+                runRecord.ErrorSummary = "Product synchronization was canceled.";
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = false,
+                    Canceled = true,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = SyncStatus.Cancelled,
+                    Message = "Akeneo product synchronization was canceled."
+                };
+            }
+            catch (Exception ex)
+            {
+                runRecord.FinishedOnUtc = DateTime.UtcNow;
+                runRecord.SyncStatusId = (int)SyncStatus.Failed;
+                runRecord.ErrorSummary = ex.Message.Truncate(4000);
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = false,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = SyncStatus.Failed,
+                    Message = $"Akeneo product synchronization failed: {ex.Message}",
+                    Errors = new List<string> { ex.Message }
+                };
+            }
         }
-
-        DateTime? lastSuccessfulRunStartedOnUtc = null;
-
-        if ((AkeneoUpdatedFilterMode)profile.UpdatedFilterModeId ==
-            AkeneoUpdatedFilterMode.SinceLastSuccessfulRun)
+        finally
         {
-            lastSuccessfulRunStartedOnUtc = await GetLastSuccessfulRunStartedOnUtcAsync();
+            await syncLeaseService.ReleaseAsync(lease);
         }
-
-        var runRecord = new AkeneoSyncRunRecord
-        {
-            SyncTypeId = (int)syncType,
-            StartedOnUtc = DateTime.UtcNow,
-            SyncStatusId = (int)SyncStatus.Started,
-            ErrorSummary = null
-        };
-
-        await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
-
-        var request = productBatchImportRequestFactory.CreateFromProfile(
-            profile,
-            runRecord.Id,
-            lastSuccessfulRunStartedOnUtc);
-
-        return await ImportProductsCoreAsync(request, runRecord, profile.Id, cancellationToken);
     }
 
     public async Task<AkeneoProductSyncExecutionResult> ImportProductsAsync(
@@ -80,30 +220,52 @@ public class AkeneoProductSyncExecutionService(
         int? profileId = null,
         CancellationToken cancellationToken = default)
     {
-        var activeRun = await GetActiveSyncRunAsync();
+        ArgumentNullException.ThrowIfNull(request);
 
-        if (activeRun != null)
-            return BuildAlreadyRunningResult(profileId, activeRun.Id);
-        var runRecord = new AkeneoSyncRunRecord
+        profileId ??= request.SyncProfileId;
+        request.SyncProfileId = profileId;
+        request.RunMode = ResolveRunMode(syncType);
+
+        var lease = await syncLeaseService.TryAcquireAsync(
+            BuildLockKey(profileId),
+            LeaseDuration);
+
+        if (lease == null)
         {
-            SyncTypeId = (int)syncType,
-            StartedOnUtc = DateTime.UtcNow,
-            SyncStatusId = (int)SyncStatus.Started,
-            ErrorSummary = null
-        };
+            var activeRun = await syncRunRecordService.GetActiveRunAsync(null);
+            return BuildAlreadyRunningResult(profileId, activeRun?.Id);
+        }
 
-        await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
+        try
+        {
+            var runRecord = CreateRunRecord(
+                profileId,
+                syncType,
+                request.RunMode,
+                request.ScopeHash,
+                null);
 
-        request.SyncRunRecordId = runRecord.Id;
+            runRecord.SearchJsonSnapshot = request.SearchJson?.Truncate(4000);
 
-        return await ImportProductsCoreAsync(
-            request,
-            runRecord,
-            profileId,
-            cancellationToken);
+            await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
+            await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+
+            request.SyncRunRecordId = runRecord.Id;
+            request.SyncLeaseId = lease.Id;
+
+            return await SyncProductsCoreAsync(
+                request,
+                runRecord,
+                profileId,
+                cancellationToken);
+        }
+        finally
+        {
+            await syncLeaseService.ReleaseAsync(lease);
+        }
     }
 
-    private async Task<AkeneoProductSyncExecutionResult> ImportProductsCoreAsync(
+    private async Task<AkeneoProductSyncExecutionResult> SyncProductsCoreAsync(
         AkeneoProductBatchImportRequest request,
         AkeneoSyncRunRecord runRecord,
         int? profileId,
@@ -111,12 +273,11 @@ public class AkeneoProductSyncExecutionService(
     {
         try
         {
-            var result = await productImportService.SyncProductsAsync(
+            var result = await productSyncService.SyncProductsAsync(
                 request,
                 cancellationToken);
 
-            ApplyImportResultToRunRecord(runRecord, result);
-
+            ApplyResultToRunRecord(runRecord, result);
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return BuildExecutionResult(runRecord, result, profileId);
@@ -125,8 +286,7 @@ public class AkeneoProductSyncExecutionService(
         {
             runRecord.FinishedOnUtc = DateTime.UtcNow;
             runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-            runRecord.ErrorSummary = "Product import was canceled.";
-
+            runRecord.ErrorSummary = "Product synchronization was canceled.";
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return new AkeneoProductSyncExecutionResult
@@ -136,7 +296,7 @@ public class AkeneoProductSyncExecutionService(
                 ProfileId = profileId,
                 SyncRunRecordId = runRecord.Id,
                 SyncStatus = SyncStatus.Cancelled,
-                Message = "Akeneo product import was canceled."
+                Message = "Akeneo product synchronization was canceled."
             };
         }
         catch (Exception ex)
@@ -144,7 +304,6 @@ public class AkeneoProductSyncExecutionService(
             runRecord.FinishedOnUtc = DateTime.UtcNow;
             runRecord.SyncStatusId = (int)SyncStatus.Failed;
             runRecord.ErrorSummary = ex.Message.Truncate(4000);
-
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return new AkeneoProductSyncExecutionResult
@@ -153,13 +312,91 @@ public class AkeneoProductSyncExecutionService(
                 ProfileId = profileId,
                 SyncRunRecordId = runRecord.Id,
                 SyncStatus = SyncStatus.Failed,
-                Message = $"Akeneo product import failed: {ex.Message}",
+                Message = $"Akeneo product synchronization failed: {ex.Message}",
                 Errors = new List<string> { ex.Message }
             };
         }
     }
 
-    private static void ApplyImportResultToRunRecord(
+    private async Task<(AkeneoSyncProfile Profile, AkeneoProductSyncExecutionResult Result)>
+        ValidateProfileAsync(int profileId)
+    {
+        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(profileId);
+
+        if (profile == null)
+        {
+            return (null, new AkeneoProductSyncExecutionResult
+            {
+                Success = false,
+                ProfileNotFound = true,
+                ProfileId = profileId,
+                SyncStatus = SyncStatus.Failed,
+                Message = "Akeneo sync profile was not found."
+            });
+        }
+
+        if (!profile.Enabled)
+        {
+            return (profile, new AkeneoProductSyncExecutionResult
+            {
+                Success = false,
+                ProfileDisabled = true,
+                ProfileId = profile.Id,
+                SyncStatus = SyncStatus.Failed,
+                Message = "This Akeneo sync profile is disabled."
+            });
+        }
+
+        return (profile, null);
+    }
+
+    private static AkeneoSyncRunRecord CreateRunRecord(
+        int? profileId,
+        SyncType syncType,
+        AkeneoRunMode runMode,
+        string scopeHash,
+        string profileSnapshotJson)
+    {
+        var startedOnUtc = DateTime.UtcNow;
+
+        return new AkeneoSyncRunRecord
+        {
+            SyncProfileId = profileId,
+            SyncTypeId = (int)syncType,
+            RunModeId = (int)runMode,
+            StartedOnUtc = startedOnUtc,
+            WatermarkUtc = startedOnUtc,
+            SyncStatusId = (int)SyncStatus.Started,
+            ScopeHash = scopeHash,
+            ProfileSnapshotJson = profileSnapshotJson
+        };
+    }
+
+    private static void ApplyItemResultToRunRecord(
+        AkeneoSyncRunRecord runRecord,
+        AkeneoProductImportResult result)
+    {
+        runRecord.FinishedOnUtc = DateTime.UtcNow;
+        runRecord.TotalRead = 1;
+        runRecord.CreatedCount = result.ActionType == SyncItemActionType.Created ? 1 : 0;
+        runRecord.UpdatedCount = result.ActionType == SyncItemActionType.Updated ? 1 : 0;
+        runRecord.SkippedCount = result.ActionType == SyncItemActionType.Skipped ? 1 : 0;
+        runRecord.FailedCount = result.Success ? 0 : 1;
+        runRecord.WarningCount = result.Warnings.Any() ? 1 : 0;
+        runRecord.CompletedAllPages = true;
+        runRecord.WasTruncated = false;
+        runRecord.ReconciliationCompleted = false;
+        runRecord.SyncStatusId = !result.Success
+            ? (int)SyncStatus.CompletedWithErrors
+            : result.Warnings.Any()
+                ? (int)SyncStatus.CompletedWithWarnings
+                : (int)SyncStatus.Completed;
+        runRecord.ErrorSummary = result.Errors.Any()
+            ? string.Join(Environment.NewLine, result.Errors).Truncate(4000)
+            : null;
+    }
+
+    private static void ApplyResultToRunRecord(
         AkeneoSyncRunRecord runRecord,
         AkeneoProductBatchImportResult result)
     {
@@ -169,23 +406,14 @@ public class AkeneoProductSyncExecutionService(
         runRecord.UpdatedCount = result.UpdatedCount;
         runRecord.SkippedCount = result.SkippedCount;
         runRecord.FailedCount = result.FailedCount;
-
-        if (result.Canceled)
-        {
-            runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-            runRecord.ErrorSummary = "Product import was canceled.";
-            return;
-        }
-
-        if (result.Errors.Any() || result.FailedCount > 0)
-        {
-            runRecord.SyncStatusId = (int)SyncStatus.CompletedWithErrors;
-            runRecord.ErrorSummary = string.Join(Environment.NewLine, result.Errors).Truncate(4000);
-            return;
-        }
-
-        runRecord.SyncStatusId = (int)SyncStatus.Completed;
-        runRecord.ErrorSummary = null;
+        runRecord.WarningCount = result.WarningCount;
+        runRecord.CompletedAllPages = result.CompletedAllPages;
+        runRecord.WasTruncated = result.WasTruncated;
+        runRecord.ReconciliationCompleted = result.ReconciliationCompleted;
+        runRecord.SyncStatusId = (int)result.SyncStatus;
+        runRecord.ErrorSummary = result.Errors.Any()
+            ? string.Join(Environment.NewLine, result.Errors).Truncate(4000)
+            : null;
     }
 
     private static AkeneoProductSyncExecutionResult BuildExecutionResult(
@@ -193,80 +421,84 @@ public class AkeneoProductSyncExecutionService(
         AkeneoProductBatchImportResult result,
         int? profileId)
     {
-        var completedWithErrors = result.Errors.Any() || result.FailedCount > 0;
-        var syncStatus = (SyncStatus)runRecord.SyncStatusId;
-
         return new AkeneoProductSyncExecutionResult
         {
-            Success = !result.Canceled && !completedWithErrors,
+            Success = result.Success,
             Canceled = result.Canceled,
-            CompletedWithErrors = completedWithErrors,
+            CompletedWithErrors = result.Errors.Any() || result.FailedCount > 0,
             ProfileId = profileId,
             SyncRunRecordId = runRecord.Id,
-            SyncStatus = syncStatus,
-            Message = BuildImportMessage(result),
+            SyncStatus = result.SyncStatus,
+            Message = BuildSyncMessage(result),
             TotalRead = result.TotalRead,
             CreatedCount = result.CreatedCount,
             UpdatedCount = result.UpdatedCount,
             SkippedCount = result.SkippedCount,
             FailedCount = result.FailedCount,
             WarningCount = result.WarningCount,
-            Errors = result.Errors,
-            Messages = result.Messages
+            ReconciledCount = result.ReconciledCount,
+            Errors = result.Errors.ToList(),
+            Warnings = result.LoggedItemResults
+                .SelectMany(item => item.Warnings)
+                .Distinct(StringComparer.Ordinal)
+                .Take(100)
+                .ToList(),
+            Messages = result.Messages.ToList()
         };
     }
 
-    private static string BuildImportMessage(
-        AkeneoProductBatchImportResult result)
+    private static string BuildSyncMessage(AkeneoProductBatchImportResult result)
     {
         if (result.Canceled)
-            return "Akeneo product import was canceled.";
+            return "Akeneo product synchronization was canceled.";
 
         var message =
-            $"Akeneo product import completed. Read: {result.TotalRead}, Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, Skipped: {result.SkippedCount}, Failed: {result.FailedCount}.";
+            $"Akeneo product synchronization completed. Read: {result.TotalRead}, " +
+            $"Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, " +
+            $"Skipped: {result.SkippedCount}, Failed: {result.FailedCount}, " +
+            $"Reconciled: {result.ReconciledCount}.";
 
         if (result.Errors.Any() || result.FailedCount > 0)
-            return "Akeneo product import completed with errors. " + message;
+            return "Akeneo product synchronization completed with errors. " + message;
+
+        if (result.WarningCount > 0)
+            return "Akeneo product synchronization completed with warnings. " + message;
 
         return message;
     }
 
-    private async Task<AkeneoSyncRunRecord> GetActiveSyncRunAsync()
+    private static AkeneoRunMode ResolveRunMode(SyncType syncType) => syncType switch
     {
-        var windowStartUtc = DateTime.UtcNow.AddMinutes(-120); //TODO TODO - this is very random
+        SyncType.InitialImport => AkeneoRunMode.Full,
+        SyncType.DeltaSync => AkeneoRunMode.Delta,
+        SyncType.ManualProductSync => AkeneoRunMode.SingleProduct,
+        SyncType.ManualProfileSync => AkeneoRunMode.Delta,
+        SyncType.ManualFullProfileSync => AkeneoRunMode.Full,
+        SyncType.ScheduledFullSync => AkeneoRunMode.Full,
+        _ => AkeneoRunMode.Delta
+    };
 
-        var candidates = await syncRunRecordService.SearchAkeneoSyncRunRecordsAsync(
-            createdFromUtc: windowStartUtc,
-            syncStatusId: (int)SyncStatus.Started,
-            pageSize: 1);
-
-        return candidates.FirstOrDefault(record => record.FinishedOnUtc == null);
-    }
-
-    private async Task<DateTime?> GetLastSuccessfulRunStartedOnUtcAsync()
-    {
-        var recent = await syncRunRecordService.SearchAkeneoSyncRunRecordsAsync(
-            pageIndex: 0,
-            pageSize: 50);
-
-        return recent.FirstOrDefault(record =>
-                record.SyncStatusId == (int)SyncStatus.Completed ||
-                record.SyncStatusId == (int)SyncStatus.CompletedWithWarnings)
-            ?.StartedOnUtc;
-    }
+    // Profiles may overlap until an explicit ownership/priority policy is
+    // configured, so serialize catalog writers by default.
+    private static string BuildLockKey(int? profileId) =>
+        "akeneo-catalog-writer";
 
     private static AkeneoProductSyncExecutionResult BuildAlreadyRunningResult(
         int? profileId,
-        int activeRunRecordId)
+        int? activeRunRecordId)
     {
+        var suffix = activeRunRecordId.HasValue
+            ? $" (run record {activeRunRecordId.Value})"
+            : string.Empty;
+
         return new AkeneoProductSyncExecutionResult
         {
             Success = false,
             AlreadyRunning = true,
             ProfileId = profileId,
             SyncRunRecordId = activeRunRecordId,
-            SyncStatus = SyncStatus.Failed,
-            Message = $"An Akeneo sync is already running (run record {activeRunRecordId}). Skipped."
+            SyncStatus = SyncStatus.Started,
+            Message = $"An Akeneo sync for this scope is already running{suffix}."
         };
     }
 }

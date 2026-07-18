@@ -34,7 +34,19 @@ public class AkeneoProductSyncExecutionResult
 
     public int WarningCount { get; set; }
 
+    public int ReconciledCount { get; set; }
+
+    public SyncItemActionType? ItemActionType { get; set; }
+
+    public int? NopProductId { get; set; }
+
+    public string AkeneoProductUuid { get; set; }
+
+    public string AkeneoIdentifier { get; set; }
+
     public IList<string> Errors { get; set; } = new List<string>();
+
+    public IList<string> Warnings { get; set; } = new List<string>();
 
     public IList<string> Messages { get; set; } = new List<string>();
 

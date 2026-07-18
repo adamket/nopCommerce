@@ -16,7 +16,7 @@ public class AkeneoApiClient : IAkeneoApiClient
     private const int TokenCacheTimeMinutes = 60 * 24 * 30;
     private const int TokenExpirationBufferMinutes = 1;
     private const int DefaultTokenLifetimeSeconds = 3600;
-
+    private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(30);
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly AkeneoConnectionSettings _settings;
@@ -43,7 +43,6 @@ public class AkeneoApiClient : IAkeneoApiClient
         _settings = settings;
         _staticCacheManager = staticCacheManager;
 
-        // SystemName is "apt.nop.plugin.misc.akeneoconnection"
         _httpClient = httpClientFactory.CreateClient(AkeneoConnectionConstants.SystemName);
 
         if (!string.IsNullOrWhiteSpace(_settings.AkeneoConnectionBaseUrl))
@@ -467,7 +466,8 @@ public class AkeneoApiClient : IAkeneoApiClient
     }
 
     /// <summary>
-    /// Performs an authenticated GET, retrying once with a forced token refresh on a 401.
+    /// Performs an authenticated GET, refreshing once on 401 and retrying
+    /// bounded transient Akeneo/network responses with Retry-After support.
     /// The caller owns the returned response and must dispose it.
     /// </summary>
     private async Task<HttpResponseMessage> SendAuthenticatedGetAsync(
@@ -475,15 +475,96 @@ public class AkeneoApiClient : IAkeneoApiClient
         AkeneoApiCredentials apiCredentials,
         CancellationToken cancellationToken)
     {
-        var accessToken = await EnsureAuthenticatedAsync(apiCredentials, cancellationToken);
-        var response = await SendGetAsync(relativeOrAbsoluteUrl, accessToken, cancellationToken);
+        const int maxTransientRetries = 3;
+        var accessToken = await EnsureAuthenticatedAsync(
+            apiCredentials,
+            cancellationToken);
+        var tokenRefreshed = false;
 
-        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        for (var attempt = 0; ; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            HttpResponseMessage response;
+
+            try
+            {
+                response = await SendGetAsync(
+                    relativeOrAbsoluteUrl,
+                    accessToken,
+                    cancellationToken);
+            }
+            catch (HttpRequestException) when (attempt < maxTransientRetries)
+            {
+                await Task.Delay(
+                    GetRetryDelay(null, attempt),
+                    cancellationToken);
+                continue;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
+                !tokenRefreshed)
+            {
+                response.Dispose();
+                accessToken = await AuthenticateAsync(
+                    forceRefresh: true,
+                    cancellationToken,
+                    apiCredentials);
+                tokenRefreshed = true;
+                continue;
+            }
+
+            if (IsTransientStatusCode(response.StatusCode) &&
+                attempt < maxTransientRetries)
+            {
+                var delay = GetRetryDelay(response, attempt);
+                response.Dispose();
+                await Task.Delay(delay, cancellationToken);
+                continue;
+            }
+
             return response;
+        }
+    }
 
-        response.Dispose();
-        accessToken = await AuthenticateAsync(forceRefresh: true, cancellationToken, apiCredentials);
-        return await SendGetAsync(relativeOrAbsoluteUrl, accessToken, cancellationToken);
+    private static bool IsTransientStatusCode(HttpStatusCode statusCode) =>
+        statusCode == HttpStatusCode.RequestTimeout ||
+        statusCode == HttpStatusCode.TooManyRequests ||
+        statusCode == HttpStatusCode.InternalServerError ||
+        statusCode == HttpStatusCode.BadGateway ||
+        statusCode == HttpStatusCode.ServiceUnavailable ||
+        statusCode == HttpStatusCode.GatewayTimeout;
+
+    private static TimeSpan GetRetryDelay(
+        HttpResponseMessage response,
+        int attempt)
+    {
+        if (response?.Headers.RetryAfter?.Delta is { } retryAfterDelta &&
+            retryAfterDelta > TimeSpan.Zero)
+        {
+            return retryAfterDelta > TimeSpan.FromMinutes(2)
+                ? TimeSpan.FromMinutes(2)
+                : retryAfterDelta;
+        }
+
+        if (response?.Headers.RetryAfter?.Date is { } retryAfterDate)
+        {
+            var requestedDelay = retryAfterDate - DateTimeOffset.UtcNow;
+            if (requestedDelay > TimeSpan.Zero)
+            {
+                return requestedDelay > TimeSpan.FromMinutes(2)
+                    ? TimeSpan.FromMinutes(2)
+                    : requestedDelay;
+            }
+        }
+
+        var exponentialMilliseconds = Math.Min(
+            30000,
+            1000 * Math.Pow(2, attempt));
+        var jitterMilliseconds = Random.Shared.Next(100, 750);
+
+        return TimeSpan.FromMilliseconds(
+            exponentialMilliseconds + jitterMilliseconds);
     }
 
     private async Task<HttpResponseMessage> SendGetAsync(
@@ -491,11 +572,25 @@ public class AkeneoApiClient : IAkeneoApiClient
         string accessToken,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, UrlHelper.BuildUri(relativeOrAbsoluteUrl, _baseUrl));
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attemptCts.CancelAfter(PerAttemptTimeout);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, UrlHelper.BuildUri(relativeOrAbsoluteUrl, _baseUrl));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        return await _httpClient.SendAsync(request, cancellationToken);
+        try
+        {
+            return await _httpClient.SendAsync(request, attemptCts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Per-attempt timeout, not caller cancellation. Surface as transient so the
+            // retry loop treats it uniformly and it never reads as a user cancel.
+            throw new HttpRequestException(
+                $"Akeneo request timed out after {PerAttemptTimeout.TotalSeconds:N0}s.");
+        }
     }
 
     #endregion

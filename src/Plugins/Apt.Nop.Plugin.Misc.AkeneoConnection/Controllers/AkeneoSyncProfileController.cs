@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -206,6 +206,9 @@ public class AkeneoSyncProfileController(
 
         profile.ProductAttributeSyncModeId =
             model.ProductAttributeSyncModeId;
+
+        profile.MissingProductBehaviorId =
+            model.MissingProductBehaviorId;
 
         profile.UpdatedFilterModeId =
             model.UpdatedFilterModeId;

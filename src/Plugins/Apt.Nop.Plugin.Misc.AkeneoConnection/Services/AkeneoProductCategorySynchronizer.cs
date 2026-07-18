@@ -1,12 +1,14 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
 
+namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+
 public class AkeneoProductCategorySynchronizer(
     ICategoryService categoryService,
-    IAkeneoNopEntityMappingService entityMappingService)
+    IAkeneoNopEntityMappingService entityMappingService,
+    IAkeneoManagedRelationService managedRelationService)
     : IAkeneoProductSectionSynchronizer
 {
     public int Order => 300;
@@ -16,13 +18,13 @@ public class AkeneoProductCategorySynchronizer(
         CancellationToken cancellationToken = default)
     {
         if (context.Product == null ||
-            context.Request.CategorySyncMode ==
-                AkeneoCollectionSyncMode.Disabled)
+            context.Request.CategorySyncMode == AkeneoCollectionSyncMode.Disabled)
         {
             return;
         }
 
         var desiredCategoryIds = new HashSet<int>();
+        var desiredStateComplete = true;
 
         foreach (var categoryCode in context.Source.Categories
                      ?.Where(code => !string.IsNullOrWhiteSpace(code))
@@ -30,7 +32,7 @@ public class AkeneoProductCategorySynchronizer(
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                  ?? Enumerable.Empty<string>())
         {
-            await AddDesiredCategoryAsync(
+            desiredStateComplete &= await AddDesiredCategoryAsync(
                 categoryCode,
                 desiredCategoryIds,
                 context);
@@ -40,10 +42,9 @@ public class AkeneoProductCategorySynchronizer(
                      .GetMappings(NopTargetType.Category)
                      .Where(value => value.HasValue))
         {
-            foreach (var categoryCode in
-                     AkeneoSyncValueHelper.GetRawItems(mapped))
+            foreach (var categoryCode in AkeneoSyncValueHelper.GetRawItems(mapped))
             {
-                await AddDesiredCategoryAsync(
+                desiredStateComplete &= await AddDesiredCategoryAsync(
                     categoryCode,
                     desiredCategoryIds,
                     context);
@@ -55,43 +56,93 @@ public class AkeneoProductCategorySynchronizer(
                 context.Product.Id,
                 showHidden: true);
 
-        var currentCategoryIds = currentMappings
-            .Select(mapping => mapping.CategoryId)
-            .ToHashSet();
+        var currentByCategoryId = currentMappings
+            .GroupBy(mapping => mapping.CategoryId)
+            .ToDictionary(group => group.Key, group => group.First());
 
         foreach (var categoryId in desiredCategoryIds)
         {
-            if (currentCategoryIds.Contains(categoryId))
+            if (currentByCategoryId.ContainsKey(categoryId))
                 continue;
 
-            await categoryService.InsertProductCategoryAsync(
-                new ProductCategory
-                {
-                    ProductId = context.Product.Id,
-                    CategoryId = categoryId,
-                    DisplayOrder = 0
-                });
+            var productCategory = new ProductCategory
+            {
+                ProductId = context.Product.Id,
+                CategoryId = categoryId,
+                DisplayOrder = 0
+            };
+
+            await categoryService.InsertProductCategoryAsync(productCategory);
+
+            if (context.Request.SyncProfileId.HasValue)
+            {
+                await managedRelationService.UpsertAsync(
+                    context.Request.SyncProfileId.Value,
+                    context.Request.SyncRunRecordId,
+                    context.Product.Id,
+                    AkeneoManagedRelationType.ProductCategory,
+                    productCategory.Id,
+                    akeneoValueCode: categoryId.ToString());
+            }
 
             context.MarkChanged();
         }
 
-        if (context.Request.CategorySyncMode !=
-            AkeneoCollectionSyncMode.Replace)
+        if (context.Request.CategorySyncMode == AkeneoCollectionSyncMode.Merge)
+            return;
+
+        if (!desiredStateComplete)
         {
+            context.Result.AddWarning(
+                "Category removal was skipped because the complete desired category state could not be resolved.");
             return;
         }
 
-        foreach (var staleMapping in currentMappings.Where(mapping =>
-                     !desiredCategoryIds.Contains(mapping.CategoryId)))
+        if (context.Request.CategorySyncMode == AkeneoCollectionSyncMode.ReplaceAll)
         {
-            await categoryService.DeleteProductCategoryAsync(
-                staleMapping);
+            foreach (var staleMapping in currentMappings.Where(mapping =>
+                         !desiredCategoryIds.Contains(mapping.CategoryId)))
+            {
+                await categoryService.DeleteProductCategoryAsync(staleMapping);
+                context.MarkChanged();
+            }
 
+            return;
+        }
+
+        if (!context.Request.SyncProfileId.HasValue)
+        {
+            context.Result.AddWarning(
+                "Replace-managed category synchronization requires a sync profile. No categories were removed.");
+            return;
+        }
+
+        var managedRelations = await managedRelationService.GetByProductAsync(
+            context.Request.SyncProfileId.Value,
+            context.Product.Id,
+            AkeneoManagedRelationType.ProductCategory);
+
+        foreach (var relation in managedRelations)
+        {
+            var current = currentMappings.FirstOrDefault(mapping =>
+                mapping.Id == relation.NopRelationEntityId);
+
+            if (current == null)
+            {
+                await managedRelationService.DeleteAsync(relation);
+                continue;
+            }
+
+            if (desiredCategoryIds.Contains(current.CategoryId))
+                continue;
+
+            await categoryService.DeleteProductCategoryAsync(current);
+            await managedRelationService.DeleteAsync(relation);
             context.MarkChanged();
         }
     }
 
-    private async Task AddDesiredCategoryAsync(
+    private async Task<bool> AddDesiredCategoryAsync(
         string categoryCode,
         ISet<int> desiredCategoryIds,
         AkeneoProductSyncContext context)
@@ -105,12 +156,20 @@ public class AkeneoProductCategorySynchronizer(
         if (!categoryId.HasValue)
         {
             context.Result.AddWarning(
-                $"No nopCommerce category mapping exists for " +
-                $"Akeneo category '{categoryCode}'.");
-
-            return;
+                $"No nopCommerce category mapping exists for Akeneo category '{categoryCode}'.");
+            return false;
         }
 
-        desiredCategoryIds.Add(categoryId.Value);
+        var category = await categoryService.GetCategoryByIdAsync(categoryId.Value);
+
+        if (category == null || category.Deleted)
+        {
+            context.Result.AddWarning(
+                $"Akeneo category '{categoryCode}' maps to missing or deleted nopCommerce category ID {categoryId.Value}.");
+            return false;
+        }
+
+        desiredCategoryIds.Add(category.Id);
+        return true;
     }
 }

@@ -18,7 +18,15 @@ public class AkeneoProductBatchImportResult
 
     public int WarningCount { get; set; }
 
+    public int ReconciledCount { get; set; }
+
     public bool Canceled { get; set; }
+
+    public bool CompletedAllPages { get; set; }
+
+    public bool WasTruncated { get; set; }
+
+    public bool ReconciliationCompleted { get; set; }
 
     public IList<string> Messages { get; } = new List<string>();
 
@@ -28,7 +36,10 @@ public class AkeneoProductBatchImportResult
 
     public IList<AkeneoProductImportResult> LoggedItemResults { get; } = new List<AkeneoProductImportResult>();
 
-    public bool Success => !Errors.Any() && FailedCount == 0;
+    public bool Success => !Canceled && !Errors.Any() && FailedCount == 0;
+
+    public bool IsAuthoritative =>
+        Success && CompletedAllPages && !WasTruncated;
 
     public void AddMessage(string message)
     {
@@ -42,11 +53,20 @@ public class AkeneoProductBatchImportResult
             Errors.Add(error);
     }
 
+    public SyncStatus SyncStatus
+    {
+        get
+        {
+            if (Canceled)
+                return SyncStatus.Cancelled;
 
-    public SyncStatus SyncStatus =>
-        Success
-            ? SyncStatus.Completed
-            : WarningCount > 0
-                ? SyncStatus.CompletedWithWarnings
-                : SyncStatus.Failed;
+            if (Errors.Any() || FailedCount > 0)
+                return SyncStatus.CompletedWithErrors;
+
+            if (WarningCount > 0)
+                return SyncStatus.CompletedWithWarnings;
+
+            return SyncStatus.Completed;
+        }
+    }
 }
