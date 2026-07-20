@@ -545,7 +545,8 @@
 
                                                         <select class="form-control"
                                                                 v-bind:name="subModelRuleName(index, 'AkeneoAxisAttributeCode')"
-                                                                v-model="row.akeneoAxisAttributeCode">
+                                                                v-model="row.akeneoAxisAttributeCode"
+                                                                v-on:change="loadSubModelAttributeOptions(row, true)">
                                                             <option v-for="attribute in availableSubModelAxisAttributes"
                                                                     v-bind:key="attribute.value || 'empty-submodel'"
                                                                     v-bind:value="attribute.value">
@@ -557,12 +558,37 @@
 
                                                 <div class="akeneo-col">
                                                     <div class="form-group mb-0">
-                                                        <label>Sub-model trigger</label>
-                                                        <input type="text"
+                                                        <label>Sub-model value</label>
+
+                                                        <select v-if="row.subModelSupportsOptions"
+                                                                class="form-control"
+                                                                v-bind:name="subModelRuleName(index, 'TriggerValue')"
+                                                                v-model="row.triggerValue"
+                                                                v-bind:disabled="
+                                                                    !row.akeneoAxisAttributeCode ||
+                                                                    row.subModelOptionsLoading">
+                                                            <option value="">
+                                                                {{
+                                                                    row.subModelOptionsLoading
+                                                                        ? 'Loading values...'
+                                                                        : 'Select a value'
+                                                                }}
+                                                            </option>
+
+                                                            <option v-for="option in row.subModelOptions"
+                                                                    v-bind:key="option.value"
+                                                                    v-bind:value="option.value">
+                                                                {{ option.text }}
+                                                            </option>
+                                                        </select>
+
+                                                        <input v-else
+                                                               type="text"
                                                                class="form-control"
                                                                v-bind:name="subModelRuleName(index, 'TriggerValue')"
-                                                               v-model="row.triggerValue"
-                                                               placeholder="potted" />
+                                                               v-model.trim="row.triggerValue"
+                                                               v-bind:disabled="!row.akeneoAxisAttributeCode"
+                                                               placeholder="Value to match" />
                                                     </div>
                                                 </div>
 
@@ -818,6 +844,9 @@
                             displayOrder: row.displayOrder || index + 1,
 
                             // UI-only properties
+                            subModelOptions: [],
+                            subModelOptionsLoading: false,
+                            subModelSupportsOptions: false,
                             variantOptions: [],
                             variantOptionsLoading: false
                         }))
@@ -883,7 +912,11 @@
                         this.availableVariantAttributes = [];
 
                         this.form.subModelRules.forEach(row => {
+                            row.subModelOptions = [];
+                            row.subModelOptionsLoading = false;
+                            row.subModelSupportsOptions = false;
                             row.variantOptions = [];
+                            row.variantOptionsLoading = false;
                         });
 
                         return;
@@ -925,9 +958,10 @@
                         this.preserveSelectedRuleAttributeOptions();
 
                         await Promise.all(
-                            this.form.subModelRules.map(row =>
+                            this.form.subModelRules.flatMap(row => [
+                                this.loadSubModelAttributeOptions(row, false),
                                 this.loadVariantAttributeOptions(row, false)
-                            )
+                            ])
                         );
                     }
                     catch (error) {
@@ -938,6 +972,83 @@
                         this.preserveSelectedRuleAttributeOptions();
                     }
                 },
+                async loadSubModelAttributeOptions(
+                    row,
+                    clearSelectedValue = false) {
+
+                    if (clearSelectedValue)
+                        row.triggerValue = '';
+
+                    row.subModelOptions = [];
+                    row.subModelSupportsOptions =
+                        this.subModelAxisSupportsOptions(
+                            row.akeneoAxisAttributeCode);
+
+                    if (!row.akeneoAxisAttributeCode ||
+                        !row.subModelSupportsOptions) {
+                        row.subModelOptionsLoading = false;
+                        return;
+                    }
+
+                    row.subModelOptionsLoading = true;
+
+                    try {
+                        row.subModelOptions = await this.fetchAttributeOptions(
+                            row.akeneoAxisAttributeCode);
+
+                        this.preserveSelectedSubModelValue(row);
+                    }
+                    catch (error) {
+                        console.error(
+                            'Unable to load Akeneo sub-model axis options.',
+                            error);
+
+                        this.preserveSelectedSubModelValue(row);
+                    }
+                    finally {
+                        row.subModelOptionsLoading = false;
+                    }
+                },
+
+                subModelAxisSupportsOptions(attributeCode) {
+                    if (!attributeCode)
+                        return false;
+
+                    const attribute =
+                        this.availableSubModelAxisAttributes.find(option =>
+                            String(option.value).toLowerCase() ===
+                            String(attributeCode).toLowerCase());
+
+                    return attribute?.supportsOptions === true;
+                },
+
+                async fetchAttributeOptions(attributeCode) {
+                    const separator =
+                        initialModel.attributeOptionsUrl.includes('?')
+                            ? '&'
+                            : '?';
+
+                    const response = await fetch(
+                        `${initialModel.attributeOptionsUrl}` +
+                        `${separator}attributeCode=` +
+                        `${encodeURIComponent(attributeCode)}`,
+                        {
+                            method: 'GET',
+                            headers: {
+                                Accept: 'application/json'
+                            }
+                        });
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `Unable to load attribute options. ` +
+                            `HTTP ${response.status}.`
+                        );
+                    }
+
+                    return await response.json();
+                },
+
                     async loadVariantAttributeOptions(row, clearSelectedValue = false) {
 
                     if (clearSelectedValue)
@@ -951,31 +1062,8 @@
                     row.variantOptionsLoading = true;
 
                     try {
-                        const separator =
-                            initialModel.attributeOptionsUrl.includes('?')
-                                ? '&'
-                                : '?';
-
-                        const response = await fetch(
-                            `${initialModel.attributeOptionsUrl}` +
-                            `${separator}attributeCode=` +
-                            `${encodeURIComponent(
-                                row.variantAxisAttributeCode)}`,
-                            {
-                                method: 'GET',
-                                headers: {
-                                    Accept: 'application/json'
-                                }
-                            });
-
-                        if (!response.ok) {
-                            throw new Error(
-                                `Unable to load attribute options. ` +
-                                `HTTP ${response.status}.`
-                            );
-                        }
-
-                        row.variantOptions = await response.json();
+                        row.variantOptions = await this.fetchAttributeOptions(
+                            row.variantAxisAttributeCode);
 
                         this.preserveSelectedVariantValue(row);
                     }
@@ -1015,7 +1103,8 @@
 
                     options.push({
                         text: `${code} (not currently returned by Akeneo)`,
-                        value: code
+                        value: code,
+                        supportsOptions: false
                     });
                 },
 
@@ -1041,6 +1130,25 @@
                             row.displayOrder = rowIndex + 1;
                     });
                 },
+                preserveSelectedSubModelValue(row) {
+                    const selectedValue = row.triggerValue;
+
+                    if (!selectedValue)
+                        return;
+
+                    const exists = row.subModelOptions.some(option =>
+                        String(option.value).toLowerCase() ===
+                        String(selectedValue).toLowerCase());
+
+                    if (exists)
+                        return;
+
+                    row.subModelOptions.push({
+                        text: `${selectedValue} (not currently returned by Akeneo)`,
+                        value: selectedValue
+                    });
+                },
+
                 preserveSelectedVariantValue(row) {
                     const selectedValue = row.variantTriggerValue;
 
@@ -1073,6 +1181,9 @@
                         mergeAncestorValues: true,
                         displayOrder: this.form.subModelRules.length + 1,
 
+                        subModelOptions: [],
+                        subModelOptionsLoading: false,
+                        subModelSupportsOptions: false,
                         variantOptions: [],
                         variantOptionsLoading: false
                     });

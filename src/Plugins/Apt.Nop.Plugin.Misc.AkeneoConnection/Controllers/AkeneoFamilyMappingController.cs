@@ -40,14 +40,25 @@ public class AkeneoFamilyMappingController(
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
     public async Task<IActionResult> GetAttributeOptions(
-        string attributeCode)
+        string attributeCode,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(attributeCode))
             return Json(Array.Empty<object>());
 
+        attributeCode = attributeCode.Trim();
+
+        var attribute = await akeneoApiClient.GetAttributeByCodeAsync(
+            attributeCode,
+            cancellationToken);
+
+        if (attribute == null || !SupportsAttributeOptions(attribute.Type))
+            return Json(Array.Empty<object>());
+
         var options =
             await akeneoApiClient.GetAttributeOptionDefinitionsAsync(
-                attributeCode.Trim());
+                attributeCode,
+                cancellationToken: cancellationToken);
 
         return Json(options
             .OrderBy(option => option.SortOrder)
@@ -83,13 +94,20 @@ public class AkeneoFamilyMappingController(
                                        .ToHashSet(StringComparer.OrdinalIgnoreCase)
                                    ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var simpleSelectAttributes = attributes
+        var attributeByCode = attributes
+            .Where(attribute => !string.IsNullOrWhiteSpace(attribute.Code))
+            .GroupBy(
+                attribute => attribute.Code,
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var optionBackedAttributes = attributes
             .Where(attribute =>
                 familyAttributeCodes.Contains(attribute.Code) &&
-                string.Equals(
-                    attribute.Type,
-                    "pim_catalog_simpleselect",
-                    StringComparison.OrdinalIgnoreCase))
+                SupportsAttributeOptions(attribute.Type))
             .OrderBy(attribute => attribute.GetLabel())
             .Select(attribute => new
             {
@@ -104,10 +122,15 @@ public class AkeneoFamilyMappingController(
                 .Select(axis => new
                 {
                     text = $"{axis.AttributeCode} (level {axis.Level})",
-                    value = axis.AttributeCode
+                    value = axis.AttributeCode,
+                    supportsOptions =
+                        attributeByCode.TryGetValue(
+                            axis.AttributeCode,
+                            out var attribute) &&
+                        SupportsAttributeOptions(attribute.Type)
                 }),
 
-            variantAttributes = simpleSelectAttributes
+            variantAttributes = optionBackedAttributes
         });
     }
 
@@ -358,6 +381,18 @@ public class AkeneoFamilyMappingController(
                     $"Sub-model rule {index + 1} has an invalid relationship override mode.");
             }
         }
+    }
+
+    private static bool SupportsAttributeOptions(string attributeType)
+    {
+        return string.Equals(
+                   attributeType,
+                   "pim_catalog_simpleselect",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   attributeType,
+                   "pim_catalog_multiselect",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task SaveAxisMappingsAsync(

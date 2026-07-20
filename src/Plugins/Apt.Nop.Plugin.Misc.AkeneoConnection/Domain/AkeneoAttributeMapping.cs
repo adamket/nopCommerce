@@ -4,6 +4,28 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
 public class AkeneoAttributeMapping : BaseEntity
 {
+    /// <summary>
+    /// Stable slot key for computed mappings. A family-scoped row with the same
+    /// key overrides the global computed mapping without changing its identity.
+    /// </summary>
+    public string MappingKey { get; set; }
+
+    /// <summary>
+    /// Administrator-facing name for a computed mapping.
+    /// </summary>
+    public string Name { get; set; }
+
+    public int ValueModeId { get; set; } =
+        (int)AkeneoAttributeMappingValueMode.SingleAttribute;
+
+    public string ValueTemplate { get; set; }
+
+    public AkeneoAttributeMappingValueMode ValueMode
+    {
+        get => (AkeneoAttributeMappingValueMode)ValueModeId;
+        set => ValueModeId = (int)value;
+    }
+
     public string AkeneoFamilyCode { get; set; }
     public string AkeneoAttributeCode { get; set; }
     public int AkeneoAttributeTypeId { get; set; }
@@ -27,6 +49,56 @@ public class AkeneoAttributeMapping : BaseEntity
     public string Channel { get; set; }
     public string TransformRuleJson { get; set; }
     public bool IsRequired { get; set; }
+
+    /// <summary>
+    /// Flags describing which nopCommerce product roles this mapping applies to.
+    /// Existing mappings default to all roles for backward compatibility.
+    /// </summary>
+    public int EntityScopeId { get; set; } =
+        (int)AkeneoAttributeMappingEntityScope.All;
+
+    public AkeneoAttributeMappingEntityScope EntityScope
+    {
+        get => (AkeneoAttributeMappingEntityScope)EntityScopeId;
+        set => EntityScopeId = (int)value;
+    }
+}
+
+
+public enum AkeneoAttributeMappingValueMode
+{
+    /// <summary>
+    /// Resolve one primary Akeneo attribute and its ordered fallback sources.
+    /// </summary>
+    SingleAttribute = 0,
+
+    /// <summary>
+    /// Render one destination value from a deterministic token template.
+    /// </summary>
+    Template = 10
+}
+
+[Flags]
+public enum AkeneoAttributeMappingEntityScope
+{
+    None = 0,
+
+    /// <summary>
+    /// nopCommerce parent products synchronized from Akeneo product models.
+    /// </summary>
+    ProductModel = 1,
+
+    /// <summary>
+    /// Real nopCommerce child products representing Akeneo variant products.
+    /// </summary>
+    VariantProduct = 2,
+
+    /// <summary>
+    /// nopCommerce products imported without a parent relationship.
+    /// </summary>
+    StandaloneProduct = 4,
+
+    All = ProductModel | VariantProduct | StandaloneProduct
 }
 
 public enum AkeneoAttributeType

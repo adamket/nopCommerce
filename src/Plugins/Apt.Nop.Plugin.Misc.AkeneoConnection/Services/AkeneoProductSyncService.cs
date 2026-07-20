@@ -13,6 +13,7 @@ public class AkeneoProductSyncService(
     IAkeneoProductValueResolver productValueResolver,
     IAkeneoReferenceEntityValueResolver referenceEntityValueResolver,
     IAkeneoValueTransformationService transformationService,
+    IAkeneoValueTemplateRenderer valueTemplateRenderer,
     IAkeneoAttributeMappingService attributeMappingService,
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoProductSyncStateService syncStateService,
@@ -20,11 +21,52 @@ public class AkeneoProductSyncService(
     IAkeneoProductSyncPipeline syncPipeline)
     : IAkeneoProductSyncService
 {
+    public Task<AkeneoProductSyncContext> PrepareAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        CancellationToken cancellationToken = default)
+    {
+        return PrepareAsync(
+            source,
+            sourceEntityType,
+            request,
+            result,
+            source?.Family,
+            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                source,
+                sourceEntityType),
+            cancellationToken);
+    }
+
+    public Task<AkeneoProductSyncContext> PrepareAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        string mappingFamilyCode,
+        CancellationToken cancellationToken = default)
+    {
+        return PrepareAsync(
+            source,
+            sourceEntityType,
+            request,
+            result,
+            mappingFamilyCode,
+            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                source,
+                sourceEntityType),
+            cancellationToken);
+    }
+
     public async Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
+        string mappingFamilyCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -55,19 +97,54 @@ public class AkeneoProductSyncService(
                     : "Akeneo product does not contain a UUID or identifier.");
         }
 
-        var mappings = await attributeMappingService
-            .GetEffectiveMappingsAsync(source.Family);
+        mappingFamilyCode = !string.IsNullOrWhiteSpace(mappingFamilyCode)
+            ? mappingFamilyCode.Trim()
+            : source.Family?.Trim();
+
+        mappingEntityScope =
+            AkeneoAttributeMappingScopeHelper.NormalizeCurrentScope(
+                mappingEntityScope,
+                source,
+                sourceEntityType);
+
+        var effectiveMappings = await attributeMappingService
+            .GetEffectiveMappingsAsync(mappingFamilyCode);
+
+        var applicableMappings = effectiveMappings
+            .Where(mapping =>
+                AkeneoAttributeMappingScopeHelper.AppliesTo(
+                    mapping,
+                    mappingEntityScope))
+            .ToList();
+
+        var fallbackSourcesByMappingId =
+            (await attributeMappingService.GetAllFallbackSourcesAsync())
+            .Where(fallback => effectiveMappings.Any(mapping =>
+                mapping.Id == fallback.AttributeMappingId))
+            .GroupBy(fallback => fallback.AttributeMappingId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<AkeneoAttributeMappingFallbackSource>)group
+                    .OrderBy(fallback => fallback.DisplayOrder)
+                    .ThenBy(fallback => fallback.Id)
+                    .ToList());
 
         var mappedValues = await ResolveMappedValuesAsync(
             source,
-            mappings,
+            applicableMappings,
+            fallbackSourcesByMappingId,
+            mappingFamilyCode,
             request,
             result,
             cancellationToken);
 
+        // A configured mapping that does not apply to this destination role is
+        // still considered handled. It must not be logged or imported as an
+        // "unmapped" custom property on the wrong product role.
         AppendUnmappedAttributeValues(
             source,
-            mappings,
+            effectiveMappings,
+            fallbackSourcesByMappingId,
             request,
             result,
             mappedValues);
@@ -103,6 +180,8 @@ public class AkeneoProductSyncService(
             MappedValues = mappedValues.ToList(),
             SourceCode = sourceCode,
             SourceUuid = sourceUuid,
+            MappingFamilyCode = mappingFamilyCode,
+            MappingEntityScope = mappingEntityScope,
             ProductKey = productKey,
             Sku = sku,
             ExistingProduct = existingProduct,
@@ -172,100 +251,352 @@ public class AkeneoProductSyncService(
     private async Task<IList<AkeneoResolvedMappedValue>> ResolveMappedValuesAsync(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> mappings,
+        IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
+        string mappingFamilyCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         CancellationToken cancellationToken)
     {
         var resolved = new List<AkeneoResolvedMappedValue>();
 
-        foreach (var mapping in mappings)
+        // Ordinary mappings are resolved first so templates can use the
+        // effective SKU produced by a normal ProductField/Sku mapping.
+        foreach (var mapping in mappings.Where(mapping =>
+                     mapping.ValueModeId !=
+                     (int)AkeneoAttributeMappingValueMode.Template))
         {
-            var targetType = (NopTargetType)mapping.NopTargetTypeId;
+            resolved.Add(await ResolveSingleAttributeMappingAsync(
+                source,
+                mapping,
+                fallbackSourcesByMappingId,
+                request,
+                result,
+                cancellationToken));
+        }
 
-            if (targetType == NopTargetType.Ignore)
-                continue;
+        var effectiveSku = resolved
+            .FirstOrDefault(mapped =>
+                mapped.HasValue &&
+                mapped.TargetType == NopTargetType.ProductField &&
+                string.Equals(
+                    mapped.Mapping.NopTargetKey,
+                    "Sku",
+                    StringComparison.OrdinalIgnoreCase))
+            ?.DisplayValue;
 
-            var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
-                ? mapping.Locale
-                : request.Locale;
-            var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
-                ? mapping.Channel
-                : request.Channel;
+        effectiveSku ??= source.Identifier ?? source.Code;
 
-            AkeneoResolvedProductValue value;
-            bool resolvedSuccessfully;
+        foreach (var mapping in mappings.Where(mapping =>
+                     mapping.ValueModeId ==
+                     (int)AkeneoAttributeMappingValueMode.Template))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-            if (IsReferenceEntityMapping(mapping) &&
-                !string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode))
-            {
-                value = await referenceEntityValueResolver.ResolveAsync(
-                    source,
-                    mapping,
-                    locale,
-                    channel,
-                    request.Currency,
-                    cancellationToken);
-
-                resolvedSuccessfully = value != null;
-            }
-            else
-            {
-                resolvedSuccessfully = productValueResolver.TryGetValue(
-                    source,
-                    mapping.AkeneoAttributeCode,
-                    out value,
-                    locale,
-                    channel,
-                    request.Currency);
-            }
-
-            if (resolvedSuccessfully && value != null &&
-                !string.IsNullOrWhiteSpace(mapping.TransformRuleJson))
-            {
-                var transformed = transformationService.Transform(value, mapping);
-
-                if (!transformed.Success)
-                {
-                    var message =
-                        $"Transform failed for Akeneo source '{AkeneoMappingHelper.GetSourceDisplayName(mapping)}': {transformed.Error}";
-
-                    if (mapping.IsRequired)
-                        result.AddError(message);
-                    else
-                        result.AddWarning(message);
-
-                    resolvedSuccessfully = false;
-                    value = null;
-                }
-                else
-                {
-                    value = transformed.Value;
-                }
-            }
-
-            var hasDisplayValue =
-                !string.IsNullOrWhiteSpace(value?.DisplayValue) ||
-                value?.DisplayValues is { Count: > 0 };
-
-            var hasValue = resolvedSuccessfully && hasDisplayValue;
-
-            if (!hasValue && mapping.IsRequired)
-            {
-                result.AddError(
-                    $"Required Akeneo source is missing a value: {AkeneoMappingHelper.GetSourceDisplayName(mapping)}");
-            }
-
-            // Missing optional mappings are retained so destination sections can
-            // apply PreserveExisting or ClearExisting consistently.
-            resolved.Add(new AkeneoResolvedMappedValue
-            {
-                Mapping = mapping,
-                HasValue = hasValue,
-                Value = value
-            });
+            resolved.Add(ResolveTemplateMapping(
+                source,
+                mapping,
+                effectiveSku,
+                mappingFamilyCode,
+                request,
+                result));
         }
 
         return resolved;
+    }
+
+    private async Task<AkeneoResolvedMappedValue>
+        ResolveSingleAttributeMappingAsync(
+            AkeneoProductDefinition source,
+            AkeneoAttributeMapping mapping,
+            IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
+            AkeneoProductImportRequest request,
+            AkeneoProductImportResult result,
+            CancellationToken cancellationToken)
+    {
+        var targetType = (NopTargetType)mapping.NopTargetTypeId;
+
+        if (targetType == NopTargetType.Ignore)
+        {
+            return new AkeneoResolvedMappedValue
+            {
+                Mapping = mapping,
+                HasValue = false
+            };
+        }
+
+        var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
+            ? mapping.Locale
+            : request.Locale;
+        var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
+            ? mapping.Channel
+            : request.Channel;
+
+        AkeneoResolvedProductValue value = null;
+        var resolvedSuccessfully = false;
+        var resolvedSourceDisplayName =
+            AkeneoMappingHelper.GetSourceDisplayName(mapping);
+
+        foreach (var sourceMapping in BuildOrderedSourceMappings(
+                     mapping,
+                     fallbackSourcesByMappingId))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var candidateValue = await ResolveSourceValueAsync(
+                source,
+                sourceMapping,
+                locale,
+                channel,
+                request.Currency,
+                cancellationToken);
+
+            if (!HasDisplayValue(candidateValue))
+                continue;
+
+            value = candidateValue;
+            resolvedSuccessfully = true;
+            resolvedSourceDisplayName =
+                AkeneoMappingHelper.GetSourceDisplayName(sourceMapping);
+            break;
+        }
+
+        (resolvedSuccessfully, value) = ApplyTransform(
+            mapping,
+            value,
+            resolvedSuccessfully,
+            resolvedSourceDisplayName,
+            result);
+
+        var hasValue = resolvedSuccessfully && HasDisplayValue(value);
+
+        if (!hasValue && mapping.IsRequired)
+        {
+            result.AddError(
+                $"Required Akeneo source is missing a value. Tried: {GetSourceChainDisplayName(mapping, fallbackSourcesByMappingId)}");
+        }
+
+        return new AkeneoResolvedMappedValue
+        {
+            Mapping = mapping,
+            HasValue = hasValue,
+            Value = value,
+            ResolvedSourceDisplayName = hasValue
+                ? resolvedSourceDisplayName
+                : null
+        };
+    }
+
+    private AkeneoResolvedMappedValue ResolveTemplateMapping(
+        AkeneoProductDefinition source,
+        AkeneoAttributeMapping mapping,
+        string effectiveSku,
+        string mappingFamilyCode,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result)
+    {
+        var sourceDisplayName =
+            $"Template '{mapping.Name ?? mapping.MappingKey}'";
+
+        if ((NopTargetType)mapping.NopTargetTypeId ==
+            NopTargetType.Ignore)
+        {
+            return new AkeneoResolvedMappedValue
+            {
+                Mapping = mapping,
+                HasValue = false,
+                ResolvedSourceDisplayName = sourceDisplayName
+            };
+        }
+
+        var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
+            ? mapping.Locale
+            : request.Locale;
+        var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
+            ? mapping.Channel
+            : request.Channel;
+
+        var rendered = valueTemplateRenderer.Render(
+            mapping.ValueTemplate,
+            new AkeneoValueTemplateContext
+            {
+                Source = source,
+                Locale = locale,
+                Channel = channel,
+                Currency = request.Currency,
+                FamilyCode = mappingFamilyCode,
+                Sku = effectiveSku
+            });
+
+        var resolvedSuccessfully = rendered.Success &&
+            !string.IsNullOrWhiteSpace(rendered.Value);
+        AkeneoResolvedProductValue value = resolvedSuccessfully
+            ? new AkeneoResolvedProductValue
+            {
+                AttributeCode = mapping.MappingKey,
+                Locale = locale,
+                Channel = channel,
+                Currency = request.Currency,
+                SourceAttributeType = "computed_template",
+                DisplayValue = rendered.Value,
+                DisplayValues = new[] { rendered.Value }
+            }
+            : null;
+
+        if (rendered.Errors.Count > 0)
+        {
+            var message =
+                $"Could not render {sourceDisplayName}: {string.Join(" ", rendered.Errors)}";
+
+            if (mapping.IsRequired)
+                result.AddError(message);
+            else
+                result.AddWarning(message);
+        }
+        else if (rendered.MissingTokens.Count > 0)
+        {
+            var message =
+                $"Could not render {sourceDisplayName} because these tokens had no value: {string.Join(", ", rendered.MissingTokens.Select(token => $"{{{token}}}"))}.";
+
+            if (mapping.IsRequired)
+                result.AddError(message);
+            else
+                result.AddWarning(message);
+        }
+        else if (!resolvedSuccessfully && mapping.IsRequired)
+        {
+            result.AddError(
+                $"Required {sourceDisplayName} rendered an empty value.");
+        }
+
+        (resolvedSuccessfully, value) = ApplyTransform(
+            mapping,
+            value,
+            resolvedSuccessfully,
+            sourceDisplayName,
+            result);
+
+        var hasValue = resolvedSuccessfully && HasDisplayValue(value);
+
+        return new AkeneoResolvedMappedValue
+        {
+            Mapping = mapping,
+            HasValue = hasValue,
+            Value = value,
+            ResolvedSourceDisplayName = hasValue
+                ? sourceDisplayName
+                : null
+        };
+    }
+
+    private (bool Success, AkeneoResolvedProductValue Value) ApplyTransform(
+        AkeneoAttributeMapping mapping,
+        AkeneoResolvedProductValue value,
+        bool resolvedSuccessfully,
+        string sourceDisplayName,
+        AkeneoProductImportResult result)
+    {
+        if (!resolvedSuccessfully ||
+            value == null ||
+            string.IsNullOrWhiteSpace(mapping.TransformRuleJson))
+        {
+            return (resolvedSuccessfully, value);
+        }
+
+        var transformed = transformationService.Transform(value, mapping);
+
+        if (transformed.Success)
+            return (true, transformed.Value);
+
+        var message =
+            $"Transform failed for Akeneo source '{sourceDisplayName}': {transformed.Error}";
+
+        if (mapping.IsRequired)
+            result.AddError(message);
+        else
+            result.AddWarning(message);
+
+        return (false, null);
+    }
+
+    private async Task<AkeneoResolvedProductValue> ResolveSourceValueAsync(
+        AkeneoProductDefinition source,
+        AkeneoAttributeMapping sourceMapping,
+        string locale,
+        string channel,
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        if (IsReferenceEntityMapping(sourceMapping) &&
+            !string.IsNullOrWhiteSpace(
+                sourceMapping.AkeneoReferenceEntityAttributeCode))
+        {
+            return await referenceEntityValueResolver.ResolveAsync(
+                source,
+                sourceMapping,
+                locale,
+                channel,
+                currency,
+                cancellationToken);
+        }
+
+        return productValueResolver.TryGetValue(
+            source,
+            sourceMapping.AkeneoAttributeCode,
+            out var value,
+            locale,
+            channel,
+            currency)
+                ? value
+                : null;
+    }
+
+    private static IEnumerable<AkeneoAttributeMapping>
+        BuildOrderedSourceMappings(
+            AkeneoAttributeMapping primaryMapping,
+            IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId)
+    {
+        yield return primaryMapping;
+
+        if (!fallbackSourcesByMappingId.TryGetValue(
+                primaryMapping.Id,
+                out var fallbackSources))
+        {
+            yield break;
+        }
+
+        foreach (var fallback in fallbackSources
+                     .OrderBy(source => source.DisplayOrder)
+                     .ThenBy(source => source.Id))
+        {
+            yield return new AkeneoAttributeMapping
+            {
+                AkeneoAttributeCode = fallback.AkeneoAttributeCode,
+                AkeneoAttributeTypeId = fallback.AkeneoAttributeTypeId,
+                AkeneoReferenceEntityCode =
+                    fallback.AkeneoReferenceEntityCode,
+                AkeneoReferenceEntityAttributeCode =
+                    fallback.AkeneoReferenceEntityAttributeCode
+            };
+        }
+    }
+
+    private static string GetSourceChainDisplayName(
+        AkeneoAttributeMapping primaryMapping,
+        IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId)
+    {
+        return string.Join(
+            " → ",
+            BuildOrderedSourceMappings(
+                    primaryMapping,
+                    fallbackSourcesByMappingId)
+                .Select(AkeneoMappingHelper.GetSourceDisplayName));
+    }
+
+    private static bool HasDisplayValue(
+        AkeneoResolvedProductValue value)
+    {
+        return !string.IsNullOrWhiteSpace(value?.DisplayValue) ||
+               value?.DisplayValues is { Count: > 0 };
     }
 
     private static bool IsReferenceEntityMapping(
@@ -278,6 +609,7 @@ public class AkeneoProductSyncService(
     private void AppendUnmappedAttributeValues(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> effectiveMappings,
+        IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IList<AkeneoResolvedMappedValue> mappedValues)
@@ -289,9 +621,25 @@ public class AkeneoProductSyncService(
             return;
         }
 
+        var templateAttributeCodes = effectiveMappings
+            .Where(mapping => mapping.ValueModeId ==
+                (int)AkeneoAttributeMappingValueMode.Template)
+            .SelectMany(mapping => valueTemplateRenderer
+                .Validate(mapping.ValueTemplate)
+                .ReferencedAttributeCodes);
+
         var handledCodes = effectiveMappings
+            .Where(mapping => mapping.ValueModeId !=
+                (int)AkeneoAttributeMappingValueMode.Template)
             .Where(mapping => !string.IsNullOrWhiteSpace(mapping.AkeneoAttributeCode))
             .Select(mapping => mapping.AkeneoAttributeCode.Trim())
+            .Concat(
+                fallbackSourcesByMappingId.Values
+                    .SelectMany(sources => sources)
+                    .Where(source => !string.IsNullOrWhiteSpace(
+                        source.AkeneoAttributeCode))
+                    .Select(source => source.AkeneoAttributeCode.Trim()))
+            .Concat(templateAttributeCodes)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var unmappedCodes = source.Values

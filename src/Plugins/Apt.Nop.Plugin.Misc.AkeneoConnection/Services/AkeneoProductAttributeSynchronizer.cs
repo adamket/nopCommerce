@@ -32,7 +32,7 @@ public class AkeneoProductAttributeSynchronizer(
         if (!mappings.Any())
             return;
 
-        var variantAxisCodes = await GetVariantAxisCodesAsync(context.Source.Family);
+        var variantAxisCodes = await GetVariantAxisCodesAsync(context.MappingFamilyCode);
         var changed = false;
 
         foreach (var mapped in mappings)

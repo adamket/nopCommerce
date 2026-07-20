@@ -24,6 +24,19 @@ public sealed class AkeneoProductSyncContext
 
     public string SourceUuid { get; init; }
 
+    /// <summary>
+    /// Family code used to resolve family-scoped mappings and family variant
+    /// configuration. This may differ from Source.Family for product models,
+    /// because Akeneo product-model payloads do not include a family field.
+    /// </summary>
+    public string MappingFamilyCode { get; init; }
+
+    /// <summary>
+    /// The nopCommerce product role used to filter attribute mappings for this
+    /// synchronization context.
+    /// </summary>
+    public AkeneoAttributeMappingEntityScope MappingEntityScope { get; init; }
+
     public string ProductKey { get; init; }
 
     public string Sku { get; init; }

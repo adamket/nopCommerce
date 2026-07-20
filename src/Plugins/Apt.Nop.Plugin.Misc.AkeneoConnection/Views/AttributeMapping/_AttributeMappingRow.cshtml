@@ -1,5 +1,8 @@
 <div class="akeneo-row-shell"
-     v-bind:class="{ 'akeneo-reference-field-shell': m.isReferenceEntityAttribute }"
+     v-bind:class="{
+         'akeneo-reference-field-shell': m.isReferenceEntityAttribute,
+         'akeneo-computed-mapping-shell': m.isComputed
+     }"
      v-bind:style="rowStaggerStyle(entryIndex + itemIndex)">
 
     <div class="akeneo-row"
@@ -9,7 +12,14 @@
          ]">
 
         <div class="akeneo-col akeneo-col-attr">
-            <template v-if="m.isReferenceEntityAttribute">
+            <template v-if="m.isComputed">
+                <div class="akeneo-code">
+                    {{ m.name || 'Computed mapping' }}
+                </div>
+                <div class="akeneo-label">Computed value template</div>
+            </template>
+
+            <template v-else-if="m.isReferenceEntityAttribute">
                 <div class="akeneo-reference-field-name">
                     {{ referenceFieldText(m) }}
                 </div>
@@ -26,7 +36,16 @@
         </div>
 
         <div class="akeneo-col akeneo-col-type">
-            <template v-if="m.isReferenceEntityAttribute">
+            <template v-if="m.isComputed">
+                <span class="akeneo-type-chip">
+                    Template
+                </span>
+                <div class="akeneo-reference-field-entity">
+                    Multiple Akeneo values
+                </div>
+            </template>
+
+            <template v-else-if="m.isReferenceEntityAttribute">
                 <span class="akeneo-type-chip">
                     Reference entity field
                 </span>
@@ -80,6 +99,16 @@
             <div class="akeneo-summary-target-detail">
                 {{ detail(m) }}
             </div>
+
+            <div class="akeneo-summary-target-detail"
+                 v-if="templateSummary(m)">
+                {{ templateSummary(m) }}
+            </div>
+
+            <div class="akeneo-summary-target-detail"
+                 v-if="fallbackSummary(m)">
+                {{ fallbackSummary(m) }}
+            </div>
         </div>
 
         <div class="akeneo-col akeneo-col-status">
@@ -91,6 +120,13 @@
                 <span class="badge"
                       v-bind:class="scopeFor(m).badgeClass">
                     {{ scopeFor(m).text }}
+                </span>
+            </div>
+
+            <div class="mt-1">
+                <span class="badge badge-light"
+                      v-bind:title="appliesToText(m)">
+                    {{ appliesToText(m) }}
                 </span>
             </div>
         </div>
@@ -165,6 +201,21 @@
              }">
 
             <div class="form-row">
+                <div class="form-group col-md-4"
+                     v-if="m.isComputed">
+                    <label class="font-weight-bold mb-1">
+                        Mapping name
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           v-model.trim="m.draft.name"
+                           maxlength="255"
+                           placeholder="Variant generated name" />
+                    <small class="form-text text-muted">
+                        Administrative label used to identify this computed mapping.
+                    </small>
+                </div>
+
                 <div class="form-group col-md-4"
                      v-if="m.isReferenceEntityAttribute">
 
@@ -289,6 +340,133 @@
                     </span>
                 </div>
 
+
+                <div class="form-group col-md-12 akeneo-template-editor"
+                     v-if="m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId)">
+                    <label class="font-weight-bold mb-1"
+                           v-bind:for="'computed-template-' + m.clientKey">
+                        Value template
+                    </label>
+
+                    <textarea class="form-control akeneo-template-input"
+                              v-bind:id="'computed-template-' + m.clientKey"
+                              v-model="m.draft.valueTemplate"
+                              rows="3"
+                              maxlength="4000"
+                              placeholder="{sku} - {root_type} {pack_size}"></textarea>
+
+                    <div class="akeneo-template-token-toolbar mt-2">
+                        <select class="form-control form-control-sm"
+                                v-model="m.draft.selectedTemplateToken">
+                            <option value="">Insert a token...</option>
+                            <option v-for="option in templateTokenOptions()"
+                                    v-bind:key="option.key"
+                                    v-bind:value="option.key">
+                                {{ option.text }} — {{ '{' + option.key + '}' }}
+                            </option>
+                        </select>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-primary ml-2"
+                                v-bind:disabled="!m.draft.selectedTemplateToken"
+                                v-on:click="insertTemplateToken(m)">
+                            <i class="fas fa-plus"></i>
+                            Insert token
+                        </button>
+                    </div>
+
+                    <small class="form-text text-muted">
+                        Attribute tokens use localized display values by default.
+                        Use <code>{attribute:code}</code> for the raw Akeneo value,
+                        <code>{attr:attribute}</code> to disambiguate an attribute
+                        from a built-in token, and
+                        <code>{root_type == bare_root ? "this" : "that"}</code>
+                        for conditional text. Conditions compare the raw Akeneo code
+                        by default and support <code>==</code> and <code>!=</code>.
+                        Conditional results are template fragments, so
+                        <code>{pack_quantity != 1 ? " {pack_quantity} pack" : ""}</code>
+                        can include the resolved value only when needed. Put the
+                        complete fragment inside the branch instead of using a
+                        <code>+</code> concatenation operator.
+                        Use doubled braces
+                        <span v-pre><code>{{</code> or <code>}}</code></span> for literal braces.
+                        Every referenced value must resolve or this mapping is treated as missing.
+                    </small>
+                </div>
+
+                <div class="form-group col-md-12"
+                     v-if="!m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Value source priority
+                    </label>
+
+                    <div class="akeneo-fallback-primary mb-2">
+                        <span class="badge badge-primary mr-2">Primary</span>
+                        <strong>{{ m.code }}</strong>
+                        <span v-if="m.isReferenceEntityAttribute">
+                            .{{ m.draft.referenceEntityAttributeCode }}
+                        </span>
+                    </div>
+
+                    <div class="akeneo-fallback-source-row mb-2"
+                         v-for="(fallback, fallbackIndex) in m.draft.fallbackSources"
+                         v-bind:key="m.clientKey + '-fallback-' + fallbackIndex">
+
+                        <span class="badge badge-secondary mr-2">
+                            Fallback {{ fallbackIndex + 1 }}
+                        </span>
+
+                        <select class="form-control form-control-sm akeneo-fallback-source-select"
+                                v-model="fallback.sourceKey"
+                                v-on:change="onFallbackSourceChanged(fallback)">
+                            <option value="">Select an Akeneo attribute</option>
+                            <option v-for="option in fallbackOptions(m, fallbackIndex)"
+                                    v-bind:key="option.key"
+                                    v-bind:value="option.key">
+                                {{ option.text }}
+                            </option>
+                        </select>
+
+                        <button type="button"
+                                class="btn btn-sm btn-default ml-2"
+                                title="Move fallback earlier"
+                                v-bind:disabled="fallbackIndex === 0"
+                                v-on:click="moveFallbackSource(m, fallbackIndex, -1)">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-sm btn-default ml-1"
+                                title="Move fallback later"
+                                v-bind:disabled="fallbackIndex === m.draft.fallbackSources.length - 1"
+                                v-on:click="moveFallbackSource(m, fallbackIndex, 1)">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger ml-1"
+                                title="Remove fallback"
+                                v-on:click="removeFallbackSource(m, fallbackIndex)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            v-on:click="addFallbackSource(m)">
+                        <i class="fas fa-plus"></i>
+                        Add fallback source
+                    </button>
+
+                    <small class="form-text text-muted">
+                        The primary source is used when it has a non-empty value.
+                        Fallback sources are tried from top to bottom. For example,
+                        map variant_name to Product Name and add product_name as its
+                        fallback for variant and standalone products.
+                    </small>
+                </div>
+
                 <div class="form-group col-md-4"
                      v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
 
@@ -310,6 +488,59 @@
                             </span>
                         </label>
                     </div>
+                </div>
+
+                <div class="form-group col-md-12"
+                     v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Apply mapping to
+                    </label>
+
+                    <div class="d-flex flex-wrap align-items-center akeneo-scope-switches">
+                        <label class="akeneo-switch mr-4 mb-2">
+                            <input type="checkbox"
+                                   v-bind:id="'scope-product-model-' + m.clientKey"
+                                   v-model="m.draft.applyToProductModels" />
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+                            <span class="akeneo-switch-text">
+                                Parent product models
+                            </span>
+                        </label>
+
+                        <label class="akeneo-switch mr-4 mb-2">
+                            <input type="checkbox"
+                                   v-bind:id="'scope-variant-product-' + m.clientKey"
+                                   v-model="m.draft.applyToVariantProducts" />
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+                            <span class="akeneo-switch-text">
+                                Variant products
+                            </span>
+                        </label>
+
+                        <label class="akeneo-switch mr-4 mb-2">
+                            <input type="checkbox"
+                                   v-bind:id="'scope-standalone-product-' + m.clientKey"
+                                   v-model="m.draft.applyToStandaloneProducts" />
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+                            <span class="akeneo-switch-text">
+                                Standalone products
+                            </span>
+                        </label>
+                    </div>
+
+                    <small class="form-text text-muted">
+                        This controls which nopCommerce product records receive
+                        the mapping. Inherited Akeneo values can still be used for
+                        variant axes and associated-value naming without mapping
+                        them onto the child product.
+                    </small>
                 </div>
             </div>
 

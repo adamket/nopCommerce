@@ -1,4 +1,5 @@
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -81,6 +82,16 @@ public class AkeneoAttributeMappingModelFactory(
         var existingAttributeMappings =
             await akeneoAttributeMappingService.GetEffectiveMappingsAsync(model.AkeneoFamilyCode);
 
+        var fallbackSourcesByMappingId =
+            (await akeneoAttributeMappingService.GetAllFallbackSourcesAsync())
+            .GroupBy(source => source.AttributeMappingId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<AkeneoAttributeMappingFallbackSource>)group
+                    .OrderBy(source => source.DisplayOrder)
+                    .ThenBy(source => source.Id)
+                    .ToList());
+
         var specificationAttributes =
             await specificationAttributeService.GetAllSpecificationAttributesAsync();
 
@@ -94,8 +105,8 @@ public class AkeneoAttributeMappingModelFactory(
 
         if (!akeneoAttributes.Any())
         {
-            model.Warnings.Add("No Akeneo attributes were found. Verify your Akeneo connection and try again.");
-            return model;
+            model.Warnings.Add(
+                "No Akeneo attributes were found. Existing computed mappings remain available, but attribute tokens cannot be added until the Akeneo connection returns attributes.");
         }
 
         var referenceEntityAttributeCache =
@@ -107,10 +118,13 @@ public class AkeneoAttributeMappingModelFactory(
                      .ThenBy(attribute => attribute.Code))
         {
             var attributeMappings = existingAttributeMappings
-                .Where(mapping => string.Equals(
-                    mapping.AkeneoAttributeCode,
-                    akeneoAttribute.Code,
-                    StringComparison.OrdinalIgnoreCase))
+                .Where(mapping =>
+                    mapping.ValueModeId ==
+                        (int)AkeneoAttributeMappingValueMode.SingleAttribute &&
+                    string.Equals(
+                        mapping.AkeneoAttributeCode,
+                        akeneoAttribute.Code,
+                        StringComparison.OrdinalIgnoreCase))
                 .OrderBy(mapping => mapping.AkeneoReferenceEntityAttributeCode)
                 .ThenBy(mapping => mapping.Id)
                 .ToList();
@@ -128,6 +142,7 @@ public class AkeneoAttributeMappingModelFactory(
                     specificationAttributes,
                     productAttributes,
                     referenceEntityAttributeCache,
+                    fallbackSourcesByMappingId,
                     model.Warnings);
 
                 model.Mappings.Add(mappingModel);
@@ -146,12 +161,27 @@ public class AkeneoAttributeMappingModelFactory(
                     specificationAttributes,
                     productAttributes,
                     referenceEntityAttributeCache,
+                    fallbackSourcesByMappingId,
                     model.Warnings);
 
                 model.Mappings.Add(mappingModel);
             }
         }
 
+        foreach (var computedMapping in existingAttributeMappings
+                     .Where(mapping => mapping.ValueModeId ==
+                         (int)AkeneoAttributeMappingValueMode.Template)
+                     .OrderBy(mapping => mapping.Name)
+                     .ThenBy(mapping => mapping.Id))
+        {
+            model.Mappings.Add(CreateComputedMappingModel(
+                computedMapping,
+                model.AkeneoFamilyCode,
+                specificationAttributes,
+                productAttributes));
+        }
+
+        PrepareFallbackSourceOptions(model);
         AddMappingWarnings(model);
 
         return model;
@@ -164,6 +194,7 @@ public class AkeneoAttributeMappingModelFactory(
         IEnumerable<SpecificationAttribute> specificationAttributes,
         IEnumerable<ProductAttribute> productAttributes,
         IDictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>> referenceEntityAttributeCache,
+        IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
         IList<string> warnings)
     {
         var defaultNopTargetType = targetTypeResolver.ResolveDefaultTargetType(
@@ -178,6 +209,11 @@ public class AkeneoAttributeMappingModelFactory(
         var mappingModel = new AkeneoAttributeMappingModel
         {
             Id = existingAttributeMapping?.Id ?? 0,
+            MappingKey = existingAttributeMapping?.MappingKey,
+            Name = existingAttributeMapping?.Name,
+            ValueModeId = existingAttributeMapping?.ValueModeId ??
+                (int)AkeneoAttributeMappingValueMode.SingleAttribute,
+            ValueTemplate = existingAttributeMapping?.ValueTemplate,
 
             // Display-only values from Akeneo.
             AkeneoAttributeCode = akeneoAttribute.Code,
@@ -208,9 +244,15 @@ public class AkeneoAttributeMappingModelFactory(
             Channel = existingAttributeMapping?.Channel,
             TransformRuleJson = existingAttributeMapping?.TransformRuleJson,
             IsRequired = existingAttributeMapping?.IsRequired ?? false,
+            EntityScopeId =
+                AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(
+                    existingAttributeMapping?.EntityScopeId),
             NopTargetEntityId = existingAttributeMapping?.NopTargetEntityId,
             AkeneoFamilyCode = existingAttributeMapping?.AkeneoFamilyCode,
-            IsInherited = isInherited
+            IsInherited = isInherited,
+            FallbackSources = GetFallbackSourceModels(
+                existingAttributeMapping,
+                fallbackSourcesByMappingId)
         };
 
         PrepareTargetTypeOptions(mappingModel, akeneoAttribute);
@@ -225,6 +267,164 @@ public class AkeneoAttributeMappingModelFactory(
             warnings);
 
         return mappingModel;
+    }
+
+
+    private AkeneoAttributeMappingModel CreateComputedMappingModel(
+        AkeneoAttributeMapping mapping,
+        string selectedFamilyCode,
+        IEnumerable<SpecificationAttribute> specificationAttributes,
+        IEnumerable<ProductAttribute> productAttributes)
+    {
+        var isFamilyScope = !string.IsNullOrWhiteSpace(selectedFamilyCode);
+        var isInherited =
+            isFamilyScope &&
+            string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode);
+
+        var model = new AkeneoAttributeMappingModel
+        {
+            Id = mapping.Id,
+            MappingKey = mapping.MappingKey,
+            Name = mapping.Name,
+            ValueModeId = (int)AkeneoAttributeMappingValueMode.Template,
+            ValueTemplate = mapping.ValueTemplate,
+            AkeneoFamilyCode = mapping.AkeneoFamilyCode,
+            IsInherited = isInherited,
+            AkeneoAttributeCode = null,
+            AkeneoAttributeLabel = mapping.Name,
+            AkeneoAttributeType = "computed_template",
+            AkeneoAttributeGroup = "__computed",
+            AkeneoAttributeGroupLabel = "Computed mappings",
+            AkeneoAttributeTypeId = (int)AkeneoAttributeType.Text,
+            NopTargetTypeId = mapping.NopTargetTypeId,
+            NopTargetKey = mapping.NopTargetKey,
+            NopTargetEntityId = mapping.NopTargetEntityId,
+            Locale = mapping.Locale,
+            Channel = mapping.Channel,
+            TransformRuleJson = mapping.TransformRuleJson,
+            IsRequired = mapping.IsRequired,
+            EntityScopeId =
+                AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(
+                    mapping.EntityScopeId),
+            IsReferenceEntityAttribute = false,
+            FallbackSources = new List<AkeneoAttributeMappingFallbackSourceModel>()
+        };
+
+        PrepareComputedTargetTypeOptions(model);
+        PrepareNopTargetKeyOptions(model);
+        PrepareSpecificationAttributeOptions(model, specificationAttributes);
+        PrepareProductAttributeOptions(model, productAttributes);
+
+        return model;
+    }
+
+    private static void PrepareComputedTargetTypeOptions(
+        AkeneoAttributeMappingModel model)
+    {
+        model.AvailableTargetTypes.Clear();
+
+        var targetTypes = new[]
+        {
+            NopTargetType.Ignore,
+            NopTargetType.ProductField,
+            NopTargetType.SpecificationAttribute,
+            NopTargetType.ProductAttribute,
+            NopTargetType.SeoField,
+            NopTargetType.CustomProperty
+        };
+
+        foreach (var targetType in targetTypes)
+        {
+            model.AvailableTargetTypes.Add(new SelectListItem
+            {
+                Text = GetTargetTypeDisplayName(targetType),
+                Value = ((int)targetType).ToString(),
+                Selected = model.NopTargetTypeId == (int)targetType
+            });
+        }
+    }
+
+
+    private static IList<AkeneoAttributeMappingFallbackSourceModel>
+        GetFallbackSourceModels(
+            AkeneoAttributeMapping mapping,
+            IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId)
+    {
+        if (mapping == null ||
+            !fallbackSourcesByMappingId.TryGetValue(mapping.Id, out var sources))
+        {
+            return new List<AkeneoAttributeMappingFallbackSourceModel>();
+        }
+
+        return sources
+            .OrderBy(source => source.DisplayOrder)
+            .ThenBy(source => source.Id)
+            .Select(source => new AkeneoAttributeMappingFallbackSourceModel
+            {
+                AkeneoAttributeCode = source.AkeneoAttributeCode,
+                AkeneoAttributeTypeId = source.AkeneoAttributeTypeId,
+                AkeneoReferenceEntityCode = source.AkeneoReferenceEntityCode,
+                AkeneoReferenceEntityAttributeCode =
+                    source.AkeneoReferenceEntityAttributeCode,
+                DisplayOrder = source.DisplayOrder
+            })
+            .ToList();
+    }
+
+    private static void PrepareFallbackSourceOptions(
+        AkeneoAttributeMappingListModel model)
+    {
+        model.AvailableFallbackSources = model.Mappings
+            .Where(mapping => !mapping.IsComputed)
+            .Where(mapping =>
+                !mapping.IsReferenceEntityAttribute ||
+                !string.IsNullOrWhiteSpace(
+                    mapping.AkeneoReferenceEntityAttributeCode))
+            .Select(mapping =>
+            {
+                var referenceFieldLabel = mapping.IsReferenceEntityAttribute
+                    ? mapping.AvailableReferenceEntityAttributes
+                        .FirstOrDefault(option => string.Equals(
+                            option.Value,
+                            mapping.AkeneoReferenceEntityAttributeCode,
+                            StringComparison.OrdinalIgnoreCase))
+                        ?.Text
+                    : null;
+
+                var text = mapping.IsReferenceEntityAttribute
+                    ? $"{mapping.AkeneoAttributeLabel} → {referenceFieldLabel ?? mapping.AkeneoReferenceEntityAttributeCode}"
+                    : $"{mapping.AkeneoAttributeLabel} ({mapping.AkeneoAttributeCode})";
+
+                return new AkeneoAttributeMappingSourceOptionModel
+                {
+                    Key = BuildSourceOptionKey(
+                        mapping.AkeneoAttributeCode,
+                        mapping.AkeneoReferenceEntityAttributeCode),
+                    Text = text,
+                    AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+                    AkeneoAttributeTypeId = mapping.AkeneoAttributeTypeId,
+                    AkeneoReferenceEntityCode =
+                        mapping.AkeneoReferenceEntityCode,
+                    AkeneoReferenceEntityAttributeCode =
+                        mapping.AkeneoReferenceEntityAttributeCode
+                };
+            })
+            .GroupBy(option => option.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(option => option.Text)
+            .ToList();
+    }
+
+    private static string BuildSourceOptionKey(
+        string attributeCode,
+        string referenceEntityAttributeCode)
+    {
+        var code = attributeCode?.Trim() ?? string.Empty;
+        var field = referenceEntityAttributeCode?.Trim() ?? string.Empty;
+
+        return string.IsNullOrWhiteSpace(field)
+            ? code
+            : $"{code}::{field}";
     }
 
     private IDictionary<string, IList<NopTargetKeyOptionModel>> BuildNopTargetKeyMap()
@@ -488,14 +688,14 @@ public class AkeneoAttributeMappingModelFactory(
                 !mapping.NopTargetEntityId.HasValue)
             {
                 model.Warnings.Add(
-                    $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a product attribute, but no nopCommerce product attribute is selected.");
+                    $"Mapping '{GetMappingDisplayName(mapping)}' is mapped as a product attribute, but no nopCommerce product attribute is selected.");
             }
 
             if (mapping.NopTargetTypeId == (int)NopTargetType.ProductField &&
                 string.IsNullOrWhiteSpace(mapping.NopTargetKey))
             {
                 model.Warnings.Add(
-                    $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a product field, but no target key is selected.");
+                    $"Mapping '{GetMappingDisplayName(mapping)}' is mapped as a product field, but no target key is selected.");
             }
 
 
@@ -506,6 +706,14 @@ public class AkeneoAttributeMappingModelFactory(
                     $"Akeneo reference entity attribute '{mapping.AkeneoAttributeCode}' has no reference entity field selected.");
             }
         }
+    }
+
+    private static string GetMappingDisplayName(
+        AkeneoAttributeMappingModel mapping)
+    {
+        return mapping.IsComputed
+            ? mapping.Name ?? "Computed mapping"
+            : mapping.AkeneoAttributeCode ?? "Attribute mapping";
     }
 
     private static string GetTargetTypeDisplayName(NopTargetType targetType)

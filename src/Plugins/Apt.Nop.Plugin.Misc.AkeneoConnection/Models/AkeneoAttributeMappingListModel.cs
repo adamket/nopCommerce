@@ -20,6 +20,7 @@ public class AkeneoAttributeMappingListModel
     public IList<SelectListItem> AvailableSpecificationAttributes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableProductAttributes { get; set; } = new List<SelectListItem>();
     public IList<AkeneoAttributeMappingModel> Mappings { get; set; } = new List<AkeneoAttributeMappingModel>();
+    public IList<AkeneoAttributeMappingSourceOptionModel> AvailableFallbackSources { get; set; } = new List<AkeneoAttributeMappingSourceOptionModel>();
     public IList<string> Warnings { get; set; } = new List<string>();
 
     // Target Key options per NopTargetType (keyed by the int target-type as a string),

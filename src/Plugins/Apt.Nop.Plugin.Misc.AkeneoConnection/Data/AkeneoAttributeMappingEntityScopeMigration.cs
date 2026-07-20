@@ -6,34 +6,34 @@
 //namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
 //[NopMigration(
-//    "2026-07-20 01:00:00",
-//    "AkeneoConnection: Add product model hierarchy mode",
+//    "2026-07-20 02:00:00",
+//    "AkeneoConnection: Add attribute mapping entity applicability",
 //    MigrationProcessType.Update)]
-//public class AkeneoProductModelHierarchyMigration : MigrationBase
+//public class AkeneoAttributeMappingEntityScopeMigration : MigrationBase
 //{
 //    public override void Up()
 //    {
 //        var table = NameCompatibilityManager.GetTableName(
-//            typeof(AkeneoFamilyMapping));
+//            typeof(AkeneoAttributeMapping));
 
 //        if (!Schema.Table(table).Exists() ||
 //            Schema.Table(table)
-//                .Column(nameof(AkeneoFamilyMapping.ProductModelHierarchyModeId))
+//                .Column(nameof(AkeneoAttributeMapping.EntityScopeId))
 //                .Exists())
 //        {
 //            return;
 //        }
 
 //        Alter.Table(table)
-//            .AddColumn(nameof(AkeneoFamilyMapping.ProductModelHierarchyModeId))
+//            .AddColumn(nameof(AkeneoAttributeMapping.EntityScopeId))
 //            .AsInt32()
 //            .NotNullable()
 //            .WithDefaultValue(
-//                (int)AkeneoProductModelHierarchyMode.ImmediateParentProductModel);
+//                (int)AkeneoAttributeMappingEntityScope.All);
 //    }
 
 //    public override void Down()
 //    {
-//        // Preserve family hierarchy configuration on downgrade.
+//        // Preserve mapping applicability configuration on downgrade.
 //    }
 //}

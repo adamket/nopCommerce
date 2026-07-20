@@ -37,6 +37,14 @@ public static class AkeneoMappingHelper
     {
         ArgumentNullException.ThrowIfNull(mapping);
 
+        if (mapping.ValueModeId ==
+            (int)AkeneoAttributeMappingValueMode.Template)
+        {
+            return !string.IsNullOrWhiteSpace(mapping.MappingKey)
+                ? $"template::{mapping.MappingKey.Trim()}"
+                : $"template::legacy-{mapping.Id}";
+        }
+
         var attributeCode = mapping.AkeneoAttributeCode?.Trim() ?? string.Empty;
 
         if (!IsReferenceEntityMapping(mapping) ||
@@ -51,6 +59,16 @@ public static class AkeneoMappingHelper
     public static string GetSourceDisplayName(AkeneoAttributeMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+
+        if (mapping.ValueModeId ==
+            (int)AkeneoAttributeMappingValueMode.Template)
+        {
+            return !string.IsNullOrWhiteSpace(mapping.Name)
+                ? mapping.Name.Trim()
+                : !string.IsNullOrWhiteSpace(mapping.MappingKey)
+                    ? $"Computed mapping ({mapping.MappingKey.Trim()})"
+                    : "Computed mapping";
+        }
 
         var attributeCode = mapping.AkeneoAttributeCode?.Trim() ?? string.Empty;
 

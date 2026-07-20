@@ -37,4 +37,18 @@ public interface IAkeneoAttributeMappingService
     /// replacing the other field mappings for the same Akeneo attribute.
     /// </summary>
     Task<IList<AkeneoAttributeMapping>> GetEffectiveMappingsAsync(string familyCode);
+
+    /// <summary>
+    /// Returns all ordered fallback sources for all mappings. Callers can group
+    /// the rows by AttributeMappingId to avoid per-mapping database queries.
+    /// </summary>
+    Task<IList<AkeneoAttributeMappingFallbackSource>>
+        GetAllFallbackSourcesAsync();
+
+    /// <summary>
+    /// Replaces the fallback source chain for one saved mapping.
+    /// </summary>
+    Task ReplaceFallbackSourcesAsync(
+        int attributeMappingId,
+        IEnumerable<AkeneoAttributeMappingFallbackSource> fallbackSources);
 }

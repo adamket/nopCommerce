@@ -12,6 +12,11 @@ public sealed class AkeneoResolvedMappedValue
 
     public AkeneoResolvedProductValue Value { get; init; }
 
+    /// <summary>
+    /// The primary or fallback Akeneo source that supplied the selected value.
+    /// </summary>
+    public string ResolvedSourceDisplayName { get; init; }
+
     public string DisplayValue =>
         HasValue
             ? Value?.DisplayValue ?? string.Empty

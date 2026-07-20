@@ -212,10 +212,30 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         var valueLocale = GetNullableStringProperty(valueObject, "locale");
         var valueChannel = GetNullableStringProperty(valueObject, "scope");
 
-        score += ScoreContextValue(valueLocale, requestedLocale);
+        score += ScoreLocaleValue(valueLocale, requestedLocale);
         score += ScoreContextValue(valueChannel, requestedChannel);
 
         return score;
+    }
+
+    private static int ScoreLocaleValue(
+        string actualValue,
+        string requestedValue)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedValue))
+        {
+            if (LocaleEquals(actualValue, requestedValue))
+                return 100;
+
+            if (string.IsNullOrWhiteSpace(actualValue))
+                return 10;
+
+            return -1000;
+        }
+
+        return string.IsNullOrWhiteSpace(actualValue)
+            ? 20
+            : 1;
     }
 
     private static int ScoreContextValue(
@@ -378,13 +398,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         if (linkedData.TryGetProperty("labels", out var labels) &&
             labels.ValueKind == JsonValueKind.Object)
         {
-            if (!string.IsNullOrWhiteSpace(locale) &&
-                labels.TryGetProperty(locale, out var localizedLabel) &&
-                localizedLabel.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(localizedLabel.GetString()))
-            {
-                return localizedLabel.GetString();
-            }
+            if (TryGetLocalizedLabel(labels, locale, out var localizedLabel))
+                return localizedLabel;
 
             if (labels.TryGetProperty("en_US", out var englishLabel) &&
                 englishLabel.ValueKind == JsonValueKind.String &&
@@ -410,6 +425,56 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         }
 
         return null;
+    }
+
+    private static bool TryGetLocalizedLabel(
+        JsonElement labels,
+        string requestedLocale,
+        out string label)
+    {
+        label = null;
+
+        if (labels.ValueKind != JsonValueKind.Object ||
+            string.IsNullOrWhiteSpace(requestedLocale))
+        {
+            return false;
+        }
+
+        if (labels.TryGetProperty(requestedLocale, out var exact) &&
+            exact.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(exact.GetString()))
+        {
+            label = exact.GetString();
+            return true;
+        }
+
+        foreach (var candidate in labels.EnumerateObject())
+        {
+            if (!LocaleEquals(candidate.Name, requestedLocale) ||
+                candidate.Value.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(candidate.Value.GetString()))
+            {
+                continue;
+            }
+
+            label = candidate.Value.GetString();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool LocaleEquals(string left, string right)
+    {
+        return string.Equals(
+            NormalizeLocale(left),
+            NormalizeLocale(right),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeLocale(string value)
+    {
+        return value?.Trim().Replace('-', '_');
     }
 
     private static string GetNullableStringProperty(
@@ -494,13 +559,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(locale) &&
-            labels.TryGetProperty(locale, out var localized) &&
-            localized.ValueKind == JsonValueKind.String &&
-            !string.IsNullOrWhiteSpace(localized.GetString()))
-        {
-            return localized.GetString();
-        }
+        if (TryGetLocalizedLabel(labels, locale, out var localized))
+            return localized;
 
         if (labels.TryGetProperty("en_US", out var english) &&
             english.ValueKind == JsonValueKind.String &&

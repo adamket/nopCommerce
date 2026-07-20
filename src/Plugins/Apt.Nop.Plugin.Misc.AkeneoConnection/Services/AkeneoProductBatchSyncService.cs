@@ -439,17 +439,22 @@ public class AkeneoProductBatchSyncService(
 
                 if (existingMode is null or AkeneoVariantRelationshipMode.None)
                 {
-                    var effectiveContext = rawLeafContext;
+                    var standaloneSource = overrideRule.MergeAncestorValues
+                        ? hierarchy.LeafWithInheritedValues
+                        : source;
 
-                    if (overrideRule.MergeAncestorValues)
-                    {
-                        effectiveContext = await productSyncService.PrepareAsync(
-                            hierarchy.LeafWithInheritedValues,
-                            AkeneoEntityType.Product,
-                            request,
-                            result,
-                            cancellationToken);
-                    }
+                    // The Akeneo record still has a parent code, but this rule
+                    // deliberately imports it as a standalone nopCommerce
+                    // product. Pass the destination role explicitly so
+                    // variant-only mappings are not applied to it.
+                    var effectiveContext = await productSyncService.PrepareAsync(
+                        standaloneSource,
+                        AkeneoEntityType.Product,
+                        request,
+                        result,
+                        familyCode,
+                        AkeneoAttributeMappingEntityScope.StandaloneProduct,
+                        cancellationToken);
 
                     if (!result.Success)
                     {
@@ -487,12 +492,15 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
-        var parentProduct = await ResolveOrCreateParentProductAsync(
+        var parentSync = await ResolveOrCreateParentProductAsync(
             hierarchy.EffectiveParentProductModel,
+            familyCode,
             request,
             result,
             parentProductCache,
             cancellationToken);
+
+        var parentProduct = parentSync?.Product;
 
         if (parentProduct == null)
         {
@@ -531,6 +539,15 @@ public class AkeneoProductBatchSyncService(
         }
 
         ApplyVariantResult(result, variantResult, previousState);
+
+        // Parent product-model changes are part of this leaf reconciliation
+        // unit. Promote an otherwise skipped leaf so the run counters and item
+        // logs accurately show that the synchronization changed nopCommerce.
+        if (parentSync.Changed &&
+            result.ActionType == SyncItemActionType.Skipped)
+        {
+            result.ActionType = SyncItemActionType.Updated;
+        }
 
         if (variantResult.Mode ==
             AkeneoVariantRelationshipMode.ProductAttributeCombinations)
@@ -759,8 +776,9 @@ public class AkeneoProductBatchSyncService(
             : null;
     }
 
-    private async Task<Product> ResolveOrCreateParentProductAsync(
+    private async Task<ParentProductSyncOutcome> ResolveOrCreateParentProductAsync(
         AkeneoProductDefinition effectiveProductModel,
+        string mappingFamilyCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IDictionary<string, Product> parentProductCache,
@@ -780,7 +798,7 @@ public class AkeneoProductBatchSyncService(
             var fresh = await productService.GetProductByIdAsync(cached.Id);
 
             if (fresh != null)
-                return fresh;
+                return new ParentProductSyncOutcome(fresh, Changed: false);
 
             parentProductCache.Remove(parentCode);
         }
@@ -798,7 +816,14 @@ public class AkeneoProductBatchSyncService(
             AkeneoEntityType.ProductModel,
             request,
             parentResult,
+            mappingFamilyCode,
             cancellationToken);
+
+        AppendParentNameResolutionDiagnostic(
+            parentContext,
+            parentResult,
+            parentCode,
+            request);
 
         var parentProduct = await productSyncService.SynchronizeAsync(
             parentContext,
@@ -814,8 +839,40 @@ public class AkeneoProductBatchSyncService(
 
         parentProductCache[parentCode] = parentProduct;
 
-        return parentProduct;
+        var changed = parentResult.ActionType is
+            SyncItemActionType.Created or SyncItemActionType.Updated;
+
+        return new ParentProductSyncOutcome(parentProduct, changed);
     }
+
+    private static void AppendParentNameResolutionDiagnostic(
+        AkeneoProductSyncContext context,
+        AkeneoProductImportResult result,
+        string parentCode,
+        AkeneoProductImportRequest request)
+    {
+        var nameMapping = context.MappedValues.FirstOrDefault(mapped =>
+            mapped.TargetType == NopTargetType.ProductField &&
+            string.Equals(
+                mapped.Mapping.NopTargetKey,
+                "Name",
+                StringComparison.OrdinalIgnoreCase));
+
+        if (nameMapping == null || nameMapping.HasValue)
+            return;
+
+        result.AddWarning(
+            $"The parent Name mapping '{nameMapping.Mapping.AkeneoAttributeCode}' " +
+            $"was selected from family scope '{context.MappingFamilyCode ?? "global"}', " +
+            $"but no value resolved on product model '{parentCode}' for locale " +
+            $"'{nameMapping.Mapping.Locale ?? request.Locale ?? "<none>"}' and channel " +
+            $"'{nameMapping.Mapping.Channel ?? request.Channel ?? "<none>"}'. " +
+            "The existing or fallback product-model name was preserved.");
+    }
+
+    private sealed record ParentProductSyncOutcome(
+        Product Product,
+        bool Changed);
 
     private static void CopyMessages(
         AkeneoProductImportResult source,

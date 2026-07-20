@@ -1,4 +1,4 @@
-@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
+﻿@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoAttributeMappingListModel
@@ -34,10 +34,57 @@
             specificationAttribute = (int)NopTargetType.SpecificationAttribute,
             productAttribute = (int)NopTargetType.ProductAttribute
         },
+        valueModes = new
+        {
+            singleAttribute = (int)AkeneoAttributeMappingValueMode.SingleAttribute,
+            template = (int)AkeneoAttributeMappingValueMode.Template
+        },
+        entityScopes = new
+        {
+            productModel = (int)AkeneoAttributeMappingEntityScope.ProductModel,
+            variantProduct = (int)AkeneoAttributeMappingEntityScope.VariantProduct,
+            standaloneProduct = (int)AkeneoAttributeMappingEntityScope.StandaloneProduct,
+            all = (int)AkeneoAttributeMappingEntityScope.All
+        },
+        computedTargetTypes = new[]
+        {
+            new { value = ((int)NopTargetType.Ignore).ToString(), text = "Ignore" },
+            new { value = ((int)NopTargetType.ProductField).ToString(), text = "Product Field" },
+            new { value = ((int)NopTargetType.SpecificationAttribute).ToString(), text = "Specification Attribute" },
+            new { value = ((int)NopTargetType.ProductAttribute).ToString(), text = "Product Attribute" },
+            new { value = ((int)NopTargetType.SeoField).ToString(), text = "SEO Field" },
+            new { value = ((int)NopTargetType.CustomProperty).ToString(), text = "Custom Property" }
+        },
+        availableSpecificationAttributes = Model.Mappings
+            .SelectMany(mapping => mapping.AvailableSpecificationAttributes)
+            .GroupBy(option => option.Value)
+            .Select(group => group.First())
+            .Select(option => new { value = option.Value, text = option.Text })
+            .ToList(),
+        availableProductAttributes = Model.Mappings
+            .SelectMany(mapping => mapping.AvailableProductAttributes)
+            .GroupBy(option => option.Value)
+            .Select(group => group.First())
+            .Select(option => new { value = option.Value, text = option.Text })
+            .ToList(),
+        availableFallbackSources = Model.AvailableFallbackSources.Select(source => new
+        {
+            key = source.Key,
+            text = source.Text,
+            akeneoAttributeCode = source.AkeneoAttributeCode,
+            akeneoAttributeTypeId = source.AkeneoAttributeTypeId,
+            akeneoReferenceEntityCode = source.AkeneoReferenceEntityCode ?? string.Empty,
+            akeneoReferenceEntityAttributeCode = source.AkeneoReferenceEntityAttributeCode ?? string.Empty
+        }).ToList(),
         mappings = Model.Mappings.Select((m, idx) => new
         {
             index = idx,
             id = m.Id,
+            mappingKey = m.MappingKey ?? string.Empty,
+            name = m.Name ?? string.Empty,
+            valueModeId = m.ValueModeId,
+            valueTemplate = m.ValueTemplate ?? string.Empty,
+            isComputed = m.IsComputed,
             akeneoFamilyCode = m.AkeneoFamilyCode ?? string.Empty,
             isInherited = m.IsInherited,
             code = m.AkeneoAttributeCode,
@@ -55,6 +102,15 @@
             nopTargetKey = m.NopTargetKey ?? string.Empty,
             nopTargetEntityId = m.NopTargetEntityId?.ToString() ?? string.Empty,
             isRequired = m.IsRequired,
+            entityScopeId = m.EntityScopeId,
+            fallbackSources = m.FallbackSources.Select(source => new
+            {
+                akeneoAttributeCode = source.AkeneoAttributeCode,
+                akeneoAttributeTypeId = source.AkeneoAttributeTypeId,
+                akeneoReferenceEntityCode = source.AkeneoReferenceEntityCode ?? string.Empty,
+                akeneoReferenceEntityAttributeCode = source.AkeneoReferenceEntityAttributeCode ?? string.Empty,
+                displayOrder = source.DisplayOrder
+            }).ToList(),
             transformRuleJson = m.TransformRuleJson ?? string.Empty,
             availableTargetTypes = m.AvailableTargetTypes.Select(o => new { value = o.Value, text = o.Text }),
             availableSpecificationAttributes = m.AvailableSpecificationAttributes.Select(o => new { value = o.Value, text = o.Text }),
@@ -107,6 +163,18 @@
                                 </div> *@
                             </div>
 
+                            <div class="form-group col-md-7 mb-0 text-right">
+                                <button type="button"
+                                        class="btn btn-primary"
+                                        v-on:click="addComputedMapping">
+                                    <i class="fas fa-plus"></i>
+                                    Add computed mapping
+                                </button>
+                                <div class="form-text text-muted">
+                                    Build one nopCommerce value from multiple Akeneo attributes.
+                                </div>
+                            </div>
+
                             @* <div class="col-md-7">
                                 <div class="alert mb-0"
                                      v-bind:class="selectedFamilyCode ? 'alert-info' : 'alert-secondary'">
@@ -150,7 +218,8 @@
                                     {{ group.entries.length }}
                                 </span>
 
-                                <span class="akeneo-group-code ml-2">
+                                <span class="akeneo-group-code ml-2"
+                                      v-if="group.code && group.code !== '__computed'">
                                     {{ group.code }}
                                 </span>
                             </div>
@@ -313,9 +382,58 @@
             var targetKeyMap = JSON.parse(document.getElementById('akeneo-target-key-map').textContent);
 
             var nextClientKey = appData.mappings.length;
+            var entityScopes = appData.entityScopes;
+            var valueModes = appData.valueModes;
+
+            function normalizeEntityScopeId(value) {
+                var parsed = Number(value) || 0;
+                var normalized = parsed & entityScopes.all;
+
+                return normalized || entityScopes.all;
+            }
+
+            function hasEntityScope(value, scope) {
+                return (normalizeEntityScopeId(value) & scope) === scope;
+            }
+
+            function sourceKey(attributeCode, referenceFieldCode) {
+                var code = (attributeCode || '').trim();
+                var field = (referenceFieldCode || '').trim();
+                return field ? code + '::' + field : code;
+            }
+
+            function createComputedMappingKey() {
+                if (window.crypto && typeof window.crypto.randomUUID === 'function')
+                    return window.crypto.randomUUID().replace(/-/g, '');
+
+                return 'computed-' + Date.now().toString(36) + '-' +
+                    Math.random().toString(36).slice(2);
+            }
+
+            function cloneFallbackSources(sources) {
+                return (sources || []).map(function (source, index) {
+                    return {
+                        sourceKey: source.sourceKey || sourceKey(
+                            source.akeneoAttributeCode,
+                            source.akeneoReferenceEntityAttributeCode),
+                        akeneoAttributeCode: source.akeneoAttributeCode || '',
+                        akeneoAttributeTypeId: Number(source.akeneoAttributeTypeId) || 0,
+                        akeneoReferenceEntityCode: source.akeneoReferenceEntityCode || '',
+                        akeneoReferenceEntityAttributeCode: source.akeneoReferenceEntityAttributeCode || '',
+                        displayOrder: index
+                    };
+                });
+            }
 
             function hydrateMapping(m, clientAdded) {
+                var entityScopeId = normalizeEntityScopeId(m.entityScopeId);
+
                 return Object.assign({}, m, {
+                    valueModeId: Number(m.valueModeId) || valueModes.singleAttribute,
+                    isComputed: !!m.isComputed ||
+                        Number(m.valueModeId) === valueModes.template,
+                    entityScopeId: entityScopeId,
+                    fallbackSources: cloneFallbackSources(m.fallbackSources),
                     clientKey: m.clientKey || ('mapping-' + (++nextClientKey)),
                     clientAdded: !!clientAdded,
                     editing: !!clientAdded,
@@ -323,11 +441,24 @@
                     deleting: false,
                     errors: [],
                     draft: {
+                        name: m.name || '',
+                        valueTemplate: m.valueTemplate || '',
+                        selectedTemplateToken: '',
                         nopTargetTypeId: m.nopTargetTypeId,
                         nopTargetKey: m.nopTargetKey,
                         nopTargetEntityId: m.nopTargetEntityId,
                         referenceEntityAttributeCode: m.referenceEntityAttributeCode,
                         isRequired: m.isRequired,
+                        applyToProductModels: hasEntityScope(
+                            entityScopeId,
+                            entityScopes.productModel),
+                        applyToVariantProducts: hasEntityScope(
+                            entityScopeId,
+                            entityScopes.variantProduct),
+                        applyToStandaloneProducts: hasEntityScope(
+                            entityScopeId,
+                            entityScopes.standaloneProduct),
+                        fallbackSources: cloneFallbackSources(m.fallbackSources),
                         transformRuleJson: m.transformRuleJson,
                         showTransform: !!(m.transformRuleJson && m.transformRuleJson.trim())
                     }
@@ -345,7 +476,12 @@
                         selectedFamilyCode: appData.selectedFamilyCode || '',
                         availableFamilies: appData.availableFamilies || [],
                         targetTypes: appData.targetTypes,
+                        valueModes: valueModes,
                         targetKeyMap: targetKeyMap,
+                        computedTargetTypes: appData.computedTargetTypes || [],
+                        availableSpecificationAttributes: appData.availableSpecificationAttributes || [],
+                        availableProductAttributes: appData.availableProductAttributes || [],
+                        availableFallbackSources: appData.availableFallbackSources || [],
                         expanded: {},
                         referenceExpanded: {},
                         toasts: []
@@ -415,6 +551,10 @@
                 return group;
             })
             .sort(function (a, b) {
+                if (a.code === '__computed' && b.code !== '__computed')
+                    return -1;
+                if (b.code === '__computed' && a.code !== '__computed')
+                    return 1;
                 return a.label.localeCompare(b.label);
             });
     }
@@ -470,6 +610,89 @@
 
                         return 'Reference source: ' + (m.referenceEntityCode || 'unknown entity') + ' → ' + fieldText;
                     },
+                    fallbackSummary: function (m) {
+                        if (m.isComputed)
+                            return '';
+
+                        var sources = m.fallbackSources || [];
+                        if (!sources.length)
+                            return '';
+
+                        var labels = sources.map(function (source) {
+                            var option = this.availableFallbackSources.find(function (candidate) {
+                                return candidate.key.toLowerCase() ===
+                                    sourceKey(
+                                        source.akeneoAttributeCode,
+                                        source.akeneoReferenceEntityAttributeCode)
+                                    .toLowerCase();
+                            });
+                            return option ? option.text : source.akeneoAttributeCode;
+                        }, this);
+
+                        return 'Fallback: ' + labels.join(' → ');
+                    },
+                    mappingDisplayName: function (m) {
+                        return m.isComputed
+                            ? (m.name || 'Computed mapping')
+                            : m.code;
+                    },
+                    templateSummary: function (m) {
+                        if (!m.isComputed || !m.valueTemplate)
+                            return '';
+
+                        return 'Template: ' + m.valueTemplate;
+                    },
+                    templateTokenOptions: function () {
+                        var builtIns = [
+                            { key: 'sku', text: 'SKU / identifier' },
+                            { key: 'code', text: 'Entity code' },
+                            { key: 'uuid', text: 'Product UUID' },
+                            { key: 'identifier', text: 'Product identifier' },
+                            { key: 'parent', text: 'Parent product model code' },
+                            { key: 'family', text: 'Family code' },
+                            { key: 'family_variant', text: 'Family variant code' },
+                            { key: 'enabled', text: 'Enabled state' }
+                        ];
+
+                        var builtInKeys = builtIns.map(function (item) {
+                            return item.key.toLowerCase();
+                        });
+
+                        var attributes = this.availableFallbackSources.map(function (source) {
+                            var attributeCode = source.akeneoAttributeCode;
+                            var collidesWithBuiltIn = builtInKeys.indexOf(
+                                attributeCode.toLowerCase()) >= 0;
+
+                            return {
+                                key: collidesWithBuiltIn
+                                    ? 'attr:' + attributeCode
+                                    : attributeCode,
+                                text: collidesWithBuiltIn
+                                    ? source.text + ' (Akeneo attribute)'
+                                    : source.text
+                            };
+                        }).filter(function (item, index, all) {
+                            return all.findIndex(function (candidate) {
+                                return candidate.key.toLowerCase() === item.key.toLowerCase();
+                            }) === index;
+                        });
+
+                        return builtIns.concat(attributes);
+                    },
+                    insertTemplateToken: function (m) {
+                        var token = m.draft.selectedTemplateToken;
+                        if (!token)
+                            return;
+
+                        var addition = '{' + token + '}';
+                        var current = m.draft.valueTemplate || '';
+                        var separator = current && !/[\s\-_/]$/.test(current)
+                            ? ' '
+                            : '';
+
+                        m.draft.valueTemplate = current + separator + addition;
+                        m.draft.selectedTemplateToken = '';
+                    },
                     detail: function (m) {
                         var t = Number(m.nopTargetTypeId);
 
@@ -522,6 +745,41 @@
                             badgeClass: 'badge-warning'
                         };
                     },
+                    entityScopeIdFromDraft: function (draft) {
+                        var value = 0;
+
+                        if (draft.applyToProductModels)
+                            value |= entityScopes.productModel;
+
+                        if (draft.applyToVariantProducts)
+                            value |= entityScopes.variantProduct;
+
+                        if (draft.applyToStandaloneProducts)
+                            value |= entityScopes.standaloneProduct;
+
+                        return value;
+                    },
+                    appliesToText: function (m) {
+                        var scope = normalizeEntityScopeId(m.entityScopeId);
+
+                        if (scope === entityScopes.all)
+                            return 'All product roles';
+
+                        var labels = [];
+
+                        if ((scope & entityScopes.productModel) !== 0)
+                            labels.push('Parent');
+
+                        if ((scope & entityScopes.variantProduct) !== 0)
+                            labels.push('Variants');
+
+                        if ((scope & entityScopes.standaloneProduct) !== 0)
+                            labels.push('Standalone');
+
+                        return labels.length
+                            ? labels.join(' + ')
+                            : 'No role selected';
+                    },
                     changeFamilyScope: function () {
                         var url = new URL(appData.listUrl, window.location.origin);
 
@@ -533,12 +791,31 @@
                         window.location.assign(url.pathname + url.search);
                     },
                     edit: function (m) {
+                        m.draft.name = m.name || '';
+                        m.draft.valueTemplate = m.valueTemplate || '';
+                        m.draft.selectedTemplateToken = '';
                         m.draft.nopTargetTypeId = m.nopTargetTypeId;
                         m.draft.nopTargetKey = m.nopTargetKey;
                         m.draft.nopTargetEntityId = m.nopTargetEntityId;
                         m.draft.referenceEntityAttributeCode =
                             m.referenceEntityAttributeCode;
                         m.draft.isRequired = m.isRequired;
+
+                        var entityScopeId =
+                            normalizeEntityScopeId(m.entityScopeId);
+
+                        m.draft.applyToProductModels = hasEntityScope(
+                            entityScopeId,
+                            entityScopes.productModel);
+                        m.draft.applyToVariantProducts = hasEntityScope(
+                            entityScopeId,
+                            entityScopes.variantProduct);
+                        m.draft.applyToStandaloneProducts = hasEntityScope(
+                            entityScopeId,
+                            entityScopes.standaloneProduct);
+                        m.draft.fallbackSources =
+                            cloneFallbackSources(m.fallbackSources);
+
                         m.draft.transformRuleJson = m.transformRuleJson;
                         m.draft.showTransform =
                             !!(m.transformRuleJson &&
@@ -566,6 +843,78 @@
                         }
 
                         m.editing = false;
+                    },
+                    primarySourceKey: function (m) {
+                        var referenceField = m.isReferenceEntityAttribute
+                            ? (m.draft.referenceEntityAttributeCode ||
+                               m.referenceEntityAttributeCode)
+                            : '';
+                        return sourceKey(m.code, referenceField);
+                    },
+                    fallbackOptions: function (m, fallbackIndex) {
+                        var primary = this.primarySourceKey(m).toLowerCase();
+                        var selectedElsewhere = (m.draft.fallbackSources || [])
+                            .filter(function (_, index) { return index !== fallbackIndex; })
+                            .map(function (source) {
+                                return (source.sourceKey || '').toLowerCase();
+                            });
+
+                        return this.availableFallbackSources.filter(function (option) {
+                            var key = (option.key || '').toLowerCase();
+                            var current = m.draft.fallbackSources[fallbackIndex];
+                            var currentKey = current
+                                ? (current.sourceKey || '').toLowerCase()
+                                : '';
+
+                            return key !== primary &&
+                                (key === currentKey || selectedElsewhere.indexOf(key) < 0);
+                        });
+                    },
+                    addFallbackSource: function (m) {
+                        m.draft.fallbackSources.push({
+                            sourceKey: '',
+                            akeneoAttributeCode: '',
+                            akeneoAttributeTypeId: 0,
+                            akeneoReferenceEntityCode: '',
+                            akeneoReferenceEntityAttributeCode: '',
+                            displayOrder: m.draft.fallbackSources.length
+                        });
+                    },
+                    removeFallbackSource: function (m, index) {
+                        m.draft.fallbackSources.splice(index, 1);
+                        m.draft.fallbackSources.forEach(function (source, order) {
+                            source.displayOrder = order;
+                        });
+                    },
+                    moveFallbackSource: function (m, index, offset) {
+                        var destination = index + offset;
+                        if (destination < 0 || destination >= m.draft.fallbackSources.length)
+                            return;
+
+                        var source = m.draft.fallbackSources.splice(index, 1)[0];
+                        m.draft.fallbackSources.splice(destination, 0, source);
+                        m.draft.fallbackSources.forEach(function (item, order) {
+                            item.displayOrder = order;
+                        });
+                    },
+                    onFallbackSourceChanged: function (fallback) {
+                        var option = this.availableFallbackSources.find(function (candidate) {
+                            return candidate.key === fallback.sourceKey;
+                        });
+
+                        if (!option) {
+                            fallback.akeneoAttributeCode = '';
+                            fallback.akeneoAttributeTypeId = 0;
+                            fallback.akeneoReferenceEntityCode = '';
+                            fallback.akeneoReferenceEntityAttributeCode = '';
+                            return;
+                        }
+
+                        fallback.akeneoAttributeCode = option.akeneoAttributeCode;
+                        fallback.akeneoAttributeTypeId = option.akeneoAttributeTypeId;
+                        fallback.akeneoReferenceEntityCode = option.akeneoReferenceEntityCode || '';
+                        fallback.akeneoReferenceEntityAttributeCode =
+                            option.akeneoReferenceEntityAttributeCode || '';
                     },
                     onTypeChange: function (m) {
                         var valid = this.keyOptions(m.draft.nopTargetTypeId).some(function (o) {
@@ -646,6 +995,48 @@
                             return !used[option.value.toLowerCase()];
                         });
                     },
+                    addComputedMapping: function () {
+                        var mapping = hydrateMapping({
+                            index: -1,
+                            id: 0,
+                            mappingKey: createComputedMappingKey(),
+                            name: 'Computed product value',
+                            valueModeId: valueModes.template,
+                            valueTemplate: '{sku}',
+                            isComputed: true,
+                            akeneoFamilyCode: this.selectedFamilyCode || '',
+                            isInherited: false,
+                            code: '',
+                            label: 'Computed product value',
+                            type: 'computed_template',
+                            group: '__computed',
+                            groupLabel: 'Computed mappings',
+                            attributeTypeId: 10,
+                            isLocalizable: false,
+                            isScopable: false,
+                            isReferenceEntityAttribute: false,
+                            referenceEntityCode: '',
+                            referenceEntityAttributeCode: '',
+                            nopTargetTypeId: String(this.targetTypes.productField),
+                            nopTargetKey: 'Name',
+                            nopTargetEntityId: '',
+                            isRequired: false,
+                            entityScopeId:
+                                entityScopes.variantProduct |
+                                entityScopes.standaloneProduct,
+                            fallbackSources: [],
+                            transformRuleJson: '',
+                            availableTargetTypes: this.computedTargetTypes,
+                            availableSpecificationAttributes:
+                                this.availableSpecificationAttributes,
+                            availableProductAttributes:
+                                this.availableProductAttributes,
+                            availableReferenceEntityAttributes: []
+                        }, true);
+
+                        this.mappings.unshift(mapping);
+                        this.expanded['Computed mappings'] = true;
+                    },
                     addReferenceMapping: function (m) {
                         var hasSpecificationTarget = m.availableTargetTypes.some(function (option) {
                             return Number(option.value) === this.targetTypes.specificationAttribute;
@@ -657,6 +1048,11 @@
                         var newMapping = hydrateMapping({
                             index: -1,
                             id: 0,
+                            mappingKey: '',
+                            name: '',
+                            valueModeId: valueModes.singleAttribute,
+                            valueTemplate: '',
+                            isComputed: false,
                             akeneoFamilyCode: this.selectedFamilyCode || '',
                             isInherited: false,
                             code: m.code,
@@ -674,6 +1070,8 @@
                             nopTargetKey: '',
                             nopTargetEntityId: '',
                             isRequired: false,
+                            entityScopeId: entityScopes.all,
+                            fallbackSources: [],
                             transformRuleJson: '',
                             availableTargetTypes: m.availableTargetTypes,
                             availableSpecificationAttributes: m.availableSpecificationAttributes,
@@ -716,7 +1114,8 @@
                             data: addAntiForgeryToken({
                                 id: m.id,
                                 akeneoFamilyCode: this.selectedFamilyCode || '',
-                                akeneoAttributeCode: m.code
+                                akeneoAttributeCode: m.code || '',
+                                mappingKey: m.mappingKey || ''
                             }),
                             success: function (res) {
                                 if (!res || !res.success) {
@@ -726,7 +1125,7 @@
                                     return;
                                 }
 
-                                self.notify('Mapping removed - ' + m.code);
+                                self.notify('Mapping removed - ' + self.mappingDisplayName(m));
                                 window.setTimeout(function () {
                                     window.location.reload();
                                 }, 300);
@@ -795,6 +1194,17 @@
                         var d = m.draft;
 
                         m.errors = [];
+
+                        var entityScopeId =
+                            this.entityScopeIdFromDraft(d);
+
+                        if (!entityScopeId) {
+                            m.errors = [
+                                'Select at least one destination under Apply mapping to.'
+                            ];
+                            return;
+                        }
+
                         m.saving = true;
 
                         $.ajax({
@@ -802,8 +1212,12 @@
                             url: appData.saveUrl,
                             data: addAntiForgeryToken({
                                 Id: m.isInherited ? 0 : m.id,
+                                MappingKey: m.mappingKey || '',
+                                Name: d.name || '',
+                                ValueModeId: m.valueModeId,
+                                ValueTemplate: d.valueTemplate || '',
                                 AkeneoFamilyCode: self.selectedFamilyCode || '',
-                                AkeneoAttributeCode: m.code,
+                                AkeneoAttributeCode: m.code || '',
                                 AkeneoAttributeTypeId: m.attributeTypeId,
                                 AkeneoReferenceEntityCode: m.referenceEntityCode || '',
                                 AkeneoReferenceEntityAttributeCode: d.referenceEntityAttributeCode || '',
@@ -811,6 +1225,17 @@
                                 NopTargetKey: d.nopTargetKey || '',
                                 NopTargetEntityId: d.nopTargetEntityId || '',
                                 IsRequired: d.isRequired,
+                                EntityScopeId: entityScopeId,
+                                FallbackSourcesJson: JSON.stringify(
+                                    (d.fallbackSources || []).map(function (source, index) {
+                                        return {
+                                            AkeneoAttributeCode: source.akeneoAttributeCode,
+                                            AkeneoAttributeTypeId: source.akeneoAttributeTypeId,
+                                            AkeneoReferenceEntityCode: source.akeneoReferenceEntityCode || '',
+                                            AkeneoReferenceEntityAttributeCode: source.akeneoReferenceEntityAttributeCode || '',
+                                            DisplayOrder: index
+                                        };
+                                    })),
                                 TransformRuleJson: d.transformRuleJson || ''
                             }),
                             success: function (res) {
@@ -820,6 +1245,12 @@
                                 }
 
                                 m.id = res.id;
+                                m.mappingKey = res.mappingKey || m.mappingKey;
+                                m.name = d.name || '';
+                                m.valueTemplate = d.valueTemplate || '';
+                                m.label = m.isComputed
+                                    ? m.name
+                                    : m.label;
                                 m.clientAdded = false;
                                 m.akeneoFamilyCode = self.selectedFamilyCode || '';
                                 m.isInherited = false;
@@ -828,10 +1259,13 @@
                                 m.nopTargetEntityId = d.nopTargetEntityId;
                                 m.referenceEntityAttributeCode = d.referenceEntityAttributeCode;
                                 m.isRequired = d.isRequired;
+                                m.entityScopeId = entityScopeId;
+                                m.fallbackSources =
+                                    cloneFallbackSources(d.fallbackSources);
                                 m.transformRuleJson = d.transformRuleJson;
 
                                 m.editing = false;
-                                self.notify('Mapping saved - ' + m.code);
+                                self.notify('Mapping saved - ' + self.mappingDisplayName(m));
                             },
                             error: function () {
                                 m.errors = ['Unable to save mapping due to a server error.'];

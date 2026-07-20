@@ -1,10 +1,18 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 
 public record AkeneoAttributeMappingModel : BaseNopEntityModel
 {
+    public string MappingKey { get; set; }
+    public string Name { get; set; }
+    public int ValueModeId { get; set; }
+    public string ValueTemplate { get; set; }
+    public bool IsComputed =>
+        ValueModeId == (int)AkeneoAttributeMappingValueMode.Template;
+
     public bool IsInherited { get; set; }
     public string AkeneoFamilyCode { get; set; }
     public string AkeneoAttributeCode { get; set; }
@@ -25,6 +33,9 @@ public record AkeneoAttributeMappingModel : BaseNopEntityModel
     public string Channel { get; set; }
     public string TransformRuleJson { get; set; }
     public bool IsRequired { get; set; }
+    public int EntityScopeId { get; set; }
+    public string FallbackSourcesJson { get; set; }
+    public IList<AkeneoAttributeMappingFallbackSourceModel> FallbackSources { get; set; } = new List<AkeneoAttributeMappingFallbackSourceModel>();
     public string AkeneoAttributeGroup { get; set; }
     public string AkeneoAttributeGroupLabel { get; set; }
 

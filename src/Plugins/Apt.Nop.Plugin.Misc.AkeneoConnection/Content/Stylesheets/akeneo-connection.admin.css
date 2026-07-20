@@ -1446,3 +1446,73 @@
 
 
 
+
+/* Ordered fallback source editor */
+.akeneo-connection .akeneo-fallback-primary {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: .45rem .65rem;
+  border: 1px solid var(--ak-line);
+  border-radius: .35rem;
+  background: rgba(91, 81, 216, .04);
+}
+
+.akeneo-connection .akeneo-fallback-source-row {
+  display: flex;
+  align-items: center;
+}
+
+.akeneo-connection .akeneo-fallback-source-select {
+  max-width: 520px;
+}
+
+.akeneo-connection .akeneo-scope-switches .akeneo-switch {
+  margin-top: 0;
+}
+
+/* Computed attribute mappings */
+.akeneo-connection .akeneo-computed-mapping-shell .akeneo-row {
+  background: linear-gradient(90deg, rgba(91, 81, 216, .045), transparent 36%);
+}
+
+.akeneo-connection .akeneo-template-editor {
+  margin-top: .25rem;
+  padding: 16px;
+  border: 1px solid var(--ak-line);
+  border-radius: 8px;
+  background: var(--ak-canvas);
+}
+
+.akeneo-connection .akeneo-template-input {
+  min-height: 86px;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .86rem;
+  line-height: 1.55;
+}
+
+.akeneo-connection .akeneo-template-token-toolbar {
+  display: flex;
+  align-items: center;
+  max-width: 720px;
+}
+
+.akeneo-connection .akeneo-template-token-toolbar select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.akeneo-connection .akeneo-template-token-toolbar .btn {
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  .akeneo-connection .akeneo-template-token-toolbar {
+    display: block;
+  }
+
+  .akeneo-connection .akeneo-template-token-toolbar .btn {
+    margin-top: .5rem;
+    margin-left: 0 !important;
+  }
+}

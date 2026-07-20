@@ -1,4 +1,4 @@
-
+﻿
 using Nop.Core.Caching;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
@@ -24,6 +24,9 @@ public static class AkeneoConnectionConstants
         new($"{EntityName}.bysource.{{0}}.{{1}}");
 
     public static string AttributeMappingPrefix => $"{EntityName}.";
+
+    public static CacheKey AttributeMappingFallbackSourcesAllCacheKey =>
+        new($"{EntityName}.fallbacksources.all");
     public static CacheKey EntityMappingByCodeCacheKey =>
         new("Apt.Nop.Plugin.Misc.AkeneoConnection.EntityMapping.type-{0}.nop-{1}.code-{2}");
 
