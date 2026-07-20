@@ -66,7 +66,10 @@
     <None Update="Views\AkeneoSyncLogs.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Views\AttributeMappings.cshtml">
+    <None Update="Views\AttributeMapping\AttributeMappings.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Views\AttributeMapping\_AttributeMappingRow.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Views\CategoryMappings.cshtml">

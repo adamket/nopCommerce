@@ -103,7 +103,14 @@
                                                             <td class="akeneo-dim">{{ item.createdOnUtc }}</td>
                                                             <td><span class="badge" v-bind:class="actionClass(item.action)">{{ item.action }}</span></td>
                                                             <td class="akeneo-mono">{{ item.akeneoIdentifier || item.akeneoProductUuid || '-' }}</td>
-                                                            <td>{{ item.nopProductId > 0 ? item.nopProductId : '-' }}</td>
+                                                            <td>
+                                                                <a v-if="item.nopProductId > 0"
+                                                                   :href="`/Admin/Product/Edit/${item.nopProductId}`">
+                                                                    {{ item.nopProductId }}
+                                                                </a>
+
+                                                                <span v-else>-</span>
+                                                            </td>
                                                             <td class="akeneo-msg">{{ item.message }}</td>
                                                         </tr>
                                                     </tbody>

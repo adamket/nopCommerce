@@ -11,6 +11,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public int VariantRelationshipModeId { get; set; }
 
+    public int ProductModelHierarchyModeId { get; set; }
+
     public bool PreserveExistingNopVariantStructure { get; set; } = true;
 
     public int? AssociatedProductAttributeId { get; set; }
@@ -28,6 +30,9 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public IList<AkeneoFamilySubModelRuleModel> SubModelRules { get; set; } = new List<AkeneoFamilySubModelRuleModel>();
 
     public IList<SelectListItem> AvailableVariantRelationshipModes { get; set; } =
+        new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableProductModelHierarchyModes { get; set; } =
         new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductAttributes { get; set; } =

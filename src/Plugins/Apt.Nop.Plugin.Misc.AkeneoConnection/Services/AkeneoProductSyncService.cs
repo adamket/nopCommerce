@@ -1,4 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
@@ -9,6 +11,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoProductSyncService(
     IAkeneoProductValueResolver productValueResolver,
+    IAkeneoReferenceEntityValueResolver referenceEntityValueResolver,
     IAkeneoValueTransformationService transformationService,
     IAkeneoAttributeMappingService attributeMappingService,
     IAkeneoNopEntityMappingService entityMappingService,
@@ -55,11 +58,12 @@ public class AkeneoProductSyncService(
         var mappings = await attributeMappingService
             .GetEffectiveMappingsAsync(source.Family);
 
-        var mappedValues = ResolveMappedValues(
+        var mappedValues = await ResolveMappedValuesAsync(
             source,
             mappings,
             request,
-            result);
+            result,
+            cancellationToken);
 
         AppendUnmappedAttributeValues(
             source,
@@ -165,11 +169,12 @@ public class AkeneoProductSyncService(
         return context.Product;
     }
 
-    private IList<AkeneoResolvedMappedValue> ResolveMappedValues(
+    private async Task<IList<AkeneoResolvedMappedValue>> ResolveMappedValuesAsync(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> mappings,
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result)
+        AkeneoProductImportResult result,
+        CancellationToken cancellationToken)
     {
         var resolved = new List<AkeneoResolvedMappedValue>();
 
@@ -180,17 +185,39 @@ public class AkeneoProductSyncService(
             if (targetType == NopTargetType.Ignore)
                 continue;
 
-            var resolvedSuccessfully = productValueResolver.TryGetValue(
-                source,
-                mapping.AkeneoAttributeCode,
-                out var value,
-                !string.IsNullOrWhiteSpace(mapping.Locale)
-                    ? mapping.Locale
-                    : request.Locale,
-                !string.IsNullOrWhiteSpace(mapping.Channel)
-                    ? mapping.Channel
-                    : request.Channel,
-                request.Currency);
+            var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
+                ? mapping.Locale
+                : request.Locale;
+            var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
+                ? mapping.Channel
+                : request.Channel;
+
+            AkeneoResolvedProductValue value;
+            bool resolvedSuccessfully;
+
+            if (IsReferenceEntityMapping(mapping) &&
+                !string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode))
+            {
+                value = await referenceEntityValueResolver.ResolveAsync(
+                    source,
+                    mapping,
+                    locale,
+                    channel,
+                    request.Currency,
+                    cancellationToken);
+
+                resolvedSuccessfully = value != null;
+            }
+            else
+            {
+                resolvedSuccessfully = productValueResolver.TryGetValue(
+                    source,
+                    mapping.AkeneoAttributeCode,
+                    out value,
+                    locale,
+                    channel,
+                    request.Currency);
+            }
 
             if (resolvedSuccessfully && value != null &&
                 !string.IsNullOrWhiteSpace(mapping.TransformRuleJson))
@@ -200,7 +227,7 @@ public class AkeneoProductSyncService(
                 if (!transformed.Success)
                 {
                     var message =
-                        $"Transform failed for Akeneo attribute '{mapping.AkeneoAttributeCode}': {transformed.Error}";
+                        $"Transform failed for Akeneo source '{AkeneoMappingHelper.GetSourceDisplayName(mapping)}': {transformed.Error}";
 
                     if (mapping.IsRequired)
                         result.AddError(message);
@@ -225,7 +252,7 @@ public class AkeneoProductSyncService(
             if (!hasValue && mapping.IsRequired)
             {
                 result.AddError(
-                    $"Required Akeneo attribute is missing a value: {mapping.AkeneoAttributeCode}");
+                    $"Required Akeneo source is missing a value: {AkeneoMappingHelper.GetSourceDisplayName(mapping)}");
             }
 
             // Missing optional mappings are retained so destination sections can
@@ -239,6 +266,13 @@ public class AkeneoProductSyncService(
         }
 
         return resolved;
+    }
+
+    private static bool IsReferenceEntityMapping(
+        AkeneoAttributeMapping mapping)
+    {
+        return mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
+               mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
     }
 
     private void AppendUnmappedAttributeValues(

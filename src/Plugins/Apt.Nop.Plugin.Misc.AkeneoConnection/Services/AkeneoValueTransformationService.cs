@@ -78,6 +78,8 @@ public class AkeneoValueTransformationService : IAkeneoValueTransformationServic
                     Locale = source.Locale,
                     Channel = source.Channel,
                     Currency = source.Currency,
+                    SourceAttributeType = source.SourceAttributeType,
+                    ReferenceDataName = source.ReferenceDataName,
                     RawData = source.RawData,
                     DisplayValues = values,
                     DisplayValue = values.Count switch

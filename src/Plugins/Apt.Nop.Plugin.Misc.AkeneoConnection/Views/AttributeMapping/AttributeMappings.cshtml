@@ -1,0 +1,847 @@
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoAttributeMappingListModel
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
+@{
+    Layout = "_AdminLayout";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    //  NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AttributeMappings");
+
+    ViewBag.PageTitle = "Akeneo Connection - Attribute Mappings";
+
+    var appModel = new
+    {
+        listUrl = Url.Action("AttributeMappings", "AkeneoMapping"),
+        saveUrl = Url.Action("SaveAttributeMappingRow", "AkeneoMapping"),
+        deleteMappingUrl = Url.Action("DeleteAttributeMappingRow", "AkeneoMapping"),
+        selectedFamilyCode = Model.AkeneoFamilyCode ?? string.Empty,
+        availableFamilies = Model.AvailableAkeneoFamilies
+            .Where(f => !string.IsNullOrWhiteSpace(f.Value))
+            .Select(f => new
+            {
+                value = f.Value,
+                text = f.Text
+            }).ToList(),
+        targetTypes = new
+        {
+            ignore = (int)NopTargetType.Ignore,
+            productField = (int)NopTargetType.ProductField,
+            seoField = (int)NopTargetType.SeoField,
+            customProperty = (int)NopTargetType.CustomProperty,
+            specificationAttribute = (int)NopTargetType.SpecificationAttribute,
+            productAttribute = (int)NopTargetType.ProductAttribute
+        },
+        mappings = Model.Mappings.Select((m, idx) => new
+        {
+            index = idx,
+            id = m.Id,
+            akeneoFamilyCode = m.AkeneoFamilyCode ?? string.Empty,
+            isInherited = m.IsInherited,
+            code = m.AkeneoAttributeCode,
+            label = m.AkeneoAttributeLabel,
+            type = m.AkeneoAttributeType,
+            group = string.IsNullOrWhiteSpace(m.AkeneoAttributeGroup) ? "ungrouped" : m.AkeneoAttributeGroup,
+            groupLabel = string.IsNullOrWhiteSpace(m.AkeneoAttributeGroupLabel) ? "Ungrouped" : m.AkeneoAttributeGroupLabel,
+            attributeTypeId = m.AkeneoAttributeTypeId,
+            isLocalizable = m.IsLocalizable,
+            isScopable = m.IsScopable,
+            isReferenceEntityAttribute = m.IsReferenceEntityAttribute,
+            referenceEntityCode = m.AkeneoReferenceEntityCode ?? string.Empty,
+            referenceEntityAttributeCode = m.AkeneoReferenceEntityAttributeCode ?? string.Empty,
+            nopTargetTypeId = m.NopTargetTypeId.ToString(),
+            nopTargetKey = m.NopTargetKey ?? string.Empty,
+            nopTargetEntityId = m.NopTargetEntityId?.ToString() ?? string.Empty,
+            isRequired = m.IsRequired,
+            transformRuleJson = m.TransformRuleJson ?? string.Empty,
+            availableTargetTypes = m.AvailableTargetTypes.Select(o => new { value = o.Value, text = o.Text }),
+            availableSpecificationAttributes = m.AvailableSpecificationAttributes.Select(o => new { value = o.Value, text = o.Text }),
+            availableProductAttributes = m.AvailableProductAttributes.Select(o => new { value = o.Value, text = o.Text }),
+            availableReferenceEntityAttributes = m.AvailableReferenceEntityAttributes.Select(o => new { value = o.Value, text = o.Text })
+        }).ToList()
+    };
+}
+
+<div class="akeneo-connection">
+    @Html.AntiForgeryToken()
+
+    <div class="content-header clearfix">
+        <div class="float-left">
+            <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+            <h1 class="m-0">Attribute Mapping</h1>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div id="akeneo-mapping-app" class="card card-default" v-cloak>
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-project-diagram"></i>
+                        Attribute Mappings
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="p-3 border-bottom bg-light">
+                        <div class="form-row align-items-end">
+                            <div class="form-group col-md-5 mb-0">
+                                <label class="font-weight-bold mb-1" for="akeneo-family-scope">
+                                    Mapping scope
+                                </label>
+                                <select id="akeneo-family-scope"
+                                        class="form-control"
+                                        v-model="selectedFamilyCode"
+                                        v-on:change="changeFamilyScope">
+                                    <option value="">Global defaults</option>
+                                    <option v-for="family in availableFamilies"
+                                            v-bind:key="family.value"
+                                            v-bind:value="family.value">
+                                        {{ family.text }}
+                                    </option>
+                                </select>
+                                @*  <div class="form-text">
+                                    Global mappings are used by every family unless the selected family defines an override.
+                                </div> *@
+                            </div>
+
+                            @* <div class="col-md-7">
+                                <div class="alert mb-0"
+                                     v-bind:class="selectedFamilyCode ? 'alert-info' : 'alert-secondary'">
+                                    <template v-if="selectedFamilyCode">
+                                        Editing mappings for <strong>{{ selectedFamilyLabel }}</strong>.
+                                        Rows marked <strong>Inherited</strong> currently use the global mapping.
+                                    </template>
+                                    <template v-else>
+                                        Editing the global default mappings.
+                                    </template>
+                                </div>
+                            </div> *@
+                        </div>
+                    </div>
+
+                    <div class="p-4" v-if="!mappings.length">
+                        <div class="alert alert-info mb-0">
+                            {{ selectedFamilyCode
+                            ? 'No Akeneo attributes were found for the selected family.'
+                            : 'No Akeneo attributes were found. Check the Sync Context connection, then reload this page.' }}
+                        </div>
+                    </div>
+
+                    <div class="akeneo-list" v-else>
+                        <template v-for="group in groups"
+                                  v-bind:key="group.key">
+
+                            <div class="akeneo-group-row">
+                                <button type="button"
+                                        class="btn btn-link p-0 akeneo-attribute-group-toggle"
+                                        v-bind:aria-expanded="isExpanded(group.key)
+                        ? 'true'
+                        : 'false'"
+                                        v-on:click="toggleGroup(group.key)">
+
+                                    <i class="fas fa-chevron-right chevron"></i>
+                                    <span>{{ group.label }}</span>
+                                </button>
+
+                                <span class="akeneo-group-count ml-2">
+                                    {{ group.entries.length }}
+                                </span>
+
+                                <span class="akeneo-group-code ml-2">
+                                    {{ group.code }}
+                                </span>
+                            </div>
+
+                            <transition name="akeneo-group-items">
+                                <div class="akeneo-group-items"
+                                     v-if="isExpanded(group.key)">
+
+                                    <template v-for="(entry, entryIndex) in group.entries"
+                                              v-bind:key="entry.key">
+
+                                        <!-- Normal Akeneo attribute -->
+                                        <template v-if="!entry.isReferenceEntity">
+                                            <template v-for="(m, itemIndex) in entry.items"
+                                                      v-bind:key="m.clientKey">
+
+                                                @await Html.PartialAsync($"{AkeneoConnectionConstants.PathToPlugin}/Views/AttributeMapping/_AttributeMappingRow.cshtml")
+                                            </template>
+                                        </template>
+
+                                        <!-- Reference entity mapping container -->
+                                        <div v-else
+                                             class="akeneo-reference-container"
+                                             v-bind:style="rowStaggerStyle(entryIndex)">
+
+                                            <div class="akeneo-reference-container-header">
+                                                <button type="button"
+                                                        class="akeneo-reference-container-toggle"
+                                                        v-bind:aria-expanded="isReferenceExpanded(entry.key)
+                                        ? 'true'
+                                        : 'false'"
+                                                        v-on:click="toggleReferenceContainer(entry.key)">
+
+                                                    <i class="fas fa-chevron-right chevron"></i>
+
+                                                    <span class="akeneo-reference-container-title">
+                                                        <span class="akeneo-code">
+                                                            {{ entry.primary.code }}
+                                                        </span>
+
+                                                        <span class="akeneo-label">
+                                                            {{ entry.primary.label }}
+                                                        </span>
+                                                    </span>
+                                                </button>
+
+                                                <div class="akeneo-reference-container-meta">
+                                                    <span class="akeneo-type-chip">
+                                                        {{ entry.primary.type }}
+                                                    </span>
+
+                                                    <span class="akeneo-reference-entity-chip">
+                                                        <i class="fas fa-database"></i>
+                                                        {{ entry.primary.referenceEntityCode }}
+                                                    </span>
+
+                                                    <span class="akeneo-reference-mapping-count">
+                                                        {{ referenceMappingCount(entry) }}
+                                                        {{
+                                                        referenceMappingCount(entry) === 1
+                                                        ? 'field mapping'
+                                                        : 'field mappings'
+                                                        }}
+                                                    </span>
+
+                                                    <div class="akeneo-flags"
+                                                         aria-label="Attribute localization and scope">
+
+                                                        <span class="akeneo-flag"
+                                                              v-bind:class="{
+                                              on: entry.primary.isLocalizable
+                                          }">
+                                                            L
+                                                        </span>
+
+                                                        <span class="akeneo-flag"
+                                                              v-bind:class="{
+                                              on: entry.primary.isScopable
+                                          }">
+                                                            S
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="akeneo-reference-container-actions">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-primary"
+                                                            v-if="canAddReferenceMapping(entry.primary)"
+                                                            v-on:click.stop="addReferenceMapping(entry.primary)">
+
+                                                        <i class="fas fa-plus"></i>
+                                                        Add field mapping
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="akeneo-reference-field-list"
+                                                 v-show="isReferenceExpanded(entry.key)">
+
+                                                <div class="akeneo-reference-field-list-heading">
+                                                    <div>
+                                                        <div class="akeneo-reference-field-list-title">
+                                                            Reference entity attribute mappings
+                                                        </div>
+
+                                                        <div class="akeneo-reference-field-list-description">
+                                                            Each reference entity field can map independently
+                                                            to a nopCommerce product field, SEO field,
+                                                            product attribute, or specification attribute.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <template v-for="(m, itemIndex) in entry.items"
+                                                          v-bind:key="m.clientKey">
+
+                                                    @await Html.PartialAsync($"{AkeneoConnectionConstants.PathToPlugin}/Views/AttributeMapping/_AttributeMappingRow.cshtml")
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </transition>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
+                    <transition-group name="akeneo-toast">
+                        <div v-for="t in toasts" :key="t.id" class="akeneo-toast" v-on:click="dismissToast(t.id)">
+                            <i class="fas fa-check-circle"></i>
+                            <span>{{ t.text }}</span>
+                        </div>
+                    </transition-group>
+                </div>
+            </div>
+
+            @if (Model.Warnings?.Any() == true)
+            {
+                <div class="alert alert-warning mt-3">
+                    <ul class="mb-0">
+                        @foreach (var warning in Model.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+<script id="akeneo-app-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
+<script id="akeneo-target-key-map" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.NopTargetKeyMap))</script>
+
+
+<script asp-location="Footer">
+        (function () {
+            var appData = JSON.parse(document.getElementById('akeneo-app-data').textContent);
+            var targetKeyMap = JSON.parse(document.getElementById('akeneo-target-key-map').textContent);
+
+            var nextClientKey = appData.mappings.length;
+
+            function hydrateMapping(m, clientAdded) {
+                return Object.assign({}, m, {
+                    clientKey: m.clientKey || ('mapping-' + (++nextClientKey)),
+                    clientAdded: !!clientAdded,
+                    editing: !!clientAdded,
+                    saving: false,
+                    deleting: false,
+                    errors: [],
+                    draft: {
+                        nopTargetTypeId: m.nopTargetTypeId,
+                        nopTargetKey: m.nopTargetKey,
+                        nopTargetEntityId: m.nopTargetEntityId,
+                        referenceEntityAttributeCode: m.referenceEntityAttributeCode,
+                        isRequired: m.isRequired,
+                        transformRuleJson: m.transformRuleJson,
+                        showTransform: !!(m.transformRuleJson && m.transformRuleJson.trim())
+                    }
+                });
+            }
+
+            var mappings = appData.mappings.map(function (m) {
+                return hydrateMapping(m, false);
+            });
+
+            Vue.createApp({
+                data: function () {
+                    return {
+                        mappings: mappings,
+                        selectedFamilyCode: appData.selectedFamilyCode || '',
+                        availableFamilies: appData.availableFamilies || [],
+                        targetTypes: appData.targetTypes,
+                        targetKeyMap: targetKeyMap,
+                        expanded: {},
+                        referenceExpanded: {},
+                        toasts: []
+                    };
+                },
+                computed: {
+                    selectedFamilyLabel: function () {
+                        if (!this.selectedFamilyCode)
+                            return 'Global defaults';
+
+                        var family = this.availableFamilies.find(function (item) {
+                            return item.value === this.selectedFamilyCode;
+                        }, this);
+
+                        return family ? family.text : this.selectedFamilyCode;
+                    },
+                   groups: function () {
+        var groupsByKey = {};
+
+        this.mappings.forEach(function (m) {
+            var groupKey = m.groupLabel || 'Ungrouped';
+
+            if (!groupsByKey[groupKey]) {
+                groupsByKey[groupKey] = {
+                    key: groupKey,
+                    label: groupKey,
+                    code: m.group,
+                    entries: [],
+                    referenceEntries: {}
+                };
+            }
+
+            var group = groupsByKey[groupKey];
+
+            if (!m.isReferenceEntityAttribute) {
+                group.entries.push({
+                    key: 'mapping::' + m.clientKey,
+                    isReferenceEntity: false,
+                    primary: m,
+                    items: [m]
+                });
+
+                return;
+            }
+
+            var referenceKey = this.referenceContainerKeyForMapping(m);
+            var referenceEntry = group.referenceEntries[referenceKey];
+
+            if (!referenceEntry) {
+                referenceEntry = {
+                    key: referenceKey,
+                    isReferenceEntity: true,
+                    primary: m,
+                    items: []
+                };
+
+                group.referenceEntries[referenceKey] = referenceEntry;
+                group.entries.push(referenceEntry);
+            }
+
+            referenceEntry.items.push(m);
+        }, this);
+
+        return Object.values(groupsByKey)
+            .map(function (group) {
+                delete group.referenceEntries;
+                return group;
+            })
+            .sort(function (a, b) {
+                return a.label.localeCompare(b.label);
+            });
+    }
+                },
+                methods: {
+                    isIgnoreType: function (t) {
+                        return Number(t) === this.targetTypes.ignore;
+                    },
+                        rowStaggerStyle: function (index) {
+                        return {
+                            animationDelay: Math.min(index * 45, 260) + 'ms'
+                        };
+                    },
+                    isExpanded: function (key) {
+                        return !!this.expanded[key];
+                    },
+                    toggleGroup: function (key) {
+                        this.expanded[key] = !this.expanded[key];
+                    },
+                    keyOptions: function (typeId) {
+                        return this.targetKeyMap[String(typeId)] || [];
+                    },
+                    isKeyType: function (t) {
+                        t = Number(t);
+                        return t === this.targetTypes.productField
+                            || t === this.targetTypes.seoField
+                            || t === this.targetTypes.customProperty;
+                    },
+                    isSpecType: function (t) {
+                        return Number(t) === this.targetTypes.specificationAttribute;
+                    },
+                    isProductType: function (t) {
+                        return Number(t) === this.targetTypes.productAttribute;
+                    },
+                    isNoneType: function (t) {
+                        return !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t);
+                    },
+                    targetTypeText: function (m) {
+                        var found = m.availableTargetTypes.find(function (o) { return o.value === m.nopTargetTypeId; });
+                        return found ? found.text : 'Ignore';
+                    },
+                    referenceSourceDetail: function (m) {
+                        if (!m.isReferenceEntityAttribute)
+                            return '';
+
+                        var selected = m.availableReferenceEntityAttributes.find(function (o) {
+                            return o.value === m.referenceEntityAttributeCode;
+                        });
+
+                        var fieldText = selected
+                            ? selected.text
+                            : (m.referenceEntityAttributeCode || 'No field selected');
+
+                        return 'Reference source: ' + (m.referenceEntityCode || 'unknown entity') + ' → ' + fieldText;
+                    },
+                    detail: function (m) {
+                        var t = Number(m.nopTargetTypeId);
+
+                        if (this.isKeyType(t)) {
+                            var k = this.keyOptions(t).find(function (o) { return o.value === m.nopTargetKey; });
+                            return (m.nopTargetKey && k) ? 'Target Key: ' + k.text : 'No target key selected';
+                        }
+                        if (this.isSpecType(t)) {
+                            var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
+                            return (m.nopTargetEntityId && s) ? 'Specification Attribute: ' + s.text : 'No specification attribute selected';
+                        }
+                        if (this.isProductType(t)) {
+                            var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
+                            return (m.nopTargetEntityId && p) ? 'Product Attribute: ' + p.text : 'No product attribute selected';
+                        }
+                        return 'No additional target selected';
+                    },
+                    statusFor: function (m) {
+                        if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
+                            return { cls: 'is-ignored', text: 'Ignored' };
+                        }
+                        return Number(m.id) > 0 || m.isInherited
+                            ? { cls: 'is-mapped', text: 'Mapped' }
+                            : { cls: 'is-attention', text: 'Unsaved' };
+                    },
+                    scopeFor: function (m) {
+                        if (!this.selectedFamilyCode) {
+                            return {
+                                text: 'Global',
+                                badgeClass: 'badge-secondary'
+                            };
+                        }
+
+                        if (m.isInherited) {
+                            return {
+                                text: 'Inherited',
+                                badgeClass: 'badge-info'
+                            };
+                        }
+
+                        if (Number(m.id) > 0) {
+                            return {
+                                text: 'Family override',
+                                badgeClass: 'badge-primary'
+                            };
+                        }
+
+                        return {
+                            text: 'No mapping',
+                            badgeClass: 'badge-warning'
+                        };
+                    },
+                    changeFamilyScope: function () {
+                        var url = new URL(appData.listUrl, window.location.origin);
+
+                        if (this.selectedFamilyCode)
+                            url.searchParams.set('akeneoFamilyCode', this.selectedFamilyCode);
+                        else
+                            url.searchParams.delete('akeneoFamilyCode');
+
+                        window.location.assign(url.pathname + url.search);
+                    },
+                    edit: function (m) {
+                        m.draft.nopTargetTypeId = m.nopTargetTypeId;
+                        m.draft.nopTargetKey = m.nopTargetKey;
+                        m.draft.nopTargetEntityId = m.nopTargetEntityId;
+                        m.draft.referenceEntityAttributeCode =
+                            m.referenceEntityAttributeCode;
+                        m.draft.isRequired = m.isRequired;
+                        m.draft.transformRuleJson = m.transformRuleJson;
+                        m.draft.showTransform =
+                            !!(m.transformRuleJson &&
+                                m.transformRuleJson.trim());
+
+                        m.errors = [];
+                        m.editing = true;
+
+                        if (m.isReferenceEntityAttribute) {
+                            this.referenceExpanded[
+                                this.referenceContainerKeyForMapping(m)
+                            ] = true;
+                        }
+                    },
+                    cancel: function (m) {
+                        m.errors = [];
+
+                        if (m.clientAdded) {
+                            this.mappings = this.mappings.filter(
+                                function (candidate) {
+                                    return candidate !== m;
+                                });
+
+                            return;
+                        }
+
+                        m.editing = false;
+                    },
+                    onTypeChange: function (m) {
+                        var valid = this.keyOptions(m.draft.nopTargetTypeId).some(function (o) {
+                            return o.value === m.draft.nopTargetKey;
+                        });
+                        if (!valid) {
+                            m.draft.nopTargetKey = '';
+                        }
+
+                        m.draft.nopTargetEntityId = '';
+                    },
+                    notify: function (text) {
+                        var self = this;
+                        var id = Date.now() + '-' + Math.random().toString(36).slice(2);
+                        this.toasts.push({ id: id, text: text });
+                        setTimeout(function () {
+                            self.dismissToast(id);
+                        }, 3000);
+                    },
+                    dismissToast: function (id) {
+                        this.toasts = this.toasts.filter(function (t) { return t.id !== id; });
+                    },
+                    isFirstReferenceMapping: function (m) {
+                        return this.mappings.find(function (candidate) {
+                            return candidate.isReferenceEntityAttribute &&
+                                candidate.code === m.code &&
+                                candidate.group === m.group;
+                        }) === m;
+                    },
+                    canAddReferenceMapping: function (m) {
+                        if (!m.isReferenceEntityAttribute) {
+                            return false;
+                        }
+
+                        // Do not add another row while a blank, unsaved row already
+                        // exists for this reference entity attribute.
+                        return !this.mappings.some(function (candidate) {
+                            if (!candidate.isReferenceEntityAttribute ||
+                                candidate.code !== m.code ||
+                                candidate.group !== m.group) {
+                                return false;
+                            }
+
+                            var selectedField =
+                                this.activeReferenceFieldCode(candidate);
+
+                            return !candidate.isInherited &&
+                                Number(candidate.id) === 0 &&
+                                (candidate.clientAdded || !selectedField);
+                        }, this);
+                    },
+                    referenceFieldOptions: function (m) {
+                        if (!m.isReferenceEntityAttribute)
+                            return [];
+
+                        var currentValue = m.draft.referenceEntityAttributeCode || '';
+                        var used = {};
+
+                        this.mappings.forEach(function (candidate) {
+                            if (candidate === m ||
+                                candidate.code !== m.code ||
+                                candidate.group !== m.group) {
+                                return;
+                            }
+
+                            var selectedField = candidate.editing
+                                ? candidate.draft.referenceEntityAttributeCode
+                                : candidate.referenceEntityAttributeCode;
+
+                            if (selectedField)
+                                used[selectedField.toLowerCase()] = true;
+                        });
+
+                        return m.availableReferenceEntityAttributes.filter(function (option) {
+                            if (!option.value || option.value === currentValue)
+                                return true;
+
+                            return !used[option.value.toLowerCase()];
+                        });
+                    },
+                    addReferenceMapping: function (m) {
+                        var hasSpecificationTarget = m.availableTargetTypes.some(function (option) {
+                            return Number(option.value) === this.targetTypes.specificationAttribute;
+                        }, this);
+                        var defaultTargetType = hasSpecificationTarget
+                            ? String(this.targetTypes.specificationAttribute)
+                            : m.nopTargetTypeId;
+
+                        var newMapping = hydrateMapping({
+                            index: -1,
+                            id: 0,
+                            akeneoFamilyCode: this.selectedFamilyCode || '',
+                            isInherited: false,
+                            code: m.code,
+                            label: m.label,
+                            type: m.type,
+                            group: m.group,
+                            groupLabel: m.groupLabel,
+                            attributeTypeId: m.attributeTypeId,
+                            isLocalizable: m.isLocalizable,
+                            isScopable: m.isScopable,
+                            isReferenceEntityAttribute: true,
+                            referenceEntityCode: m.referenceEntityCode,
+                            referenceEntityAttributeCode: '',
+                            nopTargetTypeId: defaultTargetType,
+                            nopTargetKey: '',
+                            nopTargetEntityId: '',
+                            isRequired: false,
+                            transformRuleJson: '',
+                            availableTargetTypes: m.availableTargetTypes,
+                            availableSpecificationAttributes: m.availableSpecificationAttributes,
+                            availableProductAttributes: m.availableProductAttributes,
+                            availableReferenceEntityAttributes: m.availableReferenceEntityAttributes
+                        }, true);
+
+                        var insertAt = this.mappings.reduce(function (lastIndex, candidate, index) {
+                            return candidate.code === m.code && candidate.group === m.group
+                                ? index
+                                : lastIndex;
+                        }, this.mappings.indexOf(m));
+
+                        this.mappings.splice(insertAt + 1, 0, newMapping);
+
+                            this.referenceExpanded[
+                                this.referenceContainerKeyForMapping(newMapping)
+                            ] = true;
+                    },
+                    canDeleteMapping: function (m) {
+                        return !m.isInherited &&
+                            (m.clientAdded || Number(m.id) > 0);
+                    },
+                    deleteMapping: function (m) {
+                        var self = this;
+
+                        if (m.clientAdded || Number(m.id) <= 0) {
+                            this.mappings = this.mappings.filter(function (candidate) {
+                                return candidate !== m;
+                            });
+                            return;
+                        }
+
+                        m.errors = [];
+                        m.deleting = true;
+
+                        $.ajax({
+                            type: 'POST',
+                            url: appData.deleteMappingUrl,
+                            data: addAntiForgeryToken({
+                                id: m.id,
+                                akeneoFamilyCode: this.selectedFamilyCode || '',
+                                akeneoAttributeCode: m.code
+                            }),
+                            success: function (res) {
+                                if (!res || !res.success) {
+                                    m.errors = (res && res.errors)
+                                        ? res.errors
+                                        : ['Unable to remove the mapping.'];
+                                    return;
+                                }
+
+                                self.notify('Mapping removed - ' + m.code);
+                                window.setTimeout(function () {
+                                    window.location.reload();
+                                }, 300);
+                            },
+                            error: function () {
+                                m.errors = ['Unable to remove the mapping due to a server error.'];
+                            },
+                            complete: function () {
+                                m.deleting = false;
+                            }
+                        });
+                    },
+                        referenceContainerKeyForMapping: function (m) {
+        return [
+            m.group || 'ungrouped',
+            m.code || '',
+            m.referenceEntityCode || ''
+        ]
+            .join('::')
+            .toLowerCase();
+    },
+
+    isReferenceExpanded: function (key) {
+        // Reference containers are open by default.
+        return this.referenceExpanded[key] !== false;
+    },
+
+    toggleReferenceContainer: function (key) {
+        this.referenceExpanded[key] =
+            !this.isReferenceExpanded(key);
+    },
+
+    activeReferenceFieldCode: function (m) {
+        if (m.editing && m.draft) {
+            return m.draft.referenceEntityAttributeCode || '';
+        }
+
+        return m.referenceEntityAttributeCode || '';
+    },
+
+    referenceFieldText: function (m) {
+        var selectedCode = this.activeReferenceFieldCode(m);
+
+        if (!selectedCode) {
+            return 'Select a reference entity field';
+        }
+
+        var selected = m.availableReferenceEntityAttributes.find(
+            function (option) {
+                return String(option.value).toLowerCase() ===
+                    String(selectedCode).toLowerCase();
+            });
+
+        return selected
+            ? selected.text
+            : selectedCode;
+    },
+
+    referenceMappingCount: function (entry) {
+        return entry.items.filter(function (m) {
+            return !!this.activeReferenceFieldCode(m);
+        }, this).length;
+    },
+                    save: function (m) {
+                        var self = this;
+                        var d = m.draft;
+
+                        m.errors = [];
+                        m.saving = true;
+
+                        $.ajax({
+                            type: 'POST',
+                            url: appData.saveUrl,
+                            data: addAntiForgeryToken({
+                                Id: m.isInherited ? 0 : m.id,
+                                AkeneoFamilyCode: self.selectedFamilyCode || '',
+                                AkeneoAttributeCode: m.code,
+                                AkeneoAttributeTypeId: m.attributeTypeId,
+                                AkeneoReferenceEntityCode: m.referenceEntityCode || '',
+                                AkeneoReferenceEntityAttributeCode: d.referenceEntityAttributeCode || '',
+                                NopTargetTypeId: d.nopTargetTypeId,
+                                NopTargetKey: d.nopTargetKey || '',
+                                NopTargetEntityId: d.nopTargetEntityId || '',
+                                IsRequired: d.isRequired,
+                                TransformRuleJson: d.transformRuleJson || ''
+                            }),
+                            success: function (res) {
+                                if (!res || !res.success) {
+                                    m.errors = (res && res.errors) ? res.errors : ['Unable to save mapping.'];
+                                    return;
+                                }
+
+                                m.id = res.id;
+                                m.clientAdded = false;
+                                m.akeneoFamilyCode = self.selectedFamilyCode || '';
+                                m.isInherited = false;
+                                m.nopTargetTypeId = d.nopTargetTypeId;
+                                m.nopTargetKey = d.nopTargetKey;
+                                m.nopTargetEntityId = d.nopTargetEntityId;
+                                m.referenceEntityAttributeCode = d.referenceEntityAttributeCode;
+                                m.isRequired = d.isRequired;
+                                m.transformRuleJson = d.transformRuleJson;
+
+                                m.editing = false;
+                                self.notify('Mapping saved - ' + m.code);
+                            },
+                            error: function () {
+                                m.errors = ['Unable to save mapping due to a server error.'];
+                            },
+                            complete: function () {
+                                m.saving = false;
+                            }
+                        });
+                    }
+                }
+            }).mount('#akeneo-mapping-app');
+        })();
+</script>

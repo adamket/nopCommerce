@@ -1193,7 +1193,245 @@
 
 
 
+/* ===========================================================
+   Reference entity attribute mapping container
+   =========================================================== */
 
+.akeneo-connection .akeneo-reference-container {
+  position: relative;
+  margin: 14px 16px 18px 0;
+  background: var(--ak-surface);
+  border: 1px solid var(--ak-line);
+  border-left: 4px solid var(--ak-accent);
+  border-radius: 11px;
+  box-shadow: 0 3px 12px rgba(20, 25, 40, .05);
+  overflow: hidden;
+  animation: akeneo-row-stagger-in .26s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.akeneo-connection .akeneo-reference-container-header {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(330px, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 92px;
+  padding: 15px 18px;
+  background: var(--ak-surface);
+}
+
+  .akeneo-connection .akeneo-reference-container-header:hover {
+    background: #fafbff;
+  }
+
+.akeneo-connection .akeneo-reference-container-toggle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ak-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+  .akeneo-connection .akeneo-reference-container-toggle:focus-visible {
+    outline: 2px solid var(--ak-accent);
+    outline-offset: 5px;
+    border-radius: 5px;
+  }
+
+  .akeneo-connection .akeneo-reference-container-toggle .chevron {
+    flex: 0 0 auto;
+    color: var(--ak-muted);
+    font-size: .72rem;
+    transition: transform .18s ease;
+  }
+
+  .akeneo-connection
+  .akeneo-reference-container-toggle[aria-expanded="true"]
+  .chevron {
+    color: var(--ak-accent);
+    transform: rotate(90deg);
+  }
+
+.akeneo-connection .akeneo-reference-container-title {
+  display: block;
+  min-width: 0;
+}
+
+  .akeneo-connection
+  .akeneo-reference-container-title
+  .akeneo-code {
+    margin-bottom: 3px;
+  }
+
+.akeneo-connection .akeneo-reference-container-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.akeneo-connection .akeneo-reference-entity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid #d9d6f7;
+  border-radius: 999px;
+  background: var(--ak-accent-tint);
+  color: var(--ak-accent-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .72rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.akeneo-connection .akeneo-reference-mapping-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: var(--ak-ink-2);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.akeneo-connection .akeneo-reference-container-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.akeneo-connection .akeneo-reference-field-list {
+  position: relative;
+  padding: 16px 16px 18px 34px;
+  border-top: 1px solid var(--ak-line);
+  background: #f7f8fc;
+}
+
+  .akeneo-connection .akeneo-reference-field-list::before {
+    content: "";
+    position: absolute;
+    top: 63px;
+    bottom: 18px;
+    left: 18px;
+    width: 2px;
+    background: #d9d6f7;
+  }
+
+.akeneo-connection .akeneo-reference-field-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 13px;
+  padding: 0 3px;
+}
+
+.akeneo-connection .akeneo-reference-field-list-title {
+  color: var(--ak-ink);
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+
+.akeneo-connection .akeneo-reference-field-list-description {
+  margin-top: 2px;
+  color: var(--ak-muted);
+  font-size: .77rem;
+}
+
+.akeneo-connection .akeneo-reference-field-shell {
+  position: relative;
+  margin: 0;
+  animation: none;
+}
+
+  .akeneo-connection
+  .akeneo-reference-field-shell + .akeneo-reference-field-shell {
+    margin-top: 11px;
+  }
+
+  .akeneo-connection .akeneo-reference-field-shell::before {
+    content: "";
+    position: absolute;
+    top: 39px;
+    left: -16px;
+    width: 16px;
+    height: 2px;
+    background: #d9d6f7;
+  }
+
+.akeneo-connection .akeneo-reference-field-row {
+  grid-template-columns: 27% 18% 29% 12% 14%;
+  min-height: 80px;
+  border: 1px solid var(--ak-line);
+  border-left: 0;
+  border-radius: 8px;
+  background: var(--ak-surface);
+  box-shadow: 0 2px 7px rgba(20, 25, 40, .035);
+}
+
+  .akeneo-connection .akeneo-reference-field-row::before {
+    border-radius: 8px 0 0 8px;
+  }
+
+.akeneo-connection .akeneo-reference-field-name {
+  color: var(--ak-ink);
+  font-size: .86rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.akeneo-connection .akeneo-reference-field-entity {
+  margin-top: 6px;
+  color: var(--ak-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .7rem;
+}
+
+.akeneo-connection .akeneo-reference-field-detail {
+  margin-left: 20px;
+  width: calc(100% - 20px);
+  border: 1px solid var(--ak-line);
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+@media (max-width: 1199px) {
+  .akeneo-connection .akeneo-reference-container-header,
+  .akeneo-connection .akeneo-reference-field-row,
+  .akeneo-connection .akeneo-reference-field-detail {
+    min-width: 980px;
+  }
+
+  .akeneo-connection .akeneo-reference-container {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .akeneo-connection .akeneo-reference-field-list {
+    padding-left: 26px;
+  }
+
+    .akeneo-connection .akeneo-reference-field-list::before {
+      left: 12px;
+    }
+
+  .akeneo-connection .akeneo-reference-field-shell::before {
+    left: -14px;
+    width: 14px;
+  }
+}
 
 
 @keyframes akeneo-button-spinner-spin {

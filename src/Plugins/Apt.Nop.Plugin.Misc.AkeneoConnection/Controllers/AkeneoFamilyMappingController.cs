@@ -143,6 +143,7 @@ public class AkeneoFamilyMappingController(
             AkeneoFamilyCode = model.AkeneoFamilyCode?.Trim(),
             Enabled = model.Enabled,
             VariantRelationshipModeId = model.VariantRelationshipModeId,
+            ProductModelHierarchyModeId = model.ProductModelHierarchyModeId,
             PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure,
             AssociatedProductAttributeId = model.AssociatedProductAttributeId,
             AssociatedValueNameTemplate = model.AssociatedValueNameTemplate,
@@ -207,6 +208,7 @@ public class AkeneoFamilyMappingController(
         configuration.AkeneoFamilyCode = model.AkeneoFamilyCode?.Trim();
         configuration.Enabled = model.Enabled;
         configuration.VariantRelationshipModeId = model.VariantRelationshipModeId;
+        configuration.ProductModelHierarchyModeId = model.ProductModelHierarchyModeId;
         configuration.PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure;
         configuration.AssociatedProductAttributeId = model.AssociatedProductAttributeId;
         configuration.AssociatedValueNameTemplate = model.AssociatedValueNameTemplate;
@@ -281,6 +283,15 @@ public class AkeneoFamilyMappingController(
 
 
         var mode = (AkeneoVariantRelationshipMode)model.VariantRelationshipModeId;
+
+        if (!Enum.IsDefined(
+                typeof(AkeneoProductModelHierarchyMode),
+                model.ProductModelHierarchyModeId))
+        {
+            ModelState.AddModelError(
+                nameof(model.ProductModelHierarchyModeId),
+                "The selected product-model hierarchy mode is invalid.");
+        }
 
         if (mode == AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue &&
             !AkeneoAssociatedValueNameTemplate.TryValidate(

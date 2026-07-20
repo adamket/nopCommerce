@@ -17,6 +17,7 @@
             akeneoFamilyCode = x.AkeneoFamilyCode,
             enabled = x.Enabled,
             variantRelationshipModeId = x.VariantRelationshipModeId,
+            productModelHierarchyModeId = x.ProductModelHierarchyModeId,
             preserveExistingNopVariantStructure = x.PreserveExistingNopVariantStructure,
             displayOrder = x.DisplayOrder
         }),
@@ -86,6 +87,8 @@
                                                     </span>
                                                 </div>
                                                 <div class="akeneo-summary-target-detail">
+                                                    <span v-text="hierarchyLabel(item.productModelHierarchyModeId)"></span>
+                                                    <br />
                                                     <span v-if="item.preserveExistingNopVariantStructure">
                                                         Preserve existing parent structure when detected
                                                     </span>
@@ -135,6 +138,10 @@
                         combinations: @((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations),
                         associated: @((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue),
                         grouped: @((int)AkeneoVariantRelationshipMode.GroupedProducts)
+                    },
+                    hierarchyModes: {
+                        immediate: @((int)AkeneoProductModelHierarchyMode.ImmediateParentProductModel),
+                        root: @((int)AkeneoProductModelHierarchyMode.RootProductModel)
                     }
                 };
             },
@@ -165,6 +172,17 @@
                             return 'None';
                         default:
                             return 'Unknown';
+                    }
+                },
+
+                hierarchyLabel(modeId) {
+                    switch (Number(modeId)) {
+                        case this.hierarchyModes.root:
+                            return 'Root product model; flatten submodels';
+                        case this.hierarchyModes.immediate:
+                            return 'Immediate parent product model';
+                        default:
+                            return 'Unknown product-model hierarchy';
                     }
                 },
 

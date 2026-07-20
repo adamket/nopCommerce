@@ -1,4 +1,4 @@
-﻿
+
 using Nop.Core.Caching;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
@@ -18,10 +18,10 @@ public static class AkeneoConnectionConstants
     public static CacheKey AttributeMappingsByIdCacheKey => new($"{EntityName}.byid.{{0}}");
 
     /// <summary>
-    /// {0}: Akeneo attribute code
+    /// {0}: family scope; {1}: Akeneo attribute code.
     /// </summary>
-    public static CacheKey AttributeMappingsByCodeCacheKey =>
-        new($"{EntityName}.bycode.{{0}}.{{1}}");
+    public static CacheKey AttributeMappingsBySourceCacheKey =>
+        new($"{EntityName}.bysource.{{0}}.{{1}}");
 
     public static string AttributeMappingPrefix => $"{EntityName}.";
     public static CacheKey EntityMappingByCodeCacheKey =>
@@ -34,6 +34,13 @@ public static class AkeneoConnectionConstants
     // Evicts all cached mappings — for a plugin uninstall / full remap handler.
     public static string EntityMappingAllPrefix =>
         "Apt.Nop.Plugin.Misc.AkeneoConnection.EntityMapping.";
+
+
+    /// <summary>
+    /// {0}: reference entity code; {1}: record code.
+    /// </summary>
+    public static CacheKey ReferenceEntityRecordCacheKey =>
+        new("Apt.Nop.Plugin.Misc.AkeneoConnection.ReferenceEntity.{0}.Record.{1}");
 
 
 }

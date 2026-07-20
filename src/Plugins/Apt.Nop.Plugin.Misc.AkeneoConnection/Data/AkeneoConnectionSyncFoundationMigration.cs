@@ -6,7 +6,7 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
-[NopMigration("2026-07-14 02:00:00", "AkeneoConnection: Add sync state, ownership and run watermarks", MigrationProcessType.Update)]
+[NopMigration("2026-07-15 02:00:00", "AkeneoConnection: Add sync state, ownership and run watermarks", MigrationProcessType.Update)]
 public class AkeneoConnectionSyncFoundationMigration : MigrationBase
 {
     public override void Up()

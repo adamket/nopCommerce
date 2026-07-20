@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -81,10 +81,6 @@ public class AkeneoAttributeMappingModelFactory(
         var existingAttributeMappings =
             await akeneoAttributeMappingService.GetEffectiveMappingsAsync(model.AkeneoFamilyCode);
 
-        var existingEntityMappings =
-            await akeneoNopEntityMappingService.GetAkeneoNopEntityMappingsAsync(
-                akeneoEntityType: AkeneoEntityType.Attribute);
-
         var specificationAttributes =
             await specificationAttributeService.GetAllSpecificationAttributesAsync();
 
@@ -102,80 +98,133 @@ public class AkeneoAttributeMappingModelFactory(
             return model;
         }
 
+        var referenceEntityAttributeCache =
+            new Dictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>>(
+                StringComparer.OrdinalIgnoreCase);
+
         foreach (var akeneoAttribute in akeneoAttributes
                      .OrderBy(GetAttributeGroup)
                      .ThenBy(attribute => attribute.Code))
         {
-            var existingAttributeMapping = existingAttributeMappings.FirstOrDefault(mapping =>
-                string.Equals(mapping.AkeneoAttributeCode, akeneoAttribute.Code, StringComparison.OrdinalIgnoreCase));
+            var attributeMappings = existingAttributeMappings
+                .Where(mapping => string.Equals(
+                    mapping.AkeneoAttributeCode,
+                    akeneoAttribute.Code,
+                    StringComparison.OrdinalIgnoreCase))
+                .OrderBy(mapping => mapping.AkeneoReferenceEntityAttributeCode)
+                .ThenBy(mapping => mapping.Id)
+                .ToList();
 
-            var specificationAttributeMapping = existingEntityMappings.FirstOrDefault(mapping =>
-                string.Equals(mapping.AkeneoCode, akeneoAttribute.Code, StringComparison.OrdinalIgnoreCase) &&
-                mapping.NopEntityTypeId == (int)NopEntityType.SpecificationAttribute);
-
-            var productAttributeMapping = existingEntityMappings.FirstOrDefault(mapping =>
-                string.Equals(mapping.AkeneoCode, akeneoAttribute.Code, StringComparison.OrdinalIgnoreCase) &&
-                mapping.NopEntityTypeId == (int)NopEntityType.ProductAttribute);
-
-            var defaultNopTargetType = targetTypeResolver.ResolveDefaultTargetType(akeneoAttribute);
-
-
-            var isFamilyScope =
-                !string.IsNullOrWhiteSpace(model.AkeneoFamilyCode);
-
-            var isInherited =
-                isFamilyScope &&
-                existingAttributeMapping != null &&
-                string.IsNullOrWhiteSpace(
-                    existingAttributeMapping.AkeneoFamilyCode);
-
-            var mappingModel = new AkeneoAttributeMappingModel
+            // A normal Akeneo attribute keeps the existing one-row behavior.
+            // A reference-entity attribute gets one UI row per selected
+            // reference-entity field, plus a blank starter row when it has not
+            // been configured yet.
+            if (!IsReferenceEntityType(akeneoAttribute))
             {
-                Id = existingAttributeMapping?.Id ?? 0,
+                var mappingModel = await CreateMappingModelAsync(
+                    akeneoAttribute,
+                    attributeMappings.FirstOrDefault(),
+                    model.AkeneoFamilyCode,
+                    specificationAttributes,
+                    productAttributes,
+                    referenceEntityAttributeCache,
+                    model.Warnings);
 
-                // Display-only values from Akeneo
-                AkeneoAttributeCode = akeneoAttribute.Code,
-                AkeneoAttributeLabel = GetAttributeLabel(akeneoAttribute),
-                AkeneoAttributeType = akeneoAttribute.Type,
-                AkeneoAttributeGroup = GetAttributeGroup(akeneoAttribute),
-                AkeneoAttributeGroupLabel = GetAttributeGroupLabel(akeneoAttribute),
-                IsLocalizable = akeneoAttribute.Localizable,
-                IsScopable = akeneoAttribute.Scopable,
+                model.Mappings.Add(mappingModel);
+                continue;
+            }
 
-                // Persisted mapping values
-                AkeneoAttributeTypeId = existingAttributeMapping?.AkeneoAttributeTypeId
-                    ?? (int)targetTypeResolver.ResolveAkeneoAttributeType(akeneoAttribute),
+            if (!attributeMappings.Any())
+                attributeMappings.Add(null);
 
-                NopTargetTypeId = existingAttributeMapping?.NopTargetTypeId
-                    ?? (int)defaultNopTargetType,
+            foreach (var existingAttributeMapping in attributeMappings)
+            {
+                var mappingModel = await CreateMappingModelAsync(
+                    akeneoAttribute,
+                    existingAttributeMapping,
+                    model.AkeneoFamilyCode,
+                    specificationAttributes,
+                    productAttributes,
+                    referenceEntityAttributeCache,
+                    model.Warnings);
 
-                NopTargetKey = existingAttributeMapping?.NopTargetKey
-                    ?? targetTypeResolver.ResolveDefaultTargetKey(akeneoAttribute, defaultNopTargetType),
-
-                Locale = existingAttributeMapping?.Locale,
-                Channel = existingAttributeMapping?.Channel,
-                TransformRuleJson = existingAttributeMapping?.TransformRuleJson,
-                IsRequired = existingAttributeMapping?.IsRequired ?? false,
-
-                // Backed by AkeneoNopEntityMapping
-                NopTargetEntityId = existingAttributeMapping?.NopTargetEntityId,
-                AkeneoFamilyCode = existingAttributeMapping?.AkeneoFamilyCode,
-                IsInherited = isInherited
-            };
-
-       
-
-            PrepareTargetTypeOptions(mappingModel, akeneoAttribute);
-            PrepareNopTargetKeyOptions(mappingModel);
-            PrepareSpecificationAttributeOptions(mappingModel, specificationAttributes);
-            PrepareProductAttributeOptions(mappingModel, productAttributes);
-
-            model.Mappings.Add(mappingModel);
+                model.Mappings.Add(mappingModel);
+            }
         }
 
         AddMappingWarnings(model);
 
         return model;
+    }
+
+    private async Task<AkeneoAttributeMappingModel> CreateMappingModelAsync(
+        AkeneoAttributeDefinition akeneoAttribute,
+        AkeneoAttributeMapping existingAttributeMapping,
+        string selectedFamilyCode,
+        IEnumerable<SpecificationAttribute> specificationAttributes,
+        IEnumerable<ProductAttribute> productAttributes,
+        IDictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>> referenceEntityAttributeCache,
+        IList<string> warnings)
+    {
+        var defaultNopTargetType = targetTypeResolver.ResolveDefaultTargetType(
+            akeneoAttribute);
+
+        var isFamilyScope = !string.IsNullOrWhiteSpace(selectedFamilyCode);
+        var isInherited =
+            isFamilyScope &&
+            existingAttributeMapping != null &&
+            string.IsNullOrWhiteSpace(existingAttributeMapping.AkeneoFamilyCode);
+
+        var mappingModel = new AkeneoAttributeMappingModel
+        {
+            Id = existingAttributeMapping?.Id ?? 0,
+
+            // Display-only values from Akeneo.
+            AkeneoAttributeCode = akeneoAttribute.Code,
+            AkeneoAttributeLabel = GetAttributeLabel(akeneoAttribute),
+            AkeneoAttributeType = akeneoAttribute.Type,
+            AkeneoAttributeGroup = GetAttributeGroup(akeneoAttribute),
+            AkeneoAttributeGroupLabel = GetAttributeGroupLabel(akeneoAttribute),
+            IsLocalizable = akeneoAttribute.Localizable,
+            IsScopable = akeneoAttribute.Scopable,
+            IsReferenceEntityAttribute = IsReferenceEntityType(akeneoAttribute),
+
+            AkeneoReferenceEntityCode =
+                existingAttributeMapping?.AkeneoReferenceEntityCode ??
+                akeneoAttribute.ReferenceDataName,
+            AkeneoReferenceEntityAttributeCode =
+                existingAttributeMapping?.AkeneoReferenceEntityAttributeCode,
+
+            // Persisted mapping values.
+            AkeneoAttributeTypeId = existingAttributeMapping?.AkeneoAttributeTypeId
+                ?? (int)targetTypeResolver.ResolveAkeneoAttributeType(akeneoAttribute),
+            NopTargetTypeId = existingAttributeMapping?.NopTargetTypeId
+                ?? (int)defaultNopTargetType,
+            NopTargetKey = existingAttributeMapping?.NopTargetKey
+                ?? targetTypeResolver.ResolveDefaultTargetKey(
+                    akeneoAttribute,
+                    defaultNopTargetType),
+            Locale = existingAttributeMapping?.Locale,
+            Channel = existingAttributeMapping?.Channel,
+            TransformRuleJson = existingAttributeMapping?.TransformRuleJson,
+            IsRequired = existingAttributeMapping?.IsRequired ?? false,
+            NopTargetEntityId = existingAttributeMapping?.NopTargetEntityId,
+            AkeneoFamilyCode = existingAttributeMapping?.AkeneoFamilyCode,
+            IsInherited = isInherited
+        };
+
+        PrepareTargetTypeOptions(mappingModel, akeneoAttribute);
+        PrepareNopTargetKeyOptions(mappingModel);
+        PrepareSpecificationAttributeOptions(
+            mappingModel,
+            specificationAttributes);
+        PrepareProductAttributeOptions(mappingModel, productAttributes);
+        await PrepareReferenceEntityAttributeOptionsAsync(
+            mappingModel,
+            referenceEntityAttributeCache,
+            warnings);
+
+        return mappingModel;
     }
 
     private IDictionary<string, IList<NopTargetKeyOptionModel>> BuildNopTargetKeyMap()
@@ -294,6 +343,105 @@ public class AkeneoAttributeMappingModelFactory(
         }
     }
 
+    private async Task PrepareReferenceEntityAttributeOptionsAsync(
+        AkeneoAttributeMappingModel model,
+        IDictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>> cache,
+        IList<string> warnings)
+    {
+        model.AvailableReferenceEntityAttributes.Clear();
+
+        if (!model.IsReferenceEntityAttribute)
+            return;
+
+        model.AvailableReferenceEntityAttributes.Add(new SelectListItem
+        {
+            Text = "Select reference entity field",
+            Value = string.Empty
+        });
+
+        model.AvailableReferenceEntityAttributes.Add(new SelectListItem
+        {
+            Text = "Record code",
+            Value = AkeneoReferenceEntityValueResolver.RecordCodeField,
+            Selected = string.Equals(
+                model.AkeneoReferenceEntityAttributeCode,
+                AkeneoReferenceEntityValueResolver.RecordCodeField,
+                StringComparison.OrdinalIgnoreCase)
+        });
+
+        var referenceEntityCode = model.AkeneoReferenceEntityCode?.Trim();
+
+        if (string.IsNullOrWhiteSpace(referenceEntityCode))
+        {
+            warnings.Add(
+                $"Akeneo reference entity attribute '{model.AkeneoAttributeCode}' did not expose a reference entity code.");
+            return;
+        }
+
+        if (!cache.TryGetValue(referenceEntityCode, out var attributes))
+        {
+            try
+            {
+                attributes = await akeneoApiClient
+                    .GetReferenceEntityAttributesAsync(referenceEntityCode);
+
+                cache[referenceEntityCode] = attributes;
+            }
+            catch (Exception ex)
+            {
+                warnings.Add(
+                    $"Could not load fields for reference entity '{referenceEntityCode}': {ex.Message}");
+                return;
+            }
+        }
+
+        foreach (var attribute in attributes
+                     .Where(attribute => !string.IsNullOrWhiteSpace(attribute.Code))
+                     .OrderBy(attribute => attribute.GetLabel())
+                     .ThenBy(attribute => attribute.Code))
+        {
+            var typeSuffix = string.IsNullOrWhiteSpace(attribute.Type)
+                ? string.Empty
+                : $" · {attribute.Type}";
+
+            model.AvailableReferenceEntityAttributes.Add(new SelectListItem
+            {
+                Text = $"{attribute.GetDisplayName()}{typeSuffix}",
+                Value = attribute.Code,
+                Selected = string.Equals(
+                    model.AkeneoReferenceEntityAttributeCode,
+                    attribute.Code,
+                    StringComparison.OrdinalIgnoreCase)
+            });
+        }
+
+        var selectedCode = model.AkeneoReferenceEntityAttributeCode?.Trim();
+        if (!string.IsNullOrWhiteSpace(selectedCode) &&
+            !model.AvailableReferenceEntityAttributes.Any(option =>
+                string.Equals(option.Value, selectedCode, StringComparison.OrdinalIgnoreCase)))
+        {
+            model.AvailableReferenceEntityAttributes.Add(new SelectListItem
+            {
+                Text = $"Missing field ({selectedCode})",
+                Value = selectedCode,
+                Selected = true
+            });
+        }
+    }
+
+    private static bool IsReferenceEntityType(
+        AkeneoAttributeDefinition attribute)
+    {
+        return string.Equals(
+                   attribute.Type,
+                   "akeneo_reference_entity",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   attribute.Type,
+                   "akeneo_reference_entity_collection",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void AddMappingWarnings(AkeneoAttributeMappingListModel model)
     {
         var activeMappings = model.Mappings
@@ -348,6 +496,14 @@ public class AkeneoAttributeMappingModelFactory(
             {
                 model.Warnings.Add(
                     $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped as a product field, but no target key is selected.");
+            }
+
+
+            if (mapping.IsReferenceEntityAttribute &&
+                string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode))
+            {
+                model.Warnings.Add(
+                    $"Akeneo reference entity attribute '{mapping.AkeneoAttributeCode}' has no reference entity field selected.");
             }
         }
     }

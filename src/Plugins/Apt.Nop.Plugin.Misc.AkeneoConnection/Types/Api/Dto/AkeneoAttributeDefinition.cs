@@ -8,6 +8,13 @@ public class AkeneoAttributeDefinition : LocalizableDefinition
     [JsonPropertyName("type")]
     public string Type { get; set; }
 
+    /// <summary>
+    /// Reference entity code for akeneo_reference_entity and
+    /// akeneo_reference_entity_collection attributes.
+    /// </summary>
+    [JsonPropertyName("reference_data_name")]
+    public string ReferenceDataName { get; set; }
+
     [JsonPropertyName("group")]
     public string Group { get; set; }
 

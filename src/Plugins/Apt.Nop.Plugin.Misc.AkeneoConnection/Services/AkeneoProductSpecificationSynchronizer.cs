@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
@@ -45,11 +46,15 @@ public class AkeneoProductSpecificationSynchronizer(
         AkeneoResolvedMappedValue mapped)
     {
         var specificationAttributeId = mapped.Mapping.NopTargetEntityId ?? 0;
+        var sourceMappingCode =
+            AkeneoMappingHelper.GetSourceMappingCode(mapped.Mapping);
+        var sourceDisplayName =
+            AkeneoMappingHelper.GetSourceDisplayName(mapped.Mapping);
 
         if (specificationAttributeId <= 0)
         {
             context.Result.AddWarning(
-                $"Specification mapping has no nopCommerce specification attribute. Akeneo attribute: {mapped.Mapping.AkeneoAttributeCode}");
+                $"Specification mapping has no nopCommerce specification attribute. Akeneo source: {sourceDisplayName}");
             return false;
         }
 
@@ -63,7 +68,7 @@ public class AkeneoProductSpecificationSynchronizer(
         {
             var optionResult = await GetOrCreateOptionAsync(
                 specificationAttributeId,
-                mapped.Mapping.AkeneoAttributeCode,
+                sourceMappingCode,
                 optionItem.AkeneoOptionCode,
                 optionItem.DisplayName,
                 context.Request.CreateMissingSpecificationAttributeOptions);
@@ -72,7 +77,7 @@ public class AkeneoProductSpecificationSynchronizer(
             {
                 desiredStateComplete = false;
                 context.Result.AddWarning(
-                    $"Specification option '{optionItem.DisplayName}' was not found and could not be created. Akeneo attribute: {mapped.Mapping.AkeneoAttributeCode}");
+                    $"Specification option '{optionItem.DisplayName}' was not found and could not be created. Akeneo source: {sourceDisplayName}");
                 continue;
             }
 
@@ -93,7 +98,7 @@ public class AkeneoProductSpecificationSynchronizer(
                     context.Product.Id,
                     AkeneoManagedRelationType.ProductSpecificationAssignment,
                     assignmentResult.Assignment.Id,
-                    mapped.Mapping.AkeneoAttributeCode,
+                    sourceMappingCode,
                     optionItem.AkeneoOptionCode ?? optionItem.DisplayName);
             }
         }
@@ -104,7 +109,7 @@ public class AkeneoProductSpecificationSynchronizer(
         if (!desiredStateComplete)
         {
             context.Result.AddWarning(
-                $"Specification removal for '{mapped.Mapping.AkeneoAttributeCode}' was skipped because the desired state was incomplete.");
+                $"Specification removal for '{sourceDisplayName}' was skipped because the desired state was incomplete.");
             return changed;
         }
 
@@ -140,7 +145,7 @@ public class AkeneoProductSpecificationSynchronizer(
             context.Request.SyncProfileId.Value,
             context.Product.Id,
             AkeneoManagedRelationType.ProductSpecificationAssignment,
-            mapped.Mapping.AkeneoAttributeCode);
+            sourceMappingCode);
 
         foreach (var relation in managed)
         {

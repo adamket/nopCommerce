@@ -2,7 +2,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -29,6 +28,7 @@ public class AkeneoProductBatchSyncService(
     IProductService productService,
     IProductAttributeService productAttributeService,
     IAkeneoFamilyMappingService familyMappingService,
+    IAkeneoProductModelHierarchyResolver productModelHierarchyResolver,
     IAkeneoVariantRelationshipService variantRelationshipService,
     IRepository<ProductAttributeValue> productAttributeValueRepository,
     IAkeneoProductSyncService productSyncService,
@@ -362,9 +362,9 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
-        var parentCode = source.Parent?.Trim();
+        var immediateParentCode = source.Parent?.Trim();
 
-        if (string.IsNullOrWhiteSpace(parentCode))
+        if (string.IsNullOrWhiteSpace(immediateParentCode))
         {
             var standaloneContext = await productSyncService.PrepareAsync(
                 source,
@@ -382,7 +382,34 @@ public class AkeneoProductBatchSyncService(
         }
 
         var familyCode = source.Family?.Trim();
-        var leafContext = await productSyncService.PrepareAsync(
+        var familyConfiguration = await familyMappingService
+            .GetByFamilyCodeAsync(familyCode);
+
+        var ancestors = await GetProductModelAncestorsAsync(
+            source,
+            productModelCache,
+            cancellationToken);
+
+        if (ancestors.Count == 0)
+        {
+            result.AddError(
+                $"Akeneo product model '{immediateParentCode}' was not found.");
+            result.ActionType = SyncItemActionType.Failed;
+            return result;
+        }
+
+        var hierarchyMode = familyConfiguration is { Enabled: true }
+            ? familyConfiguration.ProductModelHierarchyMode
+            : AkeneoProductModelHierarchyMode.ImmediateParentProductModel;
+
+        var hierarchy = productModelHierarchyResolver.Resolve(
+            source,
+            ancestors,
+            hierarchyMode);
+
+        // Prepare the unflattened leaf first so a standalone submodel rule can
+        // still opt out of inherited values.
+        var rawLeafContext = await productSyncService.PrepareAsync(
             source,
             AkeneoEntityType.Product,
             request,
@@ -396,68 +423,75 @@ public class AkeneoProductBatchSyncService(
         }
 
         AkeneoVariantRelationshipMode? forcedMode = null;
-        var subModel = await GetProductModelCachedAsync(
-            parentCode,
-            productModelCache,
-            cancellationToken);
+        var overrideRule = await ResolveSubModelOverrideAsync(
+            familyConfiguration,
+            source,
+            hierarchy.ImmediateParentModel);
 
-        if (subModel != null)
+        if (overrideRule != null)
         {
-            var overrideRule = await ResolveSubModelOverrideAsync(
-                familyCode,
-                source,
-                subModel);
-
-            if (overrideRule != null)
+            if (overrideRule.VariantRelationshipOverrideMode ==
+                AkeneoVariantRelationshipMode.None)
             {
-                if (overrideRule.VariantRelationshipOverrideMode ==
-                    AkeneoVariantRelationshipMode.None)
+                var existingMode = await ClassifyExistingLeafStructureAsync(
+                    rawLeafContext.ExistingProduct,
+                    rawLeafContext.Sku);
+
+                if (existingMode is null or AkeneoVariantRelationshipMode.None)
                 {
-                    var existingMode = await ClassifyExistingLeafStructureAsync(
-                        leafContext.ExistingProduct,
-                        leafContext.Sku);
+                    var effectiveContext = rawLeafContext;
 
-                    if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                    if (overrideRule.MergeAncestorValues)
                     {
-                        var effectiveContext = leafContext;
-
-                        if (overrideRule.MergeAncestorValues)
-                        {
-                            var flattenedLeaf = await BuildFlattenedLeafAsync(
-                                source,
-                                subModel,
-                                productModelCache,
-                                cancellationToken);
-
-                            effectiveContext = await productSyncService.PrepareAsync(
-                                flattenedLeaf,
-                                AkeneoEntityType.Product,
-                                request,
-                                result,
-                                cancellationToken);
-                        }
-
-                        await productSyncService.SynchronizeAsync(
-                            effectiveContext,
+                        effectiveContext = await productSyncService.PrepareAsync(
+                            hierarchy.LeafWithInheritedValues,
+                            AkeneoEntityType.Product,
+                            request,
+                            result,
                             cancellationToken);
+                    }
 
-                        result.DestinationKind = AkeneoProductDestinationKind.NopProduct;
+                    if (!result.Success)
+                    {
+                        result.ActionType = SyncItemActionType.Failed;
                         return result;
                     }
+
+                    await productSyncService.SynchronizeAsync(
+                        effectiveContext,
+                        cancellationToken);
+
+                    result.DestinationKind = AkeneoProductDestinationKind.NopProduct;
+                    return result;
                 }
-                else
-                {
-                    forcedMode = overrideRule.VariantRelationshipOverrideMode;
-                }
+            }
+            else
+            {
+                forcedMode = overrideRule.VariantRelationshipOverrideMode;
             }
         }
 
+        var effectiveSource = hierarchy.EffectiveLeaf;
+        var leafContext = ReferenceEquals(effectiveSource, source)
+            ? rawLeafContext
+            : await productSyncService.PrepareAsync(
+                effectiveSource,
+                AkeneoEntityType.Product,
+                request,
+                result,
+                cancellationToken);
+
+        if (!result.Success)
+        {
+            result.ActionType = SyncItemActionType.Failed;
+            return result;
+        }
+
         var parentProduct = await ResolveOrCreateParentProductAsync(
-            parentCode,
+            hierarchy.EffectiveParentProductModel,
             request,
             result,
             parentProductCache,
-            productModelCache,
             cancellationToken);
 
         if (parentProduct == null)
@@ -467,8 +501,9 @@ public class AkeneoProductBatchSyncService(
         }
 
         var variantContext = await BuildVariantImportContextAsync(
-            source,
+            effectiveSource,
             familyCode,
+            familyConfiguration,
             request,
             leafContext,
             previousState,
@@ -569,6 +604,7 @@ public class AkeneoProductBatchSyncService(
     private async Task<AkeneoVariantImportContext> BuildVariantImportContextAsync(
         AkeneoProductDefinition source,
         string familyCode,
+        AkeneoFamilyMapping familyConfiguration,
         AkeneoProductImportRequest request,
         AkeneoProductSyncContext leafContext,
         AkeneoProductSyncState previousState,
@@ -602,10 +638,7 @@ public class AkeneoProductBatchSyncService(
             "CombinationStockQuantity",
             "StockQuantity");
 
-        var familyConfiguration = await familyMappingService
-            .GetByFamilyCodeAsync(familyCode);
-
-        if (familyConfiguration == null)
+        if (familyConfiguration is not { Enabled: true })
             return context;
 
         var axisMappings = await familyMappingService
@@ -727,54 +760,29 @@ public class AkeneoProductBatchSyncService(
     }
 
     private async Task<Product> ResolveOrCreateParentProductAsync(
-        string parentCode,
+        AkeneoProductDefinition effectiveProductModel,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IDictionary<string, Product> parentProductCache,
-        IDictionary<string, AkeneoProductDefinition> productModelCache,
         CancellationToken cancellationToken)
     {
+        var parentCode = effectiveProductModel?.Code?.Trim();
+        if (string.IsNullOrWhiteSpace(parentCode))
+        {
+            result.AddError(
+                "The selected Akeneo parent product model does not contain a code.");
+            return null;
+        }
+
+        // This cache contains only parents synchronized during the current run.
         if (parentProductCache.TryGetValue(parentCode, out var cached))
         {
             var fresh = await productService.GetProductByIdAsync(cached.Id);
+
             if (fresh != null)
                 return fresh;
 
             parentProductCache.Remove(parentCode);
-        }
-
-        var mappedParentId = await entityMappingService
-            .GetMappedNopEntityIdByAkeneoCodeAsync(
-                AkeneoEntityType.ProductModel,
-                parentCode,
-                NopEntityType.Product);
-
-        if (mappedParentId.HasValue)
-        {
-            var existingParent = await productService
-                .GetProductByIdAsync(mappedParentId.Value);
-
-            if (existingParent != null)
-            {
-                parentProductCache[parentCode] = existingParent;
-                return existingParent;
-            }
-
-            result.AddWarning(
-                $"Product model mapping exists for '{parentCode}' but nopCommerce product ID {mappedParentId.Value} was not found. Re-creating.");
-        }
-
-        // Warmed by PrefetchProductModelsAsync before the transaction opened,
-        // so this is a cache hit and performs no HTTP inside the scope.
-        var productModel = await GetProductModelCachedAsync(
-            parentCode,
-            productModelCache,
-            cancellationToken);
-
-        if (productModel == null)
-        {
-            result.AddError($"Akeneo product model '{parentCode}' was not found.");
-            return null;
         }
 
         var parentResult = new AkeneoProductImportResult
@@ -783,8 +791,10 @@ public class AkeneoProductBatchSyncService(
             AkeneoProductKey = parentCode
         };
 
+        // PrepareAsync resolves an existing nopCommerce parent by its product-
+        // model entity mapping, while still reapplying current attribute maps.
         var parentContext = await productSyncService.PrepareAsync(
-            productModel,
+            effectiveProductModel,
             AkeneoEntityType.ProductModel,
             request,
             parentResult,
@@ -794,12 +804,16 @@ public class AkeneoProductBatchSyncService(
             parentContext,
             cancellationToken);
 
-        CopyMessages(parentResult, result, $"Product model '{parentCode}'");
+        CopyMessages(
+            parentResult,
+            result,
+            $"Product model '{parentCode}'");
 
         if (parentProduct == null)
             return null;
 
         parentProductCache[parentCode] = parentProduct;
+
         return parentProduct;
     }
 
@@ -819,31 +833,47 @@ public class AkeneoProductBatchSyncService(
     }
 
 
-    // Walks the leaf's parent chain (sub-model -> root model, Akeneo's max depth is 2)
-    // and warms the batch-scoped cache OUTSIDE any transaction. After this runs,
-    // every GetProductModelCachedAsync call for this item is a pure cache hit.
+    // Warms the entire product-model chain before opening the transaction so
+    // hierarchy resolution performs no Akeneo HTTP requests inside the unit.
     private async Task PrefetchProductModelsAsync(
         AkeneoProductDefinition source,
         IDictionary<string, AkeneoProductDefinition> productModelCache,
         CancellationToken cancellationToken = default)
     {
-        var parentCode = source.Parent?.Trim();
-        if (string.IsNullOrWhiteSpace(parentCode))
-            return; // standalone product — no model fetches happen inside the scope
-
-        var subModel = await GetProductModelCachedAsync(
-            parentCode,
+        await GetProductModelAncestorsAsync(
+            source,
             productModelCache,
             cancellationToken);
+    }
 
-        var rootCode = subModel?.Parent?.Trim();
-        if (!string.IsNullOrWhiteSpace(rootCode))
+    private async Task<IReadOnlyList<AkeneoProductDefinition>>
+        GetProductModelAncestorsAsync(
+            AkeneoProductDefinition source,
+            IDictionary<string, AkeneoProductDefinition> productModelCache,
+            CancellationToken cancellationToken = default)
+    {
+        var ancestors = new List<AkeneoProductDefinition>();
+        var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var currentCode = source?.Parent?.Trim();
+
+        while (!string.IsNullOrWhiteSpace(currentCode) &&
+               visitedCodes.Add(currentCode))
         {
-            await GetProductModelCachedAsync(
-                rootCode,
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var model = await GetProductModelCachedAsync(
+                currentCode,
                 productModelCache,
                 cancellationToken);
+
+            if (model == null)
+                break;
+
+            ancestors.Add(model);
+            currentCode = model.Parent?.Trim();
         }
+
+        return ancestors;
     }
 
     private async Task<AkeneoProductDefinition> GetProductModelCachedAsync(
@@ -867,15 +897,16 @@ public class AkeneoProductBatchSyncService(
     }
 
     private async Task<AkeneoFamilySubModelRule> ResolveSubModelOverrideAsync(
-        string familyCode,
+        AkeneoFamilyMapping familyConfiguration,
         AkeneoProductDefinition leaf,
         AkeneoProductDefinition subModel)
     {
-        var family = await familyMappingService.GetByFamilyCodeAsync(familyCode);
-        if (family is not { Enabled: true })
+        if (familyConfiguration is not { Enabled: true })
             return null;
 
-        var rules = await familyMappingService.GetSubModelRulesAsync(family.Id);
+        var rules = await familyMappingService.GetSubModelRulesAsync(
+            familyConfiguration.Id);
+
         return rules.FirstOrDefault(rule => RuleMatches(rule, leaf, subModel));
     }
 
@@ -939,72 +970,6 @@ public class AkeneoProductBatchSyncService(
 
         return null;
     }
-
-    private async Task<AkeneoProductDefinition> BuildFlattenedLeafAsync(
-        AkeneoProductDefinition leaf,
-        AkeneoProductDefinition subModel,
-        IDictionary<string, AkeneoProductDefinition> productModelCache,
-        CancellationToken cancellationToken)
-    {
-        var ancestors = new List<AkeneoProductDefinition> { subModel };
-        var rootCode = subModel.Parent?.Trim();
-
-        if (!string.IsNullOrWhiteSpace(rootCode))
-        {
-            var root = await GetProductModelCachedAsync(
-                rootCode,
-                productModelCache,
-                cancellationToken);
-
-            if (root != null)
-                ancestors.Add(root);
-        }
-
-        return WithMergedValues(
-            leaf,
-            MergeAkeneoValues(leaf.Values, ancestors));
-    }
-
-    private static JsonElement MergeAkeneoValues(
-        JsonElement leafValues,
-        IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst)
-    {
-        var merged = leafValues.ValueKind == JsonValueKind.Object
-            ? JsonNode.Parse(leafValues.GetRawText())!.AsObject()
-            : new JsonObject();
-
-        foreach (var ancestor in ancestorsNearestFirst)
-        {
-            if (ancestor?.Values.ValueKind != JsonValueKind.Object)
-                continue;
-
-            foreach (var property in ancestor.Values.EnumerateObject())
-            {
-                if (!merged.ContainsKey(property.Name))
-                {
-                    merged[property.Name] =
-                        JsonNode.Parse(property.Value.GetRawText());
-                }
-            }
-        }
-
-        return JsonSerializer.SerializeToElement(merged);
-    }
-
-    private static AkeneoProductDefinition WithMergedValues(
-        AkeneoProductDefinition leaf,
-        JsonElement mergedValues) => new()
-        {
-            Uuid = leaf.Uuid,
-            Identifier = leaf.Identifier,
-            Code = leaf.Code,
-            Family = leaf.Family,
-            FamilyVariant = leaf.FamilyVariant,
-            Parent = leaf.Parent,
-            Enabled = leaf.Enabled,
-            Categories = leaf.Categories,
-            Values = mergedValues
-        };
 
     private async Task<AkeneoVariantRelationshipMode?> ClassifyExistingLeafStructureAsync(
         Product product,

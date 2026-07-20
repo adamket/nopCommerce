@@ -9,6 +9,8 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public int VariantRelationshipModeId { get; set; }
 
+    public int ProductModelHierarchyModeId { get; set; }
+
     public bool PreserveExistingNopVariantStructure { get; set; } = true;
 
     public int? AssociatedProductAttributeId { get; set; }
@@ -28,6 +30,12 @@ public class AkeneoFamilyMapping : BaseEntity
         get => (AkeneoVariantRelationshipMode)VariantRelationshipModeId;
         set => VariantRelationshipModeId = (int)value;
     }
+
+    public AkeneoProductModelHierarchyMode ProductModelHierarchyMode
+    {
+        get => (AkeneoProductModelHierarchyMode)ProductModelHierarchyModeId;
+        set => ProductModelHierarchyModeId = (int)value;
+    }
 }
 
 
@@ -41,6 +49,24 @@ public enum AkeneoVariantRelationshipMode
     AssociatedToProductAttributeValue = 20,
 
     GroupedProducts = 30
+}
+
+/// <summary>
+/// Controls which Akeneo product-model level becomes the nopCommerce parent.
+/// </summary>
+public enum AkeneoProductModelHierarchyMode
+{
+    /// <summary>
+    /// Preserve the existing behavior: the leaf product's immediate product
+    /// model becomes the nopCommerce parent product.
+    /// </summary>
+    ImmediateParentProductModel = 0,
+
+    /// <summary>
+    /// Walk to the root product model. Intermediate submodels contribute
+    /// inherited values and variant axes, but are not imported as products.
+    /// </summary>
+    RootProductModel = 10
 }
 
 public enum AkeneoVariantRelationshipSource

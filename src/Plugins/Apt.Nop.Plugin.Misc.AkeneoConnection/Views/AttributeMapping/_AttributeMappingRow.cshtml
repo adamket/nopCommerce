@@ -1,0 +1,359 @@
+<div class="akeneo-row-shell"
+     v-bind:class="{ 'akeneo-reference-field-shell': m.isReferenceEntityAttribute }"
+     v-bind:style="rowStaggerStyle(entryIndex + itemIndex)">
+
+    <div class="akeneo-row"
+         v-bind:class="[
+             statusFor(m).cls,
+             { 'akeneo-reference-field-row': m.isReferenceEntityAttribute }
+         ]">
+
+        <div class="akeneo-col akeneo-col-attr">
+            <template v-if="m.isReferenceEntityAttribute">
+                <div class="akeneo-reference-field-name">
+                    {{ referenceFieldText(m) }}
+                </div>
+
+                <div class="akeneo-code">
+                    {{ activeReferenceFieldCode(m) || 'No field selected' }}
+                </div>
+            </template>
+
+            <template v-else>
+                <div class="akeneo-code">{{ m.code }}</div>
+                <div class="akeneo-label">{{ m.label }}</div>
+            </template>
+        </div>
+
+        <div class="akeneo-col akeneo-col-type">
+            <template v-if="m.isReferenceEntityAttribute">
+                <span class="akeneo-type-chip">
+                    Reference entity field
+                </span>
+
+                <div class="akeneo-reference-field-entity">
+                    {{ m.referenceEntityCode }}
+                </div>
+            </template>
+
+            <template v-else>
+                <span class="akeneo-type-chip">{{ m.type }}</span>
+
+                <div class="akeneo-flags"
+                     aria-label="Attribute localization and scope">
+
+                    <span class="akeneo-flag"
+                          v-bind:class="{ on: m.isLocalizable }"
+                          v-bind:aria-label="m.isLocalizable
+                              ? 'Localizable'
+                              : 'Non localizable'"
+                          v-bind:data-ak-tooltip="m.isLocalizable
+                              ? 'Localizable: Akeneo can store a different value per locale.'
+                              : 'Non localizable: this attribute uses the same value for every locale.'"
+                          tabindex="0">
+                        L
+                    </span>
+
+                    <span class="akeneo-flag"
+                          v-bind:class="{ on: m.isScopable }"
+                          v-bind:aria-label="m.isScopable
+                              ? 'Scopable'
+                              : 'Non scopable'"
+                          v-bind:data-ak-tooltip="m.isScopable
+                              ? 'Scopable: Akeneo can store a different value per channel.'
+                              : 'Non scopable: this attribute uses the same value for every channel.'"
+                          tabindex="0">
+                        S
+                    </span>
+                </div>
+            </template>
+        </div>
+
+        <div class="akeneo-col akeneo-col-maps">
+            <div>
+                <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
+                <span class="akeneo-summary-target-type">
+                    {{ targetTypeText(m) }}
+                </span>
+            </div>
+
+            <div class="akeneo-summary-target-detail">
+                {{ detail(m) }}
+            </div>
+        </div>
+
+        <div class="akeneo-col akeneo-col-status">
+            <span class="akeneo-status">
+                {{ statusFor(m).text }}
+            </span>
+
+            <div class="mt-1">
+                <span class="badge"
+                      v-bind:class="scopeFor(m).badgeClass">
+                    {{ scopeFor(m).text }}
+                </span>
+            </div>
+        </div>
+
+        <div class="akeneo-col akeneo-col-actions">
+            <span class="akeneo-summary-required">
+                <span class="badge"
+                      v-bind:class="m.isRequired
+                          ? 'badge-warning'
+                          : 'badge-secondary'">
+                    {{ m.isRequired ? 'Required' : 'Optional' }}
+                </span>
+            </span>
+
+            <div class="mt-2">
+                <button type="button"
+                        class="btn btn-sm btn-primary akeneo-edit-row"
+                        v-on:click="edit(m)"
+                        v-show="!m.editing">
+
+                    <i class="fas fa-pencil-alt"></i>
+
+                    {{
+                    selectedFamilyCode &&
+                    (m.isInherited || Number(m.id) === 0)
+                    ? 'Create override'
+                    : Number(m.id) === 0
+                    ? 'Create mapping'
+                    : 'Edit'
+                    }}
+                </button>
+
+                <button type="button"
+                        class="btn btn-sm btn-default akeneo-cancel-row"
+                        v-on:click="cancel(m)"
+                        v-show="m.editing">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger ml-1 mt-2"
+                        v-if="canDeleteMapping(m)"
+                        v-show="!m.editing"
+                        v-on:click="deleteMapping(m)"
+                        v-bind:disabled="m.deleting">
+
+                    <i class="fas"
+                       v-bind:class="selectedFamilyCode
+                           ? 'fa-undo'
+                           : 'fa-trash'">
+                    </i>
+
+                    {{
+                    m.deleting
+                    ? 'Removing...'
+                    : m.clientAdded
+                    ? 'Remove'
+                    : selectedFamilyCode
+                    ? 'Remove override'
+                    : 'Delete mapping'
+                    }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <transition name="akeneo-detail-slide">
+        <div v-if="m.editing"
+             class="akeneo-mapping-detail"
+             v-bind:class="{
+                 'akeneo-reference-field-detail': m.isReferenceEntityAttribute
+             }">
+
+            <div class="form-row">
+                <div class="form-group col-md-4"
+                     v-if="m.isReferenceEntityAttribute">
+
+                    <label class="font-weight-bold mb-1">
+                        Reference Entity Field
+                    </label>
+
+                    <select class="form-control akeneo-edit-reference-entity-field"
+                            v-model="m.draft.referenceEntityAttributeCode">
+
+                        <option v-for="o in referenceFieldOptions(m)"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+
+                    <small class="form-text text-muted">
+                        Read this field from each linked
+                        {{ m.referenceEntityCode }} record.
+                    </small>
+                </div>
+
+                <div class="form-group col-md-4">
+                    <label class="font-weight-bold mb-1">
+                        Target Type
+                    </label>
+
+                    <select class="form-control akeneo-edit-target-type"
+                            v-model="m.draft.nopTargetTypeId"
+                            v-on:change="onTypeChange(m)">
+
+                        <option v-for="o in m.availableTargetTypes"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isKeyType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Target Key
+                    </label>
+
+                    <select class="form-control akeneo-edit-target-key"
+                            v-model="m.draft.nopTargetKey">
+
+                        <option value="">None</option>
+
+                        <option v-for="o in keyOptions(m.draft.nopTargetTypeId)"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isSpecType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Specification Attribute
+                    </label>
+
+                    <select class="form-control akeneo-edit-specification-attribute"
+                            v-model="m.draft.nopTargetEntityId">
+
+                        <option v-for="o in m.availableSpecificationAttributes"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isProductType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Product Attribute
+                    </label>
+
+                    <select class="form-control akeneo-edit-product-attribute"
+                            v-model="m.draft.nopTargetEntityId">
+
+                        <option v-for="o in m.availableProductAttributes"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group col-md-8 akeneo-detail-block akeneo-detail-none"
+                     v-if="isIgnoreType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1"
+                           aria-hidden="true">
+                        &nbsp;
+                    </label>
+
+                    <span class="akeneo-none-hint">
+                        <i class="fas fa-ban"></i>
+                        This attribute is ignored. Nothing will be imported.
+                    </span>
+                </div>
+
+                <div class="form-group col-md-8 akeneo-detail-block akeneo-detail-none"
+                     v-else-if="isNoneType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1"
+                           aria-hidden="true">
+                        &nbsp;
+                    </label>
+
+                    <span class="akeneo-none-hint">
+                        <i class="fas fa-info-circle"></i>
+                        This type maps on its own. No additional target is required.
+                    </span>
+                </div>
+
+                <div class="form-group col-md-4"
+                     v-if="!isIgnoreType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Require value during import
+                    </label>
+
+                    <div>
+                        <label class="akeneo-switch">
+                            <input type="checkbox"
+                                   v-model="m.draft.isRequired" />
+
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+
+                            <span class="akeneo-switch-text">
+                                {{ m.draft.isRequired ? 'Required' : 'Optional' }}
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-danger akeneo-row-errors"
+                 v-if="m.errors.length"
+                 role="alert">
+
+                <i class="fas fa-exclamation-circle akeneo-row-errors-icon"
+                   aria-hidden="true">
+                </i>
+
+                <div class="akeneo-row-errors-body">
+                    <div class="akeneo-row-errors-title">
+                        {{
+                        m.errors.length > 1
+                        ? 'Please fix these issues:'
+                        : 'Please fix this issue:'
+                        }}
+                    </div>
+
+                    <ul class="mb-0">
+                        <li v-for="(err, errorIndex) in m.errors"
+                            v-bind:key="errorIndex">
+                            {{ err }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div>
+                <button type="button"
+                        class="btn btn-sm btn-primary akeneo-save-row"
+                        v-on:click="save(m)"
+                        v-bind:disabled="m.saving">
+
+                    <i class="fas fa-save"></i>
+                    Save
+                </button>
+
+                <span class="akeneo-row-saving ml-2"
+                      v-show="m.saving">
+                    Saving...
+                </span>
+            </div>
+        </div>
+    </transition>
+</div>

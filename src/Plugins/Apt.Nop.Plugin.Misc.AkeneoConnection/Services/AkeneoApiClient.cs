@@ -196,6 +196,56 @@ public class AkeneoApiClient : IAkeneoApiClient
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync<AkeneoAttributeDefinition>("api/rest/v1/attributes", limit, cancellationToken);
 
+
+    public async Task<AkeneoAttributeDefinition> GetAttributeByCodeAsync(
+        string attributeCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(attributeCode))
+            throw new ArgumentException("Attribute code is required.", nameof(attributeCode));
+
+        return await GetObjectOrNullAsync<AkeneoAttributeDefinition>(
+            $"api/rest/v1/attributes/{Uri.EscapeDataString(attributeCode.Trim())}",
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>>
+        GetReferenceEntityAttributesAsync(
+            string referenceEntityCode,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceEntityCode))
+        {
+            throw new ArgumentException(
+                "Reference entity code is required.",
+                nameof(referenceEntityCode));
+        }
+
+        return await GetArrayOrEmbeddedCollectionAsync<AkeneoReferenceEntityAttributeDefinition>(
+            $"api/rest/v1/reference-entities/{Uri.EscapeDataString(referenceEntityCode.Trim())}/attributes",
+            cancellationToken);
+    }
+
+    public async Task<AkeneoReferenceEntityRecordDefinition> GetReferenceEntityRecordAsync(
+        string referenceEntityCode,
+        string recordCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceEntityCode))
+        {
+            throw new ArgumentException(
+                "Reference entity code is required.",
+                nameof(referenceEntityCode));
+        }
+
+        if (string.IsNullOrWhiteSpace(recordCode))
+            throw new ArgumentException("Record code is required.", nameof(recordCode));
+
+        return await GetObjectOrNullAsync<AkeneoReferenceEntityRecordDefinition>(
+            $"api/rest/v1/reference-entities/{Uri.EscapeDataString(referenceEntityCode.Trim())}/records/{Uri.EscapeDataString(recordCode.Trim())}",
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<JsonElement>> GetLocalesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/locales", limit, cancellationToken);
@@ -377,6 +427,37 @@ public class AkeneoApiClient : IAkeneoApiClient
         return await GetPagedCollectionAsync(relativeUrl, query, cancellationToken, apiCredentials);
     }
 
+
+    private async Task<IReadOnlyList<T>> GetArrayOrEmbeddedCollectionAsync<T>(
+        string relativeUrl,
+        CancellationToken cancellationToken = default,
+        AkeneoApiCredentials apiCredentials = null)
+    {
+        using var document = await GetJsonDocumentAsync(
+            relativeUrl,
+            cancellationToken,
+            apiCredentials);
+
+        var root = document.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return root.Deserialize<List<T>>(SnakeCaseJsonOptions)
+                ?? new List<T>();
+        }
+
+        if (root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("_embedded", out var embedded) &&
+            embedded.ValueKind == JsonValueKind.Object &&
+            embedded.TryGetProperty("items", out var items) &&
+            items.ValueKind == JsonValueKind.Array)
+        {
+            return items.Deserialize<List<T>>(SnakeCaseJsonOptions)
+                ?? new List<T>();
+        }
+
+        return Array.Empty<T>();
+    }
 
     private async Task<IReadOnlyList<T>> GetPagedCollectionAsync<T>(
         string relativeUrl,

@@ -36,6 +36,7 @@ public class AkeneoFamilyMappingModelFactory
                     AkeneoFamilyCode = x.AkeneoFamilyCode,
                     Enabled = x.Enabled,
                     VariantRelationshipModeId = x.VariantRelationshipModeId,
+                    ProductModelHierarchyModeId = x.ProductModelHierarchyModeId,
                     PreserveExistingNopVariantStructure = x.PreserveExistingNopVariantStructure,
                     AssociatedProductAttributeId = x.AssociatedProductAttributeId,
                     AssociatedValueNameTemplate = x.AssociatedValueNameTemplate,
@@ -63,6 +64,7 @@ public class AkeneoFamilyMappingModelFactory
             model.AkeneoFamilyCode = configuration.AkeneoFamilyCode;
             model.Enabled = configuration.Enabled;
             model.VariantRelationshipModeId = configuration.VariantRelationshipModeId;
+            model.ProductModelHierarchyModeId = configuration.ProductModelHierarchyModeId;
             model.PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure;
             model.AssociatedProductAttributeId = configuration.AssociatedProductAttributeId;
             model.AssociatedValueNameTemplate = configuration.AssociatedValueNameTemplate;
@@ -118,9 +120,21 @@ public class AkeneoFamilyMappingModelFactory
             new("Grouped products", ((int)AkeneoVariantRelationshipMode.GroupedProducts).ToString())
         };
 
+    private static IList<SelectListItem> BuildHierarchyModeList() =>
+        new List<SelectListItem>
+        {
+            new(
+                "Immediate parent product model",
+                ((int)AkeneoProductModelHierarchyMode.ImmediateParentProductModel).ToString()),
+            new(
+                "Root product model / flatten submodels",
+                ((int)AkeneoProductModelHierarchyMode.RootProductModel).ToString())
+        };
+
     private async Task PrepareSelectListsAsync(AkeneoFamilyMappingModel model)
     {
         model.AvailableVariantRelationshipModes = BuildModeList();
+        model.AvailableProductModelHierarchyModes = BuildHierarchyModeList();
 
         var productAttributes = await _productAttributeService.GetAllProductAttributesAsync();
         model.AvailableProductAttributes = productAttributes

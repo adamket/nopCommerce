@@ -1,6 +1,7 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -21,6 +22,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
     private readonly IAkeneoAttributeMappingService _akeneoAttributeMappingService;
     private readonly IAkeneoNopEntityMappingService _akeneoNopEntityMappingService;
     private readonly IAkeneoProductValueResolver _akeneoProductValueResolver;
+    private readonly IAkeneoReferenceEntityValueResolver _referenceEntityValueResolver;
     private readonly IProductService _productService;
     private readonly ISpecificationAttributeService _specificationAttributeService;
     private readonly IProductAttributeService _productAttributeService;
@@ -30,6 +32,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         IAkeneoAttributeMappingService akeneoAttributeMappingService,
         IAkeneoNopEntityMappingService akeneoNopEntityMappingService,
         IAkeneoProductValueResolver akeneoProductValueResolver,
+        IAkeneoReferenceEntityValueResolver referenceEntityValueResolver,
         IProductService productService,
         ISpecificationAttributeService specificationAttributeService,
         IProductAttributeService productAttributeService)
@@ -38,6 +41,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         _akeneoAttributeMappingService = akeneoAttributeMappingService;
         _akeneoNopEntityMappingService = akeneoNopEntityMappingService;
         _akeneoProductValueResolver = akeneoProductValueResolver;
+        _referenceEntityValueResolver = referenceEntityValueResolver;
         _productService = productService;
         _specificationAttributeService = specificationAttributeService;
         _productAttributeService = productAttributeService;
@@ -97,6 +101,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         var activeMappings = savedMappings
             .Where(mapping => mapping.NopTargetTypeId != (int)NopTargetType.Ignore)
             .OrderBy(mapping => mapping.AkeneoAttributeCode)
+            .ThenBy(mapping => mapping.AkeneoReferenceEntityAttributeCode)
             .ToList();
 
         if (!activeMappings.Any())
@@ -116,17 +121,42 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
         foreach (var mapping in activeMappings)
         {
-            var value = _akeneoProductValueResolver.GetValue(
-                akeneoProduct,
-                mapping.AkeneoAttributeCode,
-                locale: !string.IsNullOrWhiteSpace(mapping.Locale) ? mapping.Locale : locale,
-                channel: !string.IsNullOrWhiteSpace(mapping.Channel) ? mapping.Channel : channel,
-                currency: currency);
+            var mappingLocale = !string.IsNullOrWhiteSpace(mapping.Locale)
+                ? mapping.Locale
+                : locale;
+            var mappingChannel = !string.IsNullOrWhiteSpace(mapping.Channel)
+                ? mapping.Channel
+                : channel;
+
+            string value;
+
+            if (IsReferenceEntityMapping(mapping) &&
+                !string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode))
+            {
+                var resolvedReferenceValue = await _referenceEntityValueResolver.ResolveAsync(
+                    akeneoProduct,
+                    mapping,
+                    mappingLocale,
+                    mappingChannel,
+                    currency,
+                    cancellationToken);
+
+                value = resolvedReferenceValue?.DisplayValue ?? string.Empty;
+            }
+            else
+            {
+                value = _akeneoProductValueResolver.GetValue(
+                    akeneoProduct,
+                    mapping.AkeneoAttributeCode,
+                    locale: mappingLocale,
+                    channel: mappingChannel,
+                    currency: currency);
+            }
 
             if (mapping.IsRequired && string.IsNullOrWhiteSpace(value))
             {
                 model.Errors.Add(
-                    $"Required Akeneo attribute \"{mapping.AkeneoAttributeCode}\" did not produce a value.");
+                    $"Required Akeneo source \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\" did not produce a value.");
             }
 
             var targetType = (NopTargetType)mapping.NopTargetTypeId;
@@ -163,12 +193,12 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
                 case NopTargetType.Manufacturer:
                     model.Warnings.Add(
-                        $"Manufacturer mapping preview is not implemented yet for Akeneo attribute \"{mapping.AkeneoAttributeCode}\".");
+                        $"Manufacturer mapping preview is not implemented yet for Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\".");
                     break;
 
                 case NopTargetType.Category:
                     model.Warnings.Add(
-                        $"Category mapping preview is not implemented yet for Akeneo attribute \"{mapping.AkeneoAttributeCode}\".");
+                        $"Category mapping preview is not implemented yet for Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\".");
                     break;
             }
         }
@@ -197,6 +227,13 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         AddFinalWarnings(model);
 
         return model;
+    }
+
+    private static bool IsReferenceEntityMapping(
+        AkeneoAttributeMapping mapping)
+    {
+        return mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
+               mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
     }
 
     private async Task<AkeneoProductDefinition> FindAkeneoProductByIdentifierAsync(
@@ -231,13 +268,13 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         if (string.IsNullOrWhiteSpace(mapping.NopTargetKey))
         {
             model.Warnings.Add(
-                $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Product Field but no Target Key is configured.");
+                $"Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\" is mapped to Product Field but no Target Key is configured.");
             return;
         }
 
         model.ProductFields.Add(new AkeneoMappedFieldPreviewModel
         {
-            AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+            AkeneoAttributeCode = AkeneoMappingHelper.GetSourceDisplayName(mapping),
             TargetKey = mapping.NopTargetKey,
             Value = value,
             IsRequired = mapping.IsRequired
@@ -252,13 +289,13 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         if (string.IsNullOrWhiteSpace(mapping.NopTargetKey))
         {
             model.Warnings.Add(
-                $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to SEO Field but no Target Key is configured.");
+                $"Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\" is mapped to SEO Field but no Target Key is configured.");
             return;
         }
 
         model.SeoFields.Add(new AkeneoMappedFieldPreviewModel
         {
-            AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+            AkeneoAttributeCode = AkeneoMappingHelper.GetSourceDisplayName(mapping),
             TargetKey = mapping.NopTargetKey,
             Value = value,
             IsRequired = mapping.IsRequired
@@ -272,7 +309,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
     {
         model.CustomProperties.Add(new AkeneoMappedFieldPreviewModel
         {
-            AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+            AkeneoAttributeCode = AkeneoMappingHelper.GetSourceDisplayName(mapping),
             TargetKey = string.IsNullOrWhiteSpace(mapping.NopTargetKey)
                 ? mapping.AkeneoAttributeCode
                 : mapping.NopTargetKey,
@@ -290,7 +327,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         var id = mapping.NopTargetEntityId ?? 0;
         if (id <= 0)
         {
-            model.Warnings.Add($"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Specification Attribute, but no nopCommerce specification attribute is selected.");
+            model.Warnings.Add($"Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\" is mapped to Specification Attribute, but no nopCommerce specification attribute is selected.");
             return;
         }
 
@@ -298,7 +335,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
         model.SpecificationAttributes.Add(new AkeneoMappedAttributePreviewModel
         {
-            AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+            AkeneoAttributeCode = AkeneoMappingHelper.GetSourceDisplayName(mapping),
             NopAttributeId = id,
             NopAttributeName = specificationAttribute?.Name ?? $"SpecificationAttributeId {id}",
             Value = value,
@@ -317,7 +354,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         if (id <= 0)
         {
             model.Warnings.Add(
-                $"Akeneo attribute \"{mapping.AkeneoAttributeCode}\" is mapped to Product Attribute, but no nopCommerce product attribute is selected.");
+                $"Akeneo attribute \"{AkeneoMappingHelper.GetSourceDisplayName(mapping)}\" is mapped to Product Attribute, but no nopCommerce product attribute is selected.");
 
             return;
         }
@@ -327,7 +364,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
         model.ProductAttributes.Add(new AkeneoMappedAttributePreviewModel
         {
-            AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+            AkeneoAttributeCode = AkeneoMappingHelper.GetSourceDisplayName(mapping),
             NopAttributeId = id,
             NopAttributeName = productAttribute?.Name ?? $"ProductAttributeId {id}",
             Value = value,

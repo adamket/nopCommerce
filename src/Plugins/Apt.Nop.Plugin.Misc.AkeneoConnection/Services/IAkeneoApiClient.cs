@@ -22,6 +22,20 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
+    Task<AkeneoAttributeDefinition> GetAttributeByCodeAsync(
+        string attributeCode,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>>
+        GetReferenceEntityAttributesAsync(
+            string referenceEntityCode,
+            CancellationToken cancellationToken = default);
+
+    Task<AkeneoReferenceEntityRecordDefinition> GetReferenceEntityRecordAsync(
+        string referenceEntityCode,
+        string recordCode,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<JsonElement>> GetAttributeOptionsAsync(
         string attributeCode,
         int limit = 100,

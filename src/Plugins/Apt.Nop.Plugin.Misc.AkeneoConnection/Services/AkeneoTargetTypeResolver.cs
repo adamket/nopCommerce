@@ -60,6 +60,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
             "pim_catalog_file" => AkeneoAttributeType.File,
             "pim_catalog_metric" => AkeneoAttributeType.Metric,
             "akeneo_reference_entity" => AkeneoAttributeType.ReferenceEntity,
+            "akeneo_reference_entity_collection" => AkeneoAttributeType.ReferenceEntityCollection,
             _ => AkeneoAttributeType.Unknown
         };
     }
@@ -78,7 +79,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
             "pim_catalog_number" => NopTargetType.SpecificationAttribute,
             "pim_catalog_metric" => NopTargetType.SpecificationAttribute,
             "pim_catalog_date" => NopTargetType.SpecificationAttribute,
-            "akeneo_reference_entity" => NopTargetType.SpecificationAttribute,
+            "akeneo_reference_entity" or
+            "akeneo_reference_entity_collection" => NopTargetType.SpecificationAttribute,
             _ => NopTargetType.Ignore
         };
     }
@@ -155,11 +157,14 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.CustomProperty
             ],
 
-            "akeneo_reference_entity" =>
+            "akeneo_reference_entity" or
+            "akeneo_reference_entity_collection" =>
             [
                 NopTargetType.Ignore,
-                NopTargetType.Manufacturer,
+                NopTargetType.ProductField,
                 NopTargetType.SpecificationAttribute,
+                NopTargetType.SeoField,
+                NopTargetType.Manufacturer,
                 NopTargetType.CustomProperty
             ],
 

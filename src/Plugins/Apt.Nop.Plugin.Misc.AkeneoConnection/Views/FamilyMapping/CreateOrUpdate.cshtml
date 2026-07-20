@@ -26,6 +26,7 @@
             akeneoFamilyCode = Model.AkeneoFamilyCode,
             enabled = Model.Enabled,
             variantRelationshipModeId = Model.VariantRelationshipModeId,
+            productModelHierarchyModeId = Model.ProductModelHierarchyModeId,
             preserveExistingNopVariantStructure = Model.PreserveExistingNopVariantStructure,
             associatedProductAttributeId = Model.AssociatedProductAttributeId,
             associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
@@ -73,6 +74,11 @@
                 value = x.Value
             }),
             availableVariantRelationshipModes = Model.AvailableVariantRelationshipModes.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            availableProductModelHierarchyModes = Model.AvailableProductModelHierarchyModes.Select(x => new
             {
                 text = x.Text,
                 value = x.Value
@@ -239,6 +245,28 @@
                                             <span asp-validation-for="PreserveExistingNopVariantStructure"></span>
                                             <div class="form-text">
                                                 Recommended. If a nopCommerce parent already has variants, the import follows that existing structure.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label asp-for="ProductModelHierarchyModeId">Product model hierarchy</label>
+                                            <select asp-for="ProductModelHierarchyModeId"
+                                                    class="form-control"
+                                                    v-model.number="form.productModelHierarchyModeId">
+                                                <option v-for="mode in availableProductModelHierarchyModes"
+                                                        v-bind:key="mode.value"
+                                                        v-bind:value="Number(mode.value)">
+                                                    {{ mode.text }}
+                                                </option>
+                                            </select>
+                                            <span asp-validation-for="ProductModelHierarchyModeId"></span>
+                                            <div class="form-text">
+                                                Choose <strong>Root product model</strong> to create only the root nopCommerce parent. Intermediate Akeneo submodels still contribute inherited values and variant-axis values, but are not imported as products.
+                                                Products created for submodels by earlier syncs are intentionally not deleted automatically.
                                             </div>
                                         </div>
                                     </div>
@@ -762,6 +790,7 @@
                     availableSubModelAxisAttributes: initialModel.availableSubModelAxisAttributes,
                     availableVariantAttributes: initialModel.availableVariantAttributes,
                     availableVariantRelationshipModes: initialModel.availableVariantRelationshipModes,
+                    availableProductModelHierarchyModes: initialModel.availableProductModelHierarchyModes,
                     form: {
                         ...initialModel,
                         associatedProductAttributeId: initialModel.associatedProductAttributeId ?? '',

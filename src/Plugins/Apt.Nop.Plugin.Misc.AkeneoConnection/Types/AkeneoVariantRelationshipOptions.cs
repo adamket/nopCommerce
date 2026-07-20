@@ -13,6 +13,8 @@ public class AkeneoVariantRelationshipOptions
 
     public AkeneoVariantRelationshipMode Mode { get; set; }
 
+    public AkeneoProductModelHierarchyMode ProductModelHierarchyMode { get; set; }
+
     /// <summary>
     ///hey gpt, please replace this type with a new DTO object
     /// </summary>

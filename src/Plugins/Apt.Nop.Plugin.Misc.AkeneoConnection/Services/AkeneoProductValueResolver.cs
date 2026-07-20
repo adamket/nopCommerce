@@ -75,6 +75,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 
         var resolvedLocale = GetNullableStringProperty(selectedValueObject, "locale");
         var resolvedChannel = GetNullableStringProperty(selectedValueObject, "scope");
+        var sourceAttributeType = GetNullableStringProperty(selectedValueObject, "attribute_type");
+        var referenceDataName = GetNullableStringProperty(selectedValueObject, "reference_data_name");
         var displayValues = ResolveDisplayValues(selectedValueObject, dataElement, locale, currency);
 
         resolvedValue = new AkeneoResolvedProductValue
@@ -83,6 +85,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
             Locale = resolvedLocale,
             Channel = resolvedChannel,
             Currency = currency,
+            SourceAttributeType = sourceAttributeType,
+            ReferenceDataName = referenceDataName,
             RawData = dataElement.Clone(),
             DisplayValue = displayValues.Count switch
             {
