@@ -1242,6 +1242,11 @@
     border-radius: 5px;
   }
 
+  .akeneo-connection .akeneo-reference-container-toggle:disabled {
+    cursor: default;
+    opacity: 1;
+  }
+
   .akeneo-connection .akeneo-reference-container-toggle .chevron {
     flex: 0 0 auto;
     color: var(--ak-muted);

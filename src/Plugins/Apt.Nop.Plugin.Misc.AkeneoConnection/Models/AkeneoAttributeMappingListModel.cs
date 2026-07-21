@@ -19,7 +19,21 @@ public class AkeneoAttributeMappingListModel
     public IList<SelectListItem> AvailableTargetTypes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableSpecificationAttributes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableProductAttributes { get; set; } = new List<SelectListItem>();
-    public IList<AkeneoAttributeMappingModel> Mappings { get; set; } = new List<AkeneoAttributeMappingModel>();
+    /// <summary>
+    /// Standard, computed, and saved reference-entity field mappings.
+    /// Unlike a standard attribute row, an unmapped reference-entity attribute
+    /// does not create a placeholder mapping here.
+    /// </summary>
+    public IList<AkeneoAttributeMappingModel> Mappings { get; set; }
+        = new List<AkeneoAttributeMappingModel>();
+
+    /// <summary>
+    /// Reference-entity attribute metadata used to render containers independently
+    /// of the zero-or-more saved field mappings in <see cref="Mappings"/>.
+    /// </summary>
+    public IList<AkeneoAttributeDefinitionModel> ReferenceEntityAttributes { get; set; }
+        = new List<AkeneoAttributeDefinitionModel>();
+
     public IList<AkeneoAttributeMappingSourceOptionModel> AvailableFallbackSources { get; set; } = new List<AkeneoAttributeMappingSourceOptionModel>();
     public IList<string> Warnings { get; set; } = new List<string>();
 

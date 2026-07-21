@@ -896,7 +896,110 @@ public class AkeneoMappingController(
 
         await attributeMappingService.DeleteAkeneoAttributeMappingAsync(mapping);
 
-        return Json(new { success = true });
+        AkeneoAttributeMapping replacementMapping = null;
+
+        // When a family override is removed, the matching global mapping may
+        // immediately become effective. Return it so Vue can update the row in
+        // place without reloading the page.
+        if (!string.IsNullOrWhiteSpace(requestedFamilyCode))
+        {
+            var effectiveMappings = await attributeMappingService
+                .GetEffectiveMappingsAsync(requestedFamilyCode);
+
+            replacementMapping = effectiveMappings.FirstOrDefault(candidate =>
+                MappingSlotsMatch(candidate, mapping));
+        }
+
+        var fallbackSources = replacementMapping == null
+            ? Array.Empty<AkeneoAttributeMappingFallbackSource>()
+            : (await attributeMappingService.GetAllFallbackSourcesAsync())
+                .Where(source =>
+                    source.AttributeMappingId == replacementMapping.Id)
+                .OrderBy(source => source.DisplayOrder)
+                .ThenBy(source => source.Id)
+                .ToArray();
+
+        return Json(new
+        {
+            success = true,
+            replacementMapping = replacementMapping == null
+                ? null
+                : new
+                {
+                    id = replacementMapping.Id,
+                    mappingKey = replacementMapping.MappingKey ?? string.Empty,
+                    name = replacementMapping.Name ?? string.Empty,
+                    valueModeId = replacementMapping.ValueModeId,
+                    valueTemplate = replacementMapping.ValueTemplate ?? string.Empty,
+                    isComputed = replacementMapping.ValueModeId ==
+                        (int)AkeneoAttributeMappingValueMode.Template,
+                    akeneoFamilyCode =
+                        replacementMapping.AkeneoFamilyCode ?? string.Empty,
+                    isInherited = true,
+                    referenceEntityAttributeCode =
+                        replacementMapping.AkeneoReferenceEntityAttributeCode ??
+                        string.Empty,
+                    nopTargetTypeId =
+                        replacementMapping.NopTargetTypeId.ToString(),
+                    nopTargetKey = replacementMapping.NopTargetKey ?? string.Empty,
+                    nopTargetEntityId =
+                        replacementMapping.NopTargetEntityId?.ToString() ??
+                        string.Empty,
+                    isRequired = replacementMapping.IsRequired,
+                    entityScopeId = replacementMapping.EntityScopeId,
+                    fallbackSources = fallbackSources.Select(source => new
+                    {
+                        akeneoAttributeCode = source.AkeneoAttributeCode,
+                        akeneoAttributeTypeId = source.AkeneoAttributeTypeId,
+                        akeneoReferenceEntityCode =
+                            source.AkeneoReferenceEntityCode ?? string.Empty,
+                        akeneoReferenceEntityAttributeCode =
+                            source.AkeneoReferenceEntityAttributeCode ??
+                            string.Empty,
+                        displayOrder = source.DisplayOrder
+                    }),
+                    transformRuleJson =
+                        replacementMapping.TransformRuleJson ?? string.Empty
+                }
+        });
+    }
+
+    private static bool MappingSlotsMatch(
+        AkeneoAttributeMapping left,
+        AkeneoAttributeMapping right)
+    {
+        if (left == null || right == null ||
+            left.ValueModeId != right.ValueModeId)
+        {
+            return false;
+        }
+
+        if (left.ValueModeId ==
+            (int)AkeneoAttributeMappingValueMode.Template)
+        {
+            return string.Equals(
+                NormalizeMappingSlotPart(left.MappingKey),
+                NormalizeMappingSlotPart(right.MappingKey),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(
+                   NormalizeMappingSlotPart(left.AkeneoAttributeCode),
+                   NormalizeMappingSlotPart(right.AkeneoAttributeCode),
+                   StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   NormalizeMappingSlotPart(
+                       left.AkeneoReferenceEntityAttributeCode),
+                   NormalizeMappingSlotPart(
+                       right.AkeneoReferenceEntityAttributeCode),
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeMappingSlotPart(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim();
     }
 
     [HttpGet("admin/akeneo-connection/category-mappings")]

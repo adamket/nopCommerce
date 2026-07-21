@@ -167,10 +167,10 @@
                 </button>
 
                 <button type="button"
-                        class="btn btn-sm btn-outline-danger ml-1 mt-2"
+                        class="btn btn-sm btn-danger ml-1 mt-2"
                         v-if="canDeleteMapping(m)"
                         v-show="!m.editing"
-                        v-on:click="deleteMapping(m)"
+                        v-on:click="requestDeleteMapping(m)"
                         v-bind:disabled="m.deleting">
 
                     <i class="fas"
@@ -367,7 +367,7 @@
                         </select>
 
                         <button type="button"
-                                class="btn btn-sm btn-outline-primary ml-2"
+                                class="btn btn-sm btn-primary ml-2"
                                 v-bind:disabled="!m.draft.selectedTemplateToken"
                                 v-on:click="insertTemplateToken(m)">
                             <i class="fas fa-plus"></i>
@@ -433,7 +433,7 @@
                                 title="Move fallback earlier"
                                 v-bind:disabled="fallbackIndex === 0"
                                 v-on:click="moveFallbackSource(m, fallbackIndex, -1)">
-                            <i class="fas fa-arrow-up"></i>
+                            <i class="fas fa-arrow-up pr-0"></i>
                         </button>
 
                         <button type="button"
@@ -441,19 +441,19 @@
                                 title="Move fallback later"
                                 v-bind:disabled="fallbackIndex === m.draft.fallbackSources.length - 1"
                                 v-on:click="moveFallbackSource(m, fallbackIndex, 1)">
-                            <i class="fas fa-arrow-down"></i>
+                            <i class="fas fa-arrow-down pr-0"></i>
                         </button>
 
                         <button type="button"
-                                class="btn btn-sm btn-outline-danger ml-1"
+                                class="btn btn-sm btn-danger ml-1"
                                 title="Remove fallback"
                                 v-on:click="removeFallbackSource(m, fallbackIndex)">
-                            <i class="fas fa-times"></i>
+                            <i class="fas fa-times pr-0"></i>
                         </button>
                     </div>
 
                     <button type="button"
-                            class="btn btn-sm btn-outline-primary"
+                            class="btn btn-sm btn-primary"
                             v-on:click="addFallbackSource(m)">
                         <i class="fas fa-plus"></i>
                         Add fallback source

@@ -29,6 +29,14 @@ public record AkeneoAttributeMappingModel : BaseNopEntityModel
     public int AkeneoAttributeTypeId { get; set; }
     public int NopTargetTypeId { get; set; }
     public string NopTargetKey { get; set; }
+
+    /// <summary>
+    /// Default destination suggested by the Akeneo attribute metadata when no
+    /// persisted mapping exists. Used by the AJAX delete flow to restore a
+    /// standard attribute row without reloading the page.
+    /// </summary>
+    public int DefaultNopTargetTypeId { get; set; }
+    public string DefaultNopTargetKey { get; set; }
     public string Locale { get; set; }
     public string Channel { get; set; }
     public string TransformRuleJson { get; set; }
