@@ -100,4 +100,35 @@ public interface IAkeneoApiClient
             CancellationToken cancellationToken = default);
 
 
+    Task<AkeneoMediaFileDefinition> GetProductMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoBinaryFile> DownloadProductMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoAssetFamilyDefinition> GetAssetFamilyByCodeAsync(
+        string assetFamilyCode,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AkeneoAssetAttributeDefinition>>
+        GetAssetFamilyAttributesAsync(
+            string assetFamilyCode,
+            CancellationToken cancellationToken = default);
+
+    Task<AkeneoAssetDefinition> GetAssetByCodeAsync(
+        string assetFamilyCode,
+        string assetCode,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoBinaryFile> DownloadAssetMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoBinaryFile> DownloadAssetMediaFileByUrlAsync(
+        string downloadUrl,
+        CancellationToken cancellationToken = default);
+
+
 }

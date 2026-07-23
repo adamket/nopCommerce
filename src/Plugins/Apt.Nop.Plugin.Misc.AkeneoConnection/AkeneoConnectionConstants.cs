@@ -5,6 +5,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
 public static class AkeneoConnectionConstants
 {
     public const string SystemName = "Apt.Nop.Plugin.Misc.AkeneoConnection";
+    public const string ExternalAssetHttpClientName = SystemName + ".ExternalAssets";
     public const string TablePrefix = "Apt_";
     public const string PathToPlugin = "~/Plugins/Apt.Misc.AkeneoConnection";
 
@@ -27,6 +28,11 @@ public static class AkeneoConnectionConstants
 
     public static CacheKey AttributeMappingFallbackSourcesAllCacheKey =>
         new($"{EntityName}.fallbacksources.all");
+
+    private const string AssetMappingEntityName = "Apt.akeneoassetmapping";
+    public static CacheKey AssetMappingsAllCacheKey => new($"{AssetMappingEntityName}.all");
+    public static CacheKey AssetMappingsByIdCacheKey => new($"{AssetMappingEntityName}.byid.{{0}}");
+    public static string AssetMappingPrefix => $"{AssetMappingEntityName}.";
     public static CacheKey EntityMappingByCodeCacheKey =>
         new("Apt.Nop.Plugin.Misc.AkeneoConnection.EntityMapping.type-{0}.nop-{1}.code-{2}");
 

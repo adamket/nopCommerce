@@ -49,6 +49,9 @@ public class AkeneoProductImportRequest
     public AkeneoCollectionSyncMode ProductAttributeSyncMode { get; set; }
         = AkeneoCollectionSyncMode.Merge;
 
+    public AkeneoCollectionSyncMode AssetSyncMode { get; set; }
+        = AkeneoCollectionSyncMode.ReplaceManaged;
+
     public AkeneoMissingProductBehavior MissingProductBehavior { get; set; }
         = AkeneoMissingProductBehavior.Ignore;
 

@@ -15,6 +15,7 @@ public class AkeneoProductSyncService(
     IAkeneoValueTransformationService transformationService,
     IAkeneoValueTemplateRenderer valueTemplateRenderer,
     IAkeneoAttributeMappingService attributeMappingService,
+    IAkeneoAssetMappingService assetMappingService,
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoProductSyncStateService syncStateService,
     IProductService productService,
@@ -117,6 +118,15 @@ public class AkeneoProductSyncService(
                     mappingEntityScope))
             .ToList();
 
+        var handledAssetAttributeCodes = (await assetMappingService
+                .GetEffectiveMappingsAsync(mappingFamilyCode))
+            .Where(mapping => mapping.Enabled)
+            .Where(mapping => !string.IsNullOrWhiteSpace(
+                mapping.SourceAttributeCode))
+            .Select(mapping => mapping.SourceAttributeCode.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var fallbackSourcesByMappingId =
             (await attributeMappingService.GetAllFallbackSourcesAsync())
             .Where(fallback => effectiveMappings.Any(mapping =>
@@ -145,6 +155,7 @@ public class AkeneoProductSyncService(
             source,
             effectiveMappings,
             fallbackSourcesByMappingId,
+            handledAssetAttributeCodes,
             request,
             result,
             mappedValues);
@@ -610,6 +621,7 @@ public class AkeneoProductSyncService(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> effectiveMappings,
         IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
+        IReadOnlyCollection<string> handledAssetAttributeCodes,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IList<AkeneoResolvedMappedValue> mappedValues)
@@ -640,6 +652,7 @@ public class AkeneoProductSyncService(
                         source.AkeneoAttributeCode))
                     .Select(source => source.AkeneoAttributeCode.Trim()))
             .Concat(templateAttributeCodes)
+            .Concat(handledAssetAttributeCodes ?? Array.Empty<string>())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var unmappedCodes = source.Values

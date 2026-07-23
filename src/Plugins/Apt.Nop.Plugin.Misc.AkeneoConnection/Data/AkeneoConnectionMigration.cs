@@ -9,8 +9,8 @@ using Nop.Data.Migrations;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
 [NopMigration(
-    "2026-07-20 06:00:00",
-    "AkeneoConnection: Ensure complete plugin schema",
+    "2026-07-21 01:00:00",
+    "AkeneoConnection: Add managed asset synchronization",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration : MigrationBase
 {
@@ -24,6 +24,8 @@ public sealed class AkeneoConnectionMigration : MigrationBase
         EnsureAttributeMappingColumns();
         EnsureAttributeMappingFallbackSourceSchema();
         EnsureFamilyMappingColumns();
+        EnsureAssetMappingSchema();
+        EnsureManagedAssetSchema();
         EnsureSyncProfileColumns();
         EnsureSyncRunRecordColumns();
 
@@ -57,6 +59,8 @@ public sealed class AkeneoConnectionMigration : MigrationBase
         EnsureTable<AkeneoFamilySubModelRule>();
         EnsureTable<AkeneoProductSyncState>();
         EnsureTable<AkeneoManagedRelation>();
+        EnsureTable<AkeneoAssetMapping>();
+        EnsureTable<AkeneoManagedAsset>();
         EnsureTable<AkeneoSyncLease>();
     }
 
@@ -350,6 +354,75 @@ public sealed class AkeneoConnectionMigration : MigrationBase
 
     #endregion
 
+    #region Asset mappings
+
+    private void EnsureAssetMappingSchema()
+    {
+        var table = GetTableName<AkeneoAssetMapping>();
+
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.MappingKey)).AsString(100).NotNullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.Name)).AsString(255).NotNullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SourceAttributeCode)).AsString(255).NotNullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetFamilyCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaAttributeCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaType)).AsString(100).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleAttributeCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleValuesCsv)).AsString(1000).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SortOrderAttributeCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AltTextTemplate)).AsString(2000).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.TitleTextTemplate)).AsString(2000).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SeoFilenameTemplate)).AsString(1000).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.CustomPropertyKey)).AsString(255).Nullable();
+
+        var indexName = $"IX_{table}_FamilyKey";
+        if (!IndexExists(table, indexName))
+        {
+            Create.Index(indexName)
+                .OnTable(table)
+                .OnColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).Ascending()
+                .OnColumn(nameof(AkeneoAssetMapping.MappingKey)).Ascending()
+                .WithOptions().Unique();
+        }
+    }
+
+    private void EnsureManagedAssetSchema()
+    {
+        var table = GetTableName<AkeneoManagedAsset>();
+
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).AsString(100).NotNullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).AsString(64).NotNullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceFingerprint)).AsString(64).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceAttributeCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetFamilyCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetCode)).AsString(255).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.MediaFileCode)).AsString(500).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceUrl)).AsString(2000).Nullable();
+        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.DestinationKey)).AsString(255).Nullable();
+
+        var identityIndex = $"IX_{table}_ProductMappingIdentityV2";
+        if (!IndexExists(table, identityIndex))
+        {
+            Create.Index(identityIndex)
+                .OnTable(table)
+                .OnColumn(nameof(AkeneoManagedAsset.NopProductId)).Ascending()
+                .OnColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).Ascending()
+                .OnColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).Ascending()
+                .WithOptions().Unique();
+        }
+
+        var destinationIndex = $"IX_{table}_Destination";
+        if (!IndexExists(table, destinationIndex))
+        {
+            Create.Index(destinationIndex)
+                .OnTable(table)
+                .OnColumn(nameof(AkeneoManagedAsset.NopProductId)).Ascending()
+                .OnColumn(nameof(AkeneoManagedAsset.DestinationTypeId)).Ascending();
+        }
+    }
+
+    #endregion
+
     #region Sync profiles
 
     private void EnsureSyncProfileColumns()
@@ -369,6 +442,24 @@ public sealed class AkeneoConnectionMigration : MigrationBase
                 .NotNullable()
                 .WithDefaultValue(
                     (int)AkeneoMissingProductBehavior.Ignore);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.AssetSyncModeId)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.AssetSyncModeId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCollectionSyncMode.ReplaceManaged);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.IncludeLinkedAssetUpdates)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.IncludeLinkedAssetUpdates))
+                .OnTable(table)
+                .AsBoolean()
+                .NotNullable()
+                .WithDefaultValue(false);
         }
     }
 

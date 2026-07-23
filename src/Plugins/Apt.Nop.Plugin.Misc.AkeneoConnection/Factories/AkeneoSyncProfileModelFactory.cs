@@ -69,11 +69,16 @@ public class AkeneoSyncProfileModelFactory(
             ProductAttributeSyncModeId =
                 (int)AkeneoCollectionSyncMode.Merge,
 
+            AssetSyncModeId =
+                (int)AkeneoCollectionSyncMode.ReplaceManaged,
+
             MissingProductBehaviorId =
                 (int)AkeneoMissingProductBehavior.Ignore,
 
             UpdatedFilterModeId =
                 (int)AkeneoUpdatedFilterMode.None,
+
+            IncludeLinkedAssetUpdates = false,
         };
 
         if (profile != null)
@@ -132,11 +137,17 @@ public class AkeneoSyncProfileModelFactory(
             model.ProductAttributeSyncModeId =
                 profile.ProductAttributeSyncModeId;
 
+            model.AssetSyncModeId =
+                profile.AssetSyncModeId;
+
             model.MissingProductBehaviorId =
                 profile.MissingProductBehaviorId;
 
             model.UpdatedFilterModeId =
                 profile.UpdatedFilterModeId;
+
+            model.IncludeLinkedAssetUpdates =
+                profile.IncludeLinkedAssetUpdates;
 
         }
 
@@ -253,6 +264,12 @@ public class AkeneoSyncProfileModelFactory(
             BuildSelectList(
                 Enum.GetValues<AkeneoCollectionSyncMode>(),
                 model.ProductAttributeSyncModeId,
+                GetCollectionSyncModeText);
+
+        model.AvailableAssetSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.AssetSyncModeId,
                 GetCollectionSyncModeText);
 
         model.AvailableMissingProductBehaviors =

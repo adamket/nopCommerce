@@ -22,6 +22,7 @@ public static class AkeneoSyncScopeHasher
             profile.CategoryFilterModeId,
             profile.ProductEnabledFilterId,
             profile.ProductParentFilterModeId,
+            profile.IncludeLinkedAssetUpdates,
             AdditionalSearchJson = NormalizeJson(profile.AdditionalSearchJson)
         };
 

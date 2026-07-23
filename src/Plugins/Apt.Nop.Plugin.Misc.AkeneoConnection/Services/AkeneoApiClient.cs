@@ -61,6 +61,24 @@ public class AkeneoApiClient : IAkeneoApiClient
 
     #region Public API
 
+
+    public Task<AkeneoBinaryFile> DownloadAssetMediaFileByUrlAsync(
+        string downloadUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            throw new ArgumentException(
+                "Asset download URL is required.",
+                nameof(downloadUrl));
+        }
+
+        return DownloadBinaryAsync(
+            downloadUrl.Trim(),
+            cancellationToken);
+    }
+
+
     /// <summary>
     /// Sends an unauthenticated request to the configured Akeneo API and
     /// returns true only when Akeneo responds with HTTP 401 Unauthorized.
@@ -391,6 +409,90 @@ public class AkeneoApiClient : IAkeneoApiClient
             cancellationToken);
     }
 
+
+    public async Task<AkeneoMediaFileDefinition> GetProductMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mediaFileCode))
+            throw new ArgumentException("Media file code is required.", nameof(mediaFileCode));
+
+        return await GetObjectOrNullAsync<AkeneoMediaFileDefinition>(
+            $"api/rest/v1/media-files/{Uri.EscapeDataString(mediaFileCode.Trim())}",
+            cancellationToken);
+    }
+
+    public Task<AkeneoBinaryFile> DownloadProductMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mediaFileCode))
+            throw new ArgumentException("Media file code is required.", nameof(mediaFileCode));
+
+        return DownloadBinaryAsync(
+            $"api/rest/v1/media-files/{Uri.EscapeDataString(mediaFileCode.Trim())}/download",
+            cancellationToken);
+    }
+
+    public async Task<AkeneoAssetFamilyDefinition> GetAssetFamilyByCodeAsync(
+        string assetFamilyCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(assetFamilyCode))
+            throw new ArgumentException("Asset family code is required.", nameof(assetFamilyCode));
+
+        return await GetObjectOrNullAsync<AkeneoAssetFamilyDefinition>(
+            $"api/rest/v1/asset-families/{Uri.EscapeDataString(assetFamilyCode.Trim())}",
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AkeneoAssetAttributeDefinition>>
+        GetAssetFamilyAttributesAsync(
+            string assetFamilyCode,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(assetFamilyCode))
+            throw new ArgumentException("Asset family code is required.", nameof(assetFamilyCode));
+
+        return await GetArrayOrEmbeddedCollectionAsync<AkeneoAssetAttributeDefinition>(
+            $"api/rest/v1/asset-families/{Uri.EscapeDataString(assetFamilyCode.Trim())}/attributes",
+            cancellationToken);
+    }
+
+    public async Task<AkeneoAssetDefinition> GetAssetByCodeAsync(
+        string assetFamilyCode,
+        string assetCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(assetFamilyCode))
+            throw new ArgumentException("Asset family code is required.", nameof(assetFamilyCode));
+        if (string.IsNullOrWhiteSpace(assetCode))
+            throw new ArgumentException("Asset code is required.", nameof(assetCode));
+
+        return await GetObjectOrNullAsync<AkeneoAssetDefinition>(
+            $"api/rest/v1/asset-families/{Uri.EscapeDataString(assetFamilyCode.Trim())}/assets/{Uri.EscapeDataString(assetCode.Trim())}",
+            cancellationToken);
+    }
+
+    public Task<AkeneoBinaryFile> DownloadAssetMediaFileAsync(
+        string mediaFileCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mediaFileCode))
+        {
+            throw new ArgumentException(
+                "Asset media file code is required.",
+                nameof(mediaFileCode));
+        }
+
+        var escapedPath =
+            EscapePathPreservingSeparators(mediaFileCode);
+
+        return DownloadBinaryAsync(
+            $"api/rest/v1/asset-media-files/{escapedPath}",
+            cancellationToken);
+    }
+
     #endregion
 
     #region HTTP / paging
@@ -546,6 +648,72 @@ public class AkeneoApiClient : IAkeneoApiClient
         return document.RootElement.Clone();
     }
 
+    private async Task<AkeneoBinaryFile> DownloadBinaryAsync(
+        string relativeUrl,
+        CancellationToken cancellationToken)
+    {
+        using var response = await SendAuthenticatedGetAsync(
+            relativeUrl,
+            null,
+            cancellationToken,
+            "*/*");
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        const int maximumAssetBytes = 50 * 1024 * 1024;
+        if (response.Content.Headers.ContentLength > maximumAssetBytes)
+        {
+            throw new AkeneoApiException(
+                $"Akeneo asset exceeds the {maximumAssetBytes / 1024 / 1024} MB download limit.");
+        }
+
+        var bytes = await ReadBoundedContentAsync(
+            response.Content,
+            maximumAssetBytes,
+            cancellationToken);
+
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
+            response.Content.Headers.ContentDisposition?.FileName;
+
+        return new AkeneoBinaryFile
+        {
+            Bytes = bytes,
+            ContentType = response.Content.Headers.ContentType?.MediaType,
+            FileName = fileName?.Trim('"'),
+            ETag = response.Headers.ETag?.Tag,
+            LastModified = response.Content.Headers.LastModified
+        };
+    }
+
+    private static async Task<byte[]> ReadBoundedContentAsync(
+        HttpContent content,
+        int maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var input = await content.ReadAsStreamAsync(cancellationToken);
+        await using var output = new MemoryStream();
+        var buffer = new byte[81920];
+        var total = 0;
+
+        while (true)
+        {
+            var read = await input.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+                break;
+
+            total += read;
+            if (total > maximumBytes)
+            {
+                throw new AkeneoApiException(
+                    $"Akeneo asset exceeds the {maximumBytes / 1024 / 1024} MB download limit.");
+            }
+
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
+
+        return output.ToArray();
+    }
+
     /// <summary>
     /// Performs an authenticated GET, refreshing once on 401 and retrying
     /// bounded transient Akeneo/network responses with Retry-After support.
@@ -554,7 +722,8 @@ public class AkeneoApiClient : IAkeneoApiClient
     private async Task<HttpResponseMessage> SendAuthenticatedGetAsync(
         string relativeOrAbsoluteUrl,
         AkeneoApiCredentials apiCredentials,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string acceptMediaType = "application/json")
     {
         const int maxTransientRetries = 3;
         var accessToken = await EnsureAuthenticatedAsync(
@@ -573,7 +742,8 @@ public class AkeneoApiClient : IAkeneoApiClient
                 response = await SendGetAsync(
                     relativeOrAbsoluteUrl,
                     accessToken,
-                    cancellationToken);
+                    cancellationToken,
+                    acceptMediaType);
             }
             catch (HttpRequestException) when (attempt < maxTransientRetries)
             {
@@ -651,7 +821,8 @@ public class AkeneoApiClient : IAkeneoApiClient
     private async Task<HttpResponseMessage> SendGetAsync(
         string relativeOrAbsoluteUrl,
         string accessToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string acceptMediaType)
     {
         using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         attemptCts.CancelAfter(PerAttemptTimeout);
@@ -659,11 +830,17 @@ public class AkeneoApiClient : IAkeneoApiClient
         using var request = new HttpRequestMessage(
             HttpMethod.Get, UrlHelper.BuildUri(relativeOrAbsoluteUrl, _baseUrl));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(
+            string.IsNullOrWhiteSpace(acceptMediaType)
+                ? "application/json"
+                : acceptMediaType));
 
         try
         {
-            return await _httpClient.SendAsync(request, attemptCts.Token);
+            return await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                attemptCts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -840,6 +1017,20 @@ public class AkeneoApiClient : IAkeneoApiClient
     #endregion
 
     #region Helpers
+
+
+    private static string EscapePathPreservingSeparators(
+        string path)
+    {
+        return string.Join(
+            "/",
+            path.Trim()
+                .Split(
+                    '/',
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Select(Uri.EscapeDataString));
+    }
+
 
     private static string ExtractQueryStringValue(
         string relativeOrAbsoluteUrl,

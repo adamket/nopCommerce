@@ -1521,3 +1521,90 @@
     margin-left: 0 !important;
   }
 }
+
+/* Asset mappings */
+.akeneo-connection .akeneo-asset-overview-card {
+    border-top: 3px solid #4f6bed;
+}
+
+.akeneo-connection .akeneo-asset-flow {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    color: #52606d;
+    font-weight: 600;
+}
+
+.akeneo-connection .akeneo-asset-flow span {
+    padding: 10px 14px;
+    background: #f7f9fc;
+    border: 1px solid #dfe5ee;
+    border-radius: 8px;
+}
+
+.akeneo-connection .akeneo-asset-card {
+    overflow: visible;
+    border-left: 4px solid #4f6bed;
+    transition: box-shadow .18s ease, opacity .18s ease;
+}
+
+.akeneo-connection .akeneo-asset-card:hover {
+    box-shadow: 0 5px 18px rgba(31, 45, 61, .09);
+}
+
+.akeneo-connection .akeneo-asset-card.is-disabled {
+    border-left-color: #9aa5b1;
+    opacity: .82;
+}
+
+.akeneo-connection .akeneo-asset-card-header {
+    min-height: 76px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+}
+
+.akeneo-connection .akeneo-asset-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.akeneo-connection .akeneo-asset-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.akeneo-connection .akeneo-asset-source-panel,
+.akeneo-connection .akeneo-asset-template-panel {
+    padding: 14px 16px;
+    border: 1px solid #dfe5ee;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.akeneo-connection .akeneo-asset-template-panel {
+    background: #fbfcff;
+    border-left: 3px solid #4f6bed;
+}
+
+@media (max-width: 767px) {
+    .akeneo-connection .akeneo-asset-flow {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        margin-top: 18px;
+    }
+
+    .akeneo-connection .akeneo-asset-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+.akeneo-connection .akeneo-asset-capability-note {
+    border-left-width: 4px;
+}

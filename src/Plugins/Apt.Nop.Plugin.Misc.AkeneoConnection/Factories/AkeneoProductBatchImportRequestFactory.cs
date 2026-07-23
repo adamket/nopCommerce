@@ -75,6 +75,10 @@ public class AkeneoProductBatchImportRequestFactory(
                 (AkeneoCollectionSyncMode)
                     profile.ProductAttributeSyncModeId,
 
+            AssetSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.AssetSyncModeId,
+
             CreateMissingSpecificationAttributeOptions =
                 profile.CreateMissingSpecificationAttributeOptions,
 
@@ -104,6 +108,10 @@ public class AkeneoProductBatchImportRequestFactory(
             UpdatedAfterUtc = runMode == AkeneoRunMode.Full
                 ? null
                 : ResolveUpdatedAfterUtc(profile, previousSuccessfulWatermarkUtc),
+
+            IncludeLinkedAssetUpdates =
+                runMode != AkeneoRunMode.Full &&
+                profile.IncludeLinkedAssetUpdates,
 
             ProductParentFilterMode =
                 (AkeneoProductParentFilterMode)

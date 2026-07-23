@@ -35,6 +35,8 @@ public class AkeneoSyncProfile : BaseEntity
 
     public int ProductAttributeSyncModeId { get; set; }
 
+    public int AssetSyncModeId { get; set; }
+
     // Authoritative full-run lifecycle policy
     public int MissingProductBehaviorId { get; set; }
 
@@ -66,6 +68,12 @@ public class AkeneoSyncProfile : BaseEntity
     public int ProductParentFilterModeId { get; set; }
 
     public int UpdatedFilterModeId { get; set; }
+
+    /// <summary>
+    /// Uses Akeneo SaaS Enterprise linked-entity date filtering so asset-only
+    /// changes can revisit their linked products during a delta run.
+    /// </summary>
+    public bool IncludeLinkedAssetUpdates { get; set; }
 
     public DateTime? UpdatedAfterUtc { get; set; }
 

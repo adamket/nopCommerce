@@ -22,6 +22,8 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
 
     public DateTime? UpdatedAfterUtc { get; set; }
 
+    public bool IncludeLinkedAssetUpdates { get; set; }
+
     public int? UpdatedSinceLastNDays { get; set; }
 
     public AkeneoProductParentFilterMode ProductParentFilterMode { get; set; }

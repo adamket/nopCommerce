@@ -207,11 +207,17 @@ public class AkeneoSyncProfileController(
         profile.ProductAttributeSyncModeId =
             model.ProductAttributeSyncModeId;
 
+        profile.AssetSyncModeId =
+            model.AssetSyncModeId;
+
         profile.MissingProductBehaviorId =
             model.MissingProductBehaviorId;
 
         profile.UpdatedFilterModeId =
             model.UpdatedFilterModeId;
+
+        profile.IncludeLinkedAssetUpdates =
+            model.IncludeLinkedAssetUpdates;
 
         if (profile.Id <= 0)
             profile.CreatedOnUtc = now;

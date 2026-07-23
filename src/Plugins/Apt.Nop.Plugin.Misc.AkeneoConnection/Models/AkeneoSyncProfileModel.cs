@@ -87,6 +87,7 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableCategorySyncModes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableSpecificationAttributeSyncModes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableProductAttributeSyncModes { get; set; } = new List<SelectListItem>();
+    public IList<SelectListItem> AvailableAssetSyncModes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableMissingProductBehaviors { get; set; } = new List<SelectListItem>();
 
  
@@ -109,9 +110,13 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public int ProductAttributeSyncModeId { get; set; }
 
+    public int AssetSyncModeId { get; set; }
+
     public int MissingProductBehaviorId { get; set; }
 
     public int UpdatedFilterModeId { get; set; }
+
+    public bool IncludeLinkedAssetUpdates { get; set; }
 
     public IList<SelectListItem>
         AvailableProductFieldMissingValueBehaviors

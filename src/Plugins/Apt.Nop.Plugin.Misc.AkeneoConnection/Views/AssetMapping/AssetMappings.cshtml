@@ -1,0 +1,373 @@
+@using System.Text.Json
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
+@model AkeneoAssetMappingListModel
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260721-assets"></!script>
+@{
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Akeneo asset mappings";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.AssetMappings");
+
+    var appData = new
+    {
+        selectedFamilyCode = Model.AkeneoFamilyCode ?? string.Empty,
+        availableFamilies = Model.AvailableAkeneoFamilies.Select(item => new { value = item.Value, text = item.Text }),
+        availableSources = Model.AvailableSources.Select(item => new
+        {
+            code = item.Code,
+            label = item.Label,
+            attributeType = item.AttributeType,
+            sourceTypeId = item.SourceTypeId,
+            assetFamilyCode = item.AssetFamilyCode ?? string.Empty,
+            localizable = item.Localizable,
+            scopable = item.Scopable
+        }),
+        mappings = Model.Mappings,
+        urls = new
+        {
+            list = Url.Action("List", "AkeneoAssetMapping"),
+            save = Url.Action("Save", "AkeneoAssetMapping"),
+            delete = Url.Action("Delete", "AkeneoAssetMapping"),
+            fields = Url.Action("AssetFamilyAttributes", "AkeneoAssetMapping")
+        },
+        enums = new
+        {
+            source = new
+            {
+                productMedia = (int)AkeneoAssetSourceType.ProductMediaAttribute,
+                assetCollection = (int)AkeneoAssetSourceType.AssetCollection
+            },
+            destination = new
+            {
+                picture = (int)AkeneoAssetDestinationType.ProductPicture,
+                video = (int)AkeneoAssetDestinationType.ProductVideo,
+                customProperty = (int)AkeneoAssetDestinationType.CustomProperty
+            },
+            storage = new
+            {
+                import = (int)AkeneoAssetStorageMode.ImportIntoNopCommerce,
+                external = (int)AkeneoAssetStorageMode.ExternalReference
+            },
+            scope = new
+            {
+                productModel = (int)AkeneoAttributeMappingEntityScope.ProductModel,
+                variant = (int)AkeneoAttributeMappingEntityScope.VariantProduct,
+                standalone = (int)AkeneoAttributeMappingEntityScope.StandaloneProduct,
+                all = (int)AkeneoAttributeMappingEntityScope.All
+            }
+        }
+    };
+}
+
+<div class="akeneo-connection">
+    @Html.AntiForgeryToken()
+    <div id="akeneo-asset-mapping-app" v-cloak>
+        <div class="content-header clearfix">
+            <div class="float-left">
+                <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
+                <h1 class="m-0">Asset mappings</h1>
+                <div class="akeneo-dim mt-1">Synchronize Akeneo media and Asset Manager collections into product pictures, videos, or managed references.</div>
+            </div>
+            <div class="float-right">
+                <button type="button" class="btn btn-primary" v-on:click="addMapping">
+                    <i class="fas fa-plus"></i> Add asset mapping
+                </button>
+            </div>
+        </div>
+
+        <section class="content">
+            <div class="container-fluid">
+                <div class="card card-default akeneo-asset-overview-card">
+                    <div class="card-body">
+                        <div class="form-row align-items-end">
+                            <div class="form-group col-md-5 mb-0">
+                                <label class="font-weight-bold" for="asset-family-scope">Mapping scope</label>
+                                <select id="asset-family-scope" class="form-control" v-model="selectedFamilyCode" v-on:change="changeFamilyScope">
+                                    <option value="">Global defaults</option>
+                                    <option v-for="family in availableFamilies" v-bind:key="family.value" v-bind:value="family.value">{{ family.text }}</option>
+                                </select>
+                                <div class="form-text text-muted">Family mappings override matching global mappings by stable mapping key.</div>
+                            </div>
+                            <div class="col-md-7">
+                                <div class="akeneo-asset-flow">
+                                    <span><i class="fas fa-photo-video"></i> Akeneo media</span>
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span><i class="fas fa-sliders-h"></i> Asset mapping</span>
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span><i class="fas fa-images"></i> nopCommerce media</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info akeneo-asset-capability-note">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Standard Akeneo image and file attributes work without Asset Manager.
+                    Asset collection mappings require Akeneo Asset Manager and its API endpoints.
+                </div>
+
+                @if (Model.Warnings.Any())
+                {
+                    <div class="alert alert-warning">
+                        <ul class="mb-0">
+                            @foreach (var warning in Model.Warnings)
+                            {
+                                <li>@warning</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div v-if="mappings.length === 0" class="card card-default">
+                    <div class="card-body text-center py-5">
+                        <i class="far fa-images fa-3x text-muted mb-3"></i>
+                        <h4>No asset mappings in this scope</h4>
+                        <p class="text-muted">Create a mapping for an Akeneo image, file, or Asset Manager collection.</p>
+                        <button type="button" class="btn btn-primary" v-on:click="addMapping">Add asset mapping</button>
+                    </div>
+                </div>
+
+                <div v-for="mapping in orderedMappings" v-bind:key="mapping.clientKey" class="card card-default akeneo-asset-card" v-bind:class="{ 'is-disabled': !mapping.enabled }">
+                    <div class="card-header akeneo-asset-card-header">
+                        <div>
+                            <div class="d-flex align-items-center flex-wrap">
+                                <h3 class="card-title mb-0 mr-2">{{ mapping.name || 'New asset mapping' }}</h3>
+                                <span class="badge badge-info mr-2" v-if="mapping.isInherited">Inherited</span>
+                                <span class="badge" v-bind:class="mapping.enabled ? 'badge-success' : 'badge-secondary'">{{ mapping.enabled ? 'Enabled' : 'Disabled' }}</span>
+                            </div>
+                            <div class="akeneo-asset-summary mt-2" v-if="!mapping.editing">
+                                <code>{{ mapping.sourceAttributeCode || 'No source' }}</code>
+                                <i class="fas fa-arrow-right mx-2"></i>
+                                <strong>{{ destinationText(mapping.destinationTypeId) }}</strong>
+                                <span class="ml-3 text-muted">{{ scopeText(mapping.entityScopeId) }}</span>
+                            </div>
+                        </div>
+                        <div class="akeneo-asset-actions">
+                            <button type="button" class="btn btn-default" v-if="!mapping.editing" v-on:click="edit(mapping)"><i class="fas fa-pencil-alt"></i> {{ mapping.isInherited ? 'Override' : 'Edit' }}</button>
+                            <button type="button" class="btn btn-danger" v-if="!mapping.editing && !mapping.isInherited && Number(mapping.id) > 0" v-on:click="requestDelete(mapping)"><i class="far fa-trash-alt"></i> Delete</button>
+                        </div>
+                    </div>
+
+                    <div class="card-body" v-if="mapping.editing">
+                        <div class="alert alert-danger" v-if="mapping.errors.length">
+                            <ul class="mb-0"><li v-for="error in mapping.errors" v-bind:key="error">{{ error }}</li></ul>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label>Mapping name</label>
+                                <input class="form-control" v-model.trim="mapping.draft.name" placeholder="Parent product gallery" />
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label>Akeneo source attribute</label>
+                                <select class="form-control" v-model="mapping.draft.sourceAttributeCode" v-on:change="sourceChanged(mapping)">
+                                    <option value="">Select a media attribute</option>
+                                    <option v-for="source in availableSources" v-bind:key="source.code" v-bind:value="source.code">{{ source.label }} ({{ source.code }})</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="akeneo-asset-source-panel" v-if="selectedSource(mapping)">
+                            <div><strong>{{ selectedSource(mapping).attributeType === 'pim_catalog_asset_collection' ? 'Asset Manager collection' : 'Product media attribute' }}</strong></div>
+                            <div class="text-muted">{{ selectedSource(mapping).localizable ? 'Localized' : 'Non-localized' }} · {{ selectedSource(mapping).scopable ? 'Channel-scoped' : 'Non-scoped' }}</div>
+                            <div v-if="selectedSource(mapping).assetFamilyCode"><span class="text-muted">Asset family:</span> <code>{{ selectedSource(mapping).assetFamilyCode }}</code></div>
+                        </div>
+
+                        <div class="form-row mt-3" v-if="isAssetCollection(mapping)">
+                            <div class="form-group col-md-6">
+                                <label>Asset media field</label>
+                                <select class="form-control" v-model="mapping.draft.assetMediaAttributeCode" v-on:change="mediaFieldChanged(mapping)" v-bind:disabled="mapping.loadingFields">
+                                    <option value="">{{ mapping.loadingFields ? 'Loading fields…' : 'Select a media_file or media_link field' }}</option>
+                                    <option v-for="field in mapping.assetFields.filter(f => f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }} ({{ field.type }})</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Role field <span class="text-muted">optional</span></label>
+                                <select class="form-control" v-model="mapping.draft.roleAttributeCode">
+                                    <option value="">No role filter</option>
+                                    <option v-for="field in mapping.assetFields.filter(f => !f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }}</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Allowed role codes</label>
+                                <input class="form-control" v-model.trim="mapping.draft.roleValuesCsv" placeholder="primary,lifestyle" v-bind:disabled="!mapping.draft.roleAttributeCode" />
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Destination</label>
+                                <select class="form-control" v-model.number="mapping.draft.destinationTypeId" v-on:change="destinationChanged(mapping)">
+                                    <option v-bind:value="enums.destination.picture">Product picture</option>
+                                    <option v-bind:value="enums.destination.video" v-bind:disabled="!canUseVideo(mapping)">Product video</option>
+                                    <option v-bind:value="enums.destination.customProperty">Managed custom property</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Storage behavior</label>
+                                <select class="form-control" v-model.number="mapping.draft.storageModeId" disabled>
+                                    <option v-bind:value="enums.storage.import">Import binary into nopCommerce</option>
+                                    <option v-bind:value="enums.storage.external">Keep source/external reference</option>
+                                </select>
+                                <div class="form-text text-muted">Determined by the selected destination.</div>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Base display order</label>
+                                <input class="form-control" type="number" min="0" v-model.number="mapping.draft.displayOrder" />
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Maximum assets</label>
+                                <input class="form-control" type="number" min="1" max="100" v-model.number="mapping.draft.maxAssets" />
+                            </div>
+                        </div>
+
+                        <div class="form-row" v-if="isAssetCollection(mapping)">
+                            <div class="form-group col-md-6">
+                                <label>Sort-order field <span class="text-muted">optional</span></label>
+                                <select class="form-control" v-model="mapping.draft.sortOrderAttributeCode">
+                                    <option value="">Preserve collection order</option>
+                                    <option v-for="field in mapping.assetFields.filter(f => !f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }}</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-6" v-if="mapping.draft.destinationTypeId === enums.destination.customProperty">
+                                <label>Custom property key</label>
+                                <input class="form-control" v-model.trim="mapping.draft.customPropertyKey" placeholder="Apt.Akeneo.Asset.ProductGallery" />
+                            </div>
+                        </div>
+                        <div class="form-group" v-else-if="mapping.draft.destinationTypeId === enums.destination.customProperty">
+                            <label>Custom property key</label>
+                            <input class="form-control" v-model.trim="mapping.draft.customPropertyKey" placeholder="Apt.Akeneo.Asset.PrimaryImage" />
+                        </div>
+
+                        <div class="akeneo-asset-template-panel" v-if="mapping.draft.destinationTypeId === enums.destination.picture">
+                            <div class="font-weight-bold mb-2">Picture metadata templates</div>
+                            <div class="form-row">
+                                <div class="form-group col-md-4"><label>Alt text</label><input class="form-control" v-model="mapping.draft.altTextTemplate" placeholder="{product_name} - {asset_code}" /></div>
+                                <div class="form-group col-md-4"><label>Title text</label><input class="form-control" v-model="mapping.draft.titleTextTemplate" placeholder="{product_name}" /></div>
+                                <div class="form-group col-md-4"><label>SEO filename</label><input class="form-control" v-model="mapping.draft.seoFilenameTemplate" placeholder="{sku}-{asset_code}" /></div>
+                            </div>
+                            <div class="form-text" v-pre>Product tokens use the normal template syntax. Asset fields are available as <code>{asset_code}</code>, <code>{asset_file_name}</code>, <code>{asset_source}</code>, and <code>{asset_FIELD_CODE}</code>.</div>
+                        </div>
+
+                        <div class="form-group mt-3">
+                            <label>Apply mapping to</label>
+                            <div class="d-flex flex-wrap akeneo-scope-switches">
+                                <label class="akeneo-switch mr-4 mb-2"><input type="checkbox" v-model="mapping.draft.applyToProductModels" /><span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span><span class="akeneo-switch-text">Parent product models</span></label>
+                                <label class="akeneo-switch mr-4 mb-2"><input type="checkbox" v-model="mapping.draft.applyToVariants" /><span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span><span class="akeneo-switch-text">Variant products</span></label>
+                                <label class="akeneo-switch mr-4 mb-2"><input type="checkbox" v-model="mapping.draft.applyToStandalone" /><span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span><span class="akeneo-switch-text">Standalone products</span></label>
+                                <label class="akeneo-switch mr-4 mb-2"><input type="checkbox" v-model="mapping.draft.enabled" /><span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span><span class="akeneo-switch-text">Mapping enabled</span></label>
+                            </div>
+                        </div>
+
+                        <div class="text-right border-top pt-3">
+                            <button type="button" class="btn btn-default mr-2" v-on:click="cancel(mapping)" v-bind:disabled="mapping.saving">Cancel</button>
+                            <button type="button" class="btn btn-primary" v-on:click="save(mapping)" v-bind:disabled="mapping.saving">
+                                <i v-bind:class="mapping.saving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i> {{ mapping.isInherited ? 'Save family override' : 'Save mapping' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="modal fade" id="akeneo-asset-delete-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header"><h5 class="modal-title">Delete asset mapping?</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger" v-if="deleteErrors.length"><div v-for="error in deleteErrors" v-bind:key="error">{{ error }}</div></div>
+                        <p>This removes <strong>{{ pendingDelete ? pendingDelete.name : '' }}</strong> from this mapping scope.</p>
+                        <p class="text-muted mb-0">Existing nopCommerce assets remain until a profile runs with Replace managed or Replace all.</p>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal" v-bind:disabled="deleting">Cancel</button><button type="button" class="btn btn-danger" v-on:click="confirmDelete" v-bind:disabled="deleting"><i v-bind:class="deleting ? 'fas fa-spinner fa-spin' : 'far fa-trash-alt'"></i> Delete mapping</button></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="akeneo-toast-container" aria-live="polite"><transition-group name="akeneo-toast"><div v-for="toast in toasts" v-bind:key="toast.id" class="akeneo-toast"><i class="fas fa-check-circle"></i><span>{{ toast.text }}</span></div></transition-group></div>
+    </div>
+</div>
+
+<script id="akeneo-asset-app-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(appData, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+<script asp-location="Footer">
+(function () {
+    var data = JSON.parse(document.getElementById('akeneo-asset-app-data').textContent);
+    var sequence = 0;
+    var scope = data.enums.scope;
+
+    function normalizeScope(value) {
+        var normalized = (Number(value) || 0) & scope.all;
+        return normalized || scope.all;
+    }
+    function hasScope(value, flag) { return (normalizeScope(value) & flag) === flag; }
+    function hydrate(raw, isNew) {
+        var entityScopeId = normalizeScope(raw.entityScopeId);
+        var mapping = Object.assign({}, raw, {
+            clientKey: raw.clientKey || 'asset-' + (++sequence),
+            editing: !!isNew,
+            clientAdded: !!isNew,
+            saving: false,
+            loadingFields: false,
+            errors: [],
+            assetFields: [],
+            draft: {
+                name: raw.name || '', enabled: raw.enabled !== false,
+                sourceAttributeCode: raw.sourceAttributeCode || '',
+                sourceTypeId: Number(raw.sourceTypeId) || data.enums.source.productMedia,
+                assetFamilyCode: raw.assetFamilyCode || '',
+                assetMediaAttributeCode: raw.assetMediaAttributeCode || '',
+                assetMediaType: raw.assetMediaType || '',
+                destinationTypeId: Number(raw.destinationTypeId) || data.enums.destination.picture,
+                storageModeId: Number(raw.storageModeId) || data.enums.storage.import,
+                roleAttributeCode: raw.roleAttributeCode || '', roleValuesCsv: raw.roleValuesCsv || '',
+                sortOrderAttributeCode: raw.sortOrderAttributeCode || '',
+                altTextTemplate: raw.altTextTemplate || '', titleTextTemplate: raw.titleTextTemplate || '',
+                seoFilenameTemplate: raw.seoFilenameTemplate || '', customPropertyKey: raw.customPropertyKey || '',
+                displayOrder: Number(raw.displayOrder) || 0, maxAssets: Number(raw.maxAssets) || 20,
+                applyToProductModels: hasScope(entityScopeId, scope.productModel),
+                applyToVariants: hasScope(entityScopeId, scope.variant),
+                applyToStandalone: hasScope(entityScopeId, scope.standalone)
+            }
+        });
+        return mapping;
+    }
+
+    Vue.createApp({
+        data: function () {
+            return {
+                mappings: (data.mappings || []).map(function (item) { return hydrate(item, false); }),
+                selectedFamilyCode: data.selectedFamilyCode || '', availableFamilies: data.availableFamilies || [],
+                availableSources: data.availableSources || [], enums: data.enums, toasts: [],
+                pendingDelete: null, deleteErrors: [], deleting: false
+            };
+        },
+        computed: {
+            orderedMappings: function () { return this.mappings.slice().sort(function (a, b) { return (a.displayOrder || 0) - (b.displayOrder || 0) || (a.name || '').localeCompare(b.name || ''); }); }
+        },
+        methods: {
+            selectedSource: function (mapping) { var code = mapping.draft.sourceAttributeCode; return this.availableSources.find(function (item) { return item.code === code; }) || null; },
+            selectedMediaField: function (mapping) { var code = mapping.draft.assetMediaAttributeCode; return (mapping.assetFields || []).find(function (item) { return item.code === code; }) || null; },
+            isAssetCollection: function (mapping) { var source = this.selectedSource(mapping); return !!source && Number(source.sourceTypeId) === this.enums.source.assetCollection; },
+            canUseVideo: function (mapping) { var field = this.selectedMediaField(mapping); return this.isAssetCollection(mapping) && !!field && field.type === 'media_link'; },
+            destinationText: function (value) { switch (Number(value)) { case this.enums.destination.picture: return 'Product picture'; case this.enums.destination.video: return 'Product video'; case this.enums.destination.customProperty: return 'Managed custom property'; default: return 'Unknown destination'; } },
+            scopeText: function (value) { var result = []; if (hasScope(value, scope.productModel)) result.push('Parents'); if (hasScope(value, scope.variant)) result.push('Variants'); if (hasScope(value, scope.standalone)) result.push('Standalone'); return result.join(' + '); },
+            changeFamilyScope: function () { var url = new URL(data.urls.list, window.location.origin); if (this.selectedFamilyCode) url.searchParams.set('akeneoFamilyCode', this.selectedFamilyCode); window.location.assign(url.pathname + url.search); },
+            addMapping: function () { this.mappings.unshift(hydrate({ id: 0, mappingKey: '', name: '', enabled: true, isInherited: false, sourceAttributeCode: '', sourceTypeId: this.enums.source.productMedia, destinationTypeId: this.enums.destination.picture, storageModeId: this.enums.storage.import, entityScopeId: scope.productModel, displayOrder: 0, maxAssets: 20 }, true)); },
+            edit: function (mapping) { var replacement = hydrate(mapping, false); mapping.draft = replacement.draft; mapping.errors = []; mapping.editing = true; if (this.isAssetCollection(mapping)) this.loadAssetFields(mapping); },
+            cancel: function (mapping) { if (mapping.clientAdded) this.mappings = this.mappings.filter(function (item) { return item !== mapping; }); else mapping.editing = false; },
+            sourceChanged: function (mapping) { var source = this.selectedSource(mapping); mapping.assetFields = []; mapping.draft.assetMediaAttributeCode = ''; mapping.draft.roleAttributeCode = ''; mapping.draft.roleValuesCsv = ''; mapping.draft.sortOrderAttributeCode = ''; if (!source) return; mapping.draft.sourceTypeId = Number(source.sourceTypeId); mapping.draft.assetFamilyCode = source.assetFamilyCode || ''; if (this.isAssetCollection(mapping)) { this.loadAssetFields(mapping); } else { mapping.assetFields = []; mapping.draft.assetFamilyCode = ''; mapping.draft.assetMediaType = source.attributeType === 'pim_catalog_image' ? 'image' : 'file'; if (mapping.draft.destinationTypeId === this.enums.destination.video) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); } },
+            loadAssetFields: function (mapping) { var self = this; var source = this.selectedSource(mapping); var family = mapping.draft.assetFamilyCode || (source && source.assetFamilyCode); if (!family) return; mapping.loadingFields = true; $.get(data.urls.fields, { assetFamilyCode: family }).done(function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to load asset family fields.']; return; } mapping.assetFields = response.attributes || []; if (!mapping.draft.assetMediaAttributeCode && response.mainMediaAttributeCode) mapping.draft.assetMediaAttributeCode = response.mainMediaAttributeCode; self.mediaFieldChanged(mapping); }).fail(function () { mapping.errors = ['Unable to load asset family fields.']; }).always(function () { mapping.loadingFields = false; }); },
+            mediaFieldChanged: function (mapping) { var field = this.selectedMediaField(mapping); mapping.draft.assetMediaType = field ? (field.mediaType || field.type) : ''; if (mapping.draft.destinationTypeId === this.enums.destination.video && !this.canUseVideo(mapping)) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); },
+            destinationChanged: function (mapping) { mapping.draft.storageModeId = mapping.draft.destinationTypeId === this.enums.destination.picture ? this.enums.storage.import : this.enums.storage.external; },
+            draftScope: function (draft) { var value = 0; if (draft.applyToProductModels) value |= scope.productModel; if (draft.applyToVariants) value |= scope.variant; if (draft.applyToStandalone) value |= scope.standalone; return value; },
+            save: function (mapping) { var self = this, d = mapping.draft; mapping.errors = []; var entityScopeId = this.draftScope(d); if (!entityScopeId) { mapping.errors = ['Select at least one product role.']; return; } mapping.saving = true; $.ajax({ type: 'POST', url: data.urls.save, data: addAntiForgeryToken({ Id: mapping.isInherited ? 0 : mapping.id, MappingKey: mapping.mappingKey || '', Name: d.name, Enabled: d.enabled, AkeneoFamilyCode: self.selectedFamilyCode || '', SourceTypeId: d.sourceTypeId, SourceAttributeCode: d.sourceAttributeCode, AssetFamilyCode: d.assetFamilyCode, AssetMediaAttributeCode: d.assetMediaAttributeCode, AssetMediaType: d.assetMediaType, DestinationTypeId: d.destinationTypeId, StorageModeId: d.storageModeId, EntityScopeId: entityScopeId, RoleAttributeCode: d.roleAttributeCode, RoleValuesCsv: d.roleValuesCsv, SortOrderAttributeCode: d.sortOrderAttributeCode, AltTextTemplate: d.altTextTemplate, TitleTextTemplate: d.titleTextTemplate, SeoFilenameTemplate: d.seoFilenameTemplate, CustomPropertyKey: d.customPropertyKey, DisplayOrder: d.displayOrder, MaxAssets: d.maxAssets }), success: function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to save mapping.']; return; } var saved = hydrate(response.mapping, false); var index = self.mappings.indexOf(mapping); if (index >= 0) self.mappings.splice(index, 1, saved); self.notify('Asset mapping saved.'); }, error: function () { mapping.errors = ['Unable to save mapping due to a server error.']; }, complete: function () { mapping.saving = false; } }); },
+            requestDelete: function (mapping) { this.pendingDelete = mapping; this.deleteErrors = []; $('#akeneo-asset-delete-modal').modal('show'); },
+            confirmDelete: function () { var self = this, mapping = this.pendingDelete; if (!mapping) return; this.deleting = true; this.deleteErrors = []; $.ajax({ type: 'POST', url: data.urls.delete, data: addAntiForgeryToken({ id: mapping.id, akeneoFamilyCode: self.selectedFamilyCode || '' }), success: function (response) { if (!response || !response.success) { self.deleteErrors = response && response.errors ? response.errors : ['Unable to delete mapping.']; return; } var index = self.mappings.indexOf(mapping); if (index >= 0) { if (response.replacement) self.mappings.splice(index, 1, hydrate(response.replacement, false)); else self.mappings.splice(index, 1); } $('#akeneo-asset-delete-modal').modal('hide'); self.pendingDelete = null; self.notify('Asset mapping deleted.'); }, error: function () { self.deleteErrors = ['Unable to delete mapping due to a server error.']; }, complete: function () { self.deleting = false; } }); },
+            notify: function (text) { var self = this, id = Date.now() + '-' + Math.random(); this.toasts.push({ id: id, text: text }); setTimeout(function () { self.toasts = self.toasts.filter(function (item) { return item.id !== id; }); }, 3000); }
+        }
+    }).mount('#akeneo-asset-mapping-app');
+})();
+</script>

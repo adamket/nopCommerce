@@ -34,6 +34,11 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoReferenceEntityValueResolver, AkeneoReferenceEntityValueResolver>();
         services.AddScoped<IAkeneoValueTransformationService, AkeneoValueTransformationService>();
         services.AddScoped<IAkeneoValueTemplateRenderer, AkeneoValueTemplateRenderer>();
+        services.AddScoped<IAkeneoAssetMappingService, AkeneoAssetMappingService>();
+        services.AddScoped<IAkeneoManagedAssetService, AkeneoManagedAssetService>();
+        services.AddScoped<IAkeneoAssetMappingModelFactory, AkeneoAssetMappingModelFactory>();
+        services.AddScoped<IAkeneoAssetResolver, AkeneoAssetResolver>();
+        services.AddScoped<IAkeneoExternalAssetDownloader, AkeneoExternalAssetDownloader>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();
@@ -93,6 +98,10 @@ public class NopStartup : INopStartup
 
         services.AddScoped<
             IAkeneoProductSectionSynchronizer,
+            AkeneoProductAssetSynchronizer>();
+
+        services.AddScoped<
+            IAkeneoProductSectionSynchronizer,
             AkeneoProductCustomPropertySynchronizer>();
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
@@ -118,6 +127,21 @@ public class NopStartup : INopStartup
             })
             .SetHandlerLifetime(TimeSpan.FromMinutes(5))
             .AddHttpMessageHandler<AkeneoTransientRetryHandler>();
+
+        services.AddHttpClient(AkeneoConnectionConstants.ExternalAssetHttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(60);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    "Apt-NopCommerce-AkeneoAssetImporter/1.0");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                MaxConnectionsPerServer = 8
+            })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(5));
     }
 
     /// <summary>

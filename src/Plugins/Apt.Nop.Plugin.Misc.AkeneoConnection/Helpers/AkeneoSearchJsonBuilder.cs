@@ -128,13 +128,26 @@ public class AkeneoProductSearchJsonBuilder
         if (!updatedAfterUtc.HasValue)
             return;
 
-        AddSearchCriterion(
-            search,
-            "updated",
-            ">",
-            updatedAfterUtc.Value
-                .ToUniversalTime()
-                .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        var value = updatedAfterUtc.Value
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+        if (request.IncludeLinkedAssetUpdates)
+        {
+            AddSearchCriterion(
+                search,
+                "updated_including_linked_entities",
+                ">",
+                value);
+            AddSearchCriterion(
+                search,
+                "updated_including_linked_type",
+                "IN",
+                new[] { "asset" });
+            return;
+        }
+
+        AddSearchCriterion(search, "updated", ">", value);
     }
 
     private static void AddParentSearch(
