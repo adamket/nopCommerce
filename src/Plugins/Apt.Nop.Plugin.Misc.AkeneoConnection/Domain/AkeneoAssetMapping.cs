@@ -1,4 +1,4 @@
-using Nop.Core;
+﻿using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
@@ -15,6 +15,13 @@ public class AkeneoAssetMapping : BaseEntity
 
     public int SourceTypeId { get; set; }
     public string SourceAttributeCode { get; set; }
+
+    /// <summary>
+    /// Optional secondary Akeneo media or asset collection attribute used when
+    /// the primary source is missing or contains no media values.
+    /// </summary>
+    public string FallbackSourceAttributeCode { get; set; }
+
     public string AssetFamilyCode { get; set; }
     public string AssetMediaAttributeCode { get; set; }
     public string AssetMediaType { get; set; }

@@ -364,6 +364,11 @@ public sealed class AkeneoConnectionMigration : MigrationBase
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.Name)).AsString(255).NotNullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).AsString(255).Nullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SourceAttributeCode)).AsString(255).NotNullable();
+        Alter.Table(table)
+            .AlterColumn(nameof(
+                AkeneoAssetMapping.FallbackSourceAttributeCode))
+            .AsString(255)
+            .Nullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetFamilyCode)).AsString(255).Nullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaAttributeCode)).AsString(255).Nullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaType)).AsString(100).Nullable();

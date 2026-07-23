@@ -31,27 +31,89 @@ public sealed class AkeneoAssetResolver(
         AkeneoAssetMapping mapping,
         CancellationToken cancellationToken = default)
     {
+        var sourceAttributeCodes = new[]
+            {
+                mapping.SourceAttributeCode,
+                mapping.FallbackSourceAttributeCode
+            }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var sourceAttributeCode in sourceAttributeCodes)
+        {
+            var sourceResolution = ResolveSourceCodes(
+                context,
+                sourceAttributeCode);
+
+            // A populated source with no value matching the requested locale or
+            // channel is not considered empty. Preserve managed assets instead
+            // of silently falling back to a value from another context.
+            if (sourceResolution.ContextMismatch)
+            {
+                return new AkeneoAssetResolutionResult
+                {
+                    CanReconcile = false,
+                    Warning =
+                        $"Asset source '{sourceAttributeCode}' has values, but none " +
+                        $"matched locale '{context.Request.Locale ?? "(none)"}' and " +
+                        $"channel '{context.Request.Channel ?? "(none)"}'. " +
+                        "Existing managed assets were preserved."
+                };
+            }
+
+            // Missing and authoritatively empty sources advance to the fallback.
+            if (sourceResolution.SourceCodes.Count == 0)
+                continue;
+
+            return await ResolveSourceCodesAsync(
+                context,
+                mapping,
+                sourceAttributeCode,
+                sourceResolution.SourceCodes,
+                cancellationToken);
+        }
+
+        // Every configured source was missing or empty. Reconciliation is safe
+        // and ReplaceManaged can remove assets previously owned by this mapping.
+        return new AkeneoAssetResolutionResult
+        {
+            CanReconcile = true,
+            Assets = Array.Empty<AkeneoResolvedAsset>()
+        };
+    }
+
+    private AssetSourceCodeResolution ResolveSourceCodes(
+        AkeneoProductSyncContext context,
+        string sourceAttributeCode)
+    {
+        var configuredValues = default(JsonElement);
+        var sourceExists = false;
+
+        if (context.Source.Values.ValueKind == JsonValueKind.Object)
+        {
+            sourceExists = context.Source.Values.TryGetProperty(
+                sourceAttributeCode,
+                out configuredValues);
+        }
+
         if (!productValueResolver.TryGetValue(
                 context.Source,
-                mapping.SourceAttributeCode,
+                sourceAttributeCode,
                 out var sourceValue,
                 context.Request.Locale,
                 context.Request.Channel,
                 context.Request.Currency))
         {
-            var sourceExists = context.Source.Values.ValueKind == JsonValueKind.Object &&
-                context.Source.Values.TryGetProperty(
-                    mapping.SourceAttributeCode,
-                    out _);
-
-            return new AkeneoAssetResolutionResult
+            return new AssetSourceCodeResolution
             {
-                CanReconcile = !sourceExists,
-                Warning = sourceExists
-                    ? $"Asset source '{mapping.SourceAttributeCode}' has values, but none matched locale " +
-                      $"'{context.Request.Locale ?? "(none)"}' and channel '{context.Request.Channel ?? "(none)"}'. " +
-                      "Existing managed assets were preserved."
-                    : null
+                // Empty/null values are valid fallback conditions. Only report a
+                // context mismatch when the source contains meaningful data that
+                // the value resolver could not select for this locale/channel.
+                ContextMismatch =
+                    sourceExists &&
+                    ContainsMeaningfulConfiguredValue(configuredValues)
             };
         }
 
@@ -61,11 +123,26 @@ public sealed class AkeneoAssetResolver(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        return new AssetSourceCodeResolution
+        {
+            SourceCodes = sourceCodes
+        };
+    }
+
+    private async Task<AkeneoAssetResolutionResult> ResolveSourceCodesAsync(
+        AkeneoProductSyncContext context,
+        AkeneoAssetMapping mapping,
+        string resolvedSourceAttributeCode,
+        IReadOnlyList<string> sourceCodes,
+        CancellationToken cancellationToken)
+    {
         var assets = new List<AkeneoResolvedAsset>();
         var baseOrder = Math.Max(0, mapping.DisplayOrder);
         var maximumAssets = mapping.MaxAssets > 0 ? mapping.MaxAssets : 20;
 
-        for (var index = 0; index < sourceCodes.Count; index++)
+        for (var index = 0;
+             index < sourceCodes.Count && assets.Count < maximumAssets;
+             index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -76,6 +153,7 @@ public sealed class AkeneoAssetResolver(
                 resolved = await ResolveProductMediaAsync(
                     context,
                     mapping,
+                    resolvedSourceAttributeCode,
                     sourceCodes[index],
                     baseOrder + index,
                     cancellationToken);
@@ -85,6 +163,7 @@ public sealed class AkeneoAssetResolver(
                 resolved = await ResolveAssetManagerAssetAsync(
                     context,
                     mapping,
+                    resolvedSourceAttributeCode,
                     sourceCodes[index],
                     baseOrder + index,
                     cancellationToken);
@@ -99,7 +178,9 @@ public sealed class AkeneoAssetResolver(
             CanReconcile = true,
             Assets = assets
                 .OrderBy(asset => asset.DisplayOrder)
-                .ThenBy(asset => asset.AssetCode ?? asset.MediaFileCode, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(
+                    asset => asset.AssetCode ?? asset.MediaFileCode,
+                    StringComparer.OrdinalIgnoreCase)
                 .Take(maximumAssets)
                 .ToList()
         };
@@ -108,6 +189,7 @@ public sealed class AkeneoAssetResolver(
     private async Task<AkeneoResolvedAsset> ResolveProductMediaAsync(
         AkeneoProductSyncContext context,
         AkeneoAssetMapping mapping,
+        string resolvedSourceAttributeCode,
         string mediaFileCode,
         int displayOrder,
         CancellationToken cancellationToken)
@@ -129,7 +211,8 @@ public sealed class AkeneoAssetResolver(
             context,
             mapping,
             templateSource,
-            sourceIdentity: $"product-media|{mapping.SourceAttributeCode}|{mediaFileCode}",
+            resolvedSourceAttributeCode,
+            sourceIdentity: $"product-media|{resolvedSourceAttributeCode}|{mediaFileCode}",
             sourceVersion: $"{mediaFileCode}|{metadata?.Size}|{metadata?.MimeType}|{metadata?.OriginalFilename}",
             assetCode: null,
             mediaFileCode: mediaFileCode,
@@ -144,6 +227,7 @@ public sealed class AkeneoAssetResolver(
     private async Task<AkeneoResolvedAsset> ResolveAssetManagerAssetAsync(
         AkeneoProductSyncContext context,
         AkeneoAssetMapping mapping,
+        string resolvedSourceAttributeCode,
         string assetCode,
         int defaultDisplayOrder,
         CancellationToken cancellationToken)
@@ -215,8 +299,9 @@ public sealed class AkeneoAssetResolver(
             context,
             mapping,
             templateSource,
+            resolvedSourceAttributeCode,
             sourceIdentity:
-            $"asset|{familyCode}|{asset.Code}|" +
+            $"asset|{resolvedSourceAttributeCode}|{familyCode}|{asset.Code}|" +
             $"{mapping.AssetMediaAttributeCode}",
             sourceVersion:
             $"{asset.Code}|{mediaFileCode}|{downloadUrl}|" +
@@ -272,6 +357,7 @@ public sealed class AkeneoAssetResolver(
         AkeneoProductSyncContext context,
         AkeneoAssetMapping mapping,
         AkeneoProductDefinition templateSource,
+        string resolvedSourceAttributeCode,
         string sourceIdentity,
         string sourceVersion,
         string assetCode,
@@ -308,7 +394,7 @@ public sealed class AkeneoAssetResolver(
             Mapping = mapping,
             SourceIdentityHash = identityHash,
             SourceFingerprint = fingerprint,
-            SourceAttributeCode = mapping.SourceAttributeCode,
+            SourceAttributeCode = resolvedSourceAttributeCode,
             AssetFamilyCode = mapping.AssetFamilyCode,
             AssetCode = assetCode,
             MediaFileCode = mediaFileCode,
@@ -322,6 +408,52 @@ public sealed class AkeneoAssetResolver(
             DisplayOrder = displayOrder,
             SourceUpdatedOnUtc = sourceUpdatedOnUtc
         };
+    }
+
+    private static bool ContainsMeaningfulConfiguredValue(
+        JsonElement configuredValues)
+    {
+        if (configuredValues.ValueKind != JsonValueKind.Array)
+            return configuredValues.ValueKind is not (
+                JsonValueKind.Undefined or
+                JsonValueKind.Null);
+
+        foreach (var valueObject in configuredValues.EnumerateArray())
+        {
+            if (valueObject.ValueKind != JsonValueKind.Object ||
+                !valueObject.TryGetProperty("data", out var data))
+            {
+                continue;
+            }
+
+            if (HasMeaningfulData(data))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasMeaningfulData(JsonElement data)
+    {
+        return data.ValueKind switch
+        {
+            JsonValueKind.Undefined => false,
+            JsonValueKind.Null => false,
+            JsonValueKind.String =>
+                !string.IsNullOrWhiteSpace(data.GetString()),
+            JsonValueKind.Array => data.EnumerateArray().Any(HasMeaningfulData),
+            JsonValueKind.Object => data.EnumerateObject()
+                .Any(property => HasMeaningfulData(property.Value)),
+            _ => true
+        };
+    }
+
+    private sealed class AssetSourceCodeResolution
+    {
+        public bool ContextMismatch { get; init; }
+
+        public IReadOnlyList<string> SourceCodes { get; init; } =
+            Array.Empty<string>();
     }
 
     private string RenderTemplate(

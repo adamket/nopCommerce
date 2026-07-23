@@ -121,9 +121,13 @@ public class AkeneoProductSyncService(
         var handledAssetAttributeCodes = (await assetMappingService
                 .GetEffectiveMappingsAsync(mappingFamilyCode))
             .Where(mapping => mapping.Enabled)
-            .Where(mapping => !string.IsNullOrWhiteSpace(
-                mapping.SourceAttributeCode))
-            .Select(mapping => mapping.SourceAttributeCode.Trim())
+            .SelectMany(mapping => new[]
+            {
+                mapping.SourceAttributeCode,
+                mapping.FallbackSourceAttributeCode
+            })
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 

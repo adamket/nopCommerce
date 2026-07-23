@@ -142,6 +142,8 @@ public sealed class AkeneoAssetMappingController(
         mapping.AkeneoFamilyCode = selectedFamily;
         mapping.SourceTypeId = model.SourceTypeId;
         mapping.SourceAttributeCode = model.SourceAttributeCode.Trim();
+        mapping.FallbackSourceAttributeCode = Normalize(
+            model.FallbackSourceAttributeCode);
         mapping.AssetFamilyCode = Normalize(model.AssetFamilyCode);
         mapping.AssetMediaAttributeCode = Normalize(model.AssetMediaAttributeCode);
         mapping.AssetMediaType = Normalize(model.AssetMediaType);
@@ -327,6 +329,8 @@ public sealed class AkeneoAssetMappingController(
             }
         }
 
+        await ValidateFallbackSourceAsync(model, source, errors);
+
         if (!string.IsNullOrWhiteSpace(model.RoleValuesCsv) &&
             string.IsNullOrWhiteSpace(model.RoleAttributeCode))
         {
@@ -349,6 +353,89 @@ public sealed class AkeneoAssetMappingController(
         ValidateTemplate(model.TitleTextTemplate, "Title text", errors);
         ValidateTemplate(model.SeoFilenameTemplate, "SEO filename", errors);
         return errors;
+    }
+
+    private async Task ValidateFallbackSourceAsync(
+        AkeneoAssetMappingModel model,
+        AkeneoAttributeDefinition primarySource,
+        ICollection<string> errors)
+    {
+        model.FallbackSourceAttributeCode = Normalize(
+            model.FallbackSourceAttributeCode);
+
+        if (model.FallbackSourceAttributeCode == null)
+            return;
+
+        if (string.Equals(
+                model.SourceAttributeCode?.Trim(),
+                model.FallbackSourceAttributeCode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                "The fallback source must be different from the primary source attribute.");
+            return;
+        }
+
+        AkeneoAttributeDefinition fallbackSource;
+        try
+        {
+            fallbackSource = await apiClient.GetAttributeByCodeAsync(
+                model.FallbackSourceAttributeCode);
+        }
+        catch (Exception ex)
+        {
+            errors.Add(
+                $"The fallback source attribute could not be validated: {ex.Message}");
+            return;
+        }
+
+        if (fallbackSource == null)
+        {
+            errors.Add("The fallback source attribute could not be found in Akeneo.");
+            return;
+        }
+
+        if (fallbackSource.Type is not (
+                "pim_catalog_image" or
+                "pim_catalog_file" or
+                "pim_catalog_asset_collection"))
+        {
+            errors.Add(
+                $"Fallback attribute '{fallbackSource.Code}' has unsupported type " +
+                $"'{fallbackSource.Type}'. Choose an image, file, or asset collection attribute.");
+            return;
+        }
+
+        if (primarySource == null)
+            return;
+
+        var primarySourceType = primarySource.Type ==
+            "pim_catalog_asset_collection"
+                ? AkeneoAssetSourceType.AssetCollection
+                : AkeneoAssetSourceType.ProductMediaAttribute;
+        var fallbackSourceType = fallbackSource.Type ==
+            "pim_catalog_asset_collection"
+                ? AkeneoAssetSourceType.AssetCollection
+                : AkeneoAssetSourceType.ProductMediaAttribute;
+
+        if (primarySourceType != fallbackSourceType)
+        {
+            errors.Add(
+                "The fallback source must use the same source type as the primary source " +
+                "(product media or Asset Manager collection).");
+            return;
+        }
+
+        if (primarySourceType == AkeneoAssetSourceType.AssetCollection &&
+            !string.Equals(
+                primarySource.ReferenceDataName,
+                fallbackSource.ReferenceDataName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                "Asset collection fallback sources must reference the same Akeneo asset family " +
+                "as the primary source.");
+        }
     }
 
     private static void ValidateOptionalAssetField(

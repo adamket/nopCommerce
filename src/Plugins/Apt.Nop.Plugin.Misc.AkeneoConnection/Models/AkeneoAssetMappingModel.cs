@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -13,6 +13,7 @@ public record AkeneoAssetMappingModel : BaseNopEntityModel
 
     public int SourceTypeId { get; set; }
     public string SourceAttributeCode { get; set; }
+    public string FallbackSourceAttributeCode { get; set; }
     public string AssetFamilyCode { get; set; }
     public string AssetMediaAttributeCode { get; set; }
     public string AssetMediaType { get; set; }

@@ -1,4 +1,4 @@
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -91,6 +91,7 @@ public sealed class AkeneoAssetMappingModelFactory(
                 string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode),
             SourceTypeId = mapping.SourceTypeId,
             SourceAttributeCode = mapping.SourceAttributeCode,
+            FallbackSourceAttributeCode = mapping.FallbackSourceAttributeCode,
             AssetFamilyCode = mapping.AssetFamilyCode,
             AssetMediaAttributeCode = mapping.AssetMediaAttributeCode,
             AssetMediaType = mapping.AssetMediaType,

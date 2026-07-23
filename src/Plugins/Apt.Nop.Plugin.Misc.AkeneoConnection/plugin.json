@@ -2,7 +2,7 @@
   "Group": "Misc",
   "FriendlyName": "Akeneo Connection",
   "SystemName": "Apt.Misc.AkeneoConnection",
-  "Version": "4.90.9",
+  "Version": "4.90.10",
   "SupportedVersions": [ "4.90" ],
   "Author": "Aperture Labs",
   "DisplayOrder": 1,
