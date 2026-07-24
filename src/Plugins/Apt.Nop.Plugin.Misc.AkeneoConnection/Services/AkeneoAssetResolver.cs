@@ -111,8 +111,7 @@ public sealed class AkeneoAssetResolver(
                 // Empty/null values are valid fallback conditions. Only report a
                 // context mismatch when the source contains meaningful data that
                 // the value resolver could not select for this locale/channel.
-                ContextMismatch =
-                    sourceExists &&
+                ContextMismatch = sourceExists &&
                     ContainsMeaningfulConfiguredValue(configuredValues)
             };
         }

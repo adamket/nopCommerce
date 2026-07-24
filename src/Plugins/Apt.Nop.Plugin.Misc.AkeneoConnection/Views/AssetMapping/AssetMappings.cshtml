@@ -2,7 +2,7 @@
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
 @model AkeneoAssetMappingListModel
-<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260723-asset-fallback"></!script>
+<!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260723-asset-save-hydration"></!script>
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo asset mappings";
@@ -132,25 +132,60 @@
 
                 <div v-for="mapping in orderedMappings" v-bind:key="mapping.clientKey" class="card card-default akeneo-asset-card" v-bind:class="{ 'is-disabled': !mapping.enabled }">
                     <div class="card-header akeneo-asset-card-header">
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="d-flex align-items-center flex-wrap">
-                                <h3 class="card-title mb-0 mr-2">{{ mapping.name || 'New asset mapping' }}</h3>
-                                <span class="badge badge-info mr-2" v-if="mapping.isInherited">Inherited</span>
-                                <span class="badge" v-bind:class="mapping.enabled ? 'badge-success' : 'badge-secondary'">{{ mapping.enabled ? 'Enabled' : 'Disabled' }}</span>
+                                <h3 class="card-title mb-0 mr-2">
+                                    {{ mapping.name || 'New asset mapping' }}
+                                </h3>
+
+                                <span class="badge badge-info mr-2" v-if="mapping.isInherited">
+                                    Inherited
+                                </span>
+
+                                <span class="badge"
+                                      v-bind:class="mapping.enabled ? 'badge-success' : 'badge-secondary'">
+                                    {{ mapping.enabled ? 'Enabled' : 'Disabled' }}
+                                </span>
                             </div>
+
                             <div class="akeneo-asset-summary mt-2" v-if="!mapping.editing">
                                 <code>{{ mapping.sourceAttributeCode || 'No source' }}</code>
-                                <span v-if="mapping.fallbackSourceAttributeCode" class="text-muted ml-1">
-                                    (fallback: <code>{{ mapping.fallbackSourceAttributeCode }}</code>)
+
+                                <span v-if="mapping.fallbackSourceAttributeCode"
+                                      class="text-muted ml-1">
+                                    (fallback:
+                                    <code>{{ mapping.fallbackSourceAttributeCode }}</code>)
                                 </span>
+
                                 <i class="fas fa-arrow-right mx-2"></i>
+
                                 <strong>{{ destinationText(mapping.destinationTypeId) }}</strong>
-                                <span class="ml-3 text-muted">{{ scopeText(mapping.entityScopeId) }}</span>
+
+                                <span class="ml-3 text-muted">
+                                    {{ scopeText(mapping.entityScopeId) }}
+                                </span>
                             </div>
                         </div>
-                        <div class="akeneo-asset-actions">
-                            <button type="button" class="btn btn-default" v-if="!mapping.editing" v-on:click="edit(mapping)"><i class="fas fa-pencil-alt"></i> {{ mapping.isInherited ? 'Override' : 'Edit' }}</button>
-                            <button type="button" class="btn btn-danger" v-if="!mapping.editing && !mapping.isInherited && Number(mapping.id) > 0" v-on:click="requestDelete(mapping)"><i class="far fa-trash-alt"></i> Delete</button>
+
+                        <div class="akeneo-asset-actions ml-auto">
+                            <button type="button"
+                                    class="btn btn-default"
+                                    v-if="!mapping.editing"
+                                    v-on:click="edit(mapping)">
+                                <i class="fas fa-pencil-alt"></i>
+                                {{ mapping.isInherited ? 'Override' : 'Edit' }}
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-danger"
+                                    v-if="!mapping.editing &&
+                                    !mapping.isInherited &&
+                                    Number(mapping.id)>
+                                0"
+                                v-on:click="requestDelete(mapping)">
+                                <i class="far fa-trash-alt"></i>
+                                Delete
+                            </button>
                         </div>
                     </div>
 
@@ -314,7 +349,43 @@
         return normalized || scope.all;
     }
     function hasScope(value, flag) { return (normalizeScope(value) & flag) === flag; }
+    function readProperty(raw, camelName, pascalName) {
+        if (raw && raw[camelName] !== undefined) return raw[camelName];
+        return raw ? raw[pascalName] : undefined;
+    }
+
+    function normalizeMappingResponse(raw) {
+        raw = raw || {};
+        return {
+            id: readProperty(raw, 'id', 'Id'),
+            mappingKey: readProperty(raw, 'mappingKey', 'MappingKey'),
+            name: readProperty(raw, 'name', 'Name'),
+            enabled: readProperty(raw, 'enabled', 'Enabled'),
+            akeneoFamilyCode: readProperty(raw, 'akeneoFamilyCode', 'AkeneoFamilyCode'),
+            isInherited: readProperty(raw, 'isInherited', 'IsInherited'),
+            sourceTypeId: readProperty(raw, 'sourceTypeId', 'SourceTypeId'),
+            sourceAttributeCode: readProperty(raw, 'sourceAttributeCode', 'SourceAttributeCode'),
+            fallbackSourceAttributeCode: readProperty(raw, 'fallbackSourceAttributeCode', 'FallbackSourceAttributeCode'),
+            assetFamilyCode: readProperty(raw, 'assetFamilyCode', 'AssetFamilyCode'),
+            assetMediaAttributeCode: readProperty(raw, 'assetMediaAttributeCode', 'AssetMediaAttributeCode'),
+            assetMediaType: readProperty(raw, 'assetMediaType', 'AssetMediaType'),
+            destinationTypeId: readProperty(raw, 'destinationTypeId', 'DestinationTypeId'),
+            storageModeId: readProperty(raw, 'storageModeId', 'StorageModeId'),
+            entityScopeId: readProperty(raw, 'entityScopeId', 'EntityScopeId'),
+            roleAttributeCode: readProperty(raw, 'roleAttributeCode', 'RoleAttributeCode'),
+            roleValuesCsv: readProperty(raw, 'roleValuesCsv', 'RoleValuesCsv'),
+            sortOrderAttributeCode: readProperty(raw, 'sortOrderAttributeCode', 'SortOrderAttributeCode'),
+            altTextTemplate: readProperty(raw, 'altTextTemplate', 'AltTextTemplate'),
+            titleTextTemplate: readProperty(raw, 'titleTextTemplate', 'TitleTextTemplate'),
+            seoFilenameTemplate: readProperty(raw, 'seoFilenameTemplate', 'SeoFilenameTemplate'),
+            customPropertyKey: readProperty(raw, 'customPropertyKey', 'CustomPropertyKey'),
+            displayOrder: readProperty(raw, 'displayOrder', 'DisplayOrder'),
+            maxAssets: readProperty(raw, 'maxAssets', 'MaxAssets'),
+            clientKey: readProperty(raw, 'clientKey', 'ClientKey')
+        };
+    }
     function hydrate(raw, isNew) {
+        raw = normalizeMappingResponse(raw);
         var entityScopeId = normalizeScope(raw.entityScopeId);
         var mapping = Object.assign({}, raw, {
             clientKey: raw.clientKey || 'asset-' + (++sequence),

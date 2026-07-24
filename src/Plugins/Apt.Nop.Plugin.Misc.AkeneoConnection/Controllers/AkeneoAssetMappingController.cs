@@ -172,10 +172,14 @@ public sealed class AkeneoAssetMappingController(
             await mappingService.UpdateAsync(mapping);
         }
 
+        var savedModel = modelFactory.PrepareMappingModel(
+            mapping,
+            selectedFamily);
+
         return Json(new
         {
             success = true,
-            mapping = modelFactory.PrepareMappingModel(mapping, selectedFamily)
+            mapping = savedModel
         });
     }
 
@@ -211,7 +215,6 @@ public sealed class AkeneoAssetMappingController(
             if (inherited != null)
                 replacement = modelFactory.PrepareMappingModel(inherited, selectedFamily);
         }
-
         return Json(new { success = true, replacement });
     }
 
