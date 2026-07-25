@@ -136,7 +136,7 @@ public class AkeneoAttributeMappingModelFactory(
 
             // Standard attributes retain the existing one-row behavior,
             // including an unsaved row when no mapping has been configured.
-            if (!IsReferenceEntityType(akeneoAttribute))
+            if (!AkeneoMappingHelper.IsReferenceEntityType(akeneoAttribute))
             {
                 var mappingModel = await CreateMappingModelAsync(
                     akeneoAttribute,
@@ -286,7 +286,7 @@ public class AkeneoAttributeMappingModelFactory(
             AkeneoAttributeGroupLabel = GetAttributeGroupLabel(akeneoAttribute),
             IsLocalizable = akeneoAttribute.Localizable,
             IsScopable = akeneoAttribute.Scopable,
-            IsReferenceEntityAttribute = IsReferenceEntityType(akeneoAttribute),
+            IsReferenceEntityAttribute = AkeneoMappingHelper.IsReferenceEntityType(akeneoAttribute),
 
             AkeneoReferenceEntityCode =
                 existingAttributeMapping?.AkeneoReferenceEntityCode ??
@@ -810,18 +810,6 @@ public class AkeneoAttributeMappingModelFactory(
         }
     }
 
-    private static bool IsReferenceEntityType(
-        AkeneoAttributeDefinition attribute)
-    {
-        return string.Equals(
-                   attribute.Type,
-                   "akeneo_reference_entity",
-                   StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(
-                   attribute.Type,
-                   "akeneo_reference_entity_collection",
-                   StringComparison.OrdinalIgnoreCase);
-    }
 
     private static void AddMappingWarnings(AkeneoAttributeMappingListModel model)
     {

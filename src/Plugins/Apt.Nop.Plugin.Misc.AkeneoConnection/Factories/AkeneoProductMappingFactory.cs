@@ -420,7 +420,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         string currency,
         CancellationToken cancellationToken)
     {
-        if (IsReferenceEntityMapping(sourceMapping) &&
+        if (AkeneoMappingHelper.IsReferenceEntityMapping(sourceMapping) &&
             !string.IsNullOrWhiteSpace(
                 sourceMapping.AkeneoReferenceEntityAttributeCode))
         {
@@ -564,12 +564,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         }
     }
 
-    private static bool IsReferenceEntityMapping(
-        AkeneoAttributeMapping mapping)
-    {
-        return mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
-               mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
-    }
+
 
     private async Task<AkeneoProductDefinition> FindAkeneoProductByIdentifierAsync(
         string akeneoIdentifier,

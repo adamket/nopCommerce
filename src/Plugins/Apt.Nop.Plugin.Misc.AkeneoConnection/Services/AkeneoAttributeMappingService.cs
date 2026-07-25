@@ -74,9 +74,11 @@ public class AkeneoAttributeMappingService(
         string familyCode = null)
     {
         if (string.IsNullOrWhiteSpace(attributeCode))
+        {
             return new List<AkeneoAttributeMapping>();
+        }
 
-        attributeCode = attributeCode.Trim();
+        attributeCode = attributeCode.Trim().ToLowerInvariant();
         familyCode = familyCode.TrimOrNull();
 
         var cacheKey = staticCacheManager.PrepareKeyForDefaultCache(
@@ -91,7 +93,7 @@ public class AkeneoAttributeMappingService(
                 var query = attributeMappingRepository.Table.Where(mapping =>
                     mapping.ValueModeId ==
                         (int)AkeneoAttributeMappingValueMode.SingleAttribute &&
-                    mapping.AkeneoAttributeCode == attributeCode);
+                    mapping.AkeneoAttributeCode.ToLowerInvariant() == attributeCode);
 
                 query = familyCode == null
                     ? query.Where(mapping =>

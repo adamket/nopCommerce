@@ -541,7 +541,7 @@ public class AkeneoProductSyncService(
         string currency,
         CancellationToken cancellationToken)
     {
-        if (IsReferenceEntityMapping(sourceMapping) &&
+        if (AkeneoMappingHelper.IsReferenceEntityMapping(sourceMapping) &&
             !string.IsNullOrWhiteSpace(
                 sourceMapping.AkeneoReferenceEntityAttributeCode))
         {
@@ -612,13 +612,6 @@ public class AkeneoProductSyncService(
     {
         return !string.IsNullOrWhiteSpace(value?.DisplayValue) ||
                value?.DisplayValues is { Count: > 0 };
-    }
-
-    private static bool IsReferenceEntityMapping(
-        AkeneoAttributeMapping mapping)
-    {
-        return mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
-               mapping.AkeneoAttributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
     }
 
     private void AppendUnmappedAttributeValues(
