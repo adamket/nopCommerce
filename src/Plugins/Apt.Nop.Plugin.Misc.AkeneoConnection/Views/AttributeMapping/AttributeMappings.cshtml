@@ -438,13 +438,8 @@
                                         class="btn btn-danger"
                                         v-bind:disabled="deleteConfirmation.busy"
                                         v-on:click="confirmDeleteMapping">
-                                    <i class="fas"
-                                       v-bind:class="deleteConfirmation.busy
-                                           ? 'fa-spinner fa-spin'
-                                           : selectedFamilyCode
-                                           ? 'fa-undo'
-                                           : 'fa-trash'">
-                                    </i>
+                                    <span v-if="deleteConfirmation.busy" class="akeneo-button-spinner" aria-hidden="true"></span>
+                                    <i v-else class="fas" v-bind:class="selectedFamilyCode ? 'fa-undo' : 'fa-trash'"></i>
                                     {{ deleteConfirmation.busy
                                         ? 'Removing...'
                                         : deleteConfirmation.mapping &&

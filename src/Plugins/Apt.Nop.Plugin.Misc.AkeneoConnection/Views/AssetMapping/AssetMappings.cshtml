@@ -311,7 +311,9 @@
                         <div class="text-right border-top pt-3">
                             <button type="button" class="btn btn-default mr-2" v-on:click="cancel(mapping)" v-bind:disabled="mapping.saving">Cancel</button>
                             <button type="button" class="btn btn-primary" v-on:click="save(mapping)" v-bind:disabled="mapping.saving">
-                                <i v-bind:class="mapping.saving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i> {{ mapping.isInherited ? 'Save family override' : 'Save mapping' }}
+                                <span v-if="mapping.saving" class="akeneo-button-spinner" aria-hidden="true"></span>
+                                <i v-else class="fas fa-save"></i>
+                                {{ mapping.saving ? 'Saving...' : (mapping.isInherited ? 'Save family override' : 'Save mapping') }}
                             </button>
                         </div>
                     </div>
@@ -328,7 +330,13 @@
                         <p>This removes <strong>{{ pendingDelete ? pendingDelete.name : '' }}</strong> from this mapping scope.</p>
                         <p class="text-muted mb-0">Existing nopCommerce assets remain until a profile runs with Replace managed or Replace all.</p>
                     </div>
-                    <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal" v-bind:disabled="deleting">Cancel</button><button type="button" class="btn btn-danger" v-on:click="confirmDelete" v-bind:disabled="deleting"><i v-bind:class="deleting ? 'fas fa-spinner fa-spin' : 'far fa-trash-alt'"></i> Delete mapping</button></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal" v-bind:disabled="deleting">Cancel</button>
+                        <button type="button" class="btn btn-danger" v-on:click="confirmDelete" v-bind:disabled="deleting">
+                            <span v-if="deleting" class="akeneo-button-spinner" aria-hidden="true"></span>
+                            <i v-else class="far fa-trash-alt"></i>
+                            {{ deleting ? 'Deleting...' : 'Delete mapping' }}
+                            </button></div>
                 </div>
             </div>
         </div>
@@ -339,119 +347,86 @@
 
 <script id="akeneo-asset-app-data" type="application/json">@Html.Raw(JsonSerializer.Serialize(appData, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
 <script asp-location="Footer">
-(function () {
-    var data = JSON.parse(document.getElementById('akeneo-asset-app-data').textContent);
-    var sequence = 0;
-    var scope = data.enums.scope;
+    (function () {
+        var data = JSON.parse(document.getElementById('akeneo-asset-app-data').textContent);
+        var sequence = 0;
+        var scope = data.enums.scope;
 
-    function normalizeScope(value) {
-        var normalized = (Number(value) || 0) & scope.all;
-        return normalized || scope.all;
-    }
-    function hasScope(value, flag) { return (normalizeScope(value) & flag) === flag; }
-    function readProperty(raw, camelName, pascalName) {
-        if (raw && raw[camelName] !== undefined) return raw[camelName];
-        return raw ? raw[pascalName] : undefined;
-    }
-
-    function normalizeMappingResponse(raw) {
-        raw = raw || {};
-        return {
-            id: readProperty(raw, 'id', 'Id'),
-            mappingKey: readProperty(raw, 'mappingKey', 'MappingKey'),
-            name: readProperty(raw, 'name', 'Name'),
-            enabled: readProperty(raw, 'enabled', 'Enabled'),
-            akeneoFamilyCode: readProperty(raw, 'akeneoFamilyCode', 'AkeneoFamilyCode'),
-            isInherited: readProperty(raw, 'isInherited', 'IsInherited'),
-            sourceTypeId: readProperty(raw, 'sourceTypeId', 'SourceTypeId'),
-            sourceAttributeCode: readProperty(raw, 'sourceAttributeCode', 'SourceAttributeCode'),
-            fallbackSourceAttributeCode: readProperty(raw, 'fallbackSourceAttributeCode', 'FallbackSourceAttributeCode'),
-            assetFamilyCode: readProperty(raw, 'assetFamilyCode', 'AssetFamilyCode'),
-            assetMediaAttributeCode: readProperty(raw, 'assetMediaAttributeCode', 'AssetMediaAttributeCode'),
-            assetMediaType: readProperty(raw, 'assetMediaType', 'AssetMediaType'),
-            destinationTypeId: readProperty(raw, 'destinationTypeId', 'DestinationTypeId'),
-            storageModeId: readProperty(raw, 'storageModeId', 'StorageModeId'),
-            entityScopeId: readProperty(raw, 'entityScopeId', 'EntityScopeId'),
-            roleAttributeCode: readProperty(raw, 'roleAttributeCode', 'RoleAttributeCode'),
-            roleValuesCsv: readProperty(raw, 'roleValuesCsv', 'RoleValuesCsv'),
-            sortOrderAttributeCode: readProperty(raw, 'sortOrderAttributeCode', 'SortOrderAttributeCode'),
-            altTextTemplate: readProperty(raw, 'altTextTemplate', 'AltTextTemplate'),
-            titleTextTemplate: readProperty(raw, 'titleTextTemplate', 'TitleTextTemplate'),
-            seoFilenameTemplate: readProperty(raw, 'seoFilenameTemplate', 'SeoFilenameTemplate'),
-            customPropertyKey: readProperty(raw, 'customPropertyKey', 'CustomPropertyKey'),
-            displayOrder: readProperty(raw, 'displayOrder', 'DisplayOrder'),
-            maxAssets: readProperty(raw, 'maxAssets', 'MaxAssets'),
-            clientKey: readProperty(raw, 'clientKey', 'ClientKey')
-        };
-    }
-    function hydrate(raw, isNew) {
-        raw = normalizeMappingResponse(raw);
-        var entityScopeId = normalizeScope(raw.entityScopeId);
-        var mapping = Object.assign({}, raw, {
-            clientKey: raw.clientKey || 'asset-' + (++sequence),
-            editing: !!isNew,
-            clientAdded: !!isNew,
-            saving: false,
-            loadingFields: false,
-            errors: [],
-            assetFields: [],
-            draft: {
-                name: raw.name || '', enabled: raw.enabled !== false,
-                sourceAttributeCode: raw.sourceAttributeCode || '',
-                fallbackSourceAttributeCode: raw.fallbackSourceAttributeCode || '',
-                sourceTypeId: Number(raw.sourceTypeId) || data.enums.source.productMedia,
-                assetFamilyCode: raw.assetFamilyCode || '',
-                assetMediaAttributeCode: raw.assetMediaAttributeCode || '',
-                assetMediaType: raw.assetMediaType || '',
-                destinationTypeId: Number(raw.destinationTypeId) || data.enums.destination.picture,
-                storageModeId: Number(raw.storageModeId) || data.enums.storage.import,
-                roleAttributeCode: raw.roleAttributeCode || '', roleValuesCsv: raw.roleValuesCsv || '',
-                sortOrderAttributeCode: raw.sortOrderAttributeCode || '',
-                altTextTemplate: raw.altTextTemplate || '', titleTextTemplate: raw.titleTextTemplate || '',
-                seoFilenameTemplate: raw.seoFilenameTemplate || '', customPropertyKey: raw.customPropertyKey || '',
-                displayOrder: Number(raw.displayOrder) || 0, maxAssets: Number(raw.maxAssets) || 20,
-                applyToProductModels: hasScope(entityScopeId, scope.productModel),
-                applyToVariants: hasScope(entityScopeId, scope.variant),
-                applyToStandalone: hasScope(entityScopeId, scope.standalone)
-            }
-        });
-        return mapping;
-    }
-
-    Vue.createApp({
-        data: function () {
-            return {
-                mappings: (data.mappings || []).map(function (item) { return hydrate(item, false); }),
-                selectedFamilyCode: data.selectedFamilyCode || '', availableFamilies: data.availableFamilies || [],
-                availableSources: data.availableSources || [], enums: data.enums, toasts: [],
-                pendingDelete: null, deleteErrors: [], deleting: false
-            };
-        },
-        computed: {
-            orderedMappings: function () { return this.mappings.slice().sort(function (a, b) { return (a.displayOrder || 0) - (b.displayOrder || 0) || (a.name || '').localeCompare(b.name || ''); }); }
-        },
-        methods: {
-            selectedSource: function (mapping) { var code = mapping.draft.sourceAttributeCode; return this.availableSources.find(function (item) { return item.code === code; }) || null; },
-            availableFallbackSources: function (mapping) { var primary = this.selectedSource(mapping); if (!primary) return []; return this.availableSources.filter(function (item) { return item.code !== primary.code && Number(item.sourceTypeId) === Number(primary.sourceTypeId) && (Number(primary.sourceTypeId) !== data.enums.source.assetCollection || item.assetFamilyCode === primary.assetFamilyCode); }); },
-            selectedMediaField: function (mapping) { var code = mapping.draft.assetMediaAttributeCode; return (mapping.assetFields || []).find(function (item) { return item.code === code; }) || null; },
-            isAssetCollection: function (mapping) { var source = this.selectedSource(mapping); return !!source && Number(source.sourceTypeId) === this.enums.source.assetCollection; },
-            canUseVideo: function (mapping) { var field = this.selectedMediaField(mapping); return this.isAssetCollection(mapping) && !!field && field.type === 'media_link'; },
-            destinationText: function (value) { switch (Number(value)) { case this.enums.destination.picture: return 'Product picture'; case this.enums.destination.video: return 'Product video'; case this.enums.destination.customProperty: return 'Managed custom property'; default: return 'Unknown destination'; } },
-            scopeText: function (value) { var result = []; if (hasScope(value, scope.productModel)) result.push('Parents'); if (hasScope(value, scope.variant)) result.push('Variants'); if (hasScope(value, scope.standalone)) result.push('Standalone'); return result.join(' + '); },
-            changeFamilyScope: function () { var url = new URL(data.urls.list, window.location.origin); if (this.selectedFamilyCode) url.searchParams.set('akeneoFamilyCode', this.selectedFamilyCode); window.location.assign(url.pathname + url.search); },
-            addMapping: function () { this.mappings.unshift(hydrate({ id: 0, mappingKey: '', name: '', enabled: true, isInherited: false, sourceAttributeCode: '', fallbackSourceAttributeCode: '', sourceTypeId: this.enums.source.productMedia, destinationTypeId: this.enums.destination.picture, storageModeId: this.enums.storage.import, entityScopeId: scope.productModel, displayOrder: 0, maxAssets: 20 }, true)); },
-            edit: function (mapping) { var replacement = hydrate(mapping, false); mapping.draft = replacement.draft; mapping.errors = []; mapping.editing = true; if (this.isAssetCollection(mapping)) this.loadAssetFields(mapping); },
-            cancel: function (mapping) { if (mapping.clientAdded) this.mappings = this.mappings.filter(function (item) { return item !== mapping; }); else mapping.editing = false; },
-            sourceChanged: function (mapping) { var source = this.selectedSource(mapping); mapping.assetFields = []; mapping.draft.assetMediaAttributeCode = ''; mapping.draft.roleAttributeCode = ''; mapping.draft.roleValuesCsv = ''; mapping.draft.sortOrderAttributeCode = ''; if (!source) { mapping.draft.fallbackSourceAttributeCode = ''; return; } mapping.draft.sourceTypeId = Number(source.sourceTypeId); mapping.draft.assetFamilyCode = source.assetFamilyCode || ''; var fallbackStillValid = this.availableFallbackSources(mapping).some(function (item) { return item.code === mapping.draft.fallbackSourceAttributeCode; }); if (!fallbackStillValid) mapping.draft.fallbackSourceAttributeCode = ''; if (this.isAssetCollection(mapping)) { this.loadAssetFields(mapping); } else { mapping.assetFields = []; mapping.draft.assetFamilyCode = ''; mapping.draft.assetMediaType = source.attributeType === 'pim_catalog_image' ? 'image' : 'file'; if (mapping.draft.destinationTypeId === this.enums.destination.video) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); } },
-            loadAssetFields: function (mapping) { var self = this; var source = this.selectedSource(mapping); var family = mapping.draft.assetFamilyCode || (source && source.assetFamilyCode); if (!family) return; mapping.loadingFields = true; $.get(data.urls.fields, { assetFamilyCode: family }).done(function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to load asset family fields.']; return; } mapping.assetFields = response.attributes || []; if (!mapping.draft.assetMediaAttributeCode && response.mainMediaAttributeCode) mapping.draft.assetMediaAttributeCode = response.mainMediaAttributeCode; self.mediaFieldChanged(mapping); }).fail(function () { mapping.errors = ['Unable to load asset family fields.']; }).always(function () { mapping.loadingFields = false; }); },
-            mediaFieldChanged: function (mapping) { var field = this.selectedMediaField(mapping); mapping.draft.assetMediaType = field ? (field.mediaType || field.type) : ''; if (mapping.draft.destinationTypeId === this.enums.destination.video && !this.canUseVideo(mapping)) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); },
-            destinationChanged: function (mapping) { mapping.draft.storageModeId = mapping.draft.destinationTypeId === this.enums.destination.picture ? this.enums.storage.import : this.enums.storage.external; },
-            draftScope: function (draft) { var value = 0; if (draft.applyToProductModels) value |= scope.productModel; if (draft.applyToVariants) value |= scope.variant; if (draft.applyToStandalone) value |= scope.standalone; return value; },
-            save: function (mapping) { var self = this, d = mapping.draft; mapping.errors = []; var entityScopeId = this.draftScope(d); if (!entityScopeId) { mapping.errors = ['Select at least one product role.']; return; } mapping.saving = true; $.ajax({ type: 'POST', url: data.urls.save, data: addAntiForgeryToken({ Id: mapping.isInherited ? 0 : mapping.id, MappingKey: mapping.mappingKey || '', Name: d.name, Enabled: d.enabled, AkeneoFamilyCode: self.selectedFamilyCode || '', SourceTypeId: d.sourceTypeId, SourceAttributeCode: d.sourceAttributeCode, FallbackSourceAttributeCode: d.fallbackSourceAttributeCode, AssetFamilyCode: d.assetFamilyCode, AssetMediaAttributeCode: d.assetMediaAttributeCode, AssetMediaType: d.assetMediaType, DestinationTypeId: d.destinationTypeId, StorageModeId: d.storageModeId, EntityScopeId: entityScopeId, RoleAttributeCode: d.roleAttributeCode, RoleValuesCsv: d.roleValuesCsv, SortOrderAttributeCode: d.sortOrderAttributeCode, AltTextTemplate: d.altTextTemplate, TitleTextTemplate: d.titleTextTemplate, SeoFilenameTemplate: d.seoFilenameTemplate, CustomPropertyKey: d.customPropertyKey, DisplayOrder: d.displayOrder, MaxAssets: d.maxAssets }), success: function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to save mapping.']; return; } var saved = hydrate(response.mapping, false); var index = self.mappings.indexOf(mapping); if (index >= 0) self.mappings.splice(index, 1, saved); self.notify('Asset mapping saved.'); }, error: function () { mapping.errors = ['Unable to save mapping due to a server error.']; }, complete: function () { mapping.saving = false; } }); },
-            requestDelete: function (mapping) { this.pendingDelete = mapping; this.deleteErrors = []; $('#akeneo-asset-delete-modal').modal('show'); },
-            confirmDelete: function () { var self = this, mapping = this.pendingDelete; if (!mapping) return; this.deleting = true; this.deleteErrors = []; $.ajax({ type: 'POST', url: data.urls.delete, data: addAntiForgeryToken({ id: mapping.id, akeneoFamilyCode: self.selectedFamilyCode || '' }), success: function (response) { if (!response || !response.success) { self.deleteErrors = response && response.errors ? response.errors : ['Unable to delete mapping.']; return; } var index = self.mappings.indexOf(mapping); if (index >= 0) { if (response.replacement) self.mappings.splice(index, 1, hydrate(response.replacement, false)); else self.mappings.splice(index, 1); } $('#akeneo-asset-delete-modal').modal('hide'); self.pendingDelete = null; self.notify('Asset mapping deleted.'); }, error: function () { self.deleteErrors = ['Unable to delete mapping due to a server error.']; }, complete: function () { self.deleting = false; } }); },
-            notify: function (text) { var self = this, id = Date.now() + '-' + Math.random(); this.toasts.push({ id: id, text: text }); setTimeout(function () { self.toasts = self.toasts.filter(function (item) { return item.id !== id; }); }, 3000); }
+        function normalizeScope(value) {
+            var normalized = (Number(value) || 0) & scope.all;
+            return normalized || scope.all;
         }
-    }).mount('#akeneo-asset-mapping-app');
-})();
+        function hasScope(value, flag) { return (normalizeScope(value) & flag) === flag; }
+        function hydrate(raw, isNew) {
+            // Every source is camelCase: the embedded page data and the AJAX
+            // save/delete responses are both serialized with JsonSerializerDefaults.Web.
+            raw = raw || {};
+            var entityScopeId = normalizeScope(raw.entityScopeId);
+            var mapping = Object.assign({}, raw, {
+                clientKey: raw.clientKey || 'asset-' + (++sequence),
+                editing: !!isNew,
+                clientAdded: !!isNew,
+                saving: false,
+                loadingFields: false,
+                errors: [],
+                assetFields: [],
+                draft: {
+                    name: raw.name || '', enabled: raw.enabled !== false,
+                    sourceAttributeCode: raw.sourceAttributeCode || '',
+                    fallbackSourceAttributeCode: raw.fallbackSourceAttributeCode || '',
+                    sourceTypeId: Number(raw.sourceTypeId) || data.enums.source.productMedia,
+                    assetFamilyCode: raw.assetFamilyCode || '',
+                    assetMediaAttributeCode: raw.assetMediaAttributeCode || '',
+                    assetMediaType: raw.assetMediaType || '',
+                    destinationTypeId: Number(raw.destinationTypeId) || data.enums.destination.picture,
+                    storageModeId: Number(raw.storageModeId) || data.enums.storage.import,
+                    roleAttributeCode: raw.roleAttributeCode || '', roleValuesCsv: raw.roleValuesCsv || '',
+                    sortOrderAttributeCode: raw.sortOrderAttributeCode || '',
+                    altTextTemplate: raw.altTextTemplate || '', titleTextTemplate: raw.titleTextTemplate || '',
+                    seoFilenameTemplate: raw.seoFilenameTemplate || '', customPropertyKey: raw.customPropertyKey || '',
+                    displayOrder: Number(raw.displayOrder) || 0, maxAssets: Number(raw.maxAssets) || 20,
+                    applyToProductModels: hasScope(entityScopeId, scope.productModel),
+                    applyToVariants: hasScope(entityScopeId, scope.variant),
+                    applyToStandalone: hasScope(entityScopeId, scope.standalone)
+                }
+            });
+            return mapping;
+        }
+
+        Vue.createApp({
+            data: function () {
+                return {
+                    mappings: (data.mappings || []).map(function (item) { return hydrate(item, false); }),
+                    selectedFamilyCode: data.selectedFamilyCode || '', availableFamilies: data.availableFamilies || [],
+                    availableSources: data.availableSources || [], enums: data.enums, toasts: [],
+                    pendingDelete: null, deleteErrors: [], deleting: false
+                };
+            },
+            computed: {
+                orderedMappings: function () { return this.mappings.slice().sort(function (a, b) { return (a.displayOrder || 0) - (b.displayOrder || 0) || (a.name || '').localeCompare(b.name || ''); }); }
+            },
+            methods: {
+                selectedSource: function (mapping) { var code = mapping.draft.sourceAttributeCode; return this.availableSources.find(function (item) { return item.code === code; }) || null; },
+                availableFallbackSources: function (mapping) { var primary = this.selectedSource(mapping); if (!primary) return []; return this.availableSources.filter(function (item) { return item.code !== primary.code && Number(item.sourceTypeId) === Number(primary.sourceTypeId) && (Number(primary.sourceTypeId) !== data.enums.source.assetCollection || item.assetFamilyCode === primary.assetFamilyCode); }); },
+                selectedMediaField: function (mapping) { var code = mapping.draft.assetMediaAttributeCode; return (mapping.assetFields || []).find(function (item) { return item.code === code; }) || null; },
+                isAssetCollection: function (mapping) { var source = this.selectedSource(mapping); return !!source && Number(source.sourceTypeId) === this.enums.source.assetCollection; },
+                canUseVideo: function (mapping) { var field = this.selectedMediaField(mapping); return this.isAssetCollection(mapping) && !!field && field.type === 'media_link'; },
+                destinationText: function (value) { switch (Number(value)) { case this.enums.destination.picture: return 'Product picture'; case this.enums.destination.video: return 'Product video'; case this.enums.destination.customProperty: return 'Managed custom property'; default: return 'Unknown destination'; } },
+                scopeText: function (value) { var result = []; if (hasScope(value, scope.productModel)) result.push('Parents'); if (hasScope(value, scope.variant)) result.push('Variants'); if (hasScope(value, scope.standalone)) result.push('Standalone'); return result.join(' + '); },
+                changeFamilyScope: function () { var url = new URL(data.urls.list, window.location.origin); if (this.selectedFamilyCode) url.searchParams.set('akeneoFamilyCode', this.selectedFamilyCode); window.location.assign(url.pathname + url.search); },
+                addMapping: function () { this.mappings.unshift(hydrate({ id: 0, mappingKey: '', name: '', enabled: true, isInherited: false, sourceAttributeCode: '', fallbackSourceAttributeCode: '', sourceTypeId: this.enums.source.productMedia, destinationTypeId: this.enums.destination.picture, storageModeId: this.enums.storage.import, entityScopeId: scope.productModel, displayOrder: 0, maxAssets: 20 }, true)); },
+                edit: function (mapping) { var replacement = hydrate(mapping, false); mapping.draft = replacement.draft; mapping.errors = []; mapping.editing = true; if (this.isAssetCollection(mapping)) this.loadAssetFields(mapping); },
+                cancel: function (mapping) { if (mapping.clientAdded) this.mappings = this.mappings.filter(function (item) { return item !== mapping; }); else mapping.editing = false; },
+                sourceChanged: function (mapping) { var source = this.selectedSource(mapping); mapping.assetFields = []; mapping.draft.assetMediaAttributeCode = ''; mapping.draft.roleAttributeCode = ''; mapping.draft.roleValuesCsv = ''; mapping.draft.sortOrderAttributeCode = ''; if (!source) { mapping.draft.fallbackSourceAttributeCode = ''; return; } mapping.draft.sourceTypeId = Number(source.sourceTypeId); mapping.draft.assetFamilyCode = source.assetFamilyCode || ''; var fallbackStillValid = this.availableFallbackSources(mapping).some(function (item) { return item.code === mapping.draft.fallbackSourceAttributeCode; }); if (!fallbackStillValid) mapping.draft.fallbackSourceAttributeCode = ''; if (this.isAssetCollection(mapping)) { this.loadAssetFields(mapping); } else { mapping.assetFields = []; mapping.draft.assetFamilyCode = ''; mapping.draft.assetMediaType = source.attributeType === 'pim_catalog_image' ? 'image' : 'file'; if (mapping.draft.destinationTypeId === this.enums.destination.video) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); } },
+                loadAssetFields: function (mapping) { var self = this; var source = this.selectedSource(mapping); var family = mapping.draft.assetFamilyCode || (source && source.assetFamilyCode); if (!family) return; mapping.loadingFields = true; $.get(data.urls.fields, { assetFamilyCode: family }).done(function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to load asset family fields.']; return; } mapping.assetFields = response.attributes || []; if (!mapping.draft.assetMediaAttributeCode && response.mainMediaAttributeCode) mapping.draft.assetMediaAttributeCode = response.mainMediaAttributeCode; self.mediaFieldChanged(mapping); }).fail(function () { mapping.errors = ['Unable to load asset family fields.']; }).always(function () { mapping.loadingFields = false; }); },
+                mediaFieldChanged: function (mapping) { var field = this.selectedMediaField(mapping); mapping.draft.assetMediaType = field ? (field.mediaType || field.type) : ''; if (mapping.draft.destinationTypeId === this.enums.destination.video && !this.canUseVideo(mapping)) mapping.draft.destinationTypeId = this.enums.destination.picture; this.destinationChanged(mapping); },
+                destinationChanged: function (mapping) { mapping.draft.storageModeId = mapping.draft.destinationTypeId === this.enums.destination.picture ? this.enums.storage.import : this.enums.storage.external; },
+                draftScope: function (draft) { var value = 0; if (draft.applyToProductModels) value |= scope.productModel; if (draft.applyToVariants) value |= scope.variant; if (draft.applyToStandalone) value |= scope.standalone; return value; },
+                save: function (mapping) { var self = this, d = mapping.draft; mapping.errors = []; var entityScopeId = this.draftScope(d); if (!entityScopeId) { mapping.errors = ['Select at least one product role.']; return; } mapping.saving = true; $.ajax({ type: 'POST', url: data.urls.save, data: addAntiForgeryToken({ Id: mapping.isInherited ? 0 : mapping.id, MappingKey: mapping.mappingKey || '', Name: d.name, Enabled: d.enabled, AkeneoFamilyCode: self.selectedFamilyCode || '', SourceTypeId: d.sourceTypeId, SourceAttributeCode: d.sourceAttributeCode, FallbackSourceAttributeCode: d.fallbackSourceAttributeCode, AssetFamilyCode: d.assetFamilyCode, AssetMediaAttributeCode: d.assetMediaAttributeCode, AssetMediaType: d.assetMediaType, DestinationTypeId: d.destinationTypeId, StorageModeId: d.storageModeId, EntityScopeId: entityScopeId, RoleAttributeCode: d.roleAttributeCode, RoleValuesCsv: d.roleValuesCsv, SortOrderAttributeCode: d.sortOrderAttributeCode, AltTextTemplate: d.altTextTemplate, TitleTextTemplate: d.titleTextTemplate, SeoFilenameTemplate: d.seoFilenameTemplate, CustomPropertyKey: d.customPropertyKey, DisplayOrder: d.displayOrder, MaxAssets: d.maxAssets }), success: function (response) { if (!response || !response.success) { mapping.errors = response && response.errors ? response.errors : ['Unable to save mapping.']; return; } var saved = hydrate(response.mapping, false); var index = self.mappings.indexOf(mapping); if (index >= 0) self.mappings.splice(index, 1, saved); self.notify('Asset mapping saved.'); }, error: function () { mapping.errors = ['Unable to save mapping due to a server error.']; }, complete: function () { mapping.saving = false; } }); },
+                requestDelete: function (mapping) { this.pendingDelete = mapping; this.deleteErrors = []; $('#akeneo-asset-delete-modal').modal('show'); },
+                confirmDelete: function () { var self = this, mapping = this.pendingDelete; if (!mapping) return; this.deleting = true; this.deleteErrors = []; $.ajax({ type: 'POST', url: data.urls.delete, data: addAntiForgeryToken({ id: mapping.id, akeneoFamilyCode: self.selectedFamilyCode || '' }), success: function (response) { if (!response || !response.success) { self.deleteErrors = response && response.errors ? response.errors : ['Unable to delete mapping.']; return; } var index = self.mappings.indexOf(mapping); if (index >= 0) { if (response.replacement) self.mappings.splice(index, 1, hydrate(response.replacement, false)); else self.mappings.splice(index, 1); } $('#akeneo-asset-delete-modal').modal('hide'); self.pendingDelete = null; self.notify('Asset mapping deleted.'); }, error: function () { self.deleteErrors = ['Unable to delete mapping due to a server error.']; }, complete: function () { self.deleting = false; } }); },
+                notify: function (text) { var self = this, id = Date.now() + '-' + Math.random(); this.toasts.push({ id: id, text: text }); setTimeout(function () { self.toasts = self.toasts.filter(function (item) { return item.id !== id; }); }, 3000); }
+            }
+        }).mount('#akeneo-asset-mapping-app');
+    })();
 </script>

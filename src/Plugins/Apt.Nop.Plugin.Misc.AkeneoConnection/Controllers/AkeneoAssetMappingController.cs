@@ -6,6 +6,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
@@ -23,6 +24,12 @@ public sealed class AkeneoAssetMappingController(
     IAkeneoValueTemplateRenderer templateRenderer)
     : BasePluginController
 {
+
+    
+
+    private IActionResult JsonWeb(object value) =>
+        Content(JsonSerializer.Serialize(value, WebJsonOptions), "application/json");
+
     [HttpGet("admin/akeneo-connection/asset-mappings")]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> List(string akeneoFamilyCode = null)
@@ -42,7 +49,7 @@ public sealed class AkeneoAssetMappingController(
     {
         if (string.IsNullOrWhiteSpace(assetFamilyCode))
         {
-            return Json(new
+            return JsonWeb(new
             {
                 success = false,
                 errors = new[]
@@ -76,7 +83,7 @@ public sealed class AkeneoAssetMappingController(
                 .ThenBy(attribute => attribute.code)
                 .ToList();
 
-            return Json(new
+            return JsonWeb(new
             {
                 success = true,
                 mainMediaAttributeCode =
@@ -86,7 +93,7 @@ public sealed class AkeneoAssetMappingController(
         }
         catch (Exception exception)
         {
-            return Json(new
+            return JsonWeb(new
             {
                 success = false,
                 errors = new[]
@@ -103,7 +110,7 @@ public sealed class AkeneoAssetMappingController(
     {
         var errors = await ValidateAsync(model);
         if (errors.Count > 0)
-            return Json(new { success = false, errors });
+            return JsonWeb(new { success = false, errors });
 
         var selectedFamily = model.AkeneoFamilyCode.TrimOrNull();
         AkeneoAssetMapping mapping = null;
@@ -120,7 +127,7 @@ public sealed class AkeneoAssetMappingController(
         }
 
         if (errors.Count > 0)
-            return Json(new { success = false, errors });
+            return JsonWeb(new { success = false, errors });
 
         if (mapping == null && !string.IsNullOrWhiteSpace(model.MappingKey))
         {
@@ -142,7 +149,7 @@ public sealed class AkeneoAssetMappingController(
         mapping.AkeneoFamilyCode = selectedFamily;
         mapping.SourceTypeId = model.SourceTypeId;
         mapping.SourceAttributeCode = model.SourceAttributeCode.Trim();
-        mapping.FallbackSourceAttributeCode = 
+        mapping.FallbackSourceAttributeCode =
             model.FallbackSourceAttributeCode.TrimOrNull();
         mapping.AssetFamilyCode = model.AssetFamilyCode.TrimOrNull();
         mapping.AssetMediaAttributeCode = model.AssetMediaAttributeCode.TrimOrNull();
@@ -176,7 +183,7 @@ public sealed class AkeneoAssetMappingController(
             mapping,
             selectedFamily);
 
-        return Json(new
+        return JsonWeb(new
         {
             success = true,
             mapping = savedModel
@@ -191,7 +198,7 @@ public sealed class AkeneoAssetMappingController(
     {
         var mapping = await mappingService.GetByIdAsync(id);
         if (mapping == null)
-            return Json(new { success = false, errors = new[] { "The asset mapping could not be found." } });
+            return JsonWeb(new { success = false, errors = new[] { "The asset mapping could not be found." } });
 
         var selectedFamily = akeneoFamilyCode.TrimOrNull();
         if (!string.Equals(
@@ -199,7 +206,7 @@ public sealed class AkeneoAssetMappingController(
                 selectedFamily,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return Json(new { success = false, errors = new[] { "The mapping does not belong to the selected family scope." } });
+            return JsonWeb(new { success = false, errors = new[] { "The mapping does not belong to the selected family scope." } });
         }
 
         var mappingKey = mapping.MappingKey;
@@ -215,7 +222,7 @@ public sealed class AkeneoAssetMappingController(
             if (inherited != null)
                 replacement = modelFactory.PrepareMappingModel(inherited, selectedFamily);
         }
-        return Json(new { success = true, replacement });
+        return JsonWeb(new { success = true, replacement });
     }
 
     private async Task<List<string>> ValidateAsync(AkeneoAssetMappingModel model)
@@ -363,7 +370,7 @@ public sealed class AkeneoAssetMappingController(
         AkeneoAttributeDefinition primarySource,
         ICollection<string> errors)
     {
-        model.FallbackSourceAttributeCode = 
+        model.FallbackSourceAttributeCode =
             model.FallbackSourceAttributeCode.TrimOrNull();
 
         if (model.FallbackSourceAttributeCode == null)
@@ -495,5 +502,7 @@ public sealed class AkeneoAssetMappingController(
             errors.Add($"{label} template: {error}");
     }
 
-   
+    private static readonly JsonSerializerOptions WebJsonOptions =
+        new(JsonSerializerDefaults.Web);
+
 }
