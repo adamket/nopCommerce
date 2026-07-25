@@ -325,7 +325,7 @@ public class AkeneoProductAttributeSynchronizer(
                 var renamed = !string.Equals(
                     mappedValue.Name,
                     valueName,
-                    StringComparison.Ordinal);
+                    StringComparison.OrdinalIgnoreCase);
 
                 if (renamed)
                 {

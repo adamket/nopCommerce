@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -45,7 +46,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
 
     public AkeneoAttributeType ResolveAkeneoAttributeType(AkeneoAttributeDefinition attribute)
     {
-        return Normalize(attribute.Type) switch
+        return attribute.Type.KeyPart() switch
         {
             "pim_catalog_identifier" => AkeneoAttributeType.Identifier,
             "pim_catalog_text" => AkeneoAttributeType.Text,
@@ -67,7 +68,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
 
     public NopTargetType ResolveDefaultTargetType(AkeneoAttributeDefinition attribute)
     {
-        return Normalize(attribute.Type) switch
+        return attribute.Type.KeyPart() switch
         {
             "pim_catalog_identifier" => NopTargetType.ProductField,
             "pim_catalog_text" => NopTargetType.SpecificationAttribute,
@@ -87,7 +88,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
 
     public IReadOnlyList<NopTargetType> GetAllowedTargetTypes(AkeneoAttributeDefinition attribute)
     {
-        return Normalize(attribute.Type) switch
+        return attribute.Type.KeyPart() switch
         {
             "pim_catalog_identifier" =>
             [
@@ -183,8 +184,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
         if (targetType == NopTargetType.Ignore)
             return string.Empty;
 
-        var code = Normalize(attribute.Code);
-        var type = Normalize(attribute.Type);
+        var code = attribute.Code.KeyPart();
+        var type = attribute.Type.KeyPart();
 
         if (targetType == NopTargetType.ProductField)
         {
@@ -225,7 +226,4 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
 
         return string.Empty;
     }
-
-    private static string Normalize(string type) =>
-        type?.Trim().ToLowerInvariant() ?? string.Empty;
 }

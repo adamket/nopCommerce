@@ -34,7 +34,7 @@ public static class AkeneoSyncScopeHasher
     private static IList<string> Normalize(IEnumerable<string> values) =>
         values?
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value.Trim().ToLowerInvariant())
+            .Select(value => value.KeyPart())
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToList() ?? new List<string>();

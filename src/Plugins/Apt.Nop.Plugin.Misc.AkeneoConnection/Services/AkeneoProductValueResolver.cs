@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -467,15 +468,11 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     private static bool LocaleEquals(string left, string right)
     {
         return string.Equals(
-            NormalizeLocale(left),
-            NormalizeLocale(right),
+            left.TrimAndNormalizeText(),
+            right.TrimAndNormalizeText(),
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NormalizeLocale(string value)
-    {
-        return value?.Trim().Replace('-', '_');
-    }
 
     private static string GetNullableStringProperty(
         JsonElement element,

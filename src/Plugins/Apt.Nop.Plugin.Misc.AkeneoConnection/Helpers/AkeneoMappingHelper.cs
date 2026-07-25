@@ -1,9 +1,25 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 
 public static class AkeneoMappingHelper
 {
+  
+    public static string TrimOrNull(this string v) =>
+        string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    public static string TrimOr(this string v, string fallback) =>
+        string.IsNullOrWhiteSpace(v) ? fallback : v.Trim();
+
+    public static string TrimAndNormalizeText(this string v) =>
+        v.TrimOrNull()?.Replace('-', '_');
+
+
+    // The single case-folding rule used for ALL lookup keys.
+    public static string KeyPart(this string v) =>
+        v?.Trim().ToLowerInvariant() ?? string.Empty;
+
     public static bool SetIfChanged<T>(
         T currentValue,
         T newValue,
@@ -83,9 +99,27 @@ public static class AkeneoMappingHelper
 
     public static bool IsReferenceEntityMapping(AkeneoAttributeMapping mapping)
     {
-        return mapping?.AkeneoAttributeTypeId ==
-                   (int)AkeneoAttributeType.ReferenceEntity ||
-               mapping?.AkeneoAttributeTypeId ==
-                   (int)AkeneoAttributeType.ReferenceEntityCollection;
+        return IsReferenceEntityType((AkeneoAttributeType)(mapping?.AkeneoAttributeTypeId ?? 0));
     }
+
+
+    public static bool IsReferenceEntityType(AkeneoAttributeType attributeType)
+    {
+        return attributeType == AkeneoAttributeType.ReferenceEntity ||
+               attributeType == AkeneoAttributeType.ReferenceEntityCollection;
+    }
+
+    public static bool IsReferenceEntityType(
+        AkeneoAttributeDefinition attribute)
+    {
+        return string.Equals(
+                   attribute.Type,
+                   "akeneo_reference_entity",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   attribute.Type,
+                   "akeneo_reference_entity_collection",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
 }

@@ -357,9 +357,9 @@ public sealed class AkeneoProductAssetSynchronizer(
         {
             var seoName = await ResolveSeoFilenameAsync(asset);
             var metadataChanged =
-                !string.Equals(picture.SeoFilename, seoName, StringComparison.Ordinal) ||
-                !string.Equals(picture.AltAttribute, asset.AltText, StringComparison.Ordinal) ||
-                !string.Equals(picture.TitleAttribute, asset.TitleText, StringComparison.Ordinal);
+                !string.Equals(picture.SeoFilename, seoName, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(picture.AltAttribute, asset.AltText, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(picture.TitleAttribute, asset.TitleText, StringComparison.OrdinalIgnoreCase);
 
             if (metadataChanged)
             {
@@ -438,7 +438,7 @@ public sealed class AkeneoProductAssetSynchronizer(
             await videoService.InsertVideoAsync(video);
             changed = true;
         }
-        else if (!string.Equals(video.VideoUrl, asset.ExternalUrl, StringComparison.Ordinal))
+        else if (!string.Equals(video.VideoUrl, asset.ExternalUrl, StringComparison.OrdinalIgnoreCase))
         {
             video.VideoUrl = asset.ExternalUrl;
             await videoService.UpdateVideoAsync(video);
@@ -537,7 +537,7 @@ public sealed class AkeneoProductAssetSynchronizer(
             ? null
             : JsonSerializer.Serialize(payload);
 
-        var changed = !string.Equals(current, desiredJson, StringComparison.Ordinal);
+        var changed = !string.Equals(current, desiredJson, StringComparison.OrdinalIgnoreCase);
         if (changed)
         {
             await genericAttributeService.SaveAttributeAsync(

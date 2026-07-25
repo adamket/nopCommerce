@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Nop.Core.Caching;
 using Nop.Data;
 
@@ -76,7 +77,7 @@ public class AkeneoAttributeMappingService(
             return new List<AkeneoAttributeMapping>();
 
         attributeCode = attributeCode.Trim();
-        familyCode = NormalizeScope(familyCode);
+        familyCode = familyCode.TrimOrNull();
 
         var cacheKey = staticCacheManager.PrepareKeyForDefaultCache(
             AkeneoConnectionConstants.AttributeMappingsBySourceCacheKey,
@@ -109,7 +110,7 @@ public class AkeneoAttributeMappingService(
         string familyCode)
     {
         var mappings = await GetAllAkeneoAttributeMappingsAsync();
-        familyCode = NormalizeScope(familyCode);
+        familyCode = familyCode.TrimOrNull();
 
         var effectiveMappings = new Dictionary<string, AkeneoAttributeMapping>(
             StringComparer.OrdinalIgnoreCase);
@@ -120,7 +121,7 @@ public class AkeneoAttributeMappingService(
                      .Where(mapping => string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode))
                      .OrderBy(mapping => mapping.Id))
         {
-            effectiveMappings[GetMappingSlotKey(mapping)] = mapping;
+            effectiveMappings[AkeneoMappingHelper.GetSourceMappingCode(mapping)] = mapping;
         }
 
         // A family row replaces only the matching slot. This preserves the
@@ -134,7 +135,7 @@ public class AkeneoAttributeMappingService(
                              StringComparison.OrdinalIgnoreCase))
                          .OrderBy(mapping => mapping.Id))
             {
-                effectiveMappings[GetMappingSlotKey(mapping)] = mapping;
+                effectiveMappings[AkeneoMappingHelper.GetSourceMappingCode(mapping)] = mapping;
             }
         }
 
@@ -188,10 +189,10 @@ public class AkeneoAttributeMappingService(
                         source.AkeneoAttributeCode.Trim(),
                     AkeneoAttributeTypeId =
                         source.AkeneoAttributeTypeId,
-                    AkeneoReferenceEntityCode = NormalizeScope(
-                        source.AkeneoReferenceEntityCode),
-                    AkeneoReferenceEntityAttributeCode = NormalizeScope(
-                        source.AkeneoReferenceEntityAttributeCode),
+                    AkeneoReferenceEntityCode = 
+                        source.AkeneoReferenceEntityCode.TrimOrNull(),
+                    AkeneoReferenceEntityAttributeCode = 
+                        source.AkeneoReferenceEntityAttributeCode.TrimOrNull(),
                     DisplayOrder = index
                 })
             .ToList();
@@ -206,49 +207,5 @@ public class AkeneoAttributeMappingService(
     {
         await staticCacheManager.RemoveByPrefixAsync(
             AkeneoConnectionConstants.AttributeMappingPrefix);
-    }
-
-    private static string GetMappingSlotKey(AkeneoAttributeMapping mapping)
-    {
-        if (mapping.ValueModeId ==
-            (int)AkeneoAttributeMappingValueMode.Template)
-        {
-            var mappingKey = NormalizeKeyPart(mapping.MappingKey);
-
-            // MappingKey is required for new computed mappings. The id fallback
-            // keeps malformed legacy rows independent rather than collapsing
-            // them into one slot.
-            return string.IsNullOrWhiteSpace(mappingKey)
-                ? $"template\u001flegacy-{mapping.Id}"
-                : $"template\u001f{mappingKey}";
-        }
-
-        var attributeCode = NormalizeKeyPart(mapping.AkeneoAttributeCode);
-
-        if (!IsReferenceEntityType(mapping.AkeneoAttributeTypeId))
-            return $"attribute\u001f{attributeCode}";
-
-        var referenceField = NormalizeKeyPart(
-            mapping.AkeneoReferenceEntityAttributeCode);
-
-        return $"attribute\u001f{attributeCode}\u001f{referenceField}";
-    }
-
-    private static bool IsReferenceEntityType(int attributeTypeId)
-    {
-        return attributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
-               attributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
-    }
-
-    private static string NormalizeScope(string familyCode)
-    {
-        return string.IsNullOrWhiteSpace(familyCode)
-            ? null
-            : familyCode.Trim();
-    }
-
-    private static string NormalizeKeyPart(string value)
-    {
-        return value?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 }

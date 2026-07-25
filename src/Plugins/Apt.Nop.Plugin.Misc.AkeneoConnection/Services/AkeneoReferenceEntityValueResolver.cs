@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Nop.Core.Caching;
@@ -148,8 +149,8 @@ public class AkeneoReferenceEntityValueResolver(
     {
         var cacheKey = staticCacheManager.PrepareKeyForDefaultCache(
             AkeneoConnectionConstants.ReferenceEntityRecordCacheKey,
-            referenceEntityCode.Trim().ToLowerInvariant(),
-            recordCode.Trim().ToLowerInvariant());
+            referenceEntityCode.KeyPart(),
+            recordCode.KeyPart());
 
         return await staticCacheManager.GetAsync(
             cacheKey,
@@ -219,8 +220,8 @@ public class AkeneoReferenceEntityValueResolver(
         if (!string.IsNullOrWhiteSpace(requested))
         {
             if (string.Equals(
-                    NormalizeContext(actual),
-                    NormalizeContext(requested),
+                    actual.TrimAndNormalizeText(),
+                    requested.TrimAndNormalizeText(),
                     StringComparison.OrdinalIgnoreCase))
             {
                 return 100;
@@ -385,10 +386,6 @@ public class AkeneoReferenceEntityValueResolver(
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
     }
 
-    private static string NormalizeContext(string value)
-    {
-        return value?.Trim().Replace('-', '_');
-    }
 
     private sealed record ResolvedReferenceEntityFieldValue(
         string SourceKey,

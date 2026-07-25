@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -238,7 +239,7 @@ public sealed class AkeneoValueTemplateRenderer(
     {
         var source = context.Source;
 
-        return name.Trim().ToLowerInvariant() switch
+        return name.KeyPart() switch
         {
             "sku" => context.Sku ?? source.Identifier ?? source.Code,
             "code" => source.Code ?? source.Identifier,
@@ -355,7 +356,7 @@ public sealed class AkeneoValueTemplateRenderer(
             return string.Empty;
 
         var normalizedLines = value
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r\n", "\n", StringComparison.OrdinalIgnoreCase)
             .Replace('\r', '\n')
             .Split('\n')
             .Select(line => HorizontalWhitespaceRegex
@@ -1045,7 +1046,7 @@ public sealed class AkeneoValueTemplateRenderer(
 
         var name = parts[0].Trim();
         var modifier = parts.Count == 2
-            ? parts[1].Trim().ToLowerInvariant()
+            ? parts[1].KeyPart()
             : defaultOutputMode == TemplateTokenOutputMode.Code
                 ? "code"
                 : "label";

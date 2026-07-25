@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Assets;
@@ -540,9 +541,7 @@ public sealed class AkeneoAssetResolver(
                 Item = item,
                 Score = ScoreContext(item, locale, channel)
             })
-            .Where(item => item.Score >= 0)
-            .OrderByDescending(item => item.Score)
-            .FirstOrDefault();
+            .Where(item => item.Score >= 0).MaxBy(item => item.Score);
 
         if (scored == null)
             return false;
@@ -568,7 +567,7 @@ public sealed class AkeneoAssetResolver(
             return string.IsNullOrWhiteSpace(actual) ? 20 : 1;
 
         var matches = normalizeLocale
-            ? string.Equals(NormalizeLocale(actual), NormalizeLocale(requested), StringComparison.OrdinalIgnoreCase)
+            ? string.Equals(actual.TrimAndNormalizeText(), requested.TrimAndNormalizeText(), StringComparison.OrdinalIgnoreCase)
             : string.Equals(actual, requested, StringComparison.OrdinalIgnoreCase);
 
         if (matches)
@@ -576,7 +575,7 @@ public sealed class AkeneoAssetResolver(
         return string.IsNullOrWhiteSpace(actual) ? 10 : -1000;
     }
 
-    private static string NormalizeLocale(string value) => value?.Trim().Replace('-', '_');
+
 
     private static AkeneoProductDefinition BuildTemplateSource(
         AkeneoProductDefinition product,

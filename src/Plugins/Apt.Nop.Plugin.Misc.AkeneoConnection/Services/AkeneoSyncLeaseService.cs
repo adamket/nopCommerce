@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -14,7 +15,7 @@ public class AkeneoSyncLeaseService(
         if (string.IsNullOrWhiteSpace(lockKey))
             throw new ArgumentException("A sync lease lock key is required.", nameof(lockKey));
 
-        lockKey = lockKey.Trim().ToLowerInvariant();
+        lockKey = lockKey.KeyPart();
         var now = DateTime.UtcNow;
 
         var existing = await repository.Table.FirstOrDefaultAsync(item =>

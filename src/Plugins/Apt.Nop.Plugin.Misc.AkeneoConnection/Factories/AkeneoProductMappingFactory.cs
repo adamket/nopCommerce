@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -62,9 +62,9 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
      string currency = null,
      CancellationToken cancellationToken = default)
     {
-        locale = Normalize(locale, DefaultLocale);
-        channel = Normalize(channel, DefaultChannel);
-        currency = Normalize(currency, DefaultCurrency);
+        locale = locale.TrimOr(DefaultLocale);
+        channel = channel.TrimOr(DefaultChannel);
+        currency = currency.TrimOr(DefaultCurrency);
 
         var model = new AkeneoProductMappingPreviewModel
         {
@@ -739,10 +739,5 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
     //        : null;
     //}
 
-    private static string Normalize(string value, string fallback)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? fallback
-            : value.Trim();
-    }
+   
 }

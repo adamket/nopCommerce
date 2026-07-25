@@ -142,7 +142,7 @@ public class AkeneoMappingController(
 
         var isReferenceEntityMapping =
             valueMode == AkeneoAttributeMappingValueMode.SingleAttribute &&
-            IsReferenceEntityType(model.AkeneoAttributeTypeId);
+            AkeneoMappingHelper.IsReferenceEntityType((AkeneoAttributeType)model.AkeneoAttributeTypeId);
 
         // A stable MappingKey makes computed mapping saves idempotent and also
         // identifies the family-scoped override slot for an inherited global
@@ -161,7 +161,7 @@ public class AkeneoMappingController(
                         model.MappingKey.Trim(),
                         StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(
-                        NormalizeOptionalContext(candidate.AkeneoFamilyCode),
+                        candidate.AkeneoFamilyCode.TrimAndNormalizeText(),
                         requestedFamilyCode,
                         StringComparison.OrdinalIgnoreCase));
         }
@@ -234,8 +234,8 @@ public class AkeneoMappingController(
                 ? model.NopTargetEntityId
                 : null;
 
-        mapping.Locale = NormalizeAkeneoLocale(model.Locale);
-        mapping.Channel = NormalizeOptionalContext(model.Channel);
+        mapping.Locale = model.Locale.TrimAndNormalizeText();
+        mapping.Channel = model.Channel.TrimAndNormalizeText();
         mapping.TransformRuleJson = model.TransformRuleJson;
         mapping.IsRequired = model.IsRequired;
         mapping.EntityScopeId =
@@ -367,8 +367,8 @@ public class AkeneoMappingController(
             return;
         }
 
-        var familyCode = NormalizeOptionalContext(
-            model.AkeneoFamilyCode);
+        var familyCode = model.AkeneoFamilyCode.TrimAndNormalizeText(); 
+
         var effectiveMappings = await attributeMappingService
             .GetEffectiveMappingsAsync(familyCode);
         var requestedScope =
@@ -489,12 +489,11 @@ public class AkeneoMappingController(
             var source = fallbackSources[index];
             source.DisplayOrder = index;
             source.AkeneoAttributeCode =
-                NormalizeOptionalContext(source.AkeneoAttributeCode);
+                source.AkeneoAttributeCode.TrimAndNormalizeText();
             source.AkeneoReferenceEntityCode =
-                NormalizeOptionalContext(source.AkeneoReferenceEntityCode);
+                source.AkeneoReferenceEntityCode.TrimAndNormalizeText();
             source.AkeneoReferenceEntityAttributeCode =
-                NormalizeOptionalContext(
-                    source.AkeneoReferenceEntityAttributeCode);
+                source.AkeneoReferenceEntityAttributeCode.TrimAndNormalizeText();
 
             if (string.IsNullOrWhiteSpace(source.AkeneoAttributeCode))
             {
@@ -539,7 +538,7 @@ public class AkeneoMappingController(
                     targetTypeResolver.ResolveAkeneoAttributeType(attribute);
                 source.AkeneoAttributeTypeId = (int)actualType;
 
-                if (!IsReferenceEntityType(source.AkeneoAttributeTypeId))
+                if (!AkeneoMappingHelper.IsReferenceEntityType((AkeneoAttributeType)source.AkeneoAttributeTypeId))
                 {
                     source.AkeneoReferenceEntityCode = null;
                     source.AkeneoReferenceEntityAttributeCode = null;
@@ -547,7 +546,7 @@ public class AkeneoMappingController(
                 }
 
                 source.AkeneoReferenceEntityCode =
-                    NormalizeOptionalContext(attribute.ReferenceDataName) ??
+                    attribute.ReferenceDataName.TrimAndNormalizeText() ??
                     source.AkeneoReferenceEntityCode;
 
                 if (string.IsNullOrWhiteSpace(
@@ -633,7 +632,7 @@ public class AkeneoMappingController(
             var actualType = targetTypeResolver.ResolveAkeneoAttributeType(attribute);
             model.AkeneoAttributeTypeId = (int)actualType;
 
-            if (!IsReferenceEntityType(model.AkeneoAttributeTypeId))
+            if (!AkeneoMappingHelper.IsReferenceEntityType((AkeneoAttributeType)model.AkeneoAttributeTypeId))
             {
                 model.AkeneoReferenceEntityCode = null;
                 model.AkeneoReferenceEntityAttributeCode = null;
@@ -693,7 +692,7 @@ public class AkeneoMappingController(
         IList<string> errors)
     {
         if (string.IsNullOrWhiteSpace(model.AkeneoAttributeCode) ||
-            !IsReferenceEntityType(model.AkeneoAttributeTypeId))
+            !AkeneoMappingHelper.IsReferenceEntityType((AkeneoAttributeType)model.AkeneoAttributeTypeId))
         {
             return;
         }
@@ -727,26 +726,6 @@ public class AkeneoMappingController(
             errors.Add(
                 $"Reference entity field '{selectedField}' already has a mapping in this scope. Edit that mapping instead of adding a duplicate.");
         }
-    }
-
-
-    private static string NormalizeAkeneoLocale(string value)
-    {
-        var normalized = NormalizeOptionalContext(value);
-        return normalized?.Replace('-', '_');
-    }
-
-    private static string NormalizeOptionalContext(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
-    }
-
-    private static bool IsReferenceEntityType(int attributeTypeId)
-    {
-        return attributeTypeId == (int)AkeneoAttributeType.ReferenceEntity ||
-               attributeTypeId == (int)AkeneoAttributeType.ReferenceEntityCollection;
     }
 
     private static IList<string> ValidateAttributeMappingRow(
@@ -978,28 +957,19 @@ public class AkeneoMappingController(
             (int)AkeneoAttributeMappingValueMode.Template)
         {
             return string.Equals(
-                NormalizeMappingSlotPart(left.MappingKey),
-                NormalizeMappingSlotPart(right.MappingKey),
+                left.MappingKey.TrimOr(string.Empty),
+                right.MappingKey.TrimOr(string.Empty),
                 StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(
-                   NormalizeMappingSlotPart(left.AkeneoAttributeCode),
-                   NormalizeMappingSlotPart(right.AkeneoAttributeCode),
+                   left.AkeneoAttributeCode.TrimOr(string.Empty),
+                   right.AkeneoAttributeCode.TrimOr(string.Empty),
                    StringComparison.OrdinalIgnoreCase) &&
                string.Equals(
-                   NormalizeMappingSlotPart(
-                       left.AkeneoReferenceEntityAttributeCode),
-                   NormalizeMappingSlotPart(
-                       right.AkeneoReferenceEntityAttributeCode),
+                   left.AkeneoReferenceEntityAttributeCode.TrimOr(string.Empty),
+                   right.AkeneoReferenceEntityAttributeCode.TrimOr(string.Empty),
                    StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizeMappingSlotPart(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? string.Empty
-            : value.Trim();
     }
 
     [HttpGet("admin/akeneo-connection/category-mappings")]
@@ -1014,8 +984,6 @@ public class AkeneoMappingController(
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> SaveCategoryMapping(AkeneoCategoryMappingModel model)
     {
-        
-
         if (string.IsNullOrWhiteSpace(model.AkeneoCode))
         {
             return Json(new

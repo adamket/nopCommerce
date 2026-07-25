@@ -1,4 +1,5 @@
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Nop.Core.Caching;
 using Nop.Data;
 
@@ -39,7 +40,7 @@ public sealed class AkeneoAssetMappingService(
         string familyCode)
     {
         var all = await GetAllAsync();
-        var normalizedFamily = Normalize(familyCode);
+        var normalizedFamily = familyCode.TrimOrNull();
         var effective = new Dictionary<string, AkeneoAssetMapping>(
             StringComparer.OrdinalIgnoreCase);
 
@@ -55,7 +56,7 @@ public sealed class AkeneoAssetMappingService(
         {
             foreach (var mapping in all
                          .Where(item => string.Equals(
-                             Normalize(item.AkeneoFamilyCode),
+                             item.AkeneoFamilyCode.TrimOrNull(),
                              normalizedFamily,
                              StringComparison.OrdinalIgnoreCase))
                          .OrderBy(item => item.DisplayOrder)
@@ -103,6 +104,5 @@ public sealed class AkeneoAssetMappingService(
             : mapping.MappingKey.Trim();
     }
 
-    private static string Normalize(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+  
 }

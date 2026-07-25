@@ -66,7 +66,7 @@ public class AkeneoProductCustomPropertySynchronizer(
                 ? JsonSerializer.Serialize(values)
                 : mapped.DisplayValue?.Trim() ?? string.Empty;
 
-            if (string.Equals(existing, desired, StringComparison.Ordinal))
+            if (string.Equals(existing, desired, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             await genericAttributeService.SaveAttributeAsync(

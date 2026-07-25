@@ -105,7 +105,7 @@ public sealed class AkeneoAssetMappingController(
         if (errors.Count > 0)
             return Json(new { success = false, errors });
 
-        var selectedFamily = Normalize(model.AkeneoFamilyCode);
+        var selectedFamily = model.AkeneoFamilyCode.TrimOrNull();
         AkeneoAssetMapping mapping = null;
         if (model.Id > 0)
         {
@@ -113,7 +113,7 @@ public sealed class AkeneoAssetMappingController(
             if (mapping == null)
                 errors.Add("The asset mapping could not be found.");
             else if (!string.Equals(
-                         Normalize(mapping.AkeneoFamilyCode),
+                         mapping.AkeneoFamilyCode.TrimOrNull(),
                          selectedFamily,
                          StringComparison.OrdinalIgnoreCase))
                 errors.Add("The mapping does not belong to the selected family scope.");
@@ -127,7 +127,7 @@ public sealed class AkeneoAssetMappingController(
             mapping = (await mappingService.GetAllAsync())
                 .FirstOrDefault(candidate =>
                     string.Equals(candidate.MappingKey, model.MappingKey.Trim(), StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(Normalize(candidate.AkeneoFamilyCode), selectedFamily, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(candidate.AkeneoFamilyCode.TrimOrNull(), selectedFamily, StringComparison.OrdinalIgnoreCase));
         }
 
         mapping ??= new AkeneoAssetMapping();
@@ -142,22 +142,22 @@ public sealed class AkeneoAssetMappingController(
         mapping.AkeneoFamilyCode = selectedFamily;
         mapping.SourceTypeId = model.SourceTypeId;
         mapping.SourceAttributeCode = model.SourceAttributeCode.Trim();
-        mapping.FallbackSourceAttributeCode = Normalize(
-            model.FallbackSourceAttributeCode);
-        mapping.AssetFamilyCode = Normalize(model.AssetFamilyCode);
-        mapping.AssetMediaAttributeCode = Normalize(model.AssetMediaAttributeCode);
-        mapping.AssetMediaType = Normalize(model.AssetMediaType);
+        mapping.FallbackSourceAttributeCode = 
+            model.FallbackSourceAttributeCode.TrimOrNull();
+        mapping.AssetFamilyCode = model.AssetFamilyCode.TrimOrNull();
+        mapping.AssetMediaAttributeCode = model.AssetMediaAttributeCode.TrimOrNull();
+        mapping.AssetMediaType = model.AssetMediaType.TrimOrNull();
         mapping.DestinationTypeId = model.DestinationTypeId;
         mapping.StorageModeId = model.StorageModeId;
         mapping.EntityScopeId = AkeneoAttributeMappingScopeHelper
             .NormalizeConfiguredScopeId(model.EntityScopeId);
-        mapping.RoleAttributeCode = Normalize(model.RoleAttributeCode);
-        mapping.RoleValuesCsv = Normalize(model.RoleValuesCsv);
-        mapping.SortOrderAttributeCode = Normalize(model.SortOrderAttributeCode);
-        mapping.AltTextTemplate = Normalize(model.AltTextTemplate);
-        mapping.TitleTextTemplate = Normalize(model.TitleTextTemplate);
-        mapping.SeoFilenameTemplate = Normalize(model.SeoFilenameTemplate);
-        mapping.CustomPropertyKey = Normalize(model.CustomPropertyKey);
+        mapping.RoleAttributeCode = model.RoleAttributeCode.TrimOrNull();
+        mapping.RoleValuesCsv = model.RoleValuesCsv.TrimOrNull();
+        mapping.SortOrderAttributeCode = model.SortOrderAttributeCode.TrimOrNull();
+        mapping.AltTextTemplate = model.AltTextTemplate.TrimOrNull();
+        mapping.TitleTextTemplate = model.TitleTextTemplate.TrimOrNull();
+        mapping.SeoFilenameTemplate = model.SeoFilenameTemplate.TrimOrNull();
+        mapping.CustomPropertyKey = model.CustomPropertyKey.TrimOrNull();
         mapping.DisplayOrder = Math.Max(0, model.DisplayOrder);
         mapping.MaxAssets = model.MaxAssets is > 0 and <= 100 ? model.MaxAssets : 20;
         mapping.UpdatedOnUtc = now;
@@ -193,9 +193,9 @@ public sealed class AkeneoAssetMappingController(
         if (mapping == null)
             return Json(new { success = false, errors = new[] { "The asset mapping could not be found." } });
 
-        var selectedFamily = Normalize(akeneoFamilyCode);
+        var selectedFamily = akeneoFamilyCode.TrimOrNull();
         if (!string.Equals(
-                Normalize(mapping.AkeneoFamilyCode),
+                mapping.AkeneoFamilyCode.TrimOrNull(),
                 selectedFamily,
                 StringComparison.OrdinalIgnoreCase))
         {
@@ -363,8 +363,8 @@ public sealed class AkeneoAssetMappingController(
         AkeneoAttributeDefinition primarySource,
         ICollection<string> errors)
     {
-        model.FallbackSourceAttributeCode = Normalize(
-            model.FallbackSourceAttributeCode);
+        model.FallbackSourceAttributeCode = 
+            model.FallbackSourceAttributeCode.TrimOrNull();
 
         if (model.FallbackSourceAttributeCode == null)
             return;
@@ -495,6 +495,5 @@ public sealed class AkeneoAssetMappingController(
             errors.Add($"{label} template: {error}");
     }
 
-    private static string Normalize(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+   
 }

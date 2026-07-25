@@ -93,7 +93,7 @@ public class AkeneoProductSeoSynchronizer(IProductService productService,
 
         var currentSeName = await urlRecordService.GetActiveSlugAsync(product.Id, nameof(Product), 0);
 
-        if (string.Equals(currentSeName, seName, StringComparison.Ordinal))
+        if (string.Equals(currentSeName, seName, StringComparison.OrdinalIgnoreCase))
             return false;
 
         await urlRecordService.SaveSlugAsync(product, seName, 0);

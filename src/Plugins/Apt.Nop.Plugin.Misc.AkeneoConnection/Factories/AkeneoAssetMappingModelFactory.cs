@@ -1,5 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -14,7 +15,7 @@ public sealed class AkeneoAssetMappingModelFactory(
     public async Task<AkeneoAssetMappingListModel> PrepareListModelAsync(
         string familyCode = null)
     {
-        familyCode = Normalize(familyCode);
+        familyCode = familyCode.TrimOrNull();
         var model = new AkeneoAssetMappingListModel
         {
             AkeneoFamilyCode = familyCode
@@ -115,6 +116,5 @@ public sealed class AkeneoAssetMappingModelFactory(
             "pim_catalog_file" or
             "pim_catalog_asset_collection";
 
-    private static string Normalize(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+   
 }

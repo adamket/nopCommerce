@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -110,7 +111,7 @@ public class AkeneoValueTransformationService : IAkeneoValueTransformationServic
         if (root.TryGetProperty("case", out var caseElement) &&
             caseElement.ValueKind == JsonValueKind.String)
         {
-            value = caseElement.GetString()?.Trim().ToLowerInvariant() switch
+            value = caseElement.GetString()?.KeyPart() switch
             {
                 "upper" => value.ToUpperInvariant(),
                 "lower" => value.ToLowerInvariant(),
@@ -165,7 +166,7 @@ public class AkeneoValueTransformationService : IAkeneoValueTransformationServic
 
         return string.IsNullOrEmpty(from)
             ? value
-            : value.Replace(from, to ?? string.Empty, StringComparison.Ordinal);
+            : value.Replace(from, to ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ApplyNumberRules(string input, JsonElement numberRules)

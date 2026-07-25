@@ -279,7 +279,7 @@ public class AkeneoVariantRelationshipService(
                 valueChanged = true;
             }
 
-            if (!string.Equals(existingValue.Name, valueName, StringComparison.Ordinal))
+            if (!string.Equals(existingValue.Name, valueName, StringComparison.OrdinalIgnoreCase))
             {
                 existingValue.Name = valueName;
                 valueChanged = true;
@@ -430,13 +430,13 @@ public class AkeneoVariantRelationshipService(
         {
             var combinationChanged = false;
 
-            if (!string.Equals(combination.AttributesXml, attributesXml, StringComparison.Ordinal))
+            if (!string.Equals(combination.AttributesXml, attributesXml, StringComparison.OrdinalIgnoreCase))
             {
                 combination.AttributesXml = attributesXml;
                 combinationChanged = true;
             }
 
-            if (!string.Equals(combination.Sku, context.Sku, StringComparison.Ordinal))
+            if (!string.Equals(combination.Sku, context.Sku, StringComparison.OrdinalIgnoreCase))
             {
                 combination.Sku = context.Sku;
                 combinationChanged = true;
@@ -556,7 +556,7 @@ public class AkeneoVariantRelationshipService(
             if (mapped != null &&
                 mapped.ProductAttributeMappingId == productAttributeMappingId)
             {
-                if (!string.Equals(mapped.Name, axisValue.DisplayName, StringComparison.Ordinal))
+                if (!string.Equals(mapped.Name, axisValue.DisplayName, StringComparison.OrdinalIgnoreCase))
                 {
                     mapped.Name = axisValue.DisplayName;
                     await productAttributeService.UpdateProductAttributeValueAsync(mapped);
