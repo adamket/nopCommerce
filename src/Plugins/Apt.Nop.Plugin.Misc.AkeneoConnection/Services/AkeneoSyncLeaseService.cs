@@ -1,11 +1,13 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Nop.Data;
+using Nop.Services.Logging;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoSyncLeaseService(
-    IRepository<AkeneoSyncLease> repository)
+    IRepository<AkeneoSyncLease> repository,
+    ILogger logger)
     : IAkeneoSyncLeaseService
 {
     public async Task<AkeneoSyncLease> TryAcquireAsync(
@@ -39,13 +41,20 @@ public class AkeneoSyncLeaseService(
 
         try
         {
-            // A unique index on LockKey makes this atomic across application instances.
             await repository.InsertAsync(lease);
             return lease;
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            // Only a unique-index collision means another instance holds the lease.
+            // Confirm that's the case; otherwise this is a real failure worth surfacing.
+            var held = await repository.Table.AnyAsync(l =>
+                l.LockKey == lease.LockKey && l.ExpiresOnUtc > DateTime.UtcNow);
+            if (held)
+                return null;
+
+            await logger.ErrorAsync("Akeneo sync lease acquisition failed.", ex);
+            throw;
         }
     }
 

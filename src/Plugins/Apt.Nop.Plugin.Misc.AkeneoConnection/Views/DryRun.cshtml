@@ -491,10 +491,43 @@
     </form>
 </div>
 
+
+<div class="modal fade"
+     id="akeneo-confirm-modal"
+     tabindex="-1"
+     role="dialog"
+     aria-labelledby="akeneo-confirm-modal-title"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="akeneo-confirm-modal-title" class="modal-title">Confirm action</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="akeneo-confirm-modal-message" class="mb-0"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" id="akeneo-confirm-modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
 <script asp-location="Footer">
     $(function () {
         var $button = $('#akeneo-import-product');
         var $result = $('#akeneo-import-result');
+
+        var confirmModal = $('#akeneo-confirm-modal');
+        var confirmModalTitle = $('#akeneo-confirm-modal-title');
+        var confirmModalMessage = $('#akeneo-confirm-modal-message');
+        var confirmModalConfirmButton = $('#akeneo-confirm-modal-confirm');
 
         function escapeHtml(value) {
             return $('<div/>').text(value == null ? '' : value).html();
@@ -523,15 +556,26 @@
                 .html(html);
         }
 
-        $button.on('click', function () {
-            if ($button.prop('disabled')) {
-                return;
-            }
+        function showConfirmModal(options) {
+            confirmModalTitle.text(options.title || 'Confirm action');
+            confirmModalMessage.text(options.message || 'Are you sure?');
 
-            if (!confirm('Import this Akeneo product into nopCommerce now?')) {
-                return;
-            }
+            confirmModalConfirmButton
+                .removeClass('btn-primary btn-success btn-danger btn-warning')
+                .addClass(options.confirmButtonClass || 'btn-primary')
+                .html(options.confirmButtonText || 'Confirm')
+                .off('click')
+                .on('click', function () {
+                    confirmModal.modal('hide');
+                    if (typeof options.onConfirm === 'function') {
+                        options.onConfirm();
+                    }
+                });
 
+            confirmModal.modal('show');
+        }
+
+        function runImport() {
             var originalHtml = $button.html();
 
             $button
@@ -546,13 +590,12 @@
             $.ajax({
                 type: 'POST',
                 url: $button.data('import-url'),
-                data: {
-                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val(),
+                data: addAntiForgeryToken({
                     uuid: $button.data('uuid'),
                     locale: $button.data('locale'),
                     channel: $button.data('channel'),
                     currency: $button.data('currency')
-                }
+                })
             })
             .done(function (response) {
                 var success = response && response.success === true;
@@ -610,6 +653,20 @@
                 $button
                     .prop('disabled', false)
                     .html(originalHtml);
+            });
+        }
+
+        $button.on('click', function () {
+            if ($button.prop('disabled')) {
+                return;
+            }
+
+            showConfirmModal({
+                title: 'Import Akeneo Product',
+                message: 'Import this Akeneo product into nopCommerce now?',
+                confirmButtonText: '<i class="fas fa-download"></i> Import product',
+                confirmButtonClass: 'btn-primary',
+                onConfirm: runImport
             });
         });
     });
