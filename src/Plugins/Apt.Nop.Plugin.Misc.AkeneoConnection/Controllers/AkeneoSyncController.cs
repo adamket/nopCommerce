@@ -218,7 +218,14 @@ public class AkeneoSyncController(
                 skipped = result.SkippedCount,
                 failed = result.FailedCount,
                 warnings = result.WarningCount,
-                reconciled = result.ReconciledCount
+                reconciled = result.ReconciledCount,
+                directProductChanges = result.DirectProductChangeCount,
+                ancestorProductModelChanges = result.AncestorProductModelChangeCount,
+                linkedAssetChanges = result.LinkedAssetChangeCount,
+                deduplicatedCandidates = result.DuplicateCandidateCount,
+                changedProductModels = result.ChangedProductModelCount,
+                descendantProductModels = result.DescendantProductModelCount,
+                productModelsRead = result.ProductModelsReadCount
             },
             warnings = result.Warnings,
             errors = result.Errors,

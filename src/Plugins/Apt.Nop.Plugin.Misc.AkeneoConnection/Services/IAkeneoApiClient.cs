@@ -79,6 +79,12 @@ public interface IAkeneoApiClient
         string searchJson = null,
         CancellationToken cancellationToken = default);
 
+    Task<AkeneoProductPageResult> GetProductModelsPageAsync(
+        int limit = 100,
+        string searchAfter = null,
+        string searchJson = null,
+        CancellationToken cancellationToken = default);
+
 
     Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesAsync(
         string familyCode,

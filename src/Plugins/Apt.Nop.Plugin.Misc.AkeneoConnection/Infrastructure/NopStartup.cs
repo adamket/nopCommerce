@@ -42,6 +42,9 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();
+        services.AddScoped<
+            IAkeneoProductModelDeltaFanOutService,
+            AkeneoProductModelDeltaFanOutService>();
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();

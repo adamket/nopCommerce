@@ -312,6 +312,31 @@ public class AkeneoApiClient : IAkeneoApiClient
         string searchAfter = null,
         string searchJson = null,
         CancellationToken cancellationToken = default)
+        => await GetProductLikePageAsync(
+            "api/rest/v1/products-uuid",
+            limit,
+            searchAfter,
+            searchJson,
+            cancellationToken);
+
+    public async Task<AkeneoProductPageResult> GetProductModelsPageAsync(
+        int limit = 100,
+        string searchAfter = null,
+        string searchJson = null,
+        CancellationToken cancellationToken = default)
+        => await GetProductLikePageAsync(
+            "api/rest/v1/product-models",
+            limit,
+            searchAfter,
+            searchJson,
+            cancellationToken);
+
+    private async Task<AkeneoProductPageResult> GetProductLikePageAsync(
+        string endpoint,
+        int limit,
+        string searchAfter,
+        string searchJson,
+        CancellationToken cancellationToken)
     {
         if (limit <= 0)
             limit = 100;
@@ -329,7 +354,7 @@ public class AkeneoApiClient : IAkeneoApiClient
         if (!string.IsNullOrWhiteSpace(searchJson))
             query["search"] = searchJson;
 
-        var relativeUrl = "api/rest/v1/products-uuid" + ToQueryString(query);
+        var relativeUrl = endpoint + ToQueryString(query);
 
         using var document = await GetJsonDocumentAsync(
             relativeUrl,

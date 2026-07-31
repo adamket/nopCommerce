@@ -1,4 +1,5 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
@@ -24,6 +25,8 @@ public class AkeneoProductImportResult
     public string Sku { get; set; }
 
     public SyncItemActionType ActionType { get; set; } = SyncItemActionType.Skipped;
+
+    public AkeneoSyncInclusionReason InclusionReason { get; set; }
 
     public IList<string> Messages { get; } = new List<string>();
 

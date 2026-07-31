@@ -20,6 +20,20 @@ public class AkeneoProductBatchImportResult
 
     public int ReconciledCount { get; set; }
 
+    public int DirectProductChangeCount { get; set; }
+
+    public int AncestorProductModelChangeCount { get; set; }
+
+    public int LinkedAssetChangeCount { get; set; }
+
+    public int DuplicateCandidateCount { get; set; }
+
+    public int ChangedProductModelCount { get; set; }
+
+    public int DescendantProductModelCount { get; set; }
+
+    public int ProductModelsReadCount { get; set; }
+
     public bool Canceled { get; set; }
 
     public bool CompletedAllPages { get; set; }

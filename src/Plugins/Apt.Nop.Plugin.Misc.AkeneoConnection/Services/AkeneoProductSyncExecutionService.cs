@@ -564,6 +564,13 @@ public class AkeneoProductSyncExecutionService(
             FailedCount = result.FailedCount,
             WarningCount = result.WarningCount,
             ReconciledCount = result.ReconciledCount,
+            DirectProductChangeCount = result.DirectProductChangeCount,
+            AncestorProductModelChangeCount = result.AncestorProductModelChangeCount,
+            LinkedAssetChangeCount = result.LinkedAssetChangeCount,
+            DuplicateCandidateCount = result.DuplicateCandidateCount,
+            ChangedProductModelCount = result.ChangedProductModelCount,
+            DescendantProductModelCount = result.DescendantProductModelCount,
+            ProductModelsReadCount = result.ProductModelsReadCount,
             Errors = result.Errors.ToList(),
             Warnings = result.LoggedItemResults
                 .SelectMany(item => item.Warnings)

@@ -49,3 +49,7 @@ full representation transitions and authoritative reconciliation:
 - Full-run missing-product lifecycle actions
 - Delta-watermark selection against persisted run records
 - Dry Run and real synchronization producing the same resolved plan
+
+## Product-model delta fan-out
+
+The suite also verifies the product-model delta fan-out rules: timestamped delta eligibility, direct-versus-linked-asset searches, descendant leaf scoping, and propagation of ancestor/asset inclusion reasons through submodels.
