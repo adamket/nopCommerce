@@ -25,6 +25,7 @@ public class NopStartup : INopStartup
     {
         //override services
         services.AddScoped<IAkeneoApiClient, AkeneoApiClient>();
+        services.AddScoped<IAkeneoConfigurationExportService, AkeneoConfigurationExportService>();
         services.AddScoped<IAkeneoAttributeMappingModelFactory, AkeneoAttributeMappingModelFactory>();
         services.AddScoped<IAkeneoNopEntityMappingService, AkeneoNopEntityMappingService>();
         services.AddScoped<IAkeneoAttributeMappingService, AkeneoAttributeMappingService>();

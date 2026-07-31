@@ -46,4 +46,21 @@ public static class AkeneoConnectionExtensions
             : null;
     }
 
+
+
+    public static bool HasRequiredConnectionData(
+        this AkeneoConnectionSettings settings)
+    {
+        if (settings == null)
+            return false;
+
+        return
+            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionBaseUrl) &&
+            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionClientId) &&
+            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionClientSecret) &&
+            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionUsername) &&
+            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionPassword);
+    }
+
+
 }

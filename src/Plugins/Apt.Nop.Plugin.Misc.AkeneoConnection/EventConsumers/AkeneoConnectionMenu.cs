@@ -1,4 +1,5 @@
-﻿using Nop.Core.Infrastructure;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
+using Nop.Core.Infrastructure;
 using Nop.Services.Events;
 using Nop.Services.Security;
 using Nop.Web.Framework.Events;
@@ -27,13 +28,7 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
         };
 
         var settings = EngineContext.Current.Resolve<AkeneoConnectionSettings>();
-
-        if (!string.IsNullOrWhiteSpace(settings.AkeneoConnectionClientId) &&
-            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionClientSecret) &&
-            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionPassword) &&
-            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionBaseUrl) &&
-            !string.IsNullOrWhiteSpace(settings.AkeneoConnectionUsername)
-            ) 
+        if (settings.HasRequiredConnectionData()) 
         {
             subAdminMenuItems.AddRange(new List<AdminMenuItem>
             {

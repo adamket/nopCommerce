@@ -19,6 +19,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AutoValidateAntiforgeryToken]
 public class AkeneoConnectionConfigurationController(
     IAkeneoApiClient akeneoApiClient,
+    IAkeneoConfigurationExportService configurationExportService,
     ILanguageService languageService,
     ILocalizationService localizationService,
     INotificationService notificationService,
@@ -51,6 +52,28 @@ public class AkeneoConnectionConfigurationController(
             success = result.Success,
             message = result.Message
         });
+    }
+
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet("admin/akeneo-connection/export-configuration")]
+    public async Task<IActionResult> ExportConfiguration(
+        CancellationToken cancellationToken)
+    {
+        var storeScope =
+            await storeContext.GetActiveStoreScopeConfigurationAsync();
+
+        var exportBytes = await configurationExportService.ExportAsync(
+            storeScope,
+            cancellationToken);
+
+        var fileName =
+            $"akeneo-connection-configuration-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+
+        Response.Headers["Cache-Control"] = "no-store, no-cache";
+        Response.Headers["Pragma"] = "no-cache";
+
+        return File(exportBytes, "application/json", fileName);
     }
 
 

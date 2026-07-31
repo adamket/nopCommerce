@@ -1,4 +1,6 @@
-﻿@using Apt.Nop.Plugin.Misc.AkeneoConnection
+﻿@inject AkeneoConnectionSettings settings
+
+
 @model AkeneoConfigurationModel
 @{
     Layout = "_AdminLayout";
@@ -6,6 +8,8 @@
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.Configuration");
 }
+
+
 
 @await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
 
@@ -17,14 +21,25 @@
             <h1 class="m-0">Connection settings</h1>
         </div>
         <div class="float-right">
+
+            @if (settings.HasRequiredConnectionData())
+            {
+                <a asp-controller="AkeneoConnectionConfiguration"
+                   asp-action="ExportConfiguration"
+                   asp-route-storeScope="@Model.ActiveStoreScopeConfiguration"
+                   class="btn btn-info mr-1"
+                   title="Downloads the saved plugin configuration as redacted diagnostic JSON. Unsaved form changes are not included.">
+                    <i class="fas fa-file-export"></i>
+                    Export Configuration JSON
+                </a>
+            }
+
             <button type="submit" name="save" class="btn btn-primary" onclick="$('#submit-connection-info').submit()">
                 <i class="far fa-save"></i>
                 @T("Admin.Common.Save")
             </button>
         </div>
     </div>
-
-
 
     <section class="content">
         <form asp-controller="AkeneoConnectionConfiguration" asp-action="Configure" method="post" id="submit-connection-info">
@@ -34,7 +49,6 @@
 
                         <div class="card-title float-left">
                             <i class="fas fa-plug"></i> Api Access
-
                         </div>
                         <button type="button" id="test-connection" class="btn btn-success float-right btn-sm">
                             Test Connection
@@ -97,19 +111,11 @@
                                 <span asp-validation-for="AkeneoConnectionPassword"></span>
                             </div>
                         </div>
-
                     </div>
-
-
-                    
-                    
-
-
-
                 </div>
 
-                
-                @if (!string.IsNullOrWhiteSpace(Model.AkeneoConnectionPassword) && !string.IsNullOrWhiteSpace(Model.AkeneoConnectionBaseUrl))
+
+                @if (settings.HasRequiredConnectionData())
                 {
                     <div class="card card-default">
                         <div class="card-header">
@@ -124,11 +130,11 @@
 
                             <div class="form-group row">
                                 <div class="col-md-3">
-                                    <nop-override-store-checkbox asp-for="DefaultSyncProfileId_OverrideForStore" asp-input="DefaultSyncProfileId" asp-store-scope="@Model.ActiveStoreScopeConfiguration"/>
-                                    <nop-label asp-for="DefaultSyncProfileId"/>
+                                    <nop-override-store-checkbox asp-for="DefaultSyncProfileId_OverrideForStore" asp-input="DefaultSyncProfileId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                    <nop-label asp-for="DefaultSyncProfileId" />
                                 </div>
                                 <div class="col-md-9">
-                                    <nop-select asp-for="DefaultSyncProfileId" asp-items="Model.AvailableSyncProfiles"/>
+                                    <nop-select asp-for="DefaultSyncProfileId" asp-items="Model.AvailableSyncProfiles" />
                                     <span asp-validation-for="DefaultSyncProfileId"></span>
                                 </div>
                             </div>
