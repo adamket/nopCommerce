@@ -263,6 +263,11 @@ public class AkeneoProductSyncService(
         return context.Product;
     }
 
+    public Task RunPrepareAsync(
+        AkeneoProductSyncContext context,
+        CancellationToken cancellationToken = default)
+        => syncPipeline.PrepareAsync(context, cancellationToken);
+
     private async Task<IList<AkeneoResolvedMappedValue>> ResolveMappedValuesAsync(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> mappings,

@@ -32,4 +32,20 @@ public class AkeneoProductSyncPipeline(
                 cancellationToken);
         }
     }
+
+    public async Task PrepareAsync(
+        AkeneoProductSyncContext context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        foreach (var synchronizer in _synchronizers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (context.StopProcessing || context.Result.Errors.Any())
+                return;
+
+            await synchronizer.PrepareAsync(context, cancellationToken);
+        }
+    }
 }

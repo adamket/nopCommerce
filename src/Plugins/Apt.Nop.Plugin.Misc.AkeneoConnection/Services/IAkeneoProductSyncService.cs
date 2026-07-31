@@ -45,4 +45,6 @@ public interface IAkeneoProductSyncService
     Task<Product> SynchronizeAsync(
         AkeneoProductSyncContext context,
         CancellationToken cancellationToken = default);
+
+    Task RunPrepareAsync(AkeneoProductSyncContext context, CancellationToken cancellationToken = default);
 }

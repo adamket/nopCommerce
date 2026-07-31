@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Nop.Core.Domain.Catalog;
@@ -64,4 +65,10 @@ public sealed class AkeneoProductSyncContext
     {
         HasChanges = true;
     }
+
+    // Settable so a single item-scoped cache can be shared across the parent
+    // and every child/leaf context, letting a pre-transaction prepare pass
+    // populate binaries that the in-transaction write pass reads back.
+    public IDictionary<string, AkeneoBinaryFile> PreloadedAssetBinaries { get; set; }
+        = new Dictionary<string, AkeneoBinaryFile>(StringComparer.OrdinalIgnoreCase);
 }

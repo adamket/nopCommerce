@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
@@ -114,30 +115,22 @@ public class AkeneoProductBatchSyncService(
 
                     try
                     {
-                        // Warm the model cache BEFORE opening the transaction so no Akeneo
-                        // HTTP call happens inside it. After this, every
-                        // GetProductModelCachedAsync call for this item is a cache hit.
+                        // Warm the product-model cache first so the reconcile
+                        // unit performs no product-model HTTP inside its
+                        // transaction. Asset binaries are downloaded by the
+                        // reconcile unit's own pre-transaction prepare pass.
                         await PrefetchProductModelsAsync(
                             source,
                             productModelCache,
                             cancellationToken);
 
-                        using (var transaction = CreateUnitTransaction())
-                        {
-                            itemResult = await ReconcileProductUnitAsync(
-                                source,
-                                request,
-                                itemResult,
-                                parentProductCache,
-                                productModelCache,
-                                cancellationToken);
-
-                            if (itemResult.Success &&
-                                itemResult.ActionType != SyncItemActionType.Failed)
-                            {
-                                transaction.Complete();
-                            }
-                        }
+                        itemResult = await ReconcileProductUnitAsync(
+                            source,
+                            request,
+                            itemResult,
+                            parentProductCache,
+                            productModelCache,
+                            cancellationToken);
 
                         if (!itemResult.Success ||
                             itemResult.ActionType == SyncItemActionType.Failed)
@@ -255,26 +248,22 @@ public class AkeneoProductBatchSyncService(
             var parentProductCache = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
             var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
 
-            // Warm the model cache BEFORE the transaction so the reconcile unit
-            // performs no Akeneo HTTP call while a DB transaction is open.
+            // Warm the product-model cache first. The reconcile unit owns its
+            // own transaction and downloads asset binaries in a pre-transaction
+            // prepare pass, so no Akeneo HTTP happens while the DB transaction
+            // is open.
             await PrefetchProductModelsAsync(
                 source,
                 productModelCache,
                 cancellationToken);
 
-            using (var transaction = CreateUnitTransaction())
-            {
-                result = await ReconcileProductUnitAsync(
-                    source,
-                    request,
-                    result,
-                    parentProductCache,
-                    productModelCache,
-                    cancellationToken);
-
-                if (result.Success && result.ActionType != SyncItemActionType.Failed)
-                    transaction.Complete();
-            }
+            result = await ReconcileProductUnitAsync(
+                source,
+                request,
+                result,
+                parentProductCache,
+                productModelCache,
+                cancellationToken);
 
             if (!result.Success || result.ActionType == SyncItemActionType.Failed)
                 ClearRolledBackDestination(result);
@@ -356,26 +345,15 @@ public class AkeneoProductBatchSyncService(
                     $"Product model '{requestedCode}' resolves to configured nopCommerce parent model '{effectiveSource.Code}'.");
             }
 
+            var context = await productSyncService.PrepareAsync(
+                effectiveSource, AkeneoEntityType.ProductModel, request, result, source.Family, cancellationToken);
+            AppendParentNameResolutionDiagnostic(context, result, effectiveSource.Code, request);
+
+            await productSyncService.RunPrepareAsync(context, cancellationToken);
+
             using (var transaction = CreateUnitTransaction())
             {
-                var context = await productSyncService.PrepareAsync(
-                    effectiveSource,
-                    AkeneoEntityType.ProductModel,
-                    request,
-                    result,
-                    source.Family,
-                    cancellationToken);
-
-                AppendParentNameResolutionDiagnostic(
-                    context,
-                    result,
-                    effectiveSource.Code,
-                    request);
-
-                await productSyncService.SynchronizeAsync(
-                    context,
-                    cancellationToken);
-
+                await productSyncService.SynchronizeAsync(context, cancellationToken);
                 if (result.Success && result.ActionType != SyncItemActionType.Failed)
                     transaction.Complete();
             }
@@ -413,6 +391,42 @@ public class AkeneoProductBatchSyncService(
                 source.Uuid)
             : null;
 
+        // One binary cache per item, shared by the parent and every leaf/child
+        // context so the prepare pass and the write pass agree on cache hits.
+        var assetBinaryCache = new Dictionary<string, AkeneoBinaryFile>(
+            StringComparer.OrdinalIgnoreCase);
+
+        // PASS 1 (no transaction): resolve mappings and download asset binaries
+        // into the shared cache. This performs no nopCommerce writes, so the
+        // network I/O happens while no DB transaction is open. It is
+        // best-effort: any miss in the write pass falls back to an inline
+        // download, so a prefetch failure only forfeits the optimization.
+        try
+        {
+            await ImportProductAsync(
+                source,
+                request,
+                CreateInitialResult(source),
+                previousState,
+                parentProductCache,
+                productModelCache,
+                prepareOnly: true,
+                assetBinaryCache,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Prefetch is best-effort; the write pass handles real errors.
+        }
+
+        // PASS 2 (transactional): the atomic reconciliation unit. The write
+        // pass reads binaries the prepare pass already downloaded.
+        using var transaction = CreateUnitTransaction();
+
         result = await ImportProductAsync(
             source,
             request,
@@ -420,10 +434,12 @@ public class AkeneoProductBatchSyncService(
             previousState,
             parentProductCache,
             productModelCache,
+            prepareOnly: false,
+            assetBinaryCache,
             cancellationToken);
 
         if (!result.Success || result.ActionType == SyncItemActionType.Failed)
-            return result;
+            return result; // scope left uncompleted -> rollback
 
         await representationCleanupService.CleanupPreviousRepresentationAsync(
             previousState,
@@ -443,6 +459,7 @@ public class AkeneoProductBatchSyncService(
                 ComputeDesiredStateHash(source));
         }
 
+        transaction.Complete();
         return result;
     }
 
@@ -453,6 +470,8 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductSyncState previousState,
         IDictionary<string, Product> parentProductCache,
         IDictionary<string, AkeneoProductDefinition> productModelCache,
+        bool prepareOnly,
+        IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
         CancellationToken cancellationToken)
     {
         var akeneoUuid = source.Uuid?.Trim();
@@ -476,6 +495,13 @@ public class AkeneoProductBatchSyncService(
                 request,
                 result,
                 cancellationToken);
+            standaloneContext.PreloadedAssetBinaries = assetBinaryCache;
+
+            if (prepareOnly)
+            {
+                await productSyncService.RunPrepareAsync(standaloneContext, cancellationToken);
+                return result;
+            }
 
             await productSyncService.SynchronizeAsync(
                 standaloneContext,
@@ -519,6 +545,7 @@ public class AkeneoProductBatchSyncService(
             request,
             result,
             cancellationToken);
+        rawLeafContext.PreloadedAssetBinaries = assetBinaryCache;
 
         if (!result.Success)
         {
@@ -559,10 +586,17 @@ public class AkeneoProductBatchSyncService(
                         familyCode,
                         AkeneoAttributeMappingEntityScope.StandaloneProduct,
                         cancellationToken);
+                    effectiveContext.PreloadedAssetBinaries = assetBinaryCache;
 
                     if (!result.Success)
                     {
                         result.ActionType = SyncItemActionType.Failed;
+                        return result;
+                    }
+
+                    if (prepareOnly)
+                    {
+                        await productSyncService.RunPrepareAsync(effectiveContext, cancellationToken);
                         return result;
                     }
 
@@ -589,10 +623,26 @@ public class AkeneoProductBatchSyncService(
                 request,
                 result,
                 cancellationToken);
+        leafContext.PreloadedAssetBinaries = assetBinaryCache;
 
         if (!result.Success)
         {
             result.ActionType = SyncItemActionType.Failed;
+            return result;
+        }
+
+        if (prepareOnly)
+        {
+            // Download the leaf's binaries, plus the parent product model's,
+            // into the shared item cache. No nopCommerce writes happen here.
+            await productSyncService.RunPrepareAsync(leafContext, cancellationToken);
+            await PrepareParentAssetsAsync(
+                hierarchy.EffectiveParentProductModel,
+                familyCode,
+                request,
+                parentProductCache,
+                assetBinaryCache,
+                cancellationToken);
             return result;
         }
 
@@ -602,6 +652,7 @@ public class AkeneoProductBatchSyncService(
             request,
             result,
             parentProductCache,
+            assetBinaryCache,
             cancellationToken);
 
         var parentProduct = parentSync?.Product;
@@ -886,6 +937,7 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         IDictionary<string, Product> parentProductCache,
+        IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
         CancellationToken cancellationToken)
     {
         var parentCode = effectiveProductModel?.Code?.Trim();
@@ -922,6 +974,7 @@ public class AkeneoProductBatchSyncService(
             parentResult,
             mappingFamilyCode,
             cancellationToken);
+        parentContext.PreloadedAssetBinaries = assetBinaryCache;
 
         AppendParentNameResolutionDiagnostic(
             parentContext,
@@ -947,6 +1000,48 @@ public class AkeneoProductBatchSyncService(
             SyncItemActionType.Created or SyncItemActionType.Updated;
 
         return new ParentProductSyncOutcome(parentProduct, changed);
+    }
+
+    /// <summary>
+    /// Downloads the parent product model's asset binaries into the shared item
+    /// cache during the pre-transaction prepare pass. Read-only: it builds a
+    /// throwaway context and runs only the prepare (download) pipeline, never a
+    /// nopCommerce write. A parent already synchronized earlier in this run is
+    /// skipped because its binaries were prepared when it was first seen.
+    /// </summary>
+    private async Task PrepareParentAssetsAsync(
+        AkeneoProductDefinition effectiveProductModel,
+        string mappingFamilyCode,
+        AkeneoProductImportRequest request,
+        IDictionary<string, Product> parentProductCache,
+        IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
+        CancellationToken cancellationToken)
+    {
+        var parentCode = effectiveProductModel?.Code?.Trim();
+        if (string.IsNullOrWhiteSpace(parentCode))
+            return;
+
+        // A parent already synchronized earlier in this run had its assets
+        // prepared when its first child was processed; don't re-download them.
+        if (parentProductCache.ContainsKey(parentCode))
+            return;
+
+        var parentResult = new AkeneoProductImportResult
+        {
+            AkeneoIdentifier = parentCode,
+            AkeneoProductKey = parentCode
+        };
+
+        var parentContext = await productSyncService.PrepareAsync(
+            effectiveProductModel,
+            AkeneoEntityType.ProductModel,
+            request,
+            parentResult,
+            mappingFamilyCode,
+            cancellationToken);
+        parentContext.PreloadedAssetBinaries = assetBinaryCache;
+
+        await productSyncService.RunPrepareAsync(parentContext, cancellationToken);
     }
 
     private static void AppendParentNameResolutionDiagnostic(

@@ -35,33 +35,19 @@ public sealed class AkeneoProductAssetSynchronizer(
         AkeneoProductSyncContext context,
         CancellationToken cancellationToken = default)
     {
-        if (context.Product == null ||
-            context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
-        {
+        if (context.Product == null || context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
             return;
-        }
-
-        var mappings = await assetMappingService.GetEffectiveMappingsAsync(
-            context.MappingFamilyCode);
-        var currentScope = AkeneoAttributeMappingScopeHelper.NormalizeCurrentScope(
-            context.MappingEntityScope,
-            context.Source,
-            context.SourceEntityType);
-
-        var activeMappings = mappings.Where(mapping =>
-                mapping.Enabled &&
-                AkeneoAttributeMappingScopeHelper
-                    .NormalizeConfiguredScope(mapping.EntityScopeId)
-                    .HasFlag(currentScope))
-            .ToList();
-
-        var resolvedMappings = new List<ResolvedAssetMapping>();
-        var authoritativeResolutionFailed = false;
 
         // Resolve the complete desired state before making destructive changes.
         // This is especially important for ReplaceAll: a temporary Akeneo error,
         // missing locale/channel match, or invalid external asset must never clear
         // the product gallery before the replacement set is known to be safe.
+
+        var desired = await ResolveDesiredAsync(context, emitWarnings: true, cancellationToken);
+        var activeMappings = desired.ActiveMappings;
+        var resolvedMappings = desired.ResolvedMappings;
+        var authoritativeResolutionFailed = desired.AuthoritativeResolutionFailed;
+
         foreach (var mapping in activeMappings)
         {
             try
@@ -143,6 +129,114 @@ public sealed class AkeneoProductAssetSynchronizer(
                 cancellationToken);
         }
     }
+
+    public async Task PrepareAsync(AkeneoProductSyncContext context, CancellationToken cancellationToken = default)
+    {
+        if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
+            return;
+
+        var desired = await ResolveDesiredAsync(context, emitWarnings: false, cancellationToken);
+
+        foreach (var resolved in desired.ResolvedMappings)
+        {
+            if ((AkeneoAssetDestinationType)resolved.Mapping.DestinationTypeId != AkeneoAssetDestinationType.ProductPicture)
+                continue; // videos are URL references, no binary
+            if ((AkeneoAssetStorageMode)resolved.Mapping.StorageModeId != AkeneoAssetStorageMode.ImportIntoNopCommerce)
+                continue;
+
+            // Fingerprint skip for updates so unchanged images aren't re-downloaded every run.
+            IList<AkeneoManagedAsset> existing = context.ExistingProduct is { Id: > 0 }
+                ? await managedAssetService.GetByProductAndMappingAsync(context.ExistingProduct.Id, resolved.Mapping.MappingKey)
+                : Array.Empty<AkeneoManagedAsset>();
+
+            foreach (var asset in resolved.Assets)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var key = BuildBinaryCacheKey(asset);
+                if (key == null || context.PreloadedAssetBinaries.ContainsKey(key))
+                    continue;
+
+                var managed = existing.FirstOrDefault(m =>
+                    string.Equals(m.SourceIdentityHash, asset.SourceIdentityHash, StringComparison.OrdinalIgnoreCase));
+                var binaryChanged = managed == null ||
+                    !string.Equals(managed.SourceFingerprint, asset.SourceFingerprint, StringComparison.OrdinalIgnoreCase);
+                if (!binaryChanged)
+                    continue;
+
+                try
+                {
+                    context.PreloadedAssetBinaries[key] = await DownloadFromSourceAsync(asset, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Non-fatal: write phase falls back to an inline download and warns there.
+                }
+            }
+        }
+    }
+
+    private static string BuildBinaryCacheKey(AkeneoResolvedAsset asset)
+    {
+        // Mirror the source selection in DownloadFromSourceAsync so both phases agree.
+        var source =
+            !string.IsNullOrWhiteSpace(asset.ExternalUrl) ? "ext:" + asset.ExternalUrl :
+            (AkeneoAssetSourceType)asset.Mapping.SourceTypeId == AkeneoAssetSourceType.ProductMediaAttribute ? "media:" + asset.MediaFileCode :
+            !string.IsNullOrWhiteSpace(asset.DownloadUrl) ? "url:" + asset.DownloadUrl :
+            !string.IsNullOrWhiteSpace(asset.MediaFileCode) ? "asset:" + asset.MediaFileCode :
+            null;
+
+        if (source == null)
+            return null;
+
+        return string.IsNullOrWhiteSpace(asset.SourceFingerprint) ? source : source + "|" + asset.SourceFingerprint;
+    }
+
+    private async Task<AssetDesiredState> ResolveDesiredAsync(
+        AkeneoProductSyncContext context,
+        bool emitWarnings,
+        CancellationToken cancellationToken)
+    {
+        var mappings = await assetMappingService.GetEffectiveMappingsAsync(context.MappingFamilyCode);
+        var currentScope = AkeneoAttributeMappingScopeHelper.NormalizeCurrentScope(
+            context.MappingEntityScope, context.Source, context.SourceEntityType);
+
+        var activeMappings = mappings.Where(mapping =>
+                mapping.Enabled &&
+                AkeneoAttributeMappingScopeHelper
+                    .NormalizeConfiguredScope(mapping.EntityScopeId)
+                    .HasFlag(currentScope))
+            .ToList();
+
+        var resolvedMappings = new List<ResolvedAssetMapping>();
+        var authoritativeResolutionFailed = false;
+
+        foreach (var mapping in activeMappings)
+        {
+            try
+            {
+                var resolution = await assetResolver.ResolveAsync(context, mapping, cancellationToken);
+                if (emitWarnings && !string.IsNullOrWhiteSpace(resolution.Warning))
+                    context.Result.AddWarning(resolution.Warning);
+                if (!resolution.CanReconcile)
+                {
+                    authoritativeResolutionFailed = true;
+                    continue;
+                }
+                resolvedMappings.Add(new ResolvedAssetMapping(mapping, resolution.Assets));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                authoritativeResolutionFailed = true;
+                if (emitWarnings)
+                    context.Result.AddWarning(
+                        $"Asset mapping '{mapping.Name}' could not be resolved: {ex.Message}");
+            }
+        }
+
+        return new AssetDesiredState(activeMappings, resolvedMappings, authoritativeResolutionFailed);
+    }
+
 
     private async Task<bool> ApplyMappingAsync(
         AkeneoProductSyncContext context,
@@ -324,7 +418,7 @@ public sealed class AkeneoProductAssetSynchronizer(
 
         if (binaryChanged)
         {
-            var file = await DownloadAsync(asset, cancellationToken);
+            var file = await DownloadAsync(context, asset, cancellationToken);
             var mimeType = file.ContentType ?? asset.MimeType;
             if (string.IsNullOrWhiteSpace(mimeType) ||
                 !mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
@@ -599,6 +693,18 @@ public sealed class AkeneoProductAssetSynchronizer(
     }
 
     private async Task<AkeneoBinaryFile> DownloadAsync(
+        AkeneoProductSyncContext context,
+        AkeneoResolvedAsset asset,
+        CancellationToken cancellationToken)
+    {
+        var key = BuildBinaryCacheKey(asset);
+        if (key != null && context.PreloadedAssetBinaries.TryGetValue(key, out var preloaded))
+            return preloaded;
+
+        return await DownloadFromSourceAsync(asset, cancellationToken); // fallback
+    }
+
+    private async Task<AkeneoBinaryFile> DownloadFromSourceAsync(
         AkeneoResolvedAsset asset,
         CancellationToken cancellationToken)
     {
@@ -976,4 +1082,8 @@ public sealed class AkeneoProductAssetSynchronizer(
         AkeneoAssetMapping Mapping,
         IReadOnlyList<AkeneoResolvedAsset> Assets);
 
+    private readonly record struct AssetDesiredState(
+        List<AkeneoAssetMapping> ActiveMappings,
+        List<ResolvedAssetMapping> ResolvedMappings,
+        bool AuthoritativeResolutionFailed);
 }
