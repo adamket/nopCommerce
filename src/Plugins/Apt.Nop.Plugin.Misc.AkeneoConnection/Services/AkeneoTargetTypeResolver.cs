@@ -70,18 +70,6 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
     {
         return attribute.Type.KeyPart() switch
         {
-            "pim_catalog_identifier" => NopTargetType.ProductField,
-            "pim_catalog_text" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_textarea" => NopTargetType.ProductField,
-            "pim_catalog_price_collection" => NopTargetType.ProductField,
-            "pim_catalog_simpleselect" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_multiselect" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_boolean" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_number" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_metric" => NopTargetType.SpecificationAttribute,
-            "pim_catalog_date" => NopTargetType.SpecificationAttribute,
-            "akeneo_reference_entity" or
-            "akeneo_reference_entity_collection" => NopTargetType.SpecificationAttribute,
             _ => NopTargetType.Ignore
         };
     }

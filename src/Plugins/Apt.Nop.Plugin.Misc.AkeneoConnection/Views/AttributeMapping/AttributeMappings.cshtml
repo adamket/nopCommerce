@@ -1164,16 +1164,7 @@
                     },
                     addReferenceMapping: function (entry) {
                         var definition = entry.definition;
-                        var hasSpecificationTarget =
-                            definition.availableTargetTypes.some(function (option) {
-                                return Number(option.value) ===
-                                    this.targetTypes.specificationAttribute;
-                            }, this);
-
-                        var defaultTargetType = hasSpecificationTarget
-                            ? String(this.targetTypes.specificationAttribute)
-                            : String(definition.defaultNopTargetTypeId ||
-                                this.targetTypes.ignore);
+                        var defaultTargetType = String(this.targetTypes.ignore);
 
                         var newMapping = hydrateMapping({
                             index: -1,
@@ -1198,7 +1189,7 @@
                                 definition.referenceEntityCode,
                             referenceEntityAttributeCode: '',
                             nopTargetTypeId: defaultTargetType,
-                            nopTargetKey: definition.defaultNopTargetKey || '',
+                            nopTargetKey: '',
                             nopTargetEntityId: '',
                             isRequired: false,
                             entityScopeId: entityScopes.all,
@@ -1423,10 +1414,8 @@
                         m.isComputed = false;
                         m.akeneoFamilyCode = '';
                         m.isInherited = false;
-                        m.nopTargetTypeId = String(
-                            m.defaultNopTargetTypeId ||
-                            this.targetTypes.ignore);
-                        m.nopTargetKey = m.defaultNopTargetKey || '';
+                        m.nopTargetTypeId = String(this.targetTypes.ignore);
+                        m.nopTargetKey = '';
                         m.nopTargetEntityId = '';
                         m.isRequired = false;
                         m.entityScopeId = entityScopes.all;
