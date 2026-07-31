@@ -2,22 +2,24 @@
 @using Apt.Nop.Plugin.Misc.AkeneoConnection
 
 @{
-    Layout = "_ConfigurePlugin";
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Akeneo product dry run";
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.DryRun");
 }
 
 <div class="akeneo-connection">
-    <form asp-controller="AkeneoSync" asp-action="DryRun" method="post">
+    <form id="akeneo-dry-run-form" asp-controller="AkeneoSync" asp-action="DryRun" method="post">
         @Html.AntiForgeryToken()
 
         <div class="content-header clearfix">
             <div class="float-left">
                 <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
-                <h1 class="m-0">Product Dry Run</h1>
+                <h1 class="m-0">Product dry run</h1>
+                <div class="akeneo-dim mt-1">Preview how saved Akeneo mappings will apply to an Akeneo product or product model without creating or updating nopCommerce product data.</div>
             </div>
             <div class="float-right">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" id="akeneo-preview-button" class="btn btn-primary">
                     <i class="fas fa-search"></i>
                     Preview
                 </button>
@@ -31,19 +33,19 @@
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-barcode"></i>
-                            Product Lookup
+                            Product / Product Model Lookup
                         </div>
                     </div>
 
                     <div class="card-body">
-                        <p>
+                      @*   <p>
                             Enter an Akeneo identifier/SKU to preview how the saved attribute mappings would apply.
                             No nopCommerce product data will be created or updated.
-                        </p>
+                        </p> *@
 
                         <div class="form-group row">
                             <div class="col-md-3">
-                                <label asp-for="AkeneoIdentifier">Akeneo Identifier/SKU</label>
+                                <label asp-for="AkeneoIdentifier">Akeneo Identifier/SKU or Product Model Code</label>
                             </div>
                             <div class="col-md-9">
                                 <input asp-for="AkeneoIdentifier" class="form-control" />
@@ -65,7 +67,7 @@
 
                         <div class="card-body">
                             <dl class="row mb-0">
-                                <dt class="col-sm-3">Akeneo product found</dt>
+                                <dt class="col-sm-3">Akeneo source found</dt>
                                 <dd class="col-sm-9">
                                     @if (Model.AkeneoProductFound)
                                     {
@@ -76,6 +78,14 @@
                                         <span class="badge badge-danger">No</span>
                                     }
                                 </dd>
+
+                                @if (Model.AkeneoProductFound)
+                                {
+                                    <dt class="col-sm-3">Akeneo entity type</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="akeneo-summary-target-type">@Model.AkeneoEntityTypeName</span>
+                                    </dd>
+                                }
 
                                 <dt class="col-sm-3">nopCommerce product found</dt>
                                 <dd class="col-sm-9">
@@ -144,18 +154,26 @@
                             <div class="card-body">
                                 <p>
                                     This will create or update the nopCommerce product using the mappings shown in this dry run.
+                                    @if (Model.IsProductModel)
+                                    {
+                                        <span>Only the resolved parent product model is synchronized; associated child products are not individually reimported.</span>
+                                    }
                                 </p>
 
                                 <dl class="row">
-                                    <dt class="col-sm-3">Akeneo UUID</dt>
+                                    <dt class="col-sm-3">@(Model.IsProductModel ? "Akeneo product model code" : "Akeneo UUID")</dt>
                                     <dd class="col-sm-9">
-                                        @if (!string.IsNullOrWhiteSpace(Model.AkeneoProductUuid))
+                                        @if (Model.IsProductModel && !string.IsNullOrWhiteSpace(Model.AkeneoProductModelCode))
+                                        {
+                                            <span class="akeneo-code">@Model.AkeneoProductModelCode</span>
+                                        }
+                                        else if (!Model.IsProductModel && !string.IsNullOrWhiteSpace(Model.AkeneoProductUuid))
                                         {
                                             <span class="akeneo-code">@Model.AkeneoProductUuid</span>
                                         }
                                         else
                                         {
-                                            <span class="text-danger">Missing UUID. Import cannot run.</span>
+                                            <span class="text-danger">Missing source key. Import cannot run.</span>
                                         }
                                     </dd>
 
@@ -175,17 +193,19 @@
                                         disabled="@(!Model.CanImport)"
                                         data-import-url="@Url.Action("ImportProduct", "AkeneoSync", new { area = "admin" })"
                                         data-uuid="@Model.AkeneoProductUuid"
+                                        data-product-model-code="@Model.AkeneoProductModelCode"
+                                        data-entity-type-id="@Model.AkeneoEntityTypeId"
                                         data-locale="@Model.Locale"
                                         data-channel="@Model.Channel"
                                         data-currency="@Model.Currency">
                                     <i class="fas fa-file-import"></i>
-                                    Import Product
+                                    Import @(Model.IsProductModel ? "Product Model" : "Product")
                                 </button>
 
                                 @if (!Model.CanImport)
                                 {
                                     <div class="text-muted mt-2">
-                                        Import is disabled until the product is found, a UUID is available, and the preview has no errors.
+                                        Import is disabled until the Akeneo source is found, its UUID or product model code is available, and the preview has no errors.
                                     </div>
                                 }
 
@@ -521,6 +541,8 @@
 
 <script asp-location="Footer">
     $(function () {
+        var $previewForm = $('#akeneo-dry-run-form');
+        var $previewButton = $('#akeneo-preview-button');
         var $button = $('#akeneo-import-product');
         var $result = $('#akeneo-import-result');
 
@@ -528,6 +550,45 @@
         var confirmModalTitle = $('#akeneo-confirm-modal-title');
         var confirmModalMessage = $('#akeneo-confirm-modal-message');
         var confirmModalConfirmButton = $('#akeneo-confirm-modal-confirm');
+
+        function setPreviewButtonLoading(isLoading) {
+            if (isLoading) {
+                if (!$previewButton.data('original-html')) {
+                    $previewButton.data('original-html', $previewButton.html());
+                }
+
+                $previewButton
+                    .prop('disabled', true)
+                    .attr('aria-busy', 'true')
+                    .html('<span class="akeneo-button-spinner" aria-hidden="true"></span>Previewing...');
+            } else {
+                var originalHtml = $previewButton.data('original-html');
+
+                if (originalHtml) {
+                    $previewButton.html(originalHtml);
+                }
+
+                $previewButton
+                    .prop('disabled', false)
+                    .removeAttr('aria-busy');
+            }
+        }
+
+        $previewForm.on('submit', function () {
+            if ($previewButton.prop('disabled')) {
+                return false;
+            }
+
+            if (typeof $previewForm.valid === 'function' && !$previewForm.valid()) {
+                return false;
+            }
+
+            setPreviewButtonLoading(true);
+        });
+
+        $(window).on('pageshow', function () {
+            setPreviewButtonLoading(false);
+        });
 
         function escapeHtml(value) {
             return $('<div/>').text(value == null ? '' : value).html();
@@ -592,6 +653,8 @@
                 url: $button.data('import-url'),
                 data: addAntiForgeryToken({
                     uuid: $button.data('uuid'),
+                    productModelCode: $button.data('product-model-code'),
+                    akeneoEntityTypeId: $button.data('entity-type-id'),
                     locale: $button.data('locale'),
                     channel: $button.data('channel'),
                     currency: $button.data('currency')
@@ -615,12 +678,16 @@
                     html += '<div><strong>nopCommerce Product ID:</strong> ' + escapeHtml(response.productId) + '</div>';
                 }
 
-                if (response.akeneoIdentifier) {
-                    html += '<div><strong>Akeneo Identifier:</strong> ' + escapeHtml(response.akeneoIdentifier) + '</div>';
+                if (response.akeneoEntityType) {
+                    html += '<div><strong>Akeneo Entity Type:</strong> ' + escapeHtml(response.akeneoEntityType) + '</div>';
                 }
 
-                if (response.syncRunId) {
-                    html += '<div><strong>Sync Run ID:</strong> <span class="akeneo-code">' + escapeHtml(response.syncRunId) + '</span></div>';
+                if (response.akeneoIdentifier) {
+                    html += '<div><strong>Akeneo Source Key:</strong> ' + escapeHtml(response.akeneoIdentifier) + '</div>';
+                }
+
+                if (response.syncRunRecordId) {
+                    html += '<div><strong>Sync Run ID:</strong> <span class="akeneo-code">' + escapeHtml(response.syncRunRecordId) + '</span></div>';
                 }
 
                 html += '</div>';
@@ -662,9 +729,9 @@
             }
 
             showConfirmModal({
-                title: 'Import Akeneo Product',
-                message: 'Import this Akeneo product into nopCommerce now?',
-                confirmButtonText: '<i class="fas fa-download"></i> Import product',
+                title: 'Import Akeneo Source',
+                message: 'Import this Akeneo product or product model into nopCommerce now?',
+                confirmButtonText: '<i class="fas fa-download"></i> Import',
                 confirmButtonClass: 'btn-primary',
                 onConfirm: runImport
             });

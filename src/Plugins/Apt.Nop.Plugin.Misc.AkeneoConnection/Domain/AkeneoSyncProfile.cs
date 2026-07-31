@@ -1,4 +1,4 @@
-using Nop.Core;
+﻿using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 
@@ -142,10 +142,10 @@ public enum AkeneoProductParentFilterMode
 
 public enum AkeneoUpdatedFilterMode
 {
-    None = 0,
+    SinceLastSuccessfulRun = 0,
     FixedDate = 10,
     RollingDays = 20,
-    SinceLastSuccessfulRun = 30
+    None = 30,
 }
 
 public enum AkeneoCollectionSyncMode

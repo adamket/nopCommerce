@@ -214,6 +214,133 @@ public class AkeneoProductSyncExecutionService(
         }
     }
 
+    public async Task<AkeneoProductSyncExecutionResult> SyncProductModelByCodeAsync(
+        int profileId,
+        string akeneoProductModelCode,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = await ValidateProfileAsync(profileId);
+        if (validation.Result != null)
+            return validation.Result;
+
+        if (string.IsNullOrWhiteSpace(akeneoProductModelCode))
+        {
+            return new AkeneoProductSyncExecutionResult
+            {
+                Success = false,
+                ProfileId = profileId,
+                SyncStatus = SyncStatus.Failed,
+                Message = "Akeneo product model code is required.",
+                Errors = new List<string> { "Akeneo product model code is required." }
+            };
+        }
+
+        var profile = validation.Profile;
+        var lease = await syncLeaseService.TryAcquireAsync(
+            BuildLockKey(profile.Id),
+            LeaseDuration);
+
+        if (lease == null)
+        {
+            var activeRun = await syncRunRecordService.GetActiveRunAsync(null);
+            return BuildAlreadyRunningResult(profile.Id, activeRun?.Id);
+        }
+
+        try
+        {
+            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            var runRecord = CreateRunRecord(
+                profile.Id,
+                SyncType.ManualProductSync,
+                AkeneoRunMode.SingleProduct,
+                scopeHash,
+                JsonSerializer.Serialize(profile).Truncate(4000));
+
+            await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
+            await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+
+            var request = requestFactory.CreateFromProfile(
+                profile,
+                runRecord.Id,
+                runMode: AkeneoRunMode.SingleProduct);
+
+            request.SyncLeaseId = lease.Id;
+            request.AkeneoProductModelCode = akeneoProductModelCode.Trim();
+
+            try
+            {
+                var itemResult = await productSyncService.SyncProductModelByCodeAsync(
+                    request,
+                    cancellationToken);
+
+                ApplyItemResultToRunRecord(runRecord, itemResult);
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = itemResult.Success,
+                    CompletedWithErrors = !itemResult.Success,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = (SyncStatus)runRecord.SyncStatusId,
+                    Message = itemResult.Success
+                        ? $"Akeneo product model synchronization {itemResult.ActionType.ToString().ToLowerInvariant()}."
+                        : "Akeneo product model synchronization failed.",
+                    TotalRead = 1,
+                    CreatedCount = itemResult.ActionType == SyncItemActionType.Created ? 1 : 0,
+                    UpdatedCount = itemResult.ActionType == SyncItemActionType.Updated ? 1 : 0,
+                    SkippedCount = itemResult.ActionType == SyncItemActionType.Skipped ? 1 : 0,
+                    FailedCount = itemResult.Success ? 0 : 1,
+                    WarningCount = itemResult.Warnings.Any() ? 1 : 0,
+                    ItemActionType = itemResult.ActionType,
+                    NopProductId = itemResult.NopProductId,
+                    AkeneoIdentifier = itemResult.AkeneoIdentifier,
+                    Errors = itemResult.Errors.ToList(),
+                    Warnings = itemResult.Warnings.ToList(),
+                    Messages = itemResult.Messages.ToList()
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                runRecord.FinishedOnUtc = DateTime.UtcNow;
+                runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
+                runRecord.ErrorSummary = "Product model synchronization was canceled.";
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = false,
+                    Canceled = true,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = SyncStatus.Cancelled,
+                    Message = "Akeneo product model synchronization was canceled."
+                };
+            }
+            catch (Exception ex)
+            {
+                runRecord.FinishedOnUtc = DateTime.UtcNow;
+                runRecord.SyncStatusId = (int)SyncStatus.Failed;
+                runRecord.ErrorSummary = ex.Message.Truncate(4000);
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+
+                return new AkeneoProductSyncExecutionResult
+                {
+                    Success = false,
+                    ProfileId = profile.Id,
+                    SyncRunRecordId = runRecord.Id,
+                    SyncStatus = SyncStatus.Failed,
+                    Message = $"Akeneo product model synchronization failed: {ex.Message}",
+                    Errors = new List<string> { ex.Message }
+                };
+            }
+        }
+        finally
+        {
+            await syncLeaseService.ReleaseAsync(lease);
+        }
+    }
+
     public async Task<AkeneoProductSyncExecutionResult> ImportProductsAsync(
         AkeneoProductBatchImportRequest request,
         SyncType syncType,

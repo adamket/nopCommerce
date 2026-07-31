@@ -1,7 +1,19 @@
-﻿namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+
+namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 public record AkeneoProductMappingPreviewModel
 {
     public string AkeneoProductUuid { get; set; }
+
+    public string AkeneoProductModelCode { get; set; }
+
+    public int AkeneoEntityTypeId { get; set; } = (int)AkeneoEntityType.Product;
+
+    public bool IsProductModel =>
+        AkeneoEntityTypeId == (int)AkeneoEntityType.ProductModel;
+
+    public string AkeneoEntityTypeName =>
+        IsProductModel ? "Product model" : "Product";
 
     public string Locale { get; set; } = "en_US";
 
@@ -12,7 +24,9 @@ public record AkeneoProductMappingPreviewModel
     public bool CanImport =>
         HasSearched &&
         AkeneoProductFound &&
-        !string.IsNullOrWhiteSpace(AkeneoProductUuid) &&
+        (IsProductModel
+            ? !string.IsNullOrWhiteSpace(AkeneoProductModelCode)
+            : !string.IsNullOrWhiteSpace(AkeneoProductUuid)) &&
         Errors?.Any() != true;
 
     public bool HasSearched { get; set; }

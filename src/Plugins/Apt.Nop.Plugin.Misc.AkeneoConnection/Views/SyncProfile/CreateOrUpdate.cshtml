@@ -156,9 +156,6 @@
                         <div class="col-md-9">
                             <nop-select asp-for="AkeneoChannel" asp-items="Model.AvailableAkeneoChannels" />
                             <span asp-validation-for="AkeneoChannel"></span>
-                            <span class="form-text text-muted">
-                                Select the Akeneo channel to use for scoped values, completeness, and product value resolution.
-                            </span>
                         </div>
                     </div>
 
@@ -171,9 +168,7 @@
                                         asp-items="Model.AvailableAkeneoLocales"
                                         asp-multiple="true" />
                             <span asp-validation-for="SelectedAkeneoLocaleCodes"></span>
-                            <span class="form-text text-muted">
-                                Select one or more Akeneo locales. These will be saved as a comma-separated value on the sync profile.
-                            </span>
+                          
                         </div>
                     </div>
                 </div>
@@ -439,10 +434,10 @@
 
                             <span asp-validation-for="SelectedAkeneoProductGroupCodes"></span>
 
-                            <span class="form-text text-muted">
+                         @*    <span class="form-text text-muted">
                                 Optional. Type an Akeneo product group code and press Enter, or leave the field, to add it.
                                 If one or more group codes are entered, only products belonging to those groups will be imported.
-                            </span>
+                            </span> *@
                         </div>
                     </div>
 
@@ -455,7 +450,7 @@
                             <span asp-validation-for="ProductEnabledFilterId"></span>
                         </div>
                     </div>
-
+                    @* 
                     <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="UpdatedFilterModeId" class="control-label">Updated filter mode</label>
@@ -468,8 +463,8 @@
                             </span>
                         </div>
                     </div>
-
-                    <div class="form-group row">
+               
+                  <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="IncludeLinkedAssetUpdates" class="control-label">Include asset-only updates</label>
                         </div>
@@ -502,9 +497,9 @@
                             <span asp-validation-for="UpdatedSinceLastNDays"></span>
                             <span class="form-text text-muted">Optional relative updated filter. Example: 7.</span>
                         </div>
-                    </div>
+                    </div> *@
 
-                    <div class="form-group row">
+                     <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="ProductParentFilterModeId" class="control-label">Product parent filter mode</label>
                         </div>
@@ -512,7 +507,7 @@
                             <nop-select asp-for="ProductParentFilterModeId" asp-items="Model.AvailableProductParentFilterModes" />
                             <span asp-validation-for="ProductParentFilterModeId"></span>
                         </div>
-                    </div>
+                    </div> 
                 </div>
             </div>
 

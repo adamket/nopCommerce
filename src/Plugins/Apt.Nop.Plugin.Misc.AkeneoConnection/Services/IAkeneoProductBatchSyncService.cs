@@ -7,6 +7,10 @@ public interface IAkeneoProductBatchSyncService
         AkeneoProductImportRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<AkeneoProductImportResult> SyncProductModelByCodeAsync(
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<AkeneoProductBatchImportResult> SyncProductsAsync(
         AkeneoProductBatchImportRequest request,
         CancellationToken cancellationToken = default);

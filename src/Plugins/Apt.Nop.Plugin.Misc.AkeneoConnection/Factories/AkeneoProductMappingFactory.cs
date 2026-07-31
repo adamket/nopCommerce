@@ -25,6 +25,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
     private readonly IAkeneoValueTemplateRenderer _valueTemplateRenderer;
     private readonly IAkeneoFamilyMappingService _familyMappingService;
     private readonly IAkeneoProductModelHierarchyResolver _productModelHierarchyResolver;
+    private readonly IAkeneoNopEntityMappingService _entityMappingService;
     private readonly IProductService _productService;
     private readonly ISpecificationAttributeService _specificationAttributeService;
     private readonly IProductAttributeService _productAttributeService;
@@ -38,6 +39,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         IAkeneoValueTemplateRenderer valueTemplateRenderer,
         IAkeneoFamilyMappingService familyMappingService,
         IAkeneoProductModelHierarchyResolver productModelHierarchyResolver,
+        IAkeneoNopEntityMappingService entityMappingService,
         IProductService productService,
         ISpecificationAttributeService specificationAttributeService,
         IProductAttributeService productAttributeService)
@@ -50,6 +52,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
         _valueTemplateRenderer = valueTemplateRenderer;
         _familyMappingService = familyMappingService;
         _productModelHierarchyResolver = productModelHierarchyResolver;
+        _entityMappingService = entityMappingService;
         _productService = productService;
         _specificationAttributeService = specificationAttributeService;
         _productAttributeService = productAttributeService;
@@ -77,44 +80,78 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
         if (string.IsNullOrWhiteSpace(akeneoIdentifier))
         {
-            model.Errors.Add("Enter an Akeneo identifier/SKU.");
+            model.Errors.Add("Enter an Akeneo identifier/SKU or product model code.");
             return model;
         }
 
         akeneoIdentifier = akeneoIdentifier.Trim();
 
-        var akeneoProduct = await FindAkeneoProductByIdentifierAsync(
+        var akeneoSource = await FindAkeneoProductByIdentifierAsync(
             akeneoIdentifier,
             cancellationToken);
 
-        if (akeneoProduct == null)
+        var sourceEntityType = AkeneoEntityType.Product;
+
+        if (akeneoSource == null)
+        {
+            akeneoSource = await _akeneoApiClient.GetProductModelByCodeAsync(
+                akeneoIdentifier,
+                cancellationToken);
+
+            sourceEntityType = AkeneoEntityType.ProductModel;
+        }
+
+        if (akeneoSource == null)
         {
             model.AkeneoProductFound = false;
-            model.Errors.Add($"No Akeneo product was found for identifier \"{akeneoIdentifier}\".");
+            model.Errors.Add(
+                $"No Akeneo product or product model was found for \"{akeneoIdentifier}\".");
             return model;
         }
 
         model.AkeneoProductFound = true;
-        model.AkeneoProductUuid = akeneoProduct.Uuid;
+        model.AkeneoEntityTypeId = (int)sourceEntityType;
+        model.AkeneoProductUuid = sourceEntityType == AkeneoEntityType.Product
+            ? akeneoSource.Uuid
+            : null;
+        model.AkeneoProductModelCode = sourceEntityType == AkeneoEntityType.ProductModel
+            ? akeneoSource.Code
+            : null;
 
-        if (string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
+        if (sourceEntityType == AkeneoEntityType.Product &&
+            string.IsNullOrWhiteSpace(model.AkeneoProductUuid))
         {
             model.Errors.Add("The Akeneo product was found, but it did not contain a UUID. Import cannot run.");
             return model;
         }
 
-        var previewSource = await BuildEffectivePreviewSourceAsync(
-            akeneoProduct,
-            model,
-            cancellationToken);
+        if (sourceEntityType == AkeneoEntityType.ProductModel &&
+            string.IsNullOrWhiteSpace(model.AkeneoProductModelCode))
+        {
+            model.Errors.Add("The Akeneo product model was found, but it did not contain a code. Import cannot run.");
+            return model;
+        }
+
+        var previewSource = sourceEntityType == AkeneoEntityType.ProductModel
+            ? await BuildEffectiveProductModelPreviewSourceAsync(
+                akeneoSource,
+                model,
+                cancellationToken)
+            : await BuildEffectivePreviewSourceAsync(
+                akeneoSource,
+                model,
+                cancellationToken);
+
+        if (sourceEntityType == AkeneoEntityType.ProductModel)
+            model.AkeneoProductModelCode = previewSource.Code;
 
         var savedMappings = await _akeneoAttributeMappingService
-            .GetEffectiveMappingsAsync(akeneoProduct.Family);
+            .GetEffectiveMappingsAsync(previewSource.Family ?? akeneoSource.Family);
 
         var mappingEntityScope =
             AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
-                akeneoProduct,
-                AkeneoEntityType.Product);
+                previewSource,
+                sourceEntityType);
 
         var activeMappings = savedMappings
             .Where(mapping =>
@@ -183,7 +220,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
                 !string.IsNullOrWhiteSpace(item.Value))
             .Value;
 
-        effectiveSku ??= akeneoProduct.Identifier ?? akeneoProduct.Code;
+        effectiveSku ??= previewSource.Identifier ?? previewSource.Code;
 
         foreach (var mapping in activeMappings.Where(mapping =>
                      mapping.ValueModeId ==
@@ -193,7 +230,7 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
                 previewSource,
                 mapping,
                 effectiveSku,
-                akeneoProduct.Family,
+                previewSource.Family ?? akeneoSource.Family,
                 locale,
                 channel,
                 currency,
@@ -217,9 +254,13 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
 
         var skuToFind = !string.IsNullOrWhiteSpace(mappedSku?.Value)
             ? mappedSku.Value
-            : akeneoIdentifier;
+            : previewSource.Identifier ?? previewSource.Code ?? akeneoIdentifier;
 
-        var nopProduct = await _productService.GetProductBySkuAsync(skuToFind);
+        var nopProduct = await FindMappedNopProductAsync(
+            previewSource,
+            sourceEntityType);
+
+        nopProduct ??= await _productService.GetProductBySkuAsync(skuToFind);
 
         if (nopProduct != null)
         {
@@ -297,6 +338,122 @@ public class AkeneoProductMappingFactory : IAkeneoProductMappingFactory
             hierarchyMode);
 
         return hierarchy.EffectiveLeaf;
+    }
+
+    private async Task<AkeneoProductDefinition>
+        BuildEffectiveProductModelPreviewSourceAsync(
+            AkeneoProductDefinition productModel,
+            AkeneoProductMappingPreviewModel model,
+            CancellationToken cancellationToken)
+    {
+        var selectedCode = productModel.Code?.Trim();
+        if (string.IsNullOrWhiteSpace(selectedCode))
+            return productModel;
+
+        var ancestors = new List<AkeneoProductDefinition>();
+        var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            selectedCode
+        };
+        var currentCode = productModel.Parent?.Trim();
+        var cycleDetected = false;
+
+        while (!string.IsNullOrWhiteSpace(currentCode))
+        {
+            if (!visitedCodes.Add(currentCode))
+            {
+                cycleDetected = true;
+                break;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var ancestor = await _akeneoApiClient
+                .GetProductModelByCodeAsync(currentCode, cancellationToken);
+
+            if (ancestor == null)
+            {
+                model.Warnings.Add(
+                    $"Product-model inheritance could not be fully previewed because Akeneo product model '{currentCode}' was not found.");
+                break;
+            }
+
+            ancestors.Add(ancestor);
+            currentCode = ancestor.Parent?.Trim();
+        }
+
+        if (cycleDetected)
+        {
+            model.Warnings.Add(
+                $"A product-model inheritance cycle was detected at '{currentCode}'. Preview used the values resolved before the cycle.");
+        }
+
+        var familyMapping = await _familyMappingService
+            .GetByFamilyCodeAsync(productModel.Family);
+
+        var hierarchyMode = familyMapping is { Enabled: true }
+            ? familyMapping.ProductModelHierarchyMode
+            : AkeneoProductModelHierarchyMode.ImmediateParentProductModel;
+
+        // Treat the selected model as the parent of a synthetic leaf so the
+        // same hierarchy-selection and inheritance rules used by normal leaf
+        // synchronization determine the effective nopCommerce parent model.
+        var syntheticLeaf = new AkeneoProductDefinition
+        {
+            Parent = selectedCode,
+            Family = productModel.Family,
+            FamilyVariant = productModel.FamilyVariant,
+            Values = JsonSerializer.SerializeToElement(new Dictionary<string, object>())
+        };
+
+        var modelChain = new List<AkeneoProductDefinition> { productModel };
+        modelChain.AddRange(ancestors);
+
+        var hierarchy = _productModelHierarchyResolver.Resolve(
+            syntheticLeaf,
+            modelChain,
+            hierarchyMode);
+
+        var effectiveModel = hierarchy.EffectiveParentProductModel;
+
+        if (!string.Equals(
+                selectedCode,
+                effectiveModel.Code,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            model.Warnings.Add(
+                $"The family hierarchy configuration resolves product model '{selectedCode}' to nopCommerce parent product model '{effectiveModel.Code}'. The preview and one-time import target the resolved parent model.");
+        }
+
+        return effectiveModel;
+    }
+
+    private async Task<Product> FindMappedNopProductAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType)
+    {
+        int? mappedProductId;
+
+        if (sourceEntityType == AkeneoEntityType.Product)
+        {
+            mappedProductId = await _entityMappingService
+                .GetMappedNopEntityIdByAkeneoUuidAsync(
+                    sourceEntityType,
+                    source.Uuid,
+                    NopEntityType.Product);
+        }
+        else
+        {
+            mappedProductId = await _entityMappingService
+                .GetMappedNopEntityIdByAkeneoCodeAsync(
+                    sourceEntityType,
+                    source.Code,
+                    NopEntityType.Product);
+        }
+
+        return mappedProductId.HasValue && mappedProductId.Value > 0
+            ? await _productService.GetProductByIdAsync(mappedProductId.Value)
+            : null;
     }
 
     private async Task<string> ResolveSingleAttributePreviewValueAsync(

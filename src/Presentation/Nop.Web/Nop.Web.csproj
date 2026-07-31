@@ -29,27 +29,25 @@
     <!-- We copy the entire \App_Data directory. But we ignore JSON files and data protection keys  -->
     <Content Include="App_Data\**" CopyToPublishDirectory="PreserveNewest" Exclude="App_Data\*.json" />
     <Content Remove="App_Data\*.json" />
+    <Content Remove="Plugins\**" />
     <Content Remove="App_Data\Installation\SampleData.json" />
     <None Include="App_Data\Installation\SampleData.json" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="App_Data\DataProtectionKeys\*.xml" CopyToPublishDirectory="Never" />
+    <Compile Remove="Plugins\**" />
 
-    <Compile Remove="Plugins\**;Themes\**" />
-    <Content Remove="Plugins\**;Themes\**" />
-    <EmbeddedResource Remove="Plugins\**;Themes\**" />
-    <None Remove="Plugins\**;Themes\**" />
-    <None Include="Plugins\**" CopyToPublishDirectory="PreserveNewest" Exclude="Plugins\**\runtimes\**;Plugins\**\ref\**;Plugins\**\*.pdb" />
+    <Compile Remove="Themes\**" />
+    <Content Remove="Themes\**" />
+    <EmbeddedResource Remove="Plugins\**" />
+    <EmbeddedResource Remove="Themes\**" />
+    <None Remove="Plugins\**" />
+    <None Remove="Themes\**" />
 
     <Content Include="Themes\**" CopyToPublishDirectory="PreserveNewest" CopyToOutputDirectory="Never" />
 
     <!-- We copy the \Logs directory -->
     <Content Include="Logs\**" CopyToPublishDirectory="PreserveNewest" />
-    <None Remove="Plugins\Uploaded\placeholder.txt" />
     <Content Include="App_Data\appsettings.json" />
     <Content Include="App_Data\plugins.json" />
-    <Content Include="Plugins\Uploaded\placeholder.txt">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
 
     <None Update="Areas\Admin\sitemap.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

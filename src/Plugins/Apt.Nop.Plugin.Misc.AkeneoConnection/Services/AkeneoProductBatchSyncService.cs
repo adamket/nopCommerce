@@ -293,6 +293,110 @@ public class AkeneoProductBatchSyncService(
         return await SaveLogAndReturnAsync(request, result, snapshot);
     }
 
+    public async Task<AkeneoProductImportResult> SyncProductModelByCodeAsync(
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        request ??= new AkeneoProductImportRequest();
+        ValidateRequest(request);
+
+        var requestedCode = request.AkeneoProductModelCode?.Trim();
+        var result = new AkeneoProductImportResult
+        {
+            AkeneoIdentifier = requestedCode,
+            AkeneoProductKey = requestedCode
+        };
+
+        string snapshot = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(requestedCode))
+            {
+                result.AddError("Akeneo product model code is required.");
+                result.ActionType = SyncItemActionType.Failed;
+                return await SaveLogAndReturnAsync(request, result, null);
+            }
+
+            var source = await akeneoApiClient.GetProductModelByCodeAsync(
+                requestedCode,
+                cancellationToken);
+
+            if (source == null)
+            {
+                result.AddError(
+                    $"Akeneo product model was not found. Code: {requestedCode}");
+                result.ActionType = SyncItemActionType.Failed;
+                return await SaveLogAndReturnAsync(request, result, null);
+            }
+
+            var productModelCache = new Dictionary<string, AkeneoProductDefinition>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                [requestedCode] = source
+            };
+
+            var effectiveSource = await ResolveEffectiveProductModelAsync(
+                source,
+                productModelCache,
+                cancellationToken);
+
+            result.AkeneoIdentifier = effectiveSource.Code;
+            result.AkeneoProductKey = effectiveSource.Code;
+            snapshot = request.SaveRawPayloadSnapshot
+                ? SerializeSnapshot(effectiveSource)
+                : null;
+
+            if (!string.Equals(
+                    requestedCode,
+                    effectiveSource.Code,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                result.AddMessage(
+                    $"Product model '{requestedCode}' resolves to configured nopCommerce parent model '{effectiveSource.Code}'.");
+            }
+
+            using (var transaction = CreateUnitTransaction())
+            {
+                var context = await productSyncService.PrepareAsync(
+                    effectiveSource,
+                    AkeneoEntityType.ProductModel,
+                    request,
+                    result,
+                    source.Family,
+                    cancellationToken);
+
+                AppendParentNameResolutionDiagnostic(
+                    context,
+                    result,
+                    effectiveSource.Code,
+                    request);
+
+                await productSyncService.SynchronizeAsync(
+                    context,
+                    cancellationToken);
+
+                if (result.Success && result.ActionType != SyncItemActionType.Failed)
+                    transaction.Complete();
+            }
+
+            if (!result.Success || result.ActionType == SyncItemActionType.Failed)
+                ClearRolledBackDestination(result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            result.AddError(ex.Message);
+            result.ActionType = SyncItemActionType.Failed;
+            ClearRolledBackDestination(result);
+        }
+
+        return await SaveLogAndReturnAsync(request, result, snapshot);
+    }
+
     private async Task<AkeneoProductImportResult> ReconcileProductUnitAsync(
         AkeneoProductDefinition source,
         AkeneoProductImportRequest request,
@@ -901,6 +1005,64 @@ public class AkeneoProductBatchSyncService(
             source,
             productModelCache,
             cancellationToken);
+    }
+
+    private async Task<AkeneoProductDefinition> ResolveEffectiveProductModelAsync(
+        AkeneoProductDefinition productModel,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken = default)
+    {
+        var selectedCode = productModel?.Code?.Trim();
+        if (string.IsNullOrWhiteSpace(selectedCode))
+            return productModel;
+
+        var ancestors = new List<AkeneoProductDefinition>();
+        var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            selectedCode
+        };
+        var currentCode = productModel.Parent?.Trim();
+
+        while (!string.IsNullOrWhiteSpace(currentCode) &&
+               visitedCodes.Add(currentCode))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var ancestor = await GetProductModelCachedAsync(
+                currentCode,
+                productModelCache,
+                cancellationToken);
+
+            if (ancestor == null)
+                break;
+
+            ancestors.Add(ancestor);
+            currentCode = ancestor.Parent?.Trim();
+        }
+
+        var familyConfiguration = await familyMappingService
+            .GetByFamilyCodeAsync(productModel.Family);
+
+        var hierarchyMode = familyConfiguration is { Enabled: true }
+            ? familyConfiguration.ProductModelHierarchyMode
+            : AkeneoProductModelHierarchyMode.ImmediateParentProductModel;
+
+        var syntheticLeaf = new AkeneoProductDefinition
+        {
+            Parent = selectedCode,
+            Family = productModel.Family,
+            FamilyVariant = productModel.FamilyVariant,
+            Values = JsonSerializer.SerializeToElement(new Dictionary<string, object>())
+        };
+
+        var modelChain = new List<AkeneoProductDefinition> { productModel };
+        modelChain.AddRange(ancestors);
+
+        return productModelHierarchyResolver.Resolve(
+                syntheticLeaf,
+                modelChain,
+                hierarchyMode)
+            .EffectiveParentProductModel;
     }
 
     private async Task<IReadOnlyList<AkeneoProductDefinition>>

@@ -65,7 +65,7 @@ public class AkeneoSyncController(
         if (string.IsNullOrWhiteSpace(input.AkeneoIdentifier))
         {
             input.HasSearched = true;
-            input.Errors.Add("Akeneo identifier/SKU is required.");
+            input.Errors.Add("Akeneo identifier/SKU or product model code is required.");
 
             return View(DryRunViewPath, input);
         }
@@ -90,7 +90,16 @@ public class AkeneoSyncController(
         AkeneoProductImportModel input,
         CancellationToken cancellationToken)
     {
-        if (input == null || string.IsNullOrWhiteSpace(input.Uuid))
+        var sourceEntityType = input?.AkeneoEntityTypeId ==
+            (int)AkeneoEntityType.ProductModel
+                ? AkeneoEntityType.ProductModel
+                : AkeneoEntityType.Product;
+
+        var sourceKey = sourceEntityType == AkeneoEntityType.ProductModel
+            ? input?.ProductModelCode
+            : input?.Uuid;
+
+        if (string.IsNullOrWhiteSpace(sourceKey))
         {
             return Json(new
             {
@@ -98,16 +107,23 @@ public class AkeneoSyncController(
                 action = "failed",
                 errors = new[]
                 {
-                    "Akeneo product UUID is required. Run the dry run first, then synchronize from the preview result."
+                    sourceEntityType == AkeneoEntityType.ProductModel
+                        ? "Akeneo product model code is required. Run the dry run first, then synchronize from the preview result."
+                        : "Akeneo product UUID is required. Run the dry run first, then synchronize from the preview result."
                 }
             });
         }
 
         var profileId = akeneoConnectionSettings.DefaultSyncProfileId ?? 0;
-        var execution = await productSyncExecutionService.SyncProductByUuidAsync(
-            profileId,
-            input.Uuid.Trim(),
-            cancellationToken);
+        var execution = sourceEntityType == AkeneoEntityType.ProductModel
+            ? await productSyncExecutionService.SyncProductModelByCodeAsync(
+                profileId,
+                sourceKey.Trim(),
+                cancellationToken)
+            : await productSyncExecutionService.SyncProductByUuidAsync(
+                profileId,
+                sourceKey.Trim(),
+                cancellationToken);
 
         if (execution.ProfileNotFound)
         {
@@ -125,7 +141,11 @@ public class AkeneoSyncController(
             syncRunRecordId = execution.SyncRunRecordId,
             action = execution.ItemActionType?.ToString() ?? "failed",
             productId = execution.NopProductId,
+            akeneoEntityType = sourceEntityType.ToString(),
             akeneoProductUuid = execution.AkeneoProductUuid,
+            akeneoProductModelCode = sourceEntityType == AkeneoEntityType.ProductModel
+                ? execution.AkeneoIdentifier
+                : null,
             akeneoIdentifier = execution.AkeneoIdentifier,
             messages = execution.Messages,
             warnings = execution.Warnings,

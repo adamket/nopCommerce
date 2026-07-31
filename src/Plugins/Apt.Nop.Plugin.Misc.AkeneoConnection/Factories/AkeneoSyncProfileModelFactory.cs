@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -76,7 +76,7 @@ public class AkeneoSyncProfileModelFactory(
                 (int)AkeneoMissingProductBehavior.Ignore,
 
             UpdatedFilterModeId =
-                (int)AkeneoUpdatedFilterMode.None,
+                (int)AkeneoUpdatedFilterMode.SinceLastSuccessfulRun,
 
             IncludeLinkedAssetUpdates = false,
         };
@@ -693,8 +693,8 @@ public class AkeneoSyncProfileModelFactory(
     {
         return mode switch
         {
-            AkeneoUpdatedFilterMode.None =>
-                "No updated-date filter",
+            //AkeneoUpdatedFilterMode.None =>
+            //    "No updated-date filter",
 
             AkeneoUpdatedFilterMode.FixedDate =>
                 "Updated after a fixed date",
