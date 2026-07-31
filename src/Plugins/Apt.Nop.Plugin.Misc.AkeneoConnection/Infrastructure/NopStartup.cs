@@ -2,6 +2,7 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.DryRun;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -41,6 +42,14 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoAssetResolver, AkeneoAssetResolver>();
         services.AddScoped<IAkeneoExternalAssetDownloader, AkeneoExternalAssetDownloader>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
+        services.AddScoped<IAkeneoDryRunChangeAnalyzer, AkeneoDryRunChangeAnalyzer>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductCorePlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSeoPlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCategoryPlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSpecificationPlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductAttributePlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCustomPropertyPlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCoveragePlanner>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();
         services.AddScoped<

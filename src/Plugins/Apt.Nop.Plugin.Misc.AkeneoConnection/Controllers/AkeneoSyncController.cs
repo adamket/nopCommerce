@@ -28,14 +28,36 @@ public class AkeneoSyncController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/dry-run")]
-    public IActionResult DryRun()
+    public async Task<IActionResult> DryRun()
     {
-        return View(DryRunViewPath, new AkeneoProductMappingPreviewModel
+        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(
+            akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
+
+        var model = new AkeneoProductMappingPreviewModel
         {
-            Locale = "en_US",
-            Channel = "ecommerce",
-            Currency = "USD"
-        });
+            Locale = profile?.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en_US",
+            Channel = string.IsNullOrWhiteSpace(profile?.AkeneoChannel)
+                ? "ecommerce"
+                : profile.AkeneoChannel,
+            Currency = string.IsNullOrWhiteSpace(profile?.CurrencyCode)
+                ? "USD"
+                : profile.CurrencyCode,
+            SyncProfileId = profile?.Id,
+            SyncProfileName = profile?.Name
+        };
+
+        if (profile == null)
+        {
+            model.Warnings.Add(
+                "Set a default Akeneo Connection sync profile before running a dry run.");
+        }
+        else if (!profile.Enabled)
+        {
+            model.Warnings.Add(
+                "The default sync profile is disabled. Preview remains available, but one-time import is blocked until the profile is enabled.");
+        }
+
+        return View(DryRunViewPath, model);
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
@@ -44,23 +66,29 @@ public class AkeneoSyncController(
         AkeneoProductMappingPreviewModel input,
         CancellationToken cancellationToken)
     {
-        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
-        if (profile == null && input?.Channel == null)
+        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(
+            akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
+
+        input ??= new AkeneoProductMappingPreviewModel();
+
+        if (profile == null)
         {
-            return Json(new
-            {
-                success = false,
-                action = "failed",
-                errors = new[] { "Please set a default Akeneo Connection sync profile." }
-            });
+            input.HasSearched = true;
+            input.Errors.Add(
+                "Please set a default Akeneo Connection sync profile.");
+            return View(DryRunViewPath, input);
         }
 
-        input ??= new AkeneoProductMappingPreviewModel
-        {
-            Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US",
-            Channel = profile.AkeneoChannel,
-            Currency = profile.CurrencyCode
-        };
+        // A one-time import rebuilds its request from the saved profile. Use
+        // that exact same context for the preview rather than trusting posted
+        // hidden values that may be stale or manually altered.
+        input.Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en_US";
+        input.Channel = string.IsNullOrWhiteSpace(profile.AkeneoChannel)
+            ? "ecommerce"
+            : profile.AkeneoChannel;
+        input.Currency = string.IsNullOrWhiteSpace(profile.CurrencyCode)
+            ? "USD"
+            : profile.CurrencyCode;
 
         if (string.IsNullOrWhiteSpace(input.AkeneoIdentifier))
         {
@@ -75,6 +103,7 @@ public class AkeneoSyncController(
             input.Locale,
             input.Channel,
             input.Currency,
+            profile,
             cancellationToken);
 
         model.Locale = input.Locale;

@@ -1,25 +1,38 @@
-@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoProductMappingPreviewModel
+﻿@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoProductMappingPreviewModel
 @using Apt.Nop.Plugin.Misc.AkeneoConnection
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
 
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo product dry run";
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.DryRun");
+
+    var operationGroups = (Model.Operations ?? new List<AkeneoDryRunOperationPreviewModel>())
+        .GroupBy(operation => operation.Area)
+        .ToList();
 }
 
 <div class="akeneo-connection">
     <form id="akeneo-dry-run-form" asp-controller="AkeneoSync" asp-action="DryRun" method="post">
         @Html.AntiForgeryToken()
+        <input asp-for="Locale" type="hidden" />
+        <input asp-for="Channel" type="hidden" />
+        <input asp-for="Currency" type="hidden" />
 
         <div class="content-header clearfix">
             <div class="float-left">
                 <div class="akeneo-eyebrow">Akeneo &rarr; nopCommerce</div>
                 <h1 class="m-0">Product dry run</h1>
-                <div class="akeneo-dim mt-1">Preview how saved Akeneo mappings will apply to an Akeneo product or product model without creating or updating nopCommerce product data.</div>
+                <div class="akeneo-dim mt-1">
+                    Build a read-only change plan using the same mapping preparation path as the real synchronization pipeline.
+                </div>
             </div>
             <div class="float-right">
-                <button type="submit" id="akeneo-preview-button" class="btn btn-primary">
+                <button type="submit"
+                        id="akeneo-preview-button"
+                        class="btn btn-primary"
+                        @(Model.SyncProfileId.HasValue ? null : "disabled")>
                     <i class="fas fa-search"></i>
                     Preview
                 </button>
@@ -28,7 +41,6 @@
 
         <section class="content">
             <div class="container-fluid">
-
                 <div class="card card-default">
                     <div class="card-header">
                         <div class="card-title">
@@ -38,22 +50,56 @@
                     </div>
 
                     <div class="card-body">
-                      @*   <p>
-                            Enter an Akeneo identifier/SKU to preview how the saved attribute mappings would apply.
-                            No nopCommerce product data will be created or updated.
-                        </p> *@
-
                         <div class="form-group row">
-                            <div class="col-md-3">
-                                <label asp-for="AkeneoIdentifier">Akeneo Identifier/SKU or Product Model Code</label>
+                            <div class="col-md-3 text-right">
+                                <label asp-for="AkeneoIdentifier" class="control-label">
+                                    Akeneo identifier/SKU or product model code
+                                </label>
                             </div>
                             <div class="col-md-9">
                                 <input asp-for="AkeneoIdentifier" class="form-control" />
                                 <span asp-validation-for="AkeneoIdentifier"></span>
                             </div>
                         </div>
+
+                        <div class="form-group row mb-0">
+                            <div class="col-md-3 text-right">
+                                <span class="control-label">Saved sync context</span>
+                            </div>
+                            <div class="col-md-9">
+                                @if (Model.SyncProfileId.HasValue)
+                                {
+                                    <span class="akeneo-summary-target-type">
+                                        @(!string.IsNullOrWhiteSpace(Model.SyncProfileName)
+                                            ? Model.SyncProfileName
+                                            : $"Profile #{Model.SyncProfileId}")
+                                    </span>
+                                    <span class="akeneo-code ml-2">@Model.Locale / @Model.Channel / @Model.Currency</span>
+                                    <div class="form-text text-muted">
+                                        Dry Run uses the default profile's write, missing-value, and collection synchronization policies.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-danger">No default sync profile is configured.</span>
+                                }
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                @if (!Model.HasSearched && Model.Warnings?.Any() == true)
+                {
+                    <div class="alert alert-warning">
+                        <strong>Configuration required</strong>
+                        <ul class="mb-0">
+                            @foreach (var warning in Model.Warnings)
+                            {
+                                <li>@warning</li>
+                            }
+                        </ul>
+                    </div>
+                }
 
                 @if (Model.HasSearched)
                 {
@@ -66,41 +112,34 @@
                         </div>
 
                         <div class="card-body">
-                            <dl class="row mb-0">
-                                <dt class="col-sm-3">Akeneo source found</dt>
+                            <dl class="row mb-3">
+                                <dt class="col-sm-3">Akeneo source</dt>
                                 <dd class="col-sm-9">
                                     @if (Model.AkeneoProductFound)
                                     {
-                                        <span class="badge badge-success">Yes</span>
+                                        <span class="badge badge-success">Found</span>
+                                        <span class="akeneo-summary-target-type ml-2">@Model.AkeneoEntityTypeName</span>
                                     }
                                     else
                                     {
-                                        <span class="badge badge-danger">No</span>
+                                        <span class="badge badge-danger">Not found</span>
                                     }
                                 </dd>
 
-                                @if (Model.AkeneoProductFound)
-                                {
-                                    <dt class="col-sm-3">Akeneo entity type</dt>
-                                    <dd class="col-sm-9">
-                                        <span class="akeneo-summary-target-type">@Model.AkeneoEntityTypeName</span>
-                                    </dd>
-                                }
-
-                                <dt class="col-sm-3">nopCommerce product found</dt>
+                                <dt class="col-sm-3">nopCommerce destination</dt>
                                 <dd class="col-sm-9">
                                     @if (Model.NopProductFound)
                                     {
-                                        <span class="badge badge-success">Yes</span>
+                                        <span class="badge badge-success">Existing product</span>
                                         <span class="akeneo-code ml-2">#@Model.NopProductId</span>
                                     }
                                     else
                                     {
-                                        <span class="badge badge-secondary">No</span>
+                                        <span class="badge badge-secondary">New product</span>
                                     }
                                 </dd>
 
-                                <dt class="col-sm-3">Action</dt>
+                                <dt class="col-sm-3">Expected result</dt>
                                 <dd class="col-sm-9 mb-0">
                                     @if (!string.IsNullOrWhiteSpace(Model.Action))
                                     {
@@ -108,10 +147,40 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted">No action available.</span>
+                                        <span class="text-muted">No result available.</span>
                                     }
                                 </dd>
                             </dl>
+
+                            @if (Model.AkeneoProductFound)
+                            {
+                                <div class="row">
+                                    <div class="col-md-3 mb-2">
+                                        <div class="border rounded p-3 h-100">
+                                            <div class="text-muted">Planned changes</div>
+                                            <div class="h4 mb-0">@Model.PlannedChangeCount</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <div class="border rounded p-3 h-100">
+                                            <div class="text-muted">No change</div>
+                                            <div class="h4 mb-0">@Model.NoChangeCount</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <div class="border rounded p-3 h-100">
+                                            <div class="text-muted">Preserved / skipped</div>
+                                            <div class="h4 mb-0">@Model.PreservedCount</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <div class="border rounded p-3 h-100">
+                                            <div class="text-muted">Needs review</div>
+                                            <div class="h4 mb-0">@Model.ReviewCount</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     </div>
 
@@ -128,7 +197,7 @@
                         </div>
                     }
 
-                   @*  @if (Model.Warnings?.Any() == true)
+                    @if (Model.Warnings?.Any() == true)
                     {
                         <div class="alert alert-warning">
                             <strong>Warnings</strong>
@@ -139,7 +208,119 @@
                                 }
                             </ul>
                         </div>
-                    } *@
+                    }
+
+                    @if (Model.Messages?.Any() == true)
+                    {
+                        <div class="alert alert-info">
+                            <strong>Preparation messages</strong>
+                            <ul class="mb-0">
+                                @foreach (var message in Model.Messages)
+                                {
+                                    <li>@message</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    @if (Model.CoverageNotes?.Any() == true)
+                    {
+                        <div class="alert alert-info">
+                            <strong>Preview coverage</strong>
+                            <ul class="mb-0">
+                                @foreach (var note in Model.CoverageNotes)
+                                {
+                                    <li>@note</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    @foreach (var group in operationGroups)
+                    {
+                        <div class="card card-default">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <i class="fas fa-exchange-alt"></i>
+                                    @group.Key
+                                </div>
+                            </div>
+
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 110px;">Action</th>
+                                                <th>Destination</th>
+                                                <th>Akeneo source</th>
+                                                <th>Current</th>
+                                                <th>Proposed</th>
+                                                <th>Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var operation in group)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge @operation.BadgeClass">@operation.ChangeTypeName</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="akeneo-summary-target-type">@operation.Target</span>
+                                                        @if (operation.IsRequired)
+                                                        {
+                                                            <span class="badge badge-warning ml-1">Required</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrWhiteSpace(operation.AkeneoSource))
+                                                        {
+                                                            <span class="akeneo-code">@operation.AkeneoSource</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">System behavior</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(operation.CurrentValue))
+                                                        {
+                                                            <span class="text-break">@operation.CurrentValue</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Empty / absent</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrEmpty(operation.ProposedValue))
+                                                        {
+                                                            <span class="text-break">@operation.ProposedValue</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Empty / absent</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!string.IsNullOrWhiteSpace(operation.Detail))
+                                                        {
+                                                            @operation.Detail
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">&mdash;</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    }
 
                     @if (Model.AkeneoProductFound)
                     {
@@ -153,10 +334,10 @@
 
                             <div class="card-body">
                                 <p>
-                                    This will create or update the nopCommerce product using the mappings shown in this dry run.
+                                    Import rebuilds the plan against the current destination state and then performs the actual synchronization.
                                     @if (Model.IsProductModel)
                                     {
-                                        <span>Only the resolved parent product model is synchronized; associated child products are not individually reimported.</span>
+                                        <span>Only the resolved parent product model is synchronized. Descendant products are not individually reimported.</span>
                                     }
                                 </p>
 
@@ -176,28 +357,20 @@
                                             <span class="text-danger">Missing source key. Import cannot run.</span>
                                         }
                                     </dd>
-
-                                    <dt class="col-sm-3">Locale / Channel / Currency</dt>
-                                    <dd class="col-sm-9">
-                                        <span class="akeneo-code">@Model.Locale</span>
-                                        <span class="mx-1">/</span>
-                                        <span class="akeneo-code">@Model.Channel</span>
-                                        <span class="mx-1">/</span>
-                                        <span class="akeneo-code">@Model.Currency</span>
-                                    </dd>
                                 </dl>
 
                                 <button type="button"
                                         id="akeneo-import-product"
                                         class="btn btn-success"
-                                        disabled="@(!Model.CanImport)"
+                                        @(Model.CanImport ? null : "disabled")
                                         data-import-url="@Url.Action("ImportProduct", "AkeneoSync", new { area = "admin" })"
                                         data-uuid="@Model.AkeneoProductUuid"
                                         data-product-model-code="@Model.AkeneoProductModelCode"
                                         data-entity-type-id="@Model.AkeneoEntityTypeId"
                                         data-locale="@Model.Locale"
                                         data-channel="@Model.Channel"
-                                        data-currency="@Model.Currency">
+                                        data-currency="@Model.Currency"
+                                        data-change-count="@Model.PlannedChangeCount">
                                     <i class="fas fa-file-import"></i>
                                     Import @(Model.IsProductModel ? "Product Model" : "Product")
                                 </button>
@@ -205,303 +378,18 @@
                                 @if (!Model.CanImport)
                                 {
                                     <div class="text-muted mt-2">
-                                        Import is disabled until the Akeneo source is found, its UUID or product model code is available, and the preview has no errors.
+                                        @if (!string.IsNullOrWhiteSpace(Model.ImportBlockReason))
+                                        {
+                                            @Model.ImportBlockReason
+                                        }
+                                        else
+                                        {
+                                            <span>Import is disabled until the source is resolved and the preview has no blocking errors.</span>
+                                        }
                                     </div>
                                 }
 
                                 <div id="akeneo-import-result" class="alert d-none mt-3"></div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Model.ProductFields?.Any() == true)
-                    {
-                        <div class="card card-default">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <i class="fas fa-box"></i>
-                                    Product Fields
-                                </div>
-                            </div>
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>nopCommerce Field</th>
-                                                <th>Akeneo Attribute</th>
-                                                <th>Value</th>
-                                                <th>Required</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var field in Model.ProductFields)
-                                            {
-                                                <tr>
-                                                    <td class="akeneo-summary-target-type">@field.TargetKey</td>
-                                                    <td><span class="akeneo-code">@field.AkeneoAttributeCode</span></td>
-                                                    <td>
-                                                        @if (field.HasValue)
-                                                        {
-                                                            @field.Value
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">No value</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (field.IsRequired)
-                                                        {
-                                                            <span class="badge badge-warning">Required</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Optional</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Model.SpecificationAttributes?.Any() == true)
-                    {
-                        <div class="card card-default">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <i class="fas fa-list-ul"></i>
-                                    Specification Attributes
-                                </div>
-                            </div>
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>nopCommerce Specification Attribute</th>
-                                                <th>Akeneo Attribute</th>
-                                                <th>Value</th>
-                                                <th>Required</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var sattribute in Model.SpecificationAttributes)
-                                            {
-                                                <tr>
-                                                    <td>
-                                                        <span class="akeneo-summary-target-type">@sattribute.NopAttributeName</span>
-                                                        @if (sattribute.NopAttributeId.HasValue)
-                                                        {
-                                                            <span class="akeneo-code ml-1">#@sattribute.NopAttributeId</span>
-                                                        }
-                                                    </td>
-                                                    <td><span class="akeneo-code">@sattribute.AkeneoAttributeCode</span></td>
-                                                    <td>
-                                                        @if (sattribute.HasValue)
-                                                        {
-                                                            @sattribute.Value
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">No value</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (sattribute.IsRequired)
-                                                        {
-                                                            <span class="badge badge-warning">Required</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Optional</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Model.ProductAttributes?.Any() == true)
-                    {
-                        <div class="card card-default">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <i class="fas fa-tags"></i>
-                                    Product Attributes
-                                </div>
-                            </div>
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>nopCommerce Product Attribute</th>
-                                                <th>Akeneo Attribute</th>
-                                                <th>Value</th>
-                                                <th>Required</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var pattribute in Model.ProductAttributes)
-                                            {
-                                                <tr>
-                                                    <td>
-                                                        <span class="akeneo-summary-target-type">@pattribute.NopAttributeName</span>
-                                                        @if (pattribute.NopAttributeId.HasValue)
-                                                        {
-                                                            <span class="akeneo-code ml-1">#@pattribute.NopAttributeId</span>
-                                                        }
-                                                    </td>
-                                                    <td><span class="akeneo-code">@pattribute.AkeneoAttributeCode</span></td>
-                                                    <td>
-                                                        @if (pattribute.HasValue)
-                                                        {
-                                                            @pattribute.Value
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">No value</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (pattribute.IsRequired)
-                                                        {
-                                                            <span class="badge badge-warning">Required</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Optional</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Model.SeoFields?.Any() == true)
-                    {
-                        <div class="card card-default">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <i class="fas fa-globe"></i>
-                                    SEO Fields
-                                </div>
-                            </div>
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>SEO Field</th>
-                                                <th>Akeneo Attribute</th>
-                                                <th>Value</th>
-                                                <th>Required</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var field in Model.SeoFields)
-                                            {
-                                                <tr>
-                                                    <td class="akeneo-summary-target-type">@field.TargetKey</td>
-                                                    <td><span class="akeneo-code">@field.AkeneoAttributeCode</span></td>
-                                                    <td>
-                                                        @if (field.HasValue)
-                                                        {
-                                                            @field.Value
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">No value</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (field.IsRequired)
-                                                        {
-                                                            <span class="badge badge-warning">Required</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Optional</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Model.CustomProperties?.Any() == true)
-                    {
-                        <div class="card card-default">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <i class="fas fa-puzzle-piece"></i>
-                                    Custom Properties
-                                </div>
-                            </div>
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Custom Key</th>
-                                                <th>Akeneo Attribute</th>
-                                                <th>Value</th>
-                                                <th>Required</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var field in Model.CustomProperties)
-                                            {
-                                                <tr>
-                                                    <td class="akeneo-summary-target-type">@field.TargetKey</td>
-                                                    <td><span class="akeneo-code">@field.AkeneoAttributeCode</span></td>
-                                                    <td>
-                                                        @if (field.HasValue)
-                                                        {
-                                                            @field.Value
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-muted">No value</span>
-                                                        }
-                                                    </td>
-                                                    <td>
-                                                        @if (field.IsRequired)
-                                                        {
-                                                            <span class="badge badge-warning">Required</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="badge badge-secondary">Optional</span>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
                             </div>
                         </div>
                     }
@@ -510,7 +398,6 @@
         </section>
     </form>
 </div>
-
 
 <div class="modal fade"
      id="akeneo-confirm-modal"
@@ -536,8 +423,6 @@
         </div>
     </div>
 </div>
-
-
 
 <script asp-location="Footer">
     $(function () {
@@ -587,7 +472,9 @@
         });
 
         $(window).on('pageshow', function () {
-            setPreviewButtonLoading(false);
+            if ($previewButton.data('original-html')) {
+                setPreviewButtonLoading(false);
+            }
         });
 
         function escapeHtml(value) {
@@ -606,7 +493,6 @@
             });
 
             html += '</ul>';
-
             return html;
         }
 
@@ -662,14 +548,9 @@
             })
             .done(function (response) {
                 var success = response && response.success === true;
-
-                var html = '';
-
-                if (success) {
-                    html += '<strong>Import completed.</strong>';
-                } else {
-                    html += '<strong>Import failed.</strong>';
-                }
+                var html = success
+                    ? '<strong>Import completed.</strong>'
+                    : '<strong>Import failed.</strong>';
 
                 html += '<div class="mt-2">';
                 html += '<div><strong>Action:</strong> ' + escapeHtml(response.action) + '</div>';
@@ -691,9 +572,8 @@
                 }
 
                 html += '</div>';
-
                 html += renderList('Messages', response.messages);
-                // html += renderList('Warnings', response.warnings);
+                html += renderList('Warnings', response.warnings);
                 html += renderList('Errors', response.errors);
 
                 showResult(success, html);
@@ -701,9 +581,7 @@
                 if (success) {
                     $button.html('<i class="fas fa-check"></i> Imported');
                 } else {
-                    $button
-                        .prop('disabled', false)
-                        .html(originalHtml);
+                    $button.prop('disabled', false).html(originalHtml);
                 }
             })
             .fail(function (xhr) {
@@ -716,10 +594,7 @@
                 }
 
                 showResult(false, '<strong>Import failed.</strong><div class="mt-2">' + escapeHtml(message) + '</div>');
-
-                $button
-                    .prop('disabled', false)
-                    .html(originalHtml);
+                $button.prop('disabled', false).html(originalHtml);
             });
         }
 
@@ -728,9 +603,11 @@
                 return;
             }
 
+            var changeCount = parseInt($button.data('change-count'), 10) || 0;
+
             showConfirmModal({
                 title: 'Import Akeneo Source',
-                message: 'Import this Akeneo product or product model into nopCommerce now?',
+                message: 'Import this Akeneo source now? The current preview contains ' + changeCount + ' planned change(s), and the plan will be recalculated before writing.',
                 confirmButtonText: '<i class="fas fa-download"></i> Import',
                 confirmButtonClass: 'btn-primary',
                 onConfirm: runImport
