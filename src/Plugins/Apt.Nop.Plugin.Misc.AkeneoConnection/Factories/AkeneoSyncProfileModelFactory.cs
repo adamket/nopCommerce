@@ -6,12 +6,14 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Models.SyncProfiles;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Services;
+using Nop.Services.Helpers;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
 public class AkeneoSyncProfileModelFactory(
     IAkeneoSyncProfileService syncProfileService,
-    IAkeneoApiClient akeneoApiClient)
+    IAkeneoApiClient akeneoApiClient,
+    IDateTimeHelper dateTimeHelper)
     : IAkeneoSyncProfileModelFactory
 {
     public async Task<AkeneoSyncProfileListModel> PrepareListModelAsync()
@@ -107,7 +109,14 @@ public class AkeneoSyncProfileModelFactory(
           
             model.CategoryFilterModeId = profile.CategoryFilterModeId;
             model.ProductEnabledFilterId = profile.ProductEnabledFilterId;
-            model.UpdatedAfterUtc = profile.UpdatedAfterUtc;
+            model.UpdatedAfter = profile.UpdatedAfterUtc.HasValue
+                ? dateTimeHelper.ConvertToUserTime(
+                    DateTime.SpecifyKind(
+                        profile.UpdatedAfterUtc.Value,
+                        DateTimeKind.Utc),
+                    TimeZoneInfo.Utc,
+                    dateTimeHelper.DefaultStoreTimeZone)
+                : null;
             model.UpdatedSinceLastNDays = profile.UpdatedSinceLastNDays;
             model.ProductParentFilterModeId = profile.ProductParentFilterModeId;
             model.AdditionalSearchJson = profile.AdditionalSearchJson;
@@ -161,6 +170,7 @@ public class AkeneoSyncProfileModelFactory(
     public async Task PrepareAvailableOptionsAsync(
         AkeneoSyncProfileModel model)
     {
+        PrepareDateTimeDisplay(model);
         PrepareStaticDropdowns(model);
 
         await PrepareAkeneoChannelOptionsAsync(model);
@@ -170,6 +180,19 @@ public class AkeneoSyncProfileModelFactory(
 
         PrepareAkeneoProductGroupCodes(model);
         PrepareDisplayNames(model);
+    }
+
+    private void PrepareDateTimeDisplay(
+        AkeneoSyncProfileModel model)
+    {
+        var timeZone = dateTimeHelper.DefaultStoreTimeZone;
+        var currentOffset = timeZone.GetUtcOffset(DateTime.UtcNow);
+        var offsetSign = currentOffset < TimeSpan.Zero ? "-" : "+";
+        var absoluteOffset = currentOffset.Duration();
+        var offsetHours = (int)absoluteOffset.TotalHours;
+
+        model.UpdatedAfterTimeZoneDisplayName =
+            $"{timeZone.Id} (UTC{offsetSign}{offsetHours:00}:{absoluteOffset.Minutes:00} currently)";
     }
 
     private async Task PrepareAkeneoFamilyOptionsAsync(
@@ -693,8 +716,8 @@ public class AkeneoSyncProfileModelFactory(
     {
         return mode switch
         {
-            //AkeneoUpdatedFilterMode.None =>
-            //    "No updated-date filter",
+            AkeneoUpdatedFilterMode.None =>
+                "No updated-date filter",
 
             AkeneoUpdatedFilterMode.FixedDate =>
                 "Updated after a fixed date",

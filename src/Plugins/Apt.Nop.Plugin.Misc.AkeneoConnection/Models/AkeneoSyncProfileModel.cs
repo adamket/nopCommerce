@@ -62,7 +62,9 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public string ProductEnabledFilterName { get; set; }
 
     [UIHint("DateTimeNullable")]
-    public DateTime? UpdatedAfterUtc { get; set; }
+    public DateTime? UpdatedAfter { get; set; }
+
+    public string UpdatedAfterTimeZoneDisplayName { get; set; }
 
     [UIHint("Int32Nullable")]
 

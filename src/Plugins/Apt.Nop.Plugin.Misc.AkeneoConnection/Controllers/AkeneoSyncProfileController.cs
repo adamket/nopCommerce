@@ -1,9 +1,10 @@
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
+using Nop.Services.Helpers;
 using Nop.Services.Messages;
 using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
@@ -20,7 +21,8 @@ public class AkeneoSyncProfileController(
     IAkeneoSyncProfileModelFactory syncProfileModelFactory,
     INotificationService notificationService,
     IAkeneoSyncRunRecordService syncRunRecordService,
-    IAkeneoProductBatchSyncService productImportService)
+    IAkeneoProductBatchSyncService productImportService,
+    IDateTimeHelper dateTimeHelper)
     : BaseAdminController
 {
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
@@ -132,7 +134,7 @@ public class AkeneoSyncProfileController(
    
 
 
-    private static void ApplyModelToEntity(
+    private void ApplyModelToEntity(
         AkeneoSyncProfileModel model,
         AkeneoSyncProfile profile)
     {
@@ -167,7 +169,13 @@ public class AkeneoSyncProfileController(
 
         profile.CategoryFilterModeId = model.CategoryFilterModeId;
         profile.ProductEnabledFilterId = model.ProductEnabledFilterId;
-        profile.UpdatedAfterUtc = model.UpdatedAfterUtc;
+        profile.UpdatedAfterUtc = model.UpdatedAfter.HasValue
+            ? dateTimeHelper.ConvertToUtcTime(
+                DateTime.SpecifyKind(
+                    model.UpdatedAfter.Value,
+                    DateTimeKind.Unspecified),
+                dateTimeHelper.DefaultStoreTimeZone)
+            : null;
         profile.UpdatedSinceLastNDays = model.UpdatedSinceLastNDays;
         profile.ProductParentFilterModeId = model.ProductParentFilterModeId;
         profile.AdditionalSearchJson = model.AdditionalSearchJson?.Trim();
@@ -236,11 +244,63 @@ public class AkeneoSyncProfileController(
         {
             ModelState.AddModelError(nameof(model.SelectedAkeneoLocaleCodes), "At least one Akeneo locale is required.");
         }
+
+        ValidateUpdatedFilter(model);
     }
 
+    private void ValidateUpdatedFilter(
+        AkeneoSyncProfileModel model)
+    {
+        if (!Enum.IsDefined(
+                typeof(AkeneoUpdatedFilterMode),
+                model.UpdatedFilterModeId))
+        {
+            ModelState.AddModelError(
+                nameof(model.UpdatedFilterModeId),
+                "Select a valid updated filter mode.");
 
+            return;
+        }
 
+        var updatedFilterMode =
+            (AkeneoUpdatedFilterMode)model.UpdatedFilterModeId;
 
+        if (updatedFilterMode == AkeneoUpdatedFilterMode.FixedDate &&
+            !model.UpdatedAfter.HasValue)
+        {
+            ModelState.AddModelError(
+                nameof(model.UpdatedAfter),
+                "Updated after is required when the fixed-date filter mode is selected.");
+        }
 
+        if (updatedFilterMode == AkeneoUpdatedFilterMode.FixedDate &&
+            model.UpdatedAfter.HasValue)
+        {
+            var updatedAfter = DateTime.SpecifyKind(
+                model.UpdatedAfter.Value,
+                DateTimeKind.Unspecified);
 
+            if (dateTimeHelper.DefaultStoreTimeZone.IsInvalidTime(updatedAfter))
+            {
+                ModelState.AddModelError(
+                    nameof(model.UpdatedAfter),
+                    $"The selected date and time does not exist in the store time zone ({dateTimeHelper.DefaultStoreTimeZone.Id}) because of a daylight-saving time transition.");
+            }
+            else if (dateTimeHelper.DefaultStoreTimeZone.IsAmbiguousTime(updatedAfter))
+            {
+                ModelState.AddModelError(
+                    nameof(model.UpdatedAfter),
+                    $"The selected date and time occurs twice in the store time zone ({dateTimeHelper.DefaultStoreTimeZone.Id}) because of a daylight-saving time transition. Select an unambiguous time.");
+            }
+        }
+
+        if (updatedFilterMode == AkeneoUpdatedFilterMode.RollingDays &&
+            (!model.UpdatedSinceLastNDays.HasValue ||
+             model.UpdatedSinceLastNDays.Value <= 0))
+        {
+            ModelState.AddModelError(
+                nameof(model.UpdatedSinceLastNDays),
+                "Updated since last N days must be greater than zero when the rolling-days filter mode is selected.");
+        }
+    }
 }

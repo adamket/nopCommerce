@@ -1,4 +1,5 @@
-﻿@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncProfileModel
+﻿@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoSyncProfileModel
 
 @{
     Layout = "_AdminLayout";
@@ -6,6 +7,14 @@
     var isEdit = Model.Id > 0;
     ViewBag.PageTitle = isEdit ? "Edit Akeneo Sync Profile" : "Create Akeneo Sync Profile";
     var postAction = isEdit ? "Edit" : "Create";
+    var updatedAfterRowStyle =
+        Model.UpdatedFilterModeId == (int)AkeneoUpdatedFilterMode.FixedDate
+            ? string.Empty
+            : "display:none;";
+    var updatedSinceDaysRowStyle =
+        Model.UpdatedFilterModeId == (int)AkeneoUpdatedFilterMode.RollingDays
+            ? string.Empty
+            : "display:none;";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
@@ -450,7 +459,7 @@
                             <span asp-validation-for="ProductEnabledFilterId"></span>
                         </div>
                     </div>
-                    @* 
+                    
                     <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="UpdatedFilterModeId" class="control-label">Updated filter mode</label>
@@ -463,8 +472,50 @@
                             </span>
                         </div>
                     </div>
+
+                    <div class="form-group row">
+                        <div class="col-md-3"></div>
+                        <div class="col-md-9">
+                            <div id="akeneo-updated-filter-mode-help"
+                                 class="alert alert-info py-2 mb-3"
+                                 role="status">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="akeneo-updated-after-row"
+                         class="form-group row"
+                         style="@updatedAfterRowStyle">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="UpdatedAfter" class="control-label">Updated after</label>
+                        </div>
+                        <div class="col-md-9">
+                            <nop-editor asp-for="UpdatedAfter" />
+                            <span asp-validation-for="UpdatedAfter"></span>
+                            <span class="form-text text-muted">
+                                Enter the date and time in the store time zone: <strong>@Model.UpdatedAfterTimeZoneDisplayName</strong>.
+                                The value is stored internally as UTC. Required for fixed-date mode.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="akeneo-updated-since-days-row"
+                         class="form-group row"
+                         style="@updatedSinceDaysRowStyle">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="UpdatedSinceLastNDays" class="control-label">Updated since last N days</label>
+                        </div>
+                        <div class="col-md-9">
+                            <nop-editor asp-for="UpdatedSinceLastNDays" />
+                            <span asp-validation-for="UpdatedSinceLastNDays"></span>
+                            <span class="form-text text-muted">
+                                Required for rolling-days mode and must be greater than zero. Example: 7 reprocesses the most recent seven days on every delta run.
+                            </span>
+                        </div>
+                    </div>
+
                
-                  <div class="form-group row">
+                    <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="IncludeLinkedAssetUpdates" class="control-label">Include asset-only updates</label>
                         </div>
@@ -472,32 +523,11 @@
                             <nop-editor asp-for="IncludeLinkedAssetUpdates" />
                             <span asp-validation-for="IncludeLinkedAssetUpdates"></span>
                             <span class="form-text text-muted">
-                                Uses Akeneo's linked-entity updated filter during delta runs so a product is revisited when a linked Asset Manager record changes. Requires Akeneo SaaS Enterprise and linked asset updates enabled in Akeneo.
+                                Uses Akeneo's linked-entity updated filter during delta runs so a product is revisited when a linked Asset Manager record changes. Requires an active updated cutoff, Akeneo SaaS Enterprise, and linked asset updates enabled in Akeneo.
                             </span>
                         </div>
                     </div>
 
-                    <div class="form-group row">
-                        <div class="col-md-3 text-right">
-                            <label asp-for="UpdatedAfterUtc" class="control-label">Updated after UTC</label>
-                        </div>
-                        <div class="col-md-9">
-                            <nop-editor asp-for="UpdatedAfterUtc" />
-                            <span asp-validation-for="UpdatedAfterUtc"></span>
-                            <span class="form-text text-muted">Optional absolute UTC cutoff.</span>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <div class="col-md-3 text-right">
-                            <label asp-for="UpdatedSinceLastNDays" class="control-label">Updated since last N days</label>
-                        </div>
-                        <div class="col-md-9">
-                            <nop-editor asp-for="UpdatedSinceLastNDays" />
-                            <span asp-validation-for="UpdatedSinceLastNDays"></span>
-                            <span class="form-text text-muted">Optional relative updated filter. Example: 7.</span>
-                        </div>
-                    </div> *@
 
                      <div class="form-group row">
                         <div class="col-md-3 text-right">
@@ -580,6 +610,62 @@
     </div>
 }
 
+
+<script>
+    $(function () {
+        var modeSelect = $('#UpdatedFilterModeId');
+        var fixedDateRow = $('#akeneo-updated-after-row');
+        var rollingDaysRow = $('#akeneo-updated-since-days-row');
+        var help = $('#akeneo-updated-filter-mode-help');
+
+        var modes = {
+            sinceLastSuccessfulRun: '@((int)AkeneoUpdatedFilterMode.SinceLastSuccessfulRun)',
+            fixedDate: '@((int)AkeneoUpdatedFilterMode.FixedDate)',
+            rollingDays: '@((int)AkeneoUpdatedFilterMode.RollingDays)',
+            none: '@((int)AkeneoUpdatedFilterMode.None)'
+        };
+
+        function updateUpdatedFilterFields() {
+            var selectedMode = modeSelect.val();
+
+            fixedDateRow.toggle(selectedMode === modes.fixedDate);
+            rollingDaysRow.toggle(selectedMode === modes.rollingDays);
+
+            switch (selectedMode) {
+                case modes.fixedDate:
+                    help.html(
+                        '<strong>Fixed date:</strong> Each delta run imports products updated after the saved cutoff. ' +
+                        'Enter the date and time in the configured store time zone; it is converted to UTC when saved.'
+                    );
+                    break;
+
+                case modes.rollingDays:
+                    help.html(
+                        '<strong>Rolling days:</strong> Each delta run recalculates the cutoff from the current UTC time. ' +
+                        'This intentionally reprocesses an overlapping recent window.'
+                    );
+                    break;
+
+                case modes.none:
+                    help.html(
+                        '<strong>No updated-date filter:</strong> Each delta run reads every product in the configured scope, ' +
+                        'but it does not perform missing-product reconciliation.'
+                    );
+                    break;
+
+                default:
+                    help.html(
+                        '<strong>Since last successful run:</strong> Uses the most recent complete run watermark with a two-minute overlap. ' +
+                        'If no qualifying run exists, the first delta reads the full configured scope.'
+                    );
+                    break;
+            }
+        }
+
+        modeSelect.on('change', updateUpdatedFilterFields);
+        updateUpdatedFilterFields();
+    });
+</script>
 
 <script>
         $(function () {
