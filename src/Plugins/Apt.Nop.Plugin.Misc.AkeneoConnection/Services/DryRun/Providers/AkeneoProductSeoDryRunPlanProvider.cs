@@ -14,13 +14,12 @@ public partial class AkeneoProductSeoSynchronizer
         AkeneoProductMappingPreviewModel model,
         CancellationToken cancellationToken = default)
     {
-        var plan = await BuildPlanAsync(context, model, cancellationToken);
+        var plan = await BuildPlanAsync(context, cancellationToken);
         plan.Render(model);
     }
 
     private async Task<AkeneoExecutableSectionPlan> BuildPlanAsync(
         AkeneoProductSyncContext context,
-        AkeneoProductMappingPreviewModel previewModel,
         CancellationToken cancellationToken)
     {
         var plan = new AkeneoExecutableSectionPlan();
@@ -55,7 +54,6 @@ public partial class AkeneoProductSeoSynchronizer
                 await AddSlugOperationAsync(
                     context,
                     plan,
-                    previewModel,
                     product,
                     mapped);
                 continue;
@@ -151,7 +149,7 @@ public partial class AkeneoProductSeoSynchronizer
 
         if (product == null && !hasSlugMapping)
         {
-            var proposedName = GetProposedProductName(context, previewModel);
+            var proposedName = ResolveProductNameForSeo(context);
             var slugProduct = new Product { Name = proposedName };
             var proposedSlug = await _urlRecordService.ValidateSeNameAsync(
                 slugProduct,
@@ -194,7 +192,6 @@ public partial class AkeneoProductSeoSynchronizer
     private async Task AddSlugOperationAsync(
         AkeneoProductSyncContext context,
         AkeneoExecutableSectionPlan plan,
-        AkeneoProductMappingPreviewModel previewModel,
         Product product,
         AkeneoResolvedMappedValue mapped)
     {
@@ -222,7 +219,7 @@ public partial class AkeneoProductSeoSynchronizer
             return;
         }
 
-        var proposedName = GetProposedProductName(context, previewModel);
+        var proposedName = ResolveProductNameForSeo(context);
         var slugProduct = new Product
         {
             Id = product?.Id ?? 0,
@@ -254,6 +251,19 @@ public partial class AkeneoProductSeoSynchronizer
                 AkeneoDryRunOperationType.Clear
                 ? async _ => await SaveSlugIfChangedAsync(context, proposed)
                 : null);
+    }
+
+    private static string ResolveProductNameForSeo(
+        AkeneoProductSyncContext context)
+    {
+        return !string.IsNullOrWhiteSpace(
+                context.PlanningState.ProposedProductName)
+            ? context.PlanningState.ProposedProductName
+            : context.Product?.Name ??
+              context.ExistingProduct?.Name ??
+              context.Sku ??
+              context.SourceCode ??
+              context.ProductKey;
     }
 
     private async Task<bool> SaveSlugIfChangedAsync(

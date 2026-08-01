@@ -105,24 +105,6 @@ internal static class AkeneoDryRunPlanHelper
             : AkeneoMappingHelper.GetSourceDisplayName(mapped.Mapping);
     }
 
-    public static string GetProposedProductName(
-        AkeneoProductSyncContext context,
-        AkeneoProductMappingPreviewModel model)
-    {
-        var nameOperation = model?.Operations
-            .LastOrDefault(operation =>
-                string.Equals(operation.Area, "Product fields", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(operation.Target, "Name", StringComparison.OrdinalIgnoreCase));
-
-        return !string.IsNullOrWhiteSpace(nameOperation?.ProposedValue)
-            ? nameOperation.ProposedValue
-            : context.Product?.Name ??
-              context.ExistingProduct?.Name ??
-              context.Sku ??
-              context.SourceCode ??
-              context.ProductKey;
-    }
-
     public static bool TryParseBoolean(string value, out bool parsed)
     {
         if (bool.TryParse(value, out parsed))

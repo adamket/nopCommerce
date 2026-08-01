@@ -609,6 +609,60 @@ public class AkeneoDryRunSectionParityTests
     }
 
     [Test]
+    public async Task Seo_slug_preview_uses_typed_core_name_after_core_labels_are_renamed()
+    {
+        var productService = new Mock<IProductService>();
+        var urlRecordService = new Mock<IUrlRecordService>();
+        string validatedName = null;
+
+        urlRecordService
+            .Setup(service => service.ValidateSeNameAsync(
+                It.IsAny<Product>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                true))
+            .Callback<Product, string, string, bool>((_, _, name, _) =>
+                validatedName = name)
+            .ReturnsAsync("new-product-name");
+
+        var context = Context(
+            null,
+            MappedValue(
+                NopTargetType.ProductField,
+                "Name",
+                "New product name"));
+        var model = new AkeneoProductMappingPreviewModel();
+        var core = new AkeneoProductCoreSynchronizer(productService.Object);
+        var seo = new AkeneoProductSeoSynchronizer(
+            productService.Object,
+            urlRecordService.Object);
+
+        await new AkeneoDryRunProductCorePlanner(core)
+            .PlanAsync(context, model);
+
+        foreach (var operation in model.Operations)
+        {
+            operation.Area = "Renamed core area";
+            operation.Target = "Renamed core target";
+        }
+
+        await new AkeneoDryRunSeoPlanner(seo)
+            .PlanAsync(context, model);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                context.PlanningState.ProposedProductName,
+                Is.EqualTo("New product name"));
+            Assert.That(validatedName, Is.EqualTo("New product name"));
+            Assert.That(model.Operations, Has.Some.Matches<AkeneoDryRunOperationPreviewModel>(
+                operation => operation.Area == "SEO fields" &&
+                             operation.Target == "SeName" &&
+                             operation.ProposedValue == "new-product-name"));
+        });
+    }
+
+    [Test]
     public async Task Asset_planner_and_synchronizer_share_resolver_and_payload_rules()
     {
         var mappingService = new Mock<IAkeneoAssetMappingService>();
@@ -659,7 +713,20 @@ public class AkeneoDryRunSectionParityTests
             });
         managedAssetService.SetReturnsDefault(
             Task.FromResult<IList<AkeneoManagedAsset>>([]));
+        managedAssetService
+            .Setup(service => service.InsertAsync(It.IsAny<AkeneoManagedAsset>()))
+            .Returns(Task.CompletedTask);
         genericAttributeService.SetReturnsDefault(Task.FromResult<string>(null!));
+        string savedPayload = null;
+        genericAttributeService
+            .Setup(service => service.SaveAttributeAsync<string>(
+                It.IsAny<Product>(),
+                "Apt.Documents",
+                It.IsAny<string>(),
+                It.IsAny<int>()))
+            .Callback<Product, string, string, int>((_, _, value, _) =>
+                savedPayload = value)
+            .Returns(Task.CompletedTask);
 
         var synchronizer = new AkeneoProductAssetSynchronizer(
             mappingService.Object,
@@ -682,6 +749,19 @@ public class AkeneoDryRunSectionParityTests
         await synchronizer.SynchronizeAsync(writeContext);
 
         AssertPlannerMatchesWrite(model, writeContext, "Assets", "Apt.Documents", AkeneoDryRunOperationType.Update);
+
+        var plannedPayload = model.Operations
+            .Single(operation =>
+                operation.Area == "Assets" &&
+                operation.Target.Contains("Apt.Documents", StringComparison.OrdinalIgnoreCase))
+            .ProposedValue;
+
+        var expectedPreviewPayload = savedPayload?.Length <= 240
+            ? savedPayload
+            : savedPayload?[..240] + "…";
+
+        Assert.That(plannedPayload, Is.EqualTo(expectedPreviewPayload),
+            "The structural asset payload shown by Dry Run must summarize the exact payload saved by the write path.");
         resolver.Verify(service => service.ResolveAsync(
             It.IsAny<AkeneoProductSyncContext>(),
             mapping,

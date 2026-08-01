@@ -37,7 +37,12 @@ public partial class AkeneoProductCoreSynchronizer
 
         ApplyWritePolicy(context, plan, isNew);
         AddLifecycleOperations(context, plan, product, isNew);
-        AnalyzeProductFields(context, plan, product, isNew, cancellationToken);
+        context.PlanningState.ProposedProductName = AnalyzeProductFields(
+            context,
+            plan,
+            product,
+            isNew,
+            cancellationToken);
 
         return Task.FromResult(plan);
     }
@@ -190,7 +195,7 @@ public partial class AkeneoProductCoreSynchronizer
         }
     }
 
-    private static void AnalyzeProductFields(
+    private static string AnalyzeProductFields(
         AkeneoProductSyncContext context,
         AkeneoExecutableSectionPlan plan,
         Product product,
@@ -199,6 +204,10 @@ public partial class AkeneoProductCoreSynchronizer
     {
         var mappings = context.GetMappings(NopTargetType.ProductField).ToList();
         var mappedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var proposedProductName = product.Name ??
+            context.Sku ??
+            context.SourceCode ??
+            context.ProductKey;
 
         foreach (var mapped in mappings)
         {
@@ -239,6 +248,9 @@ public partial class AkeneoProductCoreSynchronizer
                 continue;
             }
 
+            if (string.Equals(key, "Name", StringComparison.OrdinalIgnoreCase))
+                proposedProductName = proposed;
+
             if (isNew && type != AkeneoDryRunOperationType.Review)
                 type = AkeneoDryRunOperationType.Create;
 
@@ -259,7 +271,7 @@ public partial class AkeneoProductCoreSynchronizer
         }
 
         if (!isNew)
-            return;
+            return proposedProductName;
 
         var fallbackName = context.Sku ?? context.SourceCode ?? context.ProductKey;
 
@@ -286,6 +298,8 @@ public partial class AkeneoProductCoreSynchronizer
             "Published",
             (context.Source.Enabled ?? false).ToString(),
             "Akeneo enabled state");
+
+        return proposedProductName;
     }
 
     private static void AddCreationDefaultIfUnmapped(

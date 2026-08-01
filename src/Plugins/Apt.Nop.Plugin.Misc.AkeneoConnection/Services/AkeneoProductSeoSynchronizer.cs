@@ -30,8 +30,7 @@ public partial class AkeneoProductSeoSynchronizer
 
         var plan = await BuildPlanAsync(
             context,
-            previewModel: null,
-            cancellationToken: cancellationToken);
+            cancellationToken);
 
         await plan.ExecuteAsync(context, cancellationToken);
     }

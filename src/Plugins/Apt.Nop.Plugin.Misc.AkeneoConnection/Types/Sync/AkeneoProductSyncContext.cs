@@ -54,6 +54,12 @@ public sealed class AkeneoProductSyncContext
 
     public bool StopProcessing { get; set; }
 
+    /// <summary>
+    /// Typed values shared between ordered synchronization-section plans for
+    /// the current product. This state is item-scoped and is never persisted.
+    /// </summary>
+    public AkeneoProductPlanningState PlanningState { get; } = new();
+
     public IEnumerable<AkeneoResolvedMappedValue> GetMappings(
         NopTargetType targetType)
     {
