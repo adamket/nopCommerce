@@ -92,8 +92,8 @@ public class AkeneoAttributeMappingService(
             {
                 var query = attributeMappingRepository.Table.Where(mapping =>
                     mapping.ValueModeId ==
-                        (int)AkeneoAttributeMappingValueMode.SingleAttribute &&
-                    mapping.AkeneoAttributeCode.ToLowerInvariant() == attributeCode);
+                    (int)AkeneoAttributeMappingValueMode.SingleAttribute &&
+                    mapping.AkeneoAttributeCode == attributeCode);
 
                 query = familyCode == null
                     ? query.Where(mapping =>
