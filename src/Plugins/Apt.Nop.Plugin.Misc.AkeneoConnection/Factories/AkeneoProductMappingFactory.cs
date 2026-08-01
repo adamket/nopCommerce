@@ -20,6 +20,8 @@ public sealed class AkeneoProductMappingFactory(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoProductModelHierarchyResolver productModelHierarchyResolver,
+    IAkeneoVariantRelationshipResolver variantRelationshipResolver,
+    IAkeneoLeafRepresentationClassifier leafRepresentationClassifier,
     IAkeneoProductSyncService productSyncService,
     IAkeneoProductBatchImportRequestFactory requestFactory,
     IAkeneoDryRunChangeAnalyzer changeAnalyzer)
@@ -166,6 +168,15 @@ public sealed class AkeneoProductMappingFactory(
             mappingEntityScope,
             cancellationToken);
 
+        await PopulateHierarchyDecisionAsync(
+            akeneoSource,
+            previewSource,
+            sourceEntityType,
+            request,
+            context,
+            model,
+            cancellationToken);
+
         AppendDistinct(model.Messages, result.Messages);
         AppendDistinct(model.Warnings, result.Warnings);
         AppendDistinct(model.Errors, result.Errors);
@@ -212,7 +223,12 @@ public sealed class AkeneoProductMappingFactory(
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(product.Parent))
+        {
+            model.HierarchyDecision =
+                $"Akeneo product '{product.Identifier ?? product.Uuid}' is standalone and will synchronize directly to one nopCommerce product.";
+            model.HierarchyRequiresReview = false;
             return product;
+        }
 
         var ancestors = new List<AkeneoProductDefinition>();
         var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -244,7 +260,14 @@ public sealed class AkeneoProductMappingFactory(
         }
 
         if (ancestors.Count == 0)
+        {
+            model.ImmediateParentProductModelCode = product.Parent?.Trim();
+            model.EffectiveParentProductModelCode = product.Parent?.Trim();
+            model.HierarchyDecision =
+                $"Akeneo product '{product.Identifier ?? product.Uuid}' references parent model '{product.Parent}', but the model hierarchy could not be resolved completely.";
+            model.HierarchyRequiresReview = true;
             return product;
+        }
 
         if (cycleDetected)
         {
@@ -263,6 +286,14 @@ public sealed class AkeneoProductMappingFactory(
             product,
             ancestors,
             hierarchyMode);
+
+        model.ImmediateParentProductModelCode =
+            hierarchy.ImmediateParentModel?.Code ?? product.Parent?.Trim();
+        model.EffectiveParentProductModelCode =
+            hierarchy.EffectiveParentProductModel?.Code ?? product.Parent?.Trim();
+        model.HierarchyDecision =
+            $"Akeneo leaf '{product.Identifier ?? product.Uuid}' uses {FormatHierarchyMode(hierarchy.Mode)}: " +
+            $"immediate parent '{model.ImmediateParentProductModelCode}', effective nopCommerce parent '{model.EffectiveParentProductModelCode}'.";
 
         return hierarchy.EffectiveLeaf;
     }
@@ -341,6 +372,11 @@ public sealed class AkeneoProductMappingFactory(
 
         var effectiveModel = hierarchy.EffectiveParentProductModel;
 
+        model.ImmediateParentProductModelCode = productModel.Code?.Trim();
+        model.EffectiveParentProductModelCode = effectiveModel.Code?.Trim();
+        model.HierarchyDecision =
+            $"Akeneo product model '{selectedCode}' uses {FormatHierarchyMode(hierarchy.Mode)} and resolves to nopCommerce parent product model '{model.EffectiveParentProductModelCode}'.";
+
         if (!string.Equals(
                 selectedCode,
                 effectiveModel.Code,
@@ -352,6 +388,223 @@ public sealed class AkeneoProductMappingFactory(
 
         return effectiveModel;
     }
+
+
+    private async Task PopulateHierarchyDecisionAsync(
+        AkeneoProductDefinition originalSource,
+        AkeneoProductDefinition previewSource,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (sourceEntityType == AkeneoEntityType.ProductModel)
+        {
+            model.ParentNopProductId = context.ExistingProduct?.Id;
+            model.ParentProductDecision = context.ExistingProduct == null
+                ? $"The resolved product model '{model.EffectiveParentProductModelCode ?? previewSource.Code}' would create a nopCommerce parent product. Descendant leaves are not imported by this one-time product-model action."
+                : $"The resolved product model maps to existing nopCommerce parent product #{context.ExistingProduct.Id}. Descendant leaves are not imported by this one-time product-model action.";
+            model.CurrentRepresentation = context.ExistingProduct == null
+                ? "No existing nopCommerce parent product"
+                : $"Existing nopCommerce parent product #{context.ExistingProduct.Id}";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(originalSource.Parent))
+        {
+            model.CurrentRepresentation = context.ExistingProduct == null
+                ? "No existing nopCommerce product"
+                : $"Standalone nopCommerce product #{context.ExistingProduct.Id}";
+            return;
+        }
+
+        var effectiveParentCode = model.EffectiveParentProductModelCode?.Trim();
+        if (string.IsNullOrWhiteSpace(effectiveParentCode))
+        {
+            model.HierarchyRequiresReview = true;
+            model.ParentProductDecision =
+                "The effective parent product-model code could not be resolved. Parent creation and variant representation will be decided during import.";
+            return;
+        }
+
+        var effectiveParentModel = await akeneoApiClient
+            .GetProductModelByCodeAsync(effectiveParentCode, cancellationToken);
+
+        if (effectiveParentModel == null)
+        {
+            model.HierarchyRequiresReview = true;
+            model.ParentProductDecision =
+                $"Akeneo product model '{effectiveParentCode}' could not be reloaded, so the parent nopCommerce product and final representation cannot be confirmed.";
+            return;
+        }
+
+        var parentResult = new AkeneoProductImportResult
+        {
+            AkeneoIdentifier = effectiveParentCode,
+            AkeneoProductKey = effectiveParentCode
+        };
+
+        var parentContext = await productSyncService.PrepareAsync(
+            effectiveParentModel,
+            AkeneoEntityType.ProductModel,
+            request,
+            parentResult,
+            originalSource.Family,
+            AkeneoAttributeMappingEntityScope.ProductModel,
+            cancellationToken);
+
+        model.ParentNopProductId = parentContext.ExistingProduct?.Id;
+        model.ParentProductDecision = parentContext.ExistingProduct == null
+            ? $"Parent product model '{effectiveParentCode}' would be created and synchronized before the leaf representation is applied."
+            : $"Existing nopCommerce parent product #{parentContext.ExistingProduct.Id} for model '{effectiveParentCode}' would be synchronized before the leaf representation is applied.";
+
+        var familyMapping = await familyMappingService
+            .GetByFamilyCodeAsync(originalSource.Family);
+        AkeneoProductDefinition immediateParentModel = null;
+        if (string.Equals(
+                model.ImmediateParentProductModelCode,
+                effectiveParentCode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            immediateParentModel = effectiveParentModel;
+        }
+        else if (!string.IsNullOrWhiteSpace(model.ImmediateParentProductModelCode))
+        {
+            immediateParentModel = await akeneoApiClient.GetProductModelByCodeAsync(
+                model.ImmediateParentProductModelCode,
+                cancellationToken);
+        }
+        var overrideRule = await ResolveSubModelOverrideAsync(
+            familyMapping,
+            originalSource,
+            immediateParentModel);
+
+        string representation;
+        string decisionSource;
+
+        if (overrideRule != null)
+        {
+            if (overrideRule.VariantRelationshipOverrideMode ==
+                AkeneoVariantRelationshipMode.None)
+            {
+                var existingMode = await leafRepresentationClassifier.ClassifyAsync(
+                    context.ExistingProduct,
+                    context.Sku);
+
+                if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                {
+                    representation = "standalone nopCommerce product";
+                    decisionSource = "matching submodel override rule";
+                    model.CurrentRepresentation = existingMode == null
+                        ? "No existing leaf product representation"
+                        : "Existing standalone nopCommerce product";
+                }
+                else
+                {
+                    representation = FormatVariantMode(existingMode.Value);
+                    decisionSource =
+                        $"existing {representation} prevents the standalone submodel override from changing representation";
+                    model.CurrentRepresentation = representation;
+                }
+            }
+            else
+            {
+                representation = FormatVariantMode(
+                    overrideRule.VariantRelationshipOverrideMode);
+                decisionSource = "matching submodel override rule";
+                model.CurrentRepresentation ??= context.ExistingProduct == null
+                    ? "No existing leaf product representation"
+                    : "Existing leaf representation will be reconciled to the forced mode";
+            }
+        }
+        else if (parentContext.ExistingProduct != null)
+        {
+            try
+            {
+                var resolution = await variantRelationshipResolver.ResolveAsync(
+                    parentContext.ExistingProduct,
+                    originalSource.Family);
+                representation = FormatVariantMode(resolution.Mode);
+                decisionSource = resolution.Source ==
+                    AkeneoVariantRelationshipSource.ExistingNopParent
+                    ? "existing nopCommerce parent structure"
+                    : "Akeneo family configuration";
+                model.CurrentRepresentation = resolution.Source ==
+                    AkeneoVariantRelationshipSource.ExistingNopParent
+                    ? representation
+                    : "No existing variant structure was selected";
+            }
+            catch (Exception ex)
+            {
+                representation = "unresolved variant representation";
+                decisionSource = ex.Message;
+                model.HierarchyRequiresReview = true;
+                model.CurrentRepresentation =
+                    "Existing parent structure could not be classified safely";
+            }
+        }
+        else if (familyMapping is { Enabled: true })
+        {
+            representation = FormatVariantMode(familyMapping.VariantRelationshipMode);
+            decisionSource = "Akeneo family configuration";
+            model.CurrentRepresentation = "No existing nopCommerce parent structure";
+        }
+        else
+        {
+            representation = "unresolved variant representation";
+            decisionSource =
+                $"no enabled family variant configuration exists for '{originalSource.Family}'";
+            model.HierarchyRequiresReview = true;
+            model.CurrentRepresentation = "No existing nopCommerce parent structure";
+        }
+
+        model.HierarchyDecision =
+            $"{model.HierarchyDecision} Leaf representation: {representation} ({decisionSource}).";
+
+        if (parentResult.Errors.Any())
+        {
+            model.HierarchyRequiresReview = true;
+            model.ParentProductDecision +=
+                $" Parent preparation reported: {string.Join("; ", parentResult.Errors)}";
+        }
+    }
+
+    private async Task<AkeneoFamilySubModelRule> ResolveSubModelOverrideAsync(
+        AkeneoFamilyMapping familyMapping,
+        AkeneoProductDefinition leaf,
+        AkeneoProductDefinition subModel)
+    {
+        if (familyMapping is not { Enabled: true } || subModel == null)
+            return null;
+
+        var rules = await familyMappingService.GetSubModelRulesAsync(
+            familyMapping.Id);
+
+        return AkeneoSubModelRuleMatcher.FindMatch(rules, leaf, subModel);
+    }
+
+    private static string FormatHierarchyMode(
+        AkeneoProductModelHierarchyMode mode) => mode switch
+    {
+        AkeneoProductModelHierarchyMode.RootProductModel =>
+            "root-product-model flattening",
+        _ => "immediate-parent-product-model hierarchy"
+    };
+
+    private static string FormatVariantMode(
+        AkeneoVariantRelationshipMode mode,
+        bool standaloneForNone = false) => mode switch
+    {
+        AkeneoVariantRelationshipMode.GroupedProducts => "grouped child product",
+        AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue =>
+            "associated product attribute value",
+        AkeneoVariantRelationshipMode.ProductAttributeCombinations =>
+            "product attribute combination",
+        AkeneoVariantRelationshipMode.None when standaloneForNone =>
+            "standalone nopCommerce product",
+        _ => "no configured variant relationship"
+    };
 
     private async Task<AkeneoProductDefinition> FindAkeneoProductByIdentifierAsync(
         string akeneoIdentifier,

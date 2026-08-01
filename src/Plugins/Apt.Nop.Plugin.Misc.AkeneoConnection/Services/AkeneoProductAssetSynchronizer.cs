@@ -2,6 +2,8 @@
 using System.Text.Json.Serialization;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.DryRun;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Assets;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
@@ -10,6 +12,7 @@ using Nop.Core.Domain.Media;
 using Nop.Services.Catalog;
 using Nop.Services.Common;
 using Nop.Services.Media;
+using static Apt.Nop.Plugin.Misc.AkeneoConnection.Services.DryRun.AkeneoDryRunPlanHelper;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -27,7 +30,9 @@ public sealed class AkeneoProductAssetSynchronizer(
     IVideoService videoService,
     IProductService productService,
     IGenericAttributeService genericAttributeService)
-    : IAkeneoProductSectionSynchronizer
+    : IAkeneoProductSectionSynchronizer,
+      IAkeneoSectionDryRunPlanProvider,
+      IAkeneoAssetDryRunPlanProvider
 {
     public int Order => 550;
 
@@ -43,40 +48,10 @@ public sealed class AkeneoProductAssetSynchronizer(
         // missing locale/channel match, or invalid external asset must never clear
         // the product gallery before the replacement set is known to be safe.
 
-        var desired = await ResolveDesiredAsync(context, emitWarnings: true, cancellationToken);
+        var desired = await ResolveDesiredAsync(context, context.Result.AddWarning, cancellationToken);
         var activeMappings = desired.ActiveMappings;
         var resolvedMappings = desired.ResolvedMappings;
         var authoritativeResolutionFailed = desired.AuthoritativeResolutionFailed;
-
-        foreach (var mapping in activeMappings)
-        {
-            try
-            {
-                var resolution = await assetResolver.ResolveAsync(
-                    context,
-                    mapping,
-                    cancellationToken);
-
-                if (!string.IsNullOrWhiteSpace(resolution.Warning))
-                    context.Result.AddWarning(resolution.Warning);
-
-                if (!resolution.CanReconcile)
-                {
-                    authoritativeResolutionFailed = true;
-                    continue;
-                }
-
-                resolvedMappings.Add(new ResolvedAssetMapping(
-                    mapping,
-                    resolution.Assets));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                authoritativeResolutionFailed = true;
-                context.Result.AddWarning(
-                    $"Asset mapping '{mapping.Name}' could not be resolved: {ex.Message}");
-            }
-        }
 
         if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.ReplaceAll &&
             authoritativeResolutionFailed)
@@ -135,7 +110,7 @@ public sealed class AkeneoProductAssetSynchronizer(
         if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
             return;
 
-        var desired = await ResolveDesiredAsync(context, emitWarnings: false, cancellationToken);
+        var desired = await ResolveDesiredAsync(context, warningSink: null, cancellationToken: cancellationToken);
 
         foreach (var resolved in desired.ResolvedMappings)
         {
@@ -176,6 +151,674 @@ public sealed class AkeneoProductAssetSynchronizer(
         }
     }
 
+
+    /// <summary>
+    /// Builds a read-only asset plan from the same desired-state resolver used
+    /// by the write path. No media is downloaded and no nopCommerce data is
+    /// changed.
+    /// </summary>
+    public async Task PlanAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        CancellationToken cancellationToken = default)
+    {
+        if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
+        {
+            model.CoverageNotes.Add(
+                "Asset synchronization is disabled by the saved sync profile.");
+            return;
+        }
+
+        var desired = await ResolveDesiredAsync(
+            context,
+            warning => model.Warnings.Add(warning),
+            cancellationToken);
+
+        if (desired.ActiveMappings.Count == 0)
+            return;
+
+        var resolvedById = desired.ResolvedMappings.ToDictionary(
+            item => item.Mapping.Id);
+
+        foreach (var mapping in desired.ActiveMappings)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!resolvedById.TryGetValue(mapping.Id, out var resolved))
+            {
+                AddReviewOperation(
+                    model,
+                    "Assets",
+                    GetMappingDisplayName(mapping),
+                    GetMappingSource(mapping),
+                    "The asset source could not be resolved authoritatively. The import preserves existing media when a safe desired state cannot be built.");
+                continue;
+            }
+
+            await PlanResolvedMappingAsync(
+                context,
+                model,
+                resolved,
+                cancellationToken);
+        }
+
+        if (context.ExistingProduct is { Id: > 0 })
+        {
+            if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.ReplaceManaged)
+            {
+                await PlanOrphanedMappingCleanupAsync(
+                    context,
+                    model,
+                    desired.ActiveMappings,
+                    cancellationToken);
+            }
+            else if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.ReplaceAll &&
+                     !desired.AuthoritativeResolutionFailed)
+            {
+                // The real write path performs no cleanup at all when an
+                // authoritative Replace All desired state cannot be resolved.
+                await PlanOrphanedMappingCleanupAsync(
+                    context,
+                    model,
+                    desired.ActiveMappings,
+                    cancellationToken);
+                await PlanReplaceAllCollectionCleanupAsync(
+                    context,
+                    model,
+                    desired.ActiveMappings,
+                    desired.ResolvedMappings,
+                    cancellationToken);
+            }
+        }
+
+        if (desired.AuthoritativeResolutionFailed &&
+            context.Request.AssetSyncMode == AkeneoCollectionSyncMode.ReplaceAll)
+        {
+            AddReviewOperation(
+                model,
+                "Assets",
+                "Authoritative replacement",
+                "Asset mappings",
+                "Replace All cleanup will be skipped because at least one asset mapping could not be resolved safely. Existing media is preserved.");
+        }
+
+        model.CoverageNotes.Add(
+            "Asset operations are compared from Akeneo asset metadata, plugin ownership records, and current nopCommerce media metadata. Picture binaries are not downloaded during preview; import still validates the file, MIME type, and download before applying a picture change.");
+    }
+
+    private async Task PlanResolvedMappingAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        ResolvedAssetMapping resolved,
+        CancellationToken cancellationToken)
+    {
+        var mapping = resolved.Mapping;
+        var product = context.ExistingProduct;
+        var existing = product is { Id: > 0 }
+            ? (await managedAssetService.GetByProductAndMappingAsync(
+                product.Id,
+                mapping.MappingKey)).ToList()
+            : new List<AkeneoManagedAsset>();
+
+        var destinationType = (AkeneoAssetDestinationType)mapping.DestinationTypeId;
+        var customPropertyKey = destinationType == AkeneoAssetDestinationType.CustomProperty
+            ? GetCustomPropertyKey(mapping)
+            : null;
+
+        var incompatible = existing.Where(item =>
+                item.DestinationTypeId != mapping.DestinationTypeId ||
+                (destinationType == AkeneoAssetDestinationType.CustomProperty &&
+                 !string.Equals(
+                     item.DestinationKey,
+                     customPropertyKey,
+                     StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        foreach (var stale in incompatible)
+        {
+            AddOperation(
+                model,
+                "Assets",
+                DescribeManagedAsset(stale),
+                GetMappingSource(mapping),
+                DescribeManagedAssetValue(stale),
+                null,
+                AkeneoDryRunOperationType.Remove,
+                $"The saved mapping now targets {destinationType}; the incompatible plugin-managed destination is removed before the desired assets are applied.");
+            existing.Remove(stale);
+        }
+
+        if (destinationType == AkeneoAssetDestinationType.CustomProperty)
+        {
+            await PlanCustomPropertyMappingAsync(
+                context,
+                model,
+                mapping,
+                resolved.Assets,
+                cancellationToken);
+
+            if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.ReplaceManaged)
+            {
+                var rmDesiredKeys = resolved.Assets
+                    .Select(item => item.SourceIdentityHash)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var stale in existing.Where(item =>
+                             !rmDesiredKeys.Contains(item.SourceIdentityHash)))
+                {
+                    AddOperation(
+                        model,
+                        "Assets",
+                        DescribeManagedAsset(stale),
+                        GetMappingSource(mapping),
+                        DescribeManagedAssetValue(stale),
+                        null,
+                        AkeneoDryRunOperationType.Remove,
+                        "Replace Managed removes this stale plugin ownership record after the custom-property payload is rewritten without it.");
+                }
+            }
+
+            return;
+        }
+
+        foreach (var asset in resolved.Assets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var managed = existing.FirstOrDefault(item =>
+                string.Equals(
+                    item.SourceIdentityHash,
+                    asset.SourceIdentityHash,
+                    StringComparison.OrdinalIgnoreCase));
+
+            await PlanDestinationAssetAsync(
+                context,
+                model,
+                asset,
+                managed,
+                cancellationToken);
+        }
+
+        if (context.Request.AssetSyncMode != AkeneoCollectionSyncMode.ReplaceManaged)
+            return;
+
+        var desiredKeys = resolved.Assets
+            .Select(item => item.SourceIdentityHash)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var stale in existing.Where(item =>
+                     !desiredKeys.Contains(item.SourceIdentityHash)))
+        {
+            AddOperation(
+                model,
+                "Assets",
+                DescribeManagedAsset(stale),
+                GetMappingSource(mapping),
+                DescribeManagedAssetValue(stale),
+                null,
+                AkeneoDryRunOperationType.Remove,
+                "Replace Managed removes this stale destination because it is owned by this asset mapping and is no longer in the desired Akeneo set.");
+        }
+    }
+
+    private async Task PlanDestinationAssetAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        AkeneoResolvedAsset asset,
+        AkeneoManagedAsset managed,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var destinationType = (AkeneoAssetDestinationType)asset.Mapping.DestinationTypeId;
+        var target = destinationType switch
+        {
+            AkeneoAssetDestinationType.ProductPicture =>
+                $"Product picture: {GetAssetDisplayName(asset)}",
+            AkeneoAssetDestinationType.ProductVideo =>
+                $"Product video: {GetAssetDisplayName(asset)}",
+            _ => GetAssetDisplayName(asset)
+        };
+
+        if (destinationType == AkeneoAssetDestinationType.ProductPicture &&
+            (AkeneoAssetStorageMode)asset.Mapping.StorageModeId !=
+                AkeneoAssetStorageMode.ImportIntoNopCommerce)
+        {
+            AddReviewOperation(
+                model,
+                "Assets",
+                target,
+                GetMappingSource(asset.Mapping),
+                "The mapping targets Product Picture but is configured as an external reference, so the write pipeline will reject it.",
+                current: managed == null ? null : DescribeManagedAssetValue(managed),
+                proposed: DescribeResolvedAssetValue(asset));
+            return;
+        }
+
+        if (managed == null)
+        {
+            AddOperation(
+                model,
+                "Assets",
+                target,
+                GetMappingSource(asset.Mapping),
+                null,
+                DescribeResolvedAssetValue(asset),
+                context.ExistingProduct == null
+                    ? AkeneoDryRunOperationType.Create
+                    : AkeneoDryRunOperationType.Add,
+                destinationType == AkeneoAssetDestinationType.ProductPicture
+                    ? "The image will be downloaded and validated before the picture and product-picture relationship are created."
+                    : "The video and product-video relationship will be created from the resolved external URL.");
+            return;
+        }
+
+        var changed =
+            !string.Equals(
+                managed.SourceFingerprint,
+                asset.SourceFingerprint,
+                StringComparison.OrdinalIgnoreCase) ||
+            managed.DisplayOrder != asset.DisplayOrder;
+        var detailParts = new List<string>();
+
+        if (!string.Equals(
+                managed.SourceFingerprint,
+                asset.SourceFingerprint,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            detailParts.Add("source fingerprint changed");
+        }
+
+        if (managed.DisplayOrder != asset.DisplayOrder)
+            detailParts.Add($"display order {managed.DisplayOrder} → {asset.DisplayOrder}");
+
+        if (destinationType == AkeneoAssetDestinationType.ProductPicture)
+        {
+            Picture picture = null;
+            ProductPicture relation = null;
+
+            if (managed.NopPictureId > 0)
+                picture = await pictureService.GetPictureByIdAsync(managed.NopPictureId.Value);
+            if (managed.NopProductPictureId > 0)
+                relation = await productService.GetProductPictureByIdAsync(managed.NopProductPictureId.Value);
+
+            if (picture == null || relation == null)
+            {
+                changed = true;
+                detailParts.Add("managed nopCommerce picture or relationship is missing");
+            }
+            else
+            {
+                var seoName = await ResolveSeoFilenameAsync(asset);
+                if (!string.Equals(
+                        picture.SeoFilename,
+                        seoName,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        picture.AltAttribute,
+                        asset.AltText,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        picture.TitleAttribute,
+                        asset.TitleText,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    changed = true;
+                    detailParts.Add("picture metadata changed");
+                }
+
+                if (relation.PictureId != picture.Id ||
+                    relation.DisplayOrder != asset.DisplayOrder)
+                {
+                    changed = true;
+                    detailParts.Add("product-picture relationship changed");
+                }
+            }
+        }
+        else if (destinationType == AkeneoAssetDestinationType.ProductVideo)
+        {
+            Video video = null;
+            ProductVideo relation = null;
+
+            if (managed.NopVideoId > 0)
+                video = await videoService.GetVideoByIdAsync(managed.NopVideoId.Value);
+            if (managed.NopProductVideoId > 0)
+                relation = await productService.GetProductVideoByIdAsync(managed.NopProductVideoId.Value);
+
+            if (video == null || relation == null)
+            {
+                changed = true;
+                detailParts.Add("managed nopCommerce video or relationship is missing");
+            }
+            else
+            {
+                if (!string.Equals(
+                        video.VideoUrl,
+                        asset.ExternalUrl,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    changed = true;
+                    detailParts.Add("video URL changed");
+                }
+
+                if (relation.VideoId != video.Id ||
+                    relation.DisplayOrder != asset.DisplayOrder)
+                {
+                    changed = true;
+                    detailParts.Add("product-video relationship changed");
+                }
+            }
+        }
+
+        AddOperation(
+            model,
+            "Assets",
+            target,
+            GetMappingSource(asset.Mapping),
+            DescribeManagedAssetValue(managed),
+            DescribeResolvedAssetValue(asset),
+            changed
+                ? AkeneoDryRunOperationType.Update
+                : AkeneoDryRunOperationType.NoChange,
+            detailParts.Count == 0
+                ? "The managed destination matches the resolved Akeneo asset metadata."
+                : string.Join("; ", detailParts) + ".");
+    }
+
+    private async Task PlanCustomPropertyMappingAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        AkeneoAssetMapping mapping,
+        IReadOnlyList<AkeneoResolvedAsset> desired,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var key = GetCustomPropertyKey(mapping);
+        var current = context.ExistingProduct is { Id: > 0 }
+            ? await genericAttributeService.GetAttributeAsync<string>(
+                context.ExistingProduct,
+                key)
+            : null;
+
+        if (!TryBuildCustomPropertyPayload(
+                current,
+                desired,
+                context.Request.AssetSyncMode,
+                out var desiredJson,
+                out var payloadCount,
+                out var warning))
+        {
+            AddReviewOperation(
+                model,
+                "Assets",
+                $"Custom property: {key}",
+                GetMappingSource(mapping),
+                warning,
+                current: SummarizeJson(current),
+                proposed: $"{desired.Count} resolved asset reference(s)");
+            return;
+        }
+
+        var type = context.ExistingProduct == null
+            ? string.IsNullOrWhiteSpace(desiredJson)
+                ? AkeneoDryRunOperationType.NoChange
+                : AkeneoDryRunOperationType.Create
+            : DetermineScalarChangeType(current, desiredJson, ignoreCase: true);
+
+        AddOperation(
+            model,
+            "Assets",
+            $"Custom property: {key}",
+            GetMappingSource(mapping),
+            SummarizeJson(current),
+            SummarizeJson(desiredJson),
+            type,
+            $"The property will contain {payloadCount} asset reference(s) using the same JSON payload builder as the write path.");
+    }
+
+    private async Task PlanOrphanedMappingCleanupAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        IReadOnlyCollection<AkeneoAssetMapping> activeMappings,
+        CancellationToken cancellationToken)
+    {
+        var active = activeMappings
+            .Select(mapping => mapping.MappingKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var managedAssets = await managedAssetService.GetByProductAsync(
+            context.ExistingProduct.Id);
+
+        foreach (var orphan in managedAssets.Where(item =>
+                     !active.Contains(item.AssetMappingKey)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AddOperation(
+                model,
+                "Assets",
+                DescribeManagedAsset(orphan),
+                "Deleted or disabled asset mapping",
+                DescribeManagedAssetValue(orphan),
+                null,
+                AkeneoDryRunOperationType.Remove,
+                "The destination is plugin-managed but its asset mapping is no longer active for this product.");
+        }
+    }
+
+    private async Task PlanReplaceAllCollectionCleanupAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductMappingPreviewModel model,
+        IReadOnlyCollection<AkeneoAssetMapping> activeMappings,
+        IReadOnlyCollection<ResolvedAssetMapping> resolvedMappings,
+        CancellationToken cancellationToken)
+    {
+        var managedAssets = await managedAssetService.GetByProductAsync(
+            context.ExistingProduct.Id);
+        var desiredByMapping = resolvedMappings.ToDictionary(
+            item => item.Mapping.MappingKey,
+            item => item.Assets
+                .Select(asset => asset.SourceIdentityHash)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+        var mappingByKey = activeMappings.ToDictionary(
+            mapping => mapping.MappingKey,
+            StringComparer.OrdinalIgnoreCase);
+        var desiredManaged = managedAssets.Where(item =>
+                mappingByKey.TryGetValue(item.AssetMappingKey, out var mapping) &&
+                item.DestinationTypeId == mapping.DestinationTypeId &&
+                desiredByMapping.TryGetValue(item.AssetMappingKey, out var identities) &&
+                identities.Contains(item.SourceIdentityHash))
+            .ToList();
+        var destinationTypes = activeMappings
+            .Select(mapping => (AkeneoAssetDestinationType)mapping.DestinationTypeId)
+            .ToHashSet();
+
+        if (destinationTypes.Contains(AkeneoAssetDestinationType.ProductPicture))
+        {
+            var keep = desiredManaged
+                .Where(item =>
+                    item.DestinationTypeId == (int)AkeneoAssetDestinationType.ProductPicture &&
+                    item.NopProductPictureId > 0)
+                .Select(item => item.NopProductPictureId.Value)
+                .ToHashSet();
+
+            foreach (var relation in await productService
+                         .GetProductPicturesByProductIdAsync(context.ExistingProduct.Id))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (keep.Contains(relation.Id))
+                    continue;
+
+                AddOperation(
+                    model,
+                    "Assets",
+                    $"Product picture relationship #{relation.Id}",
+                    "Replace All policy",
+                    $"Picture #{relation.PictureId}, display order {relation.DisplayOrder}",
+                    null,
+                    AkeneoDryRunOperationType.Remove,
+                    "Replace All removes every current product picture that is not part of the completely resolved desired set, including unmanaged pictures.");
+            }
+        }
+
+        if (destinationTypes.Contains(AkeneoAssetDestinationType.ProductVideo))
+        {
+            var keep = desiredManaged
+                .Where(item =>
+                    item.DestinationTypeId == (int)AkeneoAssetDestinationType.ProductVideo &&
+                    item.NopProductVideoId > 0)
+                .Select(item => item.NopProductVideoId.Value)
+                .ToHashSet();
+
+            foreach (var relation in await productService
+                         .GetProductVideosByProductIdAsync(context.ExistingProduct.Id))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (keep.Contains(relation.Id))
+                    continue;
+
+                AddOperation(
+                    model,
+                    "Assets",
+                    $"Product video relationship #{relation.Id}",
+                    "Replace All policy",
+                    $"Video #{relation.VideoId}, display order {relation.DisplayOrder}",
+                    null,
+                    AkeneoDryRunOperationType.Remove,
+                    "Replace All removes every current product video that is not part of the completely resolved desired set, including unmanaged videos.");
+            }
+        }
+    }
+
+    private static bool TryBuildCustomPropertyPayload(
+        string current,
+        IReadOnlyList<AkeneoResolvedAsset> desired,
+        AkeneoCollectionSyncMode syncMode,
+        out string desiredJson,
+        out int payloadCount,
+        out string warning)
+    {
+        warning = null;
+        desiredJson = null;
+        payloadCount = 0;
+
+        if (desired.Count == 0 && syncMode == AkeneoCollectionSyncMode.Merge)
+        {
+            desiredJson = current;
+            if (!string.IsNullOrWhiteSpace(current))
+            {
+                try
+                {
+                    payloadCount = JsonSerializer.Deserialize<List<ManagedAssetReferencePayload>>(
+                        current,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true })?.Count ?? 0;
+                }
+                catch (JsonException)
+                {
+                    // Merge with no desired assets leaves the current value untouched.
+                }
+            }
+            return true;
+        }
+
+        var payloadByIdentity = new Dictionary<string, ManagedAssetReferencePayload>(
+            StringComparer.OrdinalIgnoreCase);
+
+        if (syncMode == AkeneoCollectionSyncMode.Merge &&
+            !string.IsNullOrWhiteSpace(current))
+        {
+            try
+            {
+                var currentPayload = JsonSerializer.Deserialize<
+                    List<ManagedAssetReferencePayload>>(
+                    current,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    }) ?? new List<ManagedAssetReferencePayload>();
+
+                foreach (var item in currentPayload)
+                    payloadByIdentity[GetPayloadIdentity(item)] = item;
+            }
+            catch (JsonException ex)
+            {
+                warning =
+                    $"The existing managed asset property contains invalid JSON and will be preserved: {ex.Message}";
+                return false;
+            }
+        }
+
+        foreach (var asset in desired)
+        {
+            var item = ManagedAssetReferencePayload.From(asset);
+            payloadByIdentity[GetPayloadIdentity(item)] = item;
+        }
+
+        var payload = payloadByIdentity.Values
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(
+                item => item.AssetCode ?? item.MediaFileCode ?? item.Url,
+                StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        payloadCount = payload.Count;
+        desiredJson = payload.Count == 0
+            ? null
+            : JsonSerializer.Serialize(payload);
+        return true;
+    }
+
+    private static string GetMappingDisplayName(AkeneoAssetMapping mapping) =>
+        mapping.Name?.Trim() ??
+        mapping.MappingKey?.Trim() ??
+        $"Asset mapping #{mapping.Id}";
+
+    private static string GetMappingSource(AkeneoAssetMapping mapping)
+    {
+        return string.Join(
+            " → fallback ",
+            new[]
+            {
+                mapping.SourceAttributeCode?.Trim(),
+                mapping.FallbackSourceAttributeCode?.Trim()
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static string GetAssetDisplayName(AkeneoResolvedAsset asset) =>
+        asset.OriginalFileName?.Trim() ??
+        asset.AssetCode?.Trim() ??
+        asset.MediaFileCode?.Trim() ??
+        asset.ExternalUrl?.Trim() ??
+        asset.SourceIdentityHash?.Trim() ??
+        "Akeneo asset";
+
+    private static string DescribeResolvedAssetValue(AkeneoResolvedAsset asset)
+    {
+        var identity = GetAssetDisplayName(asset);
+        return $"{identity}; display order {asset.DisplayOrder}";
+    }
+
+    private static string DescribeManagedAsset(AkeneoManagedAsset asset)
+    {
+        var destination = (AkeneoAssetDestinationType)asset.DestinationTypeId;
+        var identity = asset.AssetCode ?? asset.MediaFileCode ?? asset.SourceUrl ?? asset.SourceIdentityHash;
+        return $"{destination}: {identity}";
+    }
+
+    private static string DescribeManagedAssetValue(AkeneoManagedAsset asset) =>
+        $"{asset.AssetCode ?? asset.MediaFileCode ?? asset.SourceUrl ?? asset.SourceIdentityHash}; display order {asset.DisplayOrder}";
+
+    private static string SummarizeJson(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        const int limit = 240;
+        return value.Length <= limit
+            ? value
+            : value[..limit] + "…";
+    }
+
     private static string BuildBinaryCacheKey(AkeneoResolvedAsset asset)
     {
         // Mirror the source selection in DownloadFromSourceAsync so both phases agree.
@@ -194,7 +837,7 @@ public sealed class AkeneoProductAssetSynchronizer(
 
     private async Task<AssetDesiredState> ResolveDesiredAsync(
         AkeneoProductSyncContext context,
-        bool emitWarnings,
+        Action<string> warningSink,
         CancellationToken cancellationToken)
     {
         var mappings = await assetMappingService.GetEffectiveMappingsAsync(context.MappingFamilyCode);
@@ -216,8 +859,8 @@ public sealed class AkeneoProductAssetSynchronizer(
             try
             {
                 var resolution = await assetResolver.ResolveAsync(context, mapping, cancellationToken);
-                if (emitWarnings && !string.IsNullOrWhiteSpace(resolution.Warning))
-                    context.Result.AddWarning(resolution.Warning);
+                if (!string.IsNullOrWhiteSpace(resolution.Warning))
+                    warningSink?.Invoke(resolution.Warning);
                 if (!resolution.CanReconcile)
                 {
                     authoritativeResolutionFailed = true;
@@ -228,9 +871,8 @@ public sealed class AkeneoProductAssetSynchronizer(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 authoritativeResolutionFailed = true;
-                if (emitWarnings)
-                    context.Result.AddWarning(
-                        $"Asset mapping '{mapping.Name}' could not be resolved: {ex.Message}");
+                warningSink?.Invoke(
+                    $"Asset mapping '{mapping.Name}' could not be resolved: {ex.Message}");
             }
         }
 
@@ -583,55 +1225,24 @@ public sealed class AkeneoProductAssetSynchronizer(
             context.Product,
             key);
 
-        if (desired.Count == 0 &&
-            context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Merge)
+        if (!TryBuildCustomPropertyPayload(
+                current,
+                desired,
+                context.Request.AssetSyncMode,
+                out var desiredJson,
+                out var payloadCount,
+                out var warning))
         {
-            return AssetApplyResult.CompleteUnchanged;
+            context.Result.AddWarning(
+                $"Managed asset property '{key}' was preserved: {warning}");
+            return AssetApplyResult.Incomplete;
         }
 
-        var payloadByIdentity = new Dictionary<string, ManagedAssetReferencePayload>(
-            StringComparer.OrdinalIgnoreCase);
+        var changed = !string.Equals(
+            current,
+            desiredJson,
+            StringComparison.OrdinalIgnoreCase);
 
-        if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Merge &&
-            !string.IsNullOrWhiteSpace(current))
-        {
-            try
-            {
-                var currentPayload = JsonSerializer.Deserialize<
-                    List<ManagedAssetReferencePayload>>(
-                    current,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    }) ?? new List<ManagedAssetReferencePayload>();
-
-                foreach (var item in currentPayload)
-                    payloadByIdentity[GetPayloadIdentity(item)] = item;
-            }
-            catch (JsonException ex)
-            {
-                context.Result.AddWarning(
-                    $"Managed asset property '{key}' contains invalid JSON and was preserved: {ex.Message}");
-                return AssetApplyResult.Incomplete;
-            }
-        }
-
-        foreach (var asset in desired)
-        {
-            var item = ManagedAssetReferencePayload.From(asset);
-            payloadByIdentity[GetPayloadIdentity(item)] = item;
-        }
-
-        var payload = payloadByIdentity.Values
-            .OrderBy(item => item.DisplayOrder)
-            .ThenBy(item => item.AssetCode ?? item.MediaFileCode ?? item.Url,
-                StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var desiredJson = payload.Count == 0
-            ? null
-            : JsonSerializer.Serialize(payload);
-
-        var changed = !string.Equals(current, desiredJson, StringComparison.OrdinalIgnoreCase);
         if (changed)
         {
             await genericAttributeService.SaveAttributeAsync(
@@ -641,7 +1252,7 @@ public sealed class AkeneoProductAssetSynchronizer(
             context.Result.AddMessage(
                 desiredJson == null
                     ? $"Cleared managed asset property '{key}'."
-                    : $"Synchronized {payload.Count} asset reference(s) to '{key}'.");
+                    : $"Synchronized {payloadCount} asset reference(s) to '{key}'.");
         }
 
         var profileId = context.Request.SyncProfileId.GetValueOrDefault();

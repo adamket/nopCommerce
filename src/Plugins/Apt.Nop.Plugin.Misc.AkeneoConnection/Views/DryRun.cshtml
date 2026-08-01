@@ -139,6 +139,20 @@
                                     }
                                 </dd>
 
+                                @if (!string.IsNullOrWhiteSpace(Model.HierarchyDecision))
+                                {
+                                    <dt class="col-sm-3">Hierarchy / representation</dt>
+                                    <dd class="col-sm-9">
+                                        <span class="@(Model.HierarchyRequiresReview ? "text-warning" : "akeneo-summary-target-type")">
+                                            @Model.HierarchyDecision
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(Model.ParentProductDecision))
+                                        {
+                                            <div class="form-text text-muted">@Model.ParentProductDecision</div>
+                                        }
+                                    </dd>
+                                }
+
                                 <dt class="col-sm-3">Expected result</dt>
                                 <dd class="col-sm-9 mb-0">
                                     @if (!string.IsNullOrWhiteSpace(Model.Action))

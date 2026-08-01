@@ -43,11 +43,13 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoExternalAssetDownloader, AkeneoExternalAssetDownloader>();
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoDryRunChangeAnalyzer, AkeneoDryRunChangeAnalyzer>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunHierarchyPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductCorePlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSeoPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCategoryPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSpecificationPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductAttributePlanner>();
+        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunAssetPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCustomPropertyPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCoveragePlanner>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
@@ -61,6 +63,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductSyncExecutionService, AkeneoProductSyncExecutionService>();
         services.AddScoped<IAkeneoVariantRelationshipService, AkeneoVariantRelationshipService>();
         services.AddScoped<IAkeneoVariantRelationshipResolver, AkeneoVariantRelationshipResolver>();
+        services.AddScoped<IAkeneoLeafRepresentationClassifier, AkeneoLeafRepresentationClassifier>();
         services.AddScoped<INopVariantStructureDetector, NopVariantStructureDetector>();
         services.AddScoped<IAkeneoProductSyncStateService, AkeneoProductSyncStateService>();
         services.AddScoped<IAkeneoManagedRelationService, AkeneoManagedRelationService>();
@@ -80,13 +83,17 @@ public class NopStartup : INopStartup
             IAkeneoProductSyncPipeline,
             AkeneoProductSyncPipeline>();
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductCoreSynchronizer>();
+        services.AddScoped<AkeneoProductCoreSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductCoreSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductCoreSynchronizer>());
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductCategorySynchronizer>();
+        services.AddScoped<AkeneoProductCategorySynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
 
         services.AddScoped<
             IAkeneoFamilyMappingService,
@@ -97,25 +104,37 @@ public class NopStartup : INopStartup
             AkeneoFamilyMappingModelFactory>();
 
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductSeoSynchronizer>();
+        services.AddScoped<AkeneoProductSeoSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductSpecificationSynchronizer>();
+        services.AddScoped<AkeneoProductSpecificationSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductAttributeSynchronizer>();
+        services.AddScoped<AkeneoProductAttributeSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductAssetSynchronizer>();
+        services.AddScoped<AkeneoProductAssetSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
+        services.AddScoped<IAkeneoAssetDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
 
-        services.AddScoped<
-            IAkeneoProductSectionSynchronizer,
-            AkeneoProductCustomPropertySynchronizer>();
+        services.AddScoped<AkeneoProductCustomPropertySynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();

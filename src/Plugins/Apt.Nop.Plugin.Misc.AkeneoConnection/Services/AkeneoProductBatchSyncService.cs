@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
@@ -12,7 +13,6 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Humanizer;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
-using Nop.Data;
 using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -27,11 +27,10 @@ public class AkeneoProductBatchSyncService(
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoSyncItemLogService syncItemLogService,
     IProductService productService,
-    IProductAttributeService productAttributeService,
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoProductModelHierarchyResolver productModelHierarchyResolver,
     IAkeneoVariantRelationshipService variantRelationshipService,
-    IRepository<ProductAttributeValue> productAttributeValueRepository,
+    IAkeneoLeafRepresentationClassifier leafRepresentationClassifier,
     IAkeneoProductSyncService productSyncService,
     IAkeneoProductSyncStateService syncStateService,
     IAkeneoVariantRepresentationCleanupService representationCleanupService,
@@ -768,7 +767,7 @@ public class AkeneoProductBatchSyncService(
             if (overrideRule.VariantRelationshipOverrideMode ==
                 AkeneoVariantRelationshipMode.None)
             {
-                var existingMode = await ClassifyExistingLeafStructureAsync(
+                var existingMode = await leafRepresentationClassifier.ClassifyAsync(
                     rawLeafContext.ExistingProduct,
                     rawLeafContext.Sku);
 
@@ -1425,96 +1424,7 @@ public class AkeneoProductBatchSyncService(
         var rules = await familyMappingService.GetSubModelRulesAsync(
             familyConfiguration.Id);
 
-        return rules.FirstOrDefault(rule => RuleMatches(rule, leaf, subModel));
-    }
-
-    private static bool RuleMatches(
-        AkeneoFamilySubModelRule rule,
-        AkeneoProductDefinition leaf,
-        AkeneoProductDefinition subModel)
-    {
-        var hasSubModelCondition =
-            !string.IsNullOrWhiteSpace(rule.AkeneoAxisAttributeCode);
-        var hasVariantCondition =
-            !string.IsNullOrWhiteSpace(rule.VariantAxisAttributeCode);
-
-        if (!hasSubModelCondition && !hasVariantCondition)
-            return false;
-
-        if (hasSubModelCondition &&
-            !ValueMatches(
-                GetAkeneoAttributeValue(subModel, rule.AkeneoAxisAttributeCode),
-                rule.TriggerValue))
-        {
-            return false;
-        }
-
-        return !hasVariantCondition || ValueMatches(
-            GetAkeneoAttributeValue(leaf, rule.VariantAxisAttributeCode),
-            rule.VariantTriggerValue);
-    }
-
-    private static bool ValueMatches(string actual, string trigger) =>
-        !string.IsNullOrWhiteSpace(actual) &&
-        string.Equals(
-            actual.Trim(),
-            trigger?.Trim(),
-            StringComparison.OrdinalIgnoreCase);
-
-    private static string GetAkeneoAttributeValue(
-        AkeneoProductDefinition item,
-        string attributeCode)
-    {
-        if (string.IsNullOrWhiteSpace(attributeCode) ||
-            item?.Values.ValueKind != JsonValueKind.Object ||
-            !item.Values.TryGetProperty(attributeCode, out var entries) ||
-            entries.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
-        foreach (var entry in entries.EnumerateArray())
-        {
-            if (!entry.TryGetProperty("data", out var data))
-                continue;
-
-            return data.ValueKind switch
-            {
-                JsonValueKind.String => data.GetString(),
-                JsonValueKind.Number => data.GetRawText(),
-                _ => null
-            };
-        }
-
-        return null;
-    }
-
-    private async Task<AkeneoVariantRelationshipMode?> ClassifyExistingLeafStructureAsync(
-        Product product,
-        string sku)
-    {
-        if (product == null)
-            return null;
-
-        if (product.ParentGroupedProductId != 0)
-            return AkeneoVariantRelationshipMode.GroupedProducts;
-
-        if (!string.IsNullOrWhiteSpace(sku))
-        {
-            var combination = await productAttributeService
-                .GetProductAttributeCombinationBySkuAsync(sku);
-
-            if (combination != null)
-                return AkeneoVariantRelationshipMode.ProductAttributeCombinations;
-        }
-
-        var isAssociated = await productAttributeValueRepository.Table.AnyAsync(value =>
-            value.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
-            value.AssociatedProductId == product.Id);
-
-        return isAssociated
-            ? AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue
-            : AkeneoVariantRelationshipMode.None;
+        return AkeneoSubModelRuleMatcher.FindMatch(rules, leaf, subModel);
     }
 
     private static AkeneoProductImportResult CreateInitialResult(

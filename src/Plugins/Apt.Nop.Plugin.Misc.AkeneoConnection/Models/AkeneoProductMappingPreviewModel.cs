@@ -65,6 +65,26 @@ public record AkeneoProductMappingPreviewModel
     public string Action { get; set; }
 
     /// <summary>
+    /// Human-readable import path resolved for product-model and variant
+    /// orchestration. This is populated before the section planners run so the
+    /// Dry Run can surface parent-side effects that occur above the product
+    /// synchronizer pipeline.
+    /// </summary>
+    public string HierarchyDecision { get; set; }
+
+    public string ParentProductDecision { get; set; }
+
+    public string ImmediateParentProductModelCode { get; set; }
+
+    public string EffectiveParentProductModelCode { get; set; }
+
+    public int? ParentNopProductId { get; set; }
+
+    public string CurrentRepresentation { get; set; }
+
+    public bool HierarchyRequiresReview { get; set; }
+
+    /// <summary>
     /// A destination-oriented, read-only plan. Keeping one generic operation
     /// model makes it easy to add future synchronization areas without adding
     /// another purpose-built dry-run DTO and table.

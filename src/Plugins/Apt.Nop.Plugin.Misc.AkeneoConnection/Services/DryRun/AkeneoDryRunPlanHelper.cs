@@ -76,6 +76,28 @@ internal static class AkeneoDryRunPlanHelper
         return AkeneoDryRunOperationType.Update;
     }
 
+    /// <summary>
+    /// Compares raw scalar values without normalizing null and empty strings.
+    /// Use this when the write path's setter distinguishes null from empty.
+    /// </summary>
+    public static AkeneoDryRunOperationType DetermineExactScalarChangeType(
+        string current,
+        string proposed,
+        bool ignoreCase = false)
+    {
+        var comparison = ignoreCase
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (string.Equals(current, proposed, comparison))
+            return AkeneoDryRunOperationType.NoChange;
+
+        if (!string.IsNullOrEmpty(current) && string.IsNullOrEmpty(proposed))
+            return AkeneoDryRunOperationType.Clear;
+
+        return AkeneoDryRunOperationType.Update;
+    }
+
     public static string GetSourceName(AkeneoResolvedMappedValue mapped)
     {
         return !string.IsNullOrWhiteSpace(mapped.ResolvedSourceDisplayName)
@@ -87,14 +109,15 @@ internal static class AkeneoDryRunPlanHelper
         AkeneoProductSyncContext context,
         AkeneoProductMappingPreviewModel model)
     {
-        var nameOperation = model.Operations
+        var nameOperation = model?.Operations
             .LastOrDefault(operation =>
                 string.Equals(operation.Area, "Product fields", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(operation.Target, "Name", StringComparison.OrdinalIgnoreCase));
 
         return !string.IsNullOrWhiteSpace(nameOperation?.ProposedValue)
             ? nameOperation.ProposedValue
-            : context.ExistingProduct?.Name ??
+            : context.Product?.Name ??
+              context.ExistingProduct?.Name ??
               context.Sku ??
               context.SourceCode ??
               context.ProductKey;
