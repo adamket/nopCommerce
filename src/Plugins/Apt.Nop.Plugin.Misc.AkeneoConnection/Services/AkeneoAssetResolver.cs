@@ -354,20 +354,20 @@ public sealed class AkeneoAssetResolver(
     }
 
     private AkeneoResolvedAsset BuildResolvedAsset(
-        AkeneoProductSyncContext context,
-        AkeneoAssetMapping mapping,
-        AkeneoProductDefinition templateSource,
-        string resolvedSourceAttributeCode,
-        string sourceIdentity,
-        string sourceVersion,
-        string assetCode,
-        string mediaFileCode,
-        string downloadUrl,
-        string externalUrl,
-        string mimeType,
-        string originalFileName,
-        DateTime? sourceUpdatedOnUtc,
-        int displayOrder)
+     AkeneoProductSyncContext context,
+     AkeneoAssetMapping mapping,
+     AkeneoProductDefinition templateSource,
+     string resolvedSourceAttributeCode,
+     string sourceIdentity,
+     string sourceVersion,
+     string assetCode,
+     string mediaFileCode,
+     string downloadUrl,
+     string externalUrl,
+     string mimeType,
+     string originalFileName,
+     DateTime? sourceUpdatedOnUtc,
+     int displayOrder)
     {
         var templateContext = new AkeneoValueTemplateContext
         {
@@ -379,11 +379,31 @@ public sealed class AkeneoAssetResolver(
             Sku = context.Sku
         };
 
-        var alt = RenderTemplate(mapping.AltTextTemplate, templateContext, context.Product?.Name);
-        var title = RenderTemplate(mapping.TitleTextTemplate, templateContext, alt);
-        var seo = RenderTemplate(mapping.SeoFilenameTemplate, templateContext, originalFileName);
+        var proposedProductName =
+            context.PlanningState?.ProposedProductName ??
+            context.Product?.Name ??
+            context.ExistingProduct?.Name ??
+            context.Sku ??
+            context.SourceCode ??
+            context.ProductKey;
+
+        var alt = RenderTemplate(
+            mapping.AltTextTemplate,
+            templateContext,
+            proposedProductName);
+
+        var title = RenderTemplate(
+            mapping.TitleTextTemplate,
+            templateContext,
+            alt);
+
+        var seo = RenderTemplate(
+            mapping.SeoFilenameTemplate,
+            templateContext,
+            originalFileName);
 
         var identityHash = Hash(sourceIdentity);
+
         // This fingerprint deliberately represents the source media itself.
         // Presentation metadata and display order are compared independently so
         // changing alt text does not trigger another binary download.
