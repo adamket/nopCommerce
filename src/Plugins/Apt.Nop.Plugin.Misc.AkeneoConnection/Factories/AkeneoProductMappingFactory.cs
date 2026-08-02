@@ -636,7 +636,7 @@ public sealed class AkeneoProductMappingFactory(
     {
         var productFields = context.GetMappings(NopTargetType.ProductField).ToList();
 
-        if (!productFields.Any(field => string.Equals(
+        if (!model.IsProductModel && !productFields.Any(field => string.Equals(
                 field.Mapping.NopTargetKey,
                 "Sku",
                 StringComparison.OrdinalIgnoreCase)))
