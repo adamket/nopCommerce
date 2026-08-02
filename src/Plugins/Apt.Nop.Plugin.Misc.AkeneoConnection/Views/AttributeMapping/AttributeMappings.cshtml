@@ -175,12 +175,13 @@
                 </div>
 
                 <div class="card-body p-0">
-                    <div class="p-3 border-bottom bg-light">
-                        <div class="form-row align-items-end">
-                            <div class="form-group col-md-5 mb-0">
-                                <label class="font-weight-bold mb-1" for="akeneo-family-scope">
-                                    Mapping scope
-                                </label>
+                    <div class="akeneo-toolbar">
+                        <div class="akeneo-toolbar-panel akeneo-toolbar-panel--scope">
+                            <div class="akeneo-toolbar-panel-label">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Mapping scope</span>
+                            </div>
+                            <div class="akeneo-toolbar-panel-body">
                                 <select id="akeneo-family-scope"
                                         class="form-control"
                                         v-model="selectedFamilyCode"
@@ -192,35 +193,34 @@
                                         {{ family.text }}
                                     </option>
                                 </select>
-                                @*  <div class="form-text">
-                                    Global mappings are used by every family unless the selected family defines an override.
-                                </div> *@
+                                <div class="akeneo-toolbar-panel-hint">
+                                    <template v-if="selectedFamilyCode">
+                                        Editing overrides for <strong>{{ selectedFamilyLabel }}</strong>. Rows marked
+                                        <strong>Inherited</strong> still use the global mapping.
+                                    </template>
+                                    <template v-else>
+                                        Global mappings are used by every family unless a family defines an override.
+                                    </template>
+                                </div>
                             </div>
+                        </div>
 
-                            <div class="form-group col-md-7 mb-0 text-right">
+                        <div class="akeneo-toolbar-panel akeneo-toolbar-panel--actions">
+                            <div class="akeneo-toolbar-panel-label">
+                                <i class="fas fa-bolt"></i>
+                                <span>Actions</span>
+                            </div>
+                            <div class="akeneo-toolbar-panel-body">
                                 <button type="button"
                                         class="btn btn-primary"
                                         v-on:click="addComputedMapping">
                                     <i class="fas fa-plus"></i>
                                     Add computed mapping
                                 </button>
-                                <div class="form-text text-muted">
+                                <div class="akeneo-toolbar-panel-hint">
                                     Build one nopCommerce value from multiple Akeneo attributes.
                                 </div>
                             </div>
-
-                            @* <div class="col-md-7">
-                                <div class="alert mb-0"
-                                     v-bind:class="selectedFamilyCode ? 'alert-info' : 'alert-secondary'">
-                                    <template v-if="selectedFamilyCode">
-                                        Editing mappings for <strong>{{ selectedFamilyLabel }}</strong>.
-                                        Rows marked <strong>Inherited</strong> currently use the global mapping.
-                                    </template>
-                                    <template v-else>
-                                        Editing the global default mappings.
-                                    </template>
-                                </div>
-                            </div> *@
                         </div>
                     </div>
 
@@ -458,6 +458,63 @@
                      class="modal-backdrop fade show"
                      v-on:click="closeDeleteConfirmation"></div>
 
+                <div v-if="templateHelpVisible"
+                     class="modal fade show"
+                     style="display: block;"
+                     tabindex="-1"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="akeneo-template-help-modal-title">
+                    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 id="akeneo-template-help-modal-title" class="modal-title">
+                                    <i class="fas fa-question-circle"></i>
+                                    Value template help
+                                </h5>
+                                <button type="button"
+                                        class="close"
+                                        aria-label="Close"
+                                        v-on:click="closeTemplateHelp">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+
+                            <div class="modal-body">
+                                <p class="mb-0">
+                                    Attribute tokens use localized display values by default.
+                                    Use <code>{attribute:code}</code> for the raw Akeneo value,
+                                    <code>{attr:attribute}</code> to disambiguate an attribute
+                                    from a built-in token, and
+                                    <code>{root_type == bare_root ? "this" : "that"}</code>
+                                    for conditional text. Conditions compare the raw Akeneo code
+                                    by default and support <code>==</code> and <code>!=</code>.
+                                    Conditional results are template fragments, so
+                                    <code>{pack_quantity != 1 ? " {pack_quantity} pack" : ""}</code>
+                                    can include the resolved value only when needed. Put the
+                                    complete fragment inside the branch instead of using a
+                                    <code>+</code> concatenation operator.
+                                    Use doubled braces
+                                    <span v-pre><code>{{</code> or <code>}}</code></span> for literal braces.
+                                    Every referenced value must resolve or this mapping is treated as missing.
+                                </p>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button"
+                                        class="btn btn-default"
+                                        v-on:click="closeTemplateHelp">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="templateHelpVisible"
+                     class="modal-backdrop fade show"
+                     v-on:click="closeTemplateHelp"></div>
+
                 <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
                     <transition-group name="akeneo-toast">
                         <div v-for="t in toasts" :key="t.id" class="akeneo-toast" v-on:click="dismissToast(t.id)">
@@ -600,6 +657,7 @@
                         expanded: {},
                         referenceExpanded: {},
                         toasts: [],
+                        templateHelpVisible: false,
                         deleteConfirmation: {
                             visible: false,
                             mapping: null,
@@ -705,6 +763,12 @@
                 methods: {
                     isIgnoreType: function (t) {
                         return Number(t) === this.targetTypes.ignore;
+                    },
+                    showTemplateHelp: function () {
+                        this.templateHelpVisible = true;
+                    },
+                    closeTemplateHelp: function () {
+                        this.templateHelpVisible = false;
                     },
                         rowStaggerStyle: function (index) {
                         return {

@@ -227,6 +227,71 @@
   overflow: visible;
 }
 
+/* grouped toolbar panels */
+.akeneo-connection .akeneo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px;
+  background: var(--ak-canvas);
+  border: 1px solid var(--ak-line);
+  border-top: 0;
+}
+
+.akeneo-connection .akeneo-toolbar-panel {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--ak-surface);
+  border: 1px solid var(--ak-line);
+  border-radius: 12px;
+  box-shadow: var(--ak-shadow);
+  overflow: hidden;
+}
+
+.akeneo-connection .akeneo-toolbar-panel-label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 9px 16px;
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  border-bottom: 1px solid var(--ak-line);
+}
+
+  .akeneo-connection .akeneo-toolbar-panel-label i {
+    font-size: .8rem;
+  }
+
+.akeneo-connection .akeneo-toolbar-panel--scope .akeneo-toolbar-panel-label {
+  background: var(--ak-accent-tint);
+  color: var(--ak-accent-ink);
+}
+
+.akeneo-connection .akeneo-toolbar-panel--actions .akeneo-toolbar-panel-label {
+  background: var(--ak-mapped-tint);
+  color: var(--ak-mapped-ink);
+}
+
+.akeneo-connection .akeneo-toolbar-panel-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+
+.akeneo-connection .akeneo-toolbar-panel--actions .akeneo-toolbar-panel-body {
+  align-items: flex-start;
+}
+
+.akeneo-connection .akeneo-toolbar-panel-hint {
+  font-size: .78rem;
+  color: var(--ak-ink-2);
+  line-height: 1.4;
+}
+
 
 
 .akeneo-connection .akeneo-list {
@@ -662,8 +727,7 @@
 }
 
 .akeneo-detail-none .akeneo-none-hint {
-  position: absolute;
-  bottom: 0;
+  margin-top: .25rem;
 }
 
 .akeneo-connection .akeneo-detail-none .akeneo-none-hint {
@@ -1477,9 +1541,9 @@
 }
 
 /* Computed attribute mappings */
-.akeneo-connection .akeneo-computed-mapping-shell .akeneo-row {
+/*.akeneo-connection .akeneo-computed-mapping-shell .akeneo-row {
   background: linear-gradient(90deg, rgba(91, 81, 216, .045), transparent 36%);
-}
+}*/
 
 .akeneo-connection .akeneo-template-editor {
   margin-top: .25rem;

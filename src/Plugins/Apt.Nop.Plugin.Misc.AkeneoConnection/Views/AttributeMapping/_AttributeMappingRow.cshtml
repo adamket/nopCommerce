@@ -160,13 +160,6 @@
                 </button>
 
                 <button type="button"
-                        class="btn btn-sm btn-default akeneo-cancel-row"
-                        v-on:click="cancel(m)"
-                        v-show="m.editing">
-                    Cancel
-                </button>
-
-                <button type="button"
                         class="btn btn-sm btn-danger ml-1 mt-2"
                         v-if="canDeleteMapping(m)"
                         v-show="!m.editing"
@@ -346,6 +339,13 @@
                     <label class="font-weight-bold mb-1"
                            v-bind:for="'computed-template-' + m.clientKey">
                         Value template
+                        <button type="button"
+                                class="btn btn-link p-0 ml-1 akeneo-template-help-toggle"
+                                aria-label="Value template help"
+                                title="Value template help"
+                                v-on:click="showTemplateHelp">
+                            <i class="fas fa-question-circle"></i>
+                        </button>
                     </label>
 
                     <textarea class="form-control akeneo-template-input"
@@ -374,24 +374,6 @@
                             Insert token
                         </button>
                     </div>
-
-                    <small class="form-text text-muted">
-                        Attribute tokens use localized display values by default.
-                        Use <code>{attribute:code}</code> for the raw Akeneo value,
-                        <code>{attr:attribute}</code> to disambiguate an attribute
-                        from a built-in token, and
-                        <code>{root_type == bare_root ? "this" : "that"}</code>
-                        for conditional text. Conditions compare the raw Akeneo code
-                        by default and support <code>==</code> and <code>!=</code>.
-                        Conditional results are template fragments, so
-                        <code>{pack_quantity != 1 ? " {pack_quantity} pack" : ""}</code>
-                        can include the resolved value only when needed. Put the
-                        complete fragment inside the branch instead of using a
-                        <code>+</code> concatenation operator.
-                        Use doubled braces
-                        <span v-pre><code>{{</code> or <code>}}</code></span> for literal braces.
-                        Every referenced value must resolve or this mapping is treated as missing.
-                    </small>
                 </div>
 
                 <div class="form-group col-md-12"
@@ -578,6 +560,13 @@
 
                     <i class="fas fa-save"></i>
                     Save
+                </button>
+
+                <button type="button"
+                        class="btn btn-sm btn-default akeneo-cancel-row ml-1"
+                        v-on:click="cancel(m)"
+                        v-bind:disabled="m.saving">
+                    Cancel
                 </button>
 
                 <span class="akeneo-row-saving ml-2"
