@@ -1,4 +1,4 @@
-using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
@@ -78,9 +78,6 @@ public class AkeneoProductBatchImportRequestFactory(
             AssetSyncMode =
                 (AkeneoCollectionSyncMode)
                     profile.AssetSyncModeId,
-
-            CreateMissingSpecificationAttributeOptions =
-                profile.CreateMissingSpecificationAttributeOptions,
 
             CreateMissingProductAttributeValues =
                 profile.CreateMissingProductAttributeValues,

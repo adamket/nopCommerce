@@ -45,7 +45,6 @@ public class AkeneoSyncProfileModelFactory(
             ContinueOnError = true,
             SaveRawPayloadSnapshot = false,
          //   AddMappedManufacturers = false,
-            CreateMissingSpecificationAttributeOptions = true,
             CreateMissingProductAttributeValues = true,
 
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
@@ -104,7 +103,6 @@ public class AkeneoSyncProfileModelFactory(
 
             model.CategorySyncModeId = profile.CategorySyncModeId;
           //  model.AddMappedManufacturers = profile.AddMappedManufacturers;
-            model.CreateMissingSpecificationAttributeOptions = profile.CreateMissingSpecificationAttributeOptions;
             model.CreateMissingProductAttributeValues = profile.CreateMissingProductAttributeValues;
           
             model.CategoryFilterModeId = profile.CategoryFilterModeId;

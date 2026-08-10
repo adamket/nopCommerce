@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Web.Framework.Models;
 
@@ -44,8 +44,6 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
 
    // public bool AddMappedManufacturers { get; set; }
-
-    public bool CreateMissingSpecificationAttributeOptions { get; set; }
 
     public bool CreateMissingProductAttributeValues { get; set; }
 

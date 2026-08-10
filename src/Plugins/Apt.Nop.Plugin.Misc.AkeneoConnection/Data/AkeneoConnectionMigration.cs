@@ -138,6 +138,24 @@ public sealed class AkeneoConnectionMigration : MigrationBase
                 .WithDefaultValue(
                     (int)AkeneoAttributeMappingEntityScope.All);
         }
+
+        if (!ColumnExists(
+                table,
+                nameof(
+                    AkeneoAttributeMapping
+                        .SpecificationMissingValueHandlingId)))
+        {
+            Create.Column(
+                    nameof(
+                        AkeneoAttributeMapping
+                            .SpecificationMissingValueHandlingId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue(
+                    (int)AkeneoSpecificationMissingValueHandling
+                        .CreateSpecificationAttributeOption);
+        }
     }
 
     #endregion
@@ -466,6 +484,7 @@ public sealed class AkeneoConnectionMigration : MigrationBase
                 .NotNullable()
                 .WithDefaultValue(false);
         }
+
     }
 
     #endregion

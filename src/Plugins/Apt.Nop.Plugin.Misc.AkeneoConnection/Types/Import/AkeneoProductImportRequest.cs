@@ -57,8 +57,6 @@ public class AkeneoProductImportRequest
     public AkeneoMissingProductBehavior MissingProductBehavior { get; set; }
         = AkeneoMissingProductBehavior.Ignore;
 
-    public bool CreateMissingSpecificationAttributeOptions { get; set; } = true;
-
     public bool CreateMissingProductAttributeValues { get; set; } = true;
 
     public bool SaveRawPayloadSnapshot { get; set; }

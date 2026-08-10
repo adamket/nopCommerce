@@ -55,6 +55,27 @@
             new { value = ((int)NopTargetType.SeoField).ToString(), text = "SEO Field" },
             new { value = ((int)NopTargetType.CustomProperty).ToString(), text = "Custom Property" }
         },
+        specificationMissingValueHandlingOptions = new[]
+        {
+            new
+            {
+                value = ((int)AkeneoSpecificationMissingValueHandling
+                    .CreateSpecificationAttributeOption).ToString(),
+                text = "Create missing values as specification options"
+            },
+            new
+            {
+                value = ((int)AkeneoSpecificationMissingValueHandling
+                    .UseProductSpecificationCustomValue).ToString(),
+                text = "Create missing values as product custom values"
+            },
+            new
+            {
+                value = ((int)AkeneoSpecificationMissingValueHandling
+                    .SkipMissingValue).ToString(),
+                text = "Skip missing values"
+            }
+        },
         availableSpecificationAttributes = Model.AvailableSpecificationAttributes
             .Select(option => new { value = option.Value, text = option.Text })
             .ToList(),
@@ -98,6 +119,9 @@
                 referenceEntityCode = attribute.ReferenceEntityCode ?? string.Empty,
                 defaultNopTargetTypeId = attribute.DefaultNopTargetTypeId.ToString(),
                 defaultNopTargetKey = attribute.DefaultNopTargetKey ?? string.Empty,
+                specificationMissingValueHandlingId =
+                    ((int)AkeneoSpecificationMissingValueHandling
+                        .CreateSpecificationAttributeOption).ToString(),
                 availableTargetTypes = attribute.AvailableTargetTypes
                     .Select(option => new { value = option.Value, text = option.Text }),
                 availableSpecificationAttributes = attribute.AvailableSpecificationAttributes
@@ -132,6 +156,8 @@
             referenceEntityAttributeCode = m.AkeneoReferenceEntityAttributeCode ?? string.Empty,
             nopTargetTypeId = m.NopTargetTypeId.ToString(),
             nopTargetKey = m.NopTargetKey ?? string.Empty,
+            specificationMissingValueHandlingId =
+                m.SpecificationMissingValueHandlingId.ToString(),
             defaultNopTargetTypeId = m.DefaultNopTargetTypeId.ToString(),
             defaultNopTargetKey = m.DefaultNopTargetKey ?? string.Empty,
             nopTargetEntityId = m.NopTargetEntityId?.ToString() ?? string.Empty,
@@ -601,6 +627,8 @@
                     isComputed: !!m.isComputed ||
                         Number(m.valueModeId) === valueModes.template,
                     entityScopeId: entityScopeId,
+                    specificationMissingValueHandlingId:
+                        String(m.specificationMissingValueHandlingId || '0'),
                     fallbackSources: cloneFallbackSources(m.fallbackSources),
                     clientKey: m.clientKey || ('mapping-' + (++nextClientKey)),
                     clientAdded: !!clientAdded,
@@ -615,6 +643,8 @@
                         nopTargetTypeId: m.nopTargetTypeId,
                         nopTargetKey: m.nopTargetKey,
                         nopTargetEntityId: m.nopTargetEntityId,
+                        specificationMissingValueHandlingId:
+                            String(m.specificationMissingValueHandlingId || '0'),
                         referenceEntityAttributeCode: m.referenceEntityAttributeCode,
                         isRequired: m.isRequired,
                         applyToProductModels: hasEntityScope(
@@ -651,6 +681,8 @@
                         valueModes: valueModes,
                         targetKeyMap: targetKeyMap,
                         computedTargetTypes: appData.computedTargetTypes || [],
+                        specificationMissingValueHandlingOptions:
+                            appData.specificationMissingValueHandlingOptions || [],
                         availableSpecificationAttributes: appData.availableSpecificationAttributes || [],
                         availableProductAttributes: appData.availableProductAttributes || [],
                         availableFallbackSources: appData.availableFallbackSources || [],
@@ -917,6 +949,17 @@
                         }
                         return 'No additional target selected';
                     },
+                    specificationHandlingText: function (m) {
+                        var value = m.editing
+                            ? m.draft.specificationMissingValueHandlingId
+                            : m.specificationMissingValueHandlingId;
+                        var option = this.specificationMissingValueHandlingOptions
+                            .find(function (candidate) {
+                                return String(candidate.value) === String(value);
+                            });
+
+                        return option ? option.text : 'Create missing values as specification options';
+                    },
                     statusFor: function (m) {
                         if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
                             return { cls: 'is-ignored', text: 'Ignored' };
@@ -1004,6 +1047,8 @@
                         m.draft.nopTargetTypeId = m.nopTargetTypeId;
                         m.draft.nopTargetKey = m.nopTargetKey;
                         m.draft.nopTargetEntityId = m.nopTargetEntityId;
+                        m.draft.specificationMissingValueHandlingId =
+                            String(m.specificationMissingValueHandlingId || '0');
                         m.draft.referenceEntityAttributeCode =
                             m.referenceEntityAttributeCode;
                         m.draft.isRequired = m.isRequired;
@@ -1209,6 +1254,7 @@
                             nopTargetTypeId: String(this.targetTypes.productField),
                             nopTargetKey: 'Name',
                             nopTargetEntityId: '',
+                            specificationMissingValueHandlingId: '0',
                             isRequired: false,
                             entityScopeId:
                                 entityScopes.variantProduct |
@@ -1255,6 +1301,7 @@
                             nopTargetTypeId: defaultTargetType,
                             nopTargetKey: '',
                             nopTargetEntityId: '',
+                            specificationMissingValueHandlingId: '0',
                             isRequired: false,
                             entityScopeId: entityScopes.all,
                             fallbackSources: [],
@@ -1456,6 +1503,8 @@
                         m.nopTargetKey = replacement.nopTargetKey || '';
                         m.nopTargetEntityId =
                             replacement.nopTargetEntityId || '';
+                        m.specificationMissingValueHandlingId = String(
+                            replacement.specificationMissingValueHandlingId || '0');
                         m.isRequired = !!replacement.isRequired;
                         m.entityScopeId = normalizeEntityScopeId(
                             replacement.entityScopeId);
@@ -1481,6 +1530,7 @@
                         m.nopTargetTypeId = String(this.targetTypes.ignore);
                         m.nopTargetKey = '';
                         m.nopTargetEntityId = '';
+                        m.specificationMissingValueHandlingId = '0';
                         m.isRequired = false;
                         m.entityScopeId = entityScopes.all;
                         m.fallbackSources = [];
@@ -1501,6 +1551,8 @@
                         m.draft.nopTargetTypeId = m.nopTargetTypeId;
                         m.draft.nopTargetKey = m.nopTargetKey;
                         m.draft.nopTargetEntityId = m.nopTargetEntityId;
+                        m.draft.specificationMissingValueHandlingId =
+                            String(m.specificationMissingValueHandlingId || '0');
                         m.draft.referenceEntityAttributeCode =
                             m.referenceEntityAttributeCode || '';
                         m.draft.isRequired = !!m.isRequired;
@@ -1611,6 +1663,8 @@
                                 NopTargetTypeId: d.nopTargetTypeId,
                                 NopTargetKey: d.nopTargetKey || '',
                                 NopTargetEntityId: d.nopTargetEntityId || '',
+                                SpecificationMissingValueHandlingId:
+                                    d.specificationMissingValueHandlingId || '0',
                                 IsRequired: d.isRequired,
                                 EntityScopeId: entityScopeId,
                                 FallbackSourcesJson: JSON.stringify(
@@ -1644,6 +1698,8 @@
                                 m.nopTargetTypeId = d.nopTargetTypeId;
                                 m.nopTargetKey = d.nopTargetKey;
                                 m.nopTargetEntityId = d.nopTargetEntityId;
+                                m.specificationMissingValueHandlingId =
+                                    String(d.specificationMissingValueHandlingId || '0');
                                 m.referenceEntityAttributeCode = d.referenceEntityAttributeCode;
                                 m.isRequired = d.isRequired;
                                 m.entityScopeId = entityScopeId;

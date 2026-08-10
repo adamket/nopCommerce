@@ -303,6 +303,10 @@ public class AkeneoAttributeMappingModelFactory(
                 ?? targetTypeResolver.ResolveDefaultTargetKey(
                     akeneoAttribute,
                     defaultNopTargetType),
+            SpecificationMissingValueHandlingId =
+                NormalizeSpecificationMissingValueHandlingId(
+                    existingAttributeMapping?
+                        .SpecificationMissingValueHandlingId),
             DefaultNopTargetTypeId = (int)defaultNopTargetType,
             DefaultNopTargetKey = targetTypeResolver.ResolveDefaultTargetKey(
                 akeneoAttribute,
@@ -365,6 +369,9 @@ public class AkeneoAttributeMappingModelFactory(
             AkeneoAttributeTypeId = (int)AkeneoAttributeType.Text,
             NopTargetTypeId = mapping.NopTargetTypeId,
             NopTargetKey = mapping.NopTargetKey,
+            SpecificationMissingValueHandlingId =
+                NormalizeSpecificationMissingValueHandlingId(
+                    mapping.SpecificationMissingValueHandlingId),
             NopTargetEntityId = mapping.NopTargetEntityId,
             Locale = mapping.Locale,
             Channel = mapping.Channel,
@@ -883,6 +890,18 @@ public class AkeneoAttributeMappingModelFactory(
         return mapping.IsComputed
             ? mapping.Name ?? "Computed mapping"
             : mapping.AkeneoAttributeCode ?? "Attribute mapping";
+    }
+
+    private static int NormalizeSpecificationMissingValueHandlingId(
+        int? value)
+    {
+        return value.HasValue &&
+               Enum.IsDefined(
+                   typeof(AkeneoSpecificationMissingValueHandling),
+                   value.Value)
+            ? value.Value
+            : (int)AkeneoSpecificationMissingValueHandling
+                .CreateSpecificationAttributeOption;
     }
 
     private static string GetTargetTypeDisplayName(NopTargetType targetType)

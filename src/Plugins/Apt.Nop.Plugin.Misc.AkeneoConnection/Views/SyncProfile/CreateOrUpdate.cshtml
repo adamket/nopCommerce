@@ -282,6 +282,9 @@
                         <div class="col-md-9">
                             <nop-select asp-for="SpecificationAttributeSyncModeId" asp-items="Model.AvailableSpecificationAttributeSyncModes" />
                             <span asp-validation-for="SpecificationAttributeSyncModeId"></span>
+                            <span class="form-text text-muted">
+                                Missing specification values are handled per attribute mapping.
+                            </span>
                         </div>
                     </div>
 
@@ -318,16 +321,6 @@
                             <span class="form-text text-muted">
                                 Applied only after a complete, successful full run. Delta, canceled, failed, and MaxProducts-limited runs never reconcile missing products.
                             </span>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <div class="col-md-3 text-right">
-                            <label asp-for="CreateMissingSpecificationAttributeOptions" class="control-label">Create missing specification attribute options</label>
-                        </div>
-                        <div class="col-md-9">
-                            <nop-editor asp-for="CreateMissingSpecificationAttributeOptions" />
-                            <span asp-validation-for="CreateMissingSpecificationAttributeOptions"></span>
                         </div>
                     </div>
 

@@ -1,4 +1,4 @@
-<div class="akeneo-row-shell"
+﻿<div class="akeneo-row-shell"
      v-bind:class="{
          'akeneo-reference-field-shell': m.isReferenceEntityAttribute,
          'akeneo-computed-mapping-shell': m.isComputed
@@ -98,6 +98,11 @@
 
             <div class="akeneo-summary-target-detail">
                 {{ detail(m) }}
+            </div>
+
+            <div class="akeneo-summary-target-detail"
+                 v-if="isSpecType(m.nopTargetTypeId)">
+                Missing values: {{ specificationHandlingText(m) }}
             </div>
 
             <div class="akeneo-summary-target-detail"
@@ -285,6 +290,29 @@
                             {{ o.text }}
                         </option>
                     </select>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isSpecType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Missing Value Handling
+                    </label>
+
+                    <select class="form-control akeneo-edit-specification-missing-value-handling"
+                            v-model="m.draft.specificationMissingValueHandlingId">
+
+                        <option v-for="o in specificationMissingValueHandlingOptions"
+                                v-bind:key="o.value"
+                                v-bind:value="o.value">
+                            {{ o.text }}
+                        </option>
+                    </select>
+
+                    <small class="form-text text-muted">
+                        Applied only when no matching nopCommerce specification
+                        option exists. Existing options are always reused.
+                    </small>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"

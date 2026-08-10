@@ -223,6 +223,12 @@ public class AkeneoMappingController(
 
         mapping.NopTargetTypeId = model.NopTargetTypeId;
         mapping.NopTargetKey = model.NopTargetKey;
+        mapping.SpecificationMissingValueHandlingId =
+            model.NopTargetTypeId ==
+                (int)NopTargetType.SpecificationAttribute
+                ? model.SpecificationMissingValueHandlingId
+                : (int)AkeneoSpecificationMissingValueHandling
+                    .CreateSpecificationAttributeOption;
 
         // Only persist the entity id for target types that use one, so
         // switching targets cannot leave a stale destination id behind.
@@ -801,6 +807,15 @@ public class AkeneoMappingController(
             errors.Add("Specification Attribute is required when Target Type is Specification Attribute.");
         }
 
+        if (targetType == NopTargetType.SpecificationAttribute &&
+            !Enum.IsDefined(
+                typeof(AkeneoSpecificationMissingValueHandling),
+                model.SpecificationMissingValueHandlingId))
+        {
+            errors.Add(
+                "Select a valid missing specification value behavior.");
+        }
+
         if (targetType == NopTargetType.ProductAttribute &&
             (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId <= 0))
         {
@@ -924,6 +939,10 @@ public class AkeneoMappingController(
                     nopTargetEntityId =
                         replacementMapping.NopTargetEntityId?.ToString() ??
                         string.Empty,
+                    specificationMissingValueHandlingId =
+                        replacementMapping
+                            .SpecificationMissingValueHandlingId
+                            .ToString(),
                     isRequired = replacementMapping.IsRequired,
                     entityScopeId = replacementMapping.EntityScopeId,
                     fallbackSources = fallbackSources.Select(source => new

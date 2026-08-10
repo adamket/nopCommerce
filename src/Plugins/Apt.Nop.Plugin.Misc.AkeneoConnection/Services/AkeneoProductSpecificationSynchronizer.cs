@@ -67,6 +67,8 @@ public partial class AkeneoProductSpecificationSynchronizer
                 AkeneoMappingHelper.GetSourceMappingCode(mapped.Mapping);
             var sourceDisplayName =
                 AkeneoMappingHelper.GetSourceDisplayName(mapped.Mapping);
+            var missingValueHandling =
+                ResolveMissingValueHandling(mapped.Mapping);
             var definition = definitions.FirstOrDefault(item =>
                 item.Id == specificationAttributeId);
 
@@ -85,12 +87,29 @@ public partial class AkeneoProductSpecificationSynchronizer
 
             var options = (await _specificationAttributeService
                 .GetSpecificationAttributeOptionsBySpecificationAttributeAsync(
-                    specificationAttributeId)).ToList();
+                    specificationAttributeId))
+                .OrderBy(option => option.DisplayOrder)
+                .ThenBy(option => option.Id)
+                .ToList();
+            var optionIds = options.Select(option => option.Id).ToHashSet();
+            var customValueAnchorOption = options.FirstOrDefault();
             var desiredAssignmentIds = new HashSet<int>();
+            var plannedRemovalAssignmentIds = new HashSet<int>();
             var desiredStateComplete = true;
             var plannedNewOptionsByName =
                 new Dictionary<string, SpecificationDesiredValueState>(
                     StringComparer.OrdinalIgnoreCase);
+            var plannedCustomValuesByName =
+                new Dictionary<string, SpecificationDesiredValueState>(
+                    StringComparer.OrdinalIgnoreCase);
+            var managedAssignments =
+                context.Request.SyncProfileId.HasValue && product != null
+                    ? (await _managedRelationService.GetByProductAsync(
+                        context.Request.SyncProfileId.Value,
+                        product.Id,
+                        AkeneoManagedRelationType.ProductSpecificationAssignment,
+                        sourceMappingCode)).ToList()
+                    : new List<AkeneoManagedRelation>();
 
             foreach (var optionItem in mapped.HasValue
                          ? AkeneoSyncValueHelper.GetOptionItems(mapped)
@@ -104,17 +123,20 @@ public partial class AkeneoProductSpecificationSynchronizer
                 if (string.IsNullOrWhiteSpace(optionName))
                     continue;
 
+                var valueCode = optionItem.AkeneoOptionCode?.Trim() ?? optionName;
                 var mappingCode = BuildOptionMappingCode(
                     specificationAttributeId,
                     sourceMappingCode,
-                    optionItem.AkeneoOptionCode ?? optionName);
+                    valueCode);
                 var state = new SpecificationDesiredValueState
                 {
                     MappingCode = mappingCode,
                     OptionCode = optionItem.AkeneoOptionCode,
-                    OptionName = optionName
+                    OptionName = optionName,
+                    ValueCode = valueCode
                 };
                 var reusedPlannedOption = false;
+                var reusedPlannedCustomValue = false;
 
                 var mappedOptionId = await _entityMappingService
                     .GetMappedNopEntityIdByAkeneoCodeAsync(
@@ -140,83 +162,89 @@ public partial class AkeneoProductSpecificationSynchronizer
 
                 if (state.Option == null)
                 {
-                    if (plannedNewOptionsByName.TryGetValue(optionName, out var plannedState))
-                    {
-                        state = plannedState;
-                        reusedPlannedOption = true;
-                    }
-                    else
-                    {
-                        state.Option = options.FirstOrDefault(option =>
-                            string.Equals(
-                                option.Name,
-                                optionName,
-                                StringComparison.OrdinalIgnoreCase));
+                    state.Option = options.FirstOrDefault(option =>
+                        string.Equals(
+                            option.Name,
+                            optionName,
+                            StringComparison.OrdinalIgnoreCase));
 
-                        if (state.Option != null)
+                    if (state.Option != null)
+                    {
+                        state.LinkOptionMapping = true;
+                    }
+                    else if (missingValueHandling ==
+                             AkeneoSpecificationMissingValueHandling
+                                 .UseProductSpecificationCustomValue)
+                    {
+                        if (customValueAnchorOption == null)
                         {
-                            state.LinkOptionMapping = true;
+                            desiredStateComplete = false;
+                            plan.AddReview(
+                                "Specification attributes",
+                                $"{definition.Name}: {optionName}",
+                                sourceDisplayName,
+                                $"Specification option '{optionName}' was not found and cannot be stored as a custom value because '{definition.Name}' has no existing option to anchor the nopCommerce custom-text assignment.",
+                                mapped.Mapping.IsRequired,
+                                "Option absent",
+                                "Custom value unavailable");
+                            continue;
                         }
-                        else if (context.Request.CreateMissingSpecificationAttributeOptions)
+
+                        if (plannedCustomValuesByName.TryGetValue(
+                                optionName,
+                                out var plannedCustomState))
                         {
-                            state.CreateOption = true;
-                            plannedNewOptionsByName[optionName] = state;
+                            state = plannedCustomState;
+                            reusedPlannedCustomValue = true;
                         }
                         else
                         {
+                            state.UseCustomValue = true;
+                            state.Option = customValueAnchorOption;
+                            plannedCustomValuesByName[optionName] = state;
+                        }
+                    }
+                    else if (missingValueHandling ==
+                             AkeneoSpecificationMissingValueHandling
+                                 .CreateSpecificationAttributeOption &&
+                             plannedNewOptionsByName.TryGetValue(
+                                 optionName,
+                                 out var plannedOptionState))
+                    {
+                        state = plannedOptionState;
+                        reusedPlannedOption = true;
+                    }
+                    else if (missingValueHandling ==
+                             AkeneoSpecificationMissingValueHandling
+                                 .CreateSpecificationAttributeOption)
+                    {
+                        state.CreateOption = true;
+                        plannedNewOptionsByName[optionName] = state;
+                    }
+                    else
+                    {
                         desiredStateComplete = false;
                         plan.AddReview(
                             "Specification attributes",
                             $"{definition.Name}: {optionName}",
                             sourceDisplayName,
-                            $"Specification option '{optionName}' was not found and the profile does not allow it to be created. Akeneo source: {sourceDisplayName}",
+                            $"Specification option '{optionName}' was not found and this attribute mapping is configured to skip missing values.",
                             mapped.Mapping.IsRequired,
                             "Option absent",
-                            "Option absent");
-                            continue;
-                        }
+                            "Skipped");
+                        continue;
                     }
                 }
 
-                if (reusedPlannedOption)
+                if (!state.UseCustomValue)
                 {
-                    plan.AddInternalOperation(async _ =>
+                    if (reusedPlannedOption)
                     {
-                        if (state.Option == null)
-                            return false;
-
-                        await _entityMappingService
-                            .UpsertAkeneoNopEntityMappingAsync(
-                                AkeneoEntityType.Option,
-                                mappingCode,
-                                null,
-                                NopEntityType.SpecificationAttributeOption,
-                                state.Option.Id);
-                        return false;
-                    });
-                }
-                else if (state.CreateOption)
-                {
-                    plan.AddOperation(
-                        "Specification attributes",
-                        $"{definition.Name} option: {optionName}",
-                        sourceDisplayName,
-                        "Option absent",
-                        "Create option",
-                        AkeneoDryRunOperationType.Add,
-                        "The missing specification option would be created and linked to its Akeneo option code.",
-                        mapped.Mapping.IsRequired,
-                        async _ =>
+                        plan.AddInternalOperation(async _ =>
                         {
-                            state.Option = new SpecificationAttributeOption
-                            {
-                                SpecificationAttributeId = specificationAttributeId,
-                                Name = optionName,
-                                DisplayOrder = 0
-                            };
+                            if (state.Option == null)
+                                return false;
 
-                            await _specificationAttributeService
-                                .InsertSpecificationAttributeOptionAsync(state.Option);
                             await _entityMappingService
                                 .UpsertAkeneoNopEntityMappingAsync(
                                     AkeneoEntityType.Option,
@@ -224,48 +252,262 @@ public partial class AkeneoProductSpecificationSynchronizer
                                     null,
                                     NopEntityType.SpecificationAttributeOption,
                                     state.Option.Id);
-
-                            return true;
+                            return false;
                         });
+                    }
+                    else if (state.CreateOption)
+                    {
+                        plan.AddOperation(
+                            "Specification attributes",
+                            $"{definition.Name} option: {optionName}",
+                            sourceDisplayName,
+                            "Option absent",
+                            "Create option",
+                            AkeneoDryRunOperationType.Add,
+                            "The missing specification option would be created and linked to its Akeneo option code.",
+                            mapped.Mapping.IsRequired,
+                            async _ =>
+                            {
+                                state.Option = new SpecificationAttributeOption
+                                {
+                                    SpecificationAttributeId = specificationAttributeId,
+                                    Name = optionName,
+                                    DisplayOrder = 0
+                                };
+
+                                await _specificationAttributeService
+                                    .InsertSpecificationAttributeOptionAsync(state.Option);
+                                await _entityMappingService
+                                    .UpsertAkeneoNopEntityMappingAsync(
+                                        AkeneoEntityType.Option,
+                                        mappingCode,
+                                        null,
+                                        NopEntityType.SpecificationAttributeOption,
+                                        state.Option.Id);
+
+                                return true;
+                            });
+                    }
+                    else if (state.RenameOption)
+                    {
+                        plan.AddOperation(
+                            "Specification attributes",
+                            $"{definition.Name} option",
+                            sourceDisplayName,
+                            state.Option.Name,
+                            optionName,
+                            AkeneoDryRunOperationType.Update,
+                            "The Akeneo-mapped specification option would be renamed.",
+                            mapped.Mapping.IsRequired,
+                            async _ =>
+                            {
+                                state.Option.Name = optionName;
+                                await _specificationAttributeService
+                                    .UpdateSpecificationAttributeOptionAsync(state.Option);
+                                return true;
+                            });
+                    }
+                    else if (state.LinkOptionMapping)
+                    {
+                        plan.AddInternalOperation(async _ =>
+                        {
+                            await _entityMappingService
+                                .UpsertAkeneoNopEntityMappingAsync(
+                                    AkeneoEntityType.Option,
+                                    mappingCode,
+                                    null,
+                                    NopEntityType.SpecificationAttributeOption,
+                                    state.Option.Id);
+                            return false;
+                        });
+                    }
                 }
-                else if (state.RenameOption)
+
+                var managedForValue = managedAssignments.FirstOrDefault(relation =>
+                    string.Equals(
+                        relation.AkeneoValueCode,
+                        valueCode,
+                        StringComparison.OrdinalIgnoreCase));
+                var managedAssignment = managedForValue == null
+                    ? null
+                    : currentAssignments.FirstOrDefault(assignment =>
+                        assignment.Id == managedForValue.NopRelationEntityId);
+
+                if (managedForValue != null && managedAssignment == null)
                 {
+                    var staleRelation = managedForValue;
+                    managedAssignments.Remove(staleRelation);
+                    plan.AddInternalOperation(async _ =>
+                    {
+                        await _managedRelationService.DeleteAsync(staleRelation);
+                        return false;
+                    });
+                    managedForValue = null;
+                }
+
+                var managedRepresentationMatches = managedAssignment != null &&
+                    (state.UseCustomValue
+                        ? managedAssignment.AttributeTypeId ==
+                          (int)SpecificationAttributeType.CustomText &&
+                          optionIds.Contains(
+                              managedAssignment.SpecificationAttributeOptionId)
+                        : managedAssignment.AttributeTypeId ==
+                          (int)SpecificationAttributeType.Option &&
+                          state.Option != null &&
+                          managedAssignment.SpecificationAttributeOptionId ==
+                          state.Option.Id);
+
+                if (managedAssignment != null && !managedRepresentationMatches)
+                {
+                    var assignmentToReplace = managedAssignment;
+                    var relationToReplace = managedForValue;
+                    plannedRemovalAssignmentIds.Add(assignmentToReplace.Id);
+                    var previousDisplay = GetAssignmentDisplayName(
+                        assignmentToReplace,
+                        options);
                     plan.AddOperation(
                         "Specification attributes",
-                        $"{definition.Name} option",
+                        $"{definition.Name}: {previousDisplay}",
                         sourceDisplayName,
-                        state.Option.Name,
-                        optionName,
-                        AkeneoDryRunOperationType.Update,
-                        "The Akeneo-mapped specification option would be renamed.",
+                        GetAssignmentRepresentation(assignmentToReplace, options),
+                        "Removed",
+                        AkeneoDryRunOperationType.Remove,
+                        "The plugin-owned assignment uses a different representation for this Akeneo value and would be replaced.",
                         mapped.Mapping.IsRequired,
                         async _ =>
                         {
-                            state.Option.Name = optionName;
                             await _specificationAttributeService
-                                .UpdateSpecificationAttributeOptionAsync(state.Option);
+                                .DeleteProductSpecificationAttributeAsync(
+                                    assignmentToReplace);
+                            await _managedRelationService.DeleteAsync(
+                                relationToReplace);
                             return true;
                         });
+
+                    managedAssignments.Remove(relationToReplace);
+                    managedForValue = null;
+                    managedAssignment = null;
                 }
-                else if (state.LinkOptionMapping)
+
+                if (state.UseCustomValue)
                 {
-                    plan.AddInternalOperation(async _ =>
+                    if (reusedPlannedCustomValue)
+                        continue;
+
+                    state.Assignment = managedAssignment ??
+                        currentAssignments.FirstOrDefault(assignment =>
+                            !plannedRemovalAssignmentIds.Contains(assignment.Id) &&
+                            assignment.AttributeTypeId ==
+                            (int)SpecificationAttributeType.CustomText &&
+                            optionIds.Contains(
+                                assignment.SpecificationAttributeOptionId) &&
+                            string.Equals(
+                                assignment.CustomValue?.Trim(),
+                                optionName,
+                                StringComparison.Ordinal));
+
+                    if (state.Assignment != null)
                     {
-                        await _entityMappingService
-                            .UpsertAkeneoNopEntityMappingAsync(
-                                AkeneoEntityType.Option,
-                                mappingCode,
-                                null,
-                                NopEntityType.SpecificationAttributeOption,
-                                state.Option.Id);
-                        return false;
-                    });
+                        desiredAssignmentIds.Add(state.Assignment.Id);
+                        var currentValue = state.Assignment.CustomValue?.Trim();
+
+                        if (!string.Equals(
+                                currentValue,
+                                optionName,
+                                StringComparison.Ordinal))
+                        {
+                            plan.AddOperation(
+                                "Specification attributes",
+                                $"{definition.Name} custom value",
+                                sourceDisplayName,
+                                currentValue,
+                                optionName,
+                                AkeneoDryRunOperationType.Update,
+                                "The plugin-owned custom specification value would be updated from the current Akeneo option label.",
+                                mapped.Mapping.IsRequired,
+                                async _ =>
+                                {
+                                    state.Assignment.CustomValue = optionName;
+                                    state.Assignment.AllowFiltering = false;
+                                    await _specificationAttributeService
+                                        .UpdateProductSpecificationAttributeAsync(
+                                            state.Assignment);
+                                    return true;
+                                });
+                        }
+                        else
+                        {
+                            plan.AddOperation(
+                                "Specification attributes",
+                                $"{definition.Name}: {optionName}",
+                                sourceDisplayName,
+                                $"Custom text: {currentValue}",
+                                $"Custom text: {optionName}",
+                                AkeneoDryRunOperationType.NoChange,
+                                isRequired: mapped.Mapping.IsRequired);
+                        }
+
+                        continue;
+                    }
+
+                    plan.AddOperation(
+                        "Specification attributes",
+                        $"{definition.Name}: {optionName}",
+                        sourceDisplayName,
+                        "Not assigned",
+                        $"Custom text: {optionName}",
+                        AkeneoDryRunOperationType.Add,
+                        "No matching nopCommerce option exists, so the Akeneo option label would be imported as a CustomText ProductSpecificationAttribute.",
+                        mapped.Mapping.IsRequired,
+                        async _ =>
+                        {
+                            if (product == null || state.Option == null)
+                                return false;
+
+                            state.Assignment = new ProductSpecificationAttribute
+                            {
+                                ProductId = product.Id,
+                                AttributeTypeId =
+                                    (int)SpecificationAttributeType.CustomText,
+                                SpecificationAttributeOptionId = state.Option.Id,
+                                CustomValue = optionName,
+                                AllowFiltering = false,
+                                ShowOnProductPage = true,
+                                DisplayOrder = 0
+                            };
+
+                            await _specificationAttributeService
+                                .InsertProductSpecificationAttributeAsync(
+                                    state.Assignment);
+
+                            if (context.Request.SyncProfileId.HasValue)
+                            {
+                                await _managedRelationService.UpsertAsync(
+                                    context.Request.SyncProfileId.Value,
+                                    context.Request.SyncRunRecordId,
+                                    product.Id,
+                                    AkeneoManagedRelationType
+                                        .ProductSpecificationAssignment,
+                                    state.Assignment.Id,
+                                    sourceMappingCode,
+                                    valueCode);
+                            }
+
+                            return true;
+                        });
+
+                    continue;
                 }
 
                 if (state.Option != null)
                 {
-                    state.Assignment = currentAssignments.FirstOrDefault(item =>
-                        item.SpecificationAttributeOptionId == state.Option.Id);
+                    state.Assignment = managedAssignment ??
+                        currentAssignments.FirstOrDefault(assignment =>
+                            !plannedRemovalAssignmentIds.Contains(assignment.Id) &&
+                            assignment.AttributeTypeId ==
+                            (int)SpecificationAttributeType.Option &&
+                            assignment.SpecificationAttributeOptionId ==
+                            state.Option.Id);
                 }
 
                 if (state.Assignment != null)
@@ -308,7 +550,8 @@ public partial class AkeneoProductSpecificationSynchronizer
                             state.Assignment = new ProductSpecificationAttribute
                             {
                                 ProductId = product.Id,
-                                AttributeTypeId = (int)SpecificationAttributeType.Option,
+                                AttributeTypeId =
+                                    (int)SpecificationAttributeType.Option,
                                 SpecificationAttributeOptionId = state.Option.Id,
                                 AllowFiltering = true,
                                 ShowOnProductPage = true,
@@ -316,7 +559,8 @@ public partial class AkeneoProductSpecificationSynchronizer
                             };
 
                             await _specificationAttributeService
-                                .InsertProductSpecificationAttributeAsync(state.Assignment);
+                                .InsertProductSpecificationAttributeAsync(
+                                    state.Assignment);
 
                             if (context.Request.SyncProfileId.HasValue)
                             {
@@ -324,10 +568,11 @@ public partial class AkeneoProductSpecificationSynchronizer
                                     context.Request.SyncProfileId.Value,
                                     context.Request.SyncRunRecordId,
                                     product.Id,
-                                    AkeneoManagedRelationType.ProductSpecificationAssignment,
+                                    AkeneoManagedRelationType
+                                        .ProductSpecificationAssignment,
                                     state.Assignment.Id,
                                     sourceMappingCode,
-                                    optionItem.AkeneoOptionCode ?? optionName);
+                                    valueCode);
                             }
 
                             return true;
@@ -356,8 +601,11 @@ public partial class AkeneoProductSpecificationSynchronizer
             {
                 foreach (var assignment in currentAssignments)
                 {
-                    if (desiredAssignmentIds.Contains(assignment.Id))
+                    if (desiredAssignmentIds.Contains(assignment.Id) ||
+                        plannedRemovalAssignmentIds.Contains(assignment.Id))
+                    {
                         continue;
+                    }
 
                     var option = options.FirstOrDefault(item =>
                         item.Id == assignment.SpecificationAttributeOptionId);
@@ -365,14 +613,17 @@ public partial class AkeneoProductSpecificationSynchronizer
                     if (option?.SpecificationAttributeId != specificationAttributeId)
                         continue;
 
+                    var assignmentDisplayName = GetAssignmentDisplayName(
+                        assignment,
+                        options);
                     plan.AddOperation(
                         "Specification attributes",
-                        $"{definition.Name}: {option.Name}",
+                        $"{definition.Name}: {assignmentDisplayName}",
                         sourceDisplayName,
-                        "Assigned",
+                        GetAssignmentRepresentation(assignment, options),
                         "Removed",
                         AkeneoDryRunOperationType.Remove,
-                        "Replace-all makes this specification attribute match the desired Akeneo options.",
+                        "Replace-all makes this specification attribute match the desired Akeneo values.",
                         mapped.Mapping.IsRequired,
                         async _ =>
                         {
@@ -392,16 +643,14 @@ public partial class AkeneoProductSpecificationSynchronizer
                 continue;
             }
 
-            var managed = await _managedRelationService.GetByProductAsync(
-                context.Request.SyncProfileId.Value,
-                product.Id,
-                AkeneoManagedRelationType.ProductSpecificationAssignment,
-                sourceMappingCode);
-
-            foreach (var relation in managed)
+            foreach (var relation in managedAssignments)
             {
-                if (desiredAssignmentIds.Contains(relation.NopRelationEntityId))
+                if (desiredAssignmentIds.Contains(relation.NopRelationEntityId) ||
+                    plannedRemovalAssignmentIds.Contains(
+                        relation.NopRelationEntityId))
+                {
                     continue;
+                }
 
                 var assignment = currentAssignments.FirstOrDefault(item =>
                     item.Id == relation.NopRelationEntityId);
@@ -416,17 +665,15 @@ public partial class AkeneoProductSpecificationSynchronizer
                     continue;
                 }
 
-                var option = options.FirstOrDefault(item =>
-                    item.Id == assignment.SpecificationAttributeOptionId);
-
-                var optionDisplayName = option?.Name ??
-                    $"Option #{assignment.SpecificationAttributeOptionId}";
+                var assignmentDisplayName = GetAssignmentDisplayName(
+                    assignment,
+                    options);
 
                 plan.AddOperation(
                     "Specification attributes",
-                    $"{definition.Name}: {optionDisplayName}",
+                    $"{definition.Name}: {assignmentDisplayName}",
                     sourceDisplayName,
-                    "Assigned",
+                    GetAssignmentRepresentation(assignment, options),
                     "Removed",
                     AkeneoDryRunOperationType.Remove,
                     "This specification assignment is plugin-owned and stale for this mapping.",
@@ -444,11 +691,52 @@ public partial class AkeneoProductSpecificationSynchronizer
         return plan;
     }
 
+    private static AkeneoSpecificationMissingValueHandling
+        ResolveMissingValueHandling(AkeneoAttributeMapping mapping)
+    {
+        return Enum.IsDefined(
+            typeof(AkeneoSpecificationMissingValueHandling),
+            mapping.SpecificationMissingValueHandlingId)
+            ? (AkeneoSpecificationMissingValueHandling)
+                mapping.SpecificationMissingValueHandlingId
+            : AkeneoSpecificationMissingValueHandling
+                .CreateSpecificationAttributeOption;
+    }
+
     private static string BuildOptionMappingCode(
         int specificationAttributeId,
         string akeneoAttributeCode,
         string optionCode) =>
         $"spec:{specificationAttributeId}:{akeneoAttributeCode?.Trim()}:{optionCode?.Trim()}";
+
+    private static string GetAssignmentDisplayName(
+        ProductSpecificationAttribute assignment,
+        IReadOnlyCollection<SpecificationAttributeOption> options)
+    {
+        if (assignment.AttributeTypeId !=
+            (int)SpecificationAttributeType.Option &&
+            !string.IsNullOrWhiteSpace(assignment.CustomValue))
+        {
+            return assignment.CustomValue.Trim();
+        }
+
+        return options.FirstOrDefault(option =>
+                   option.Id == assignment.SpecificationAttributeOptionId)?.Name ??
+               $"Option #{assignment.SpecificationAttributeOptionId}";
+    }
+
+    private static string GetAssignmentRepresentation(
+        ProductSpecificationAttribute assignment,
+        IReadOnlyCollection<SpecificationAttributeOption> options)
+    {
+        if (assignment.AttributeTypeId ==
+            (int)SpecificationAttributeType.CustomText)
+        {
+            return $"Custom text: {assignment.CustomValue}";
+        }
+
+        return $"Option: {GetAssignmentDisplayName(assignment, options)}";
+    }
 
     private sealed class SpecificationDesiredValueState
     {
@@ -458,9 +746,13 @@ public partial class AkeneoProductSpecificationSynchronizer
 
         public string OptionName { get; init; }
 
+        public string ValueCode { get; init; }
+
         public SpecificationAttributeOption Option { get; set; }
 
         public ProductSpecificationAttribute Assignment { get; set; }
+
+        public bool UseCustomValue { get; set; }
 
         public bool CreateOption { get; set; }
 

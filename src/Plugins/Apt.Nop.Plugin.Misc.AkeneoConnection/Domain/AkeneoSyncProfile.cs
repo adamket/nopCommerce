@@ -41,8 +41,6 @@ public class AkeneoSyncProfile : BaseEntity
     public int MissingProductBehaviorId { get; set; }
 
     // Destination metadata creation
-    public bool CreateMissingSpecificationAttributeOptions { get; set; }
-
     public bool CreateMissingProductAttributeValues { get; set; }
 
     // Batch execution

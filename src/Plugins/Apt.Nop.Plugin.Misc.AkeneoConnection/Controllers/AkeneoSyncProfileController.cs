@@ -158,7 +158,6 @@ public class AkeneoSyncProfileController(
         
         profile.CategorySyncModeId = model.CategorySyncModeId;
        // profile.AddMappedManufacturers = model.AddMappedManufacturers;
-        profile.CreateMissingSpecificationAttributeOptions = model.CreateMissingSpecificationAttributeOptions;
         profile.CreateMissingProductAttributeValues = model.CreateMissingProductAttributeValues;
 
         profile.AkeneoFamilyCodes =

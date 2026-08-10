@@ -29,6 +29,8 @@ public record AkeneoAttributeMappingModel : BaseNopEntityModel
     public int AkeneoAttributeTypeId { get; set; }
     public int NopTargetTypeId { get; set; }
     public string NopTargetKey { get; set; }
+    public int SpecificationMissingValueHandlingId { get; set; } =
+        (int)AkeneoSpecificationMissingValueHandling.CreateSpecificationAttributeOption;
 
     /// <summary>
     /// Default destination suggested by the Akeneo attribute metadata when no

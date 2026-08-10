@@ -45,6 +45,21 @@ public class AkeneoAttributeMapping : BaseEntity
     public int NopTargetTypeId { get; set; }
     public int? NopTargetEntityId { get; set; }
     public string NopTargetKey { get; set; }
+
+    /// <summary>
+    /// Controls how a missing nopCommerce specification option is handled for
+    /// this mapping. Existing matching options are always reused.
+    /// </summary>
+    public int SpecificationMissingValueHandlingId { get; set; } =
+        (int)AkeneoSpecificationMissingValueHandling.CreateSpecificationAttributeOption;
+
+    public AkeneoSpecificationMissingValueHandling SpecificationMissingValueHandling
+    {
+        get => (AkeneoSpecificationMissingValueHandling)
+            SpecificationMissingValueHandlingId;
+        set => SpecificationMissingValueHandlingId = (int)value;
+    }
+
     public string Locale { get; set; }
     public string Channel { get; set; }
     public string TransformRuleJson { get; set; }
@@ -76,6 +91,26 @@ public enum AkeneoAttributeMappingValueMode
     /// Render one destination value from a deterministic token template.
     /// </summary>
     Template = 10
+}
+
+public enum AkeneoSpecificationMissingValueHandling
+{
+    /// <summary>
+    /// Create a missing nopCommerce SpecificationAttributeOption and assign it
+    /// to the product.
+    /// </summary>
+    CreateSpecificationAttributeOption = 0,
+
+    /// <summary>
+    /// Store the Akeneo display value in a CustomText
+    /// ProductSpecificationAttribute instead of creating a reusable option.
+    /// </summary>
+    UseProductSpecificationCustomValue = 10,
+
+    /// <summary>
+    /// Leave the missing value unassigned and report it for review.
+    /// </summary>
+    SkipMissingValue = 20
 }
 
 [Flags]
