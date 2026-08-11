@@ -44,13 +44,6 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductMappingFactory, AkeneoProductMappingFactory>();
         services.AddScoped<IAkeneoDryRunChangeAnalyzer, AkeneoDryRunChangeAnalyzer>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunHierarchyPlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductCorePlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSeoPlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCategoryPlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunSpecificationPlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunProductAttributePlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunAssetPlanner>();
-        services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCustomPropertyPlanner>();
         services.AddScoped<IAkeneoDryRunSectionPlanner, AkeneoDryRunCoveragePlanner>();
         services.AddScoped<IAkeneoCategoryMappingModelFactory, AkeneoCategoryMappingModelFactory>();
         services.AddScoped<IAkeneoProductBatchSyncService, AkeneoProductBatchSyncService>();

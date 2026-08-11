@@ -7,6 +7,42 @@ using Nop.Core.Domain.Catalog;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 public interface IAkeneoProductSyncService
 {
+
+    /// <summary>
+    /// Resolves the source-side synchronization intent without binding to the
+    /// current nopCommerce destination state. The returned intent may be reused
+    /// within a reconciliation unit.
+    /// </summary>
+    Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        CancellationToken cancellationToken = default);
+
+    Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a fresh destination-bound synchronization context from a
+    /// previously resolved source intent. Destination state is deliberately
+    /// re-read so intent reuse cannot make the write path stale.
+    /// </summary>
+    Task<AkeneoProductSyncContext> PrepareFromIntentAsync(
+        AkeneoResolvedProductIntent intent,
+        AkeneoProductImportResult result,
+        CancellationToken cancellationToken = default);
     Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,

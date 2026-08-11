@@ -37,6 +37,13 @@ public class AkeneoProductSyncState : BaseEntity
 
     public DateTime? LastSourceUpdatedOnUtc { get; set; }
 
+    /// <summary>
+    /// SHA-256 fingerprint of the last successfully applied resolved desired
+    /// state. This is intentionally not a raw Akeneo payload hash: hierarchy,
+    /// mapped/reference-entity values, destination mapping, asset metadata and
+    /// write policy all contribute to the fingerprint used by delta fast-paths.
+    /// Authoritative full runs never skip solely because this value matches.
+    /// </summary>
     public string LastDesiredStateHash { get; set; }
 
     public int LifecycleStatusId { get; set; }

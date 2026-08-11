@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
@@ -36,7 +37,10 @@ public class AkeneoProductBatchSyncService(
     IAkeneoVariantRepresentationCleanupService representationCleanupService,
     IAkeneoCatalogReconciliationService catalogReconciliationService,
     IAkeneoSyncLeaseService syncLeaseService,
-    IAkeneoProductModelDeltaFanOutService productModelDeltaFanOutService)
+    IAkeneoProductModelDeltaFanOutService productModelDeltaFanOutService,
+    IAkeneoDryRunChangeAnalyzer dryRunChangeAnalyzer,
+    IAkeneoAssetMappingService assetMappingService,
+    IAkeneoAssetResolver assetResolver)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
@@ -594,6 +598,31 @@ public class AkeneoProductBatchSyncService(
                 source.Uuid)
             : null;
 
+        // Build a read-only fingerprint of the resolved nopCommerce desired
+        // state before downloading asset binaries or opening a transaction.
+        // Full runs intentionally never use this as a skip gate: they remain
+        // authoritative destination reconciliations and can repair nopCommerce
+        // drift even when Akeneo itself has not changed.
+        var resolvedDesiredState = request.SyncProfileId.HasValue
+            ? await TryResolveDesiredStateAsync(
+                source,
+                request,
+                previousState,
+                productModelCache,
+                cancellationToken)
+            : null;
+        var desiredStateHash = resolvedDesiredState?.Hash;
+
+        var skipLeafWrite = request.RunMode == AkeneoRunMode.Delta &&
+                            previousState != null &&
+                            previousState.LifecycleStatusId ==
+                                (int)AkeneoProductLifecycleStatus.Active &&
+                            !string.IsNullOrWhiteSpace(desiredStateHash) &&
+                            string.Equals(
+                                previousState.LastDesiredStateHash,
+                                desiredStateHash,
+                                StringComparison.OrdinalIgnoreCase);
+
         // One binary cache per item, shared by the parent and every leaf/child
         // context so the prepare pass and the write pass agree on cache hits.
         var assetBinaryCache = new Dictionary<string, AkeneoBinaryFile>(
@@ -614,8 +643,10 @@ public class AkeneoProductBatchSyncService(
                 parentProductCache,
                 productModelCache,
                 prepareOnly: true,
-                assetBinaryCache,
-                cancellationToken);
+                skipLeafWrite: skipLeafWrite,
+                resolvedDesiredState: resolvedDesiredState,
+                assetBinaryCache: assetBinaryCache,
+                cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -638,16 +669,21 @@ public class AkeneoProductBatchSyncService(
             parentProductCache,
             productModelCache,
             prepareOnly: false,
-            assetBinaryCache,
-            cancellationToken);
+            skipLeafWrite: skipLeafWrite,
+            resolvedDesiredState: resolvedDesiredState,
+            assetBinaryCache: assetBinaryCache,
+            cancellationToken: cancellationToken);
 
         if (!result.Success || result.ActionType == SyncItemActionType.Failed)
             return result; // scope left uncompleted -> rollback
 
-        await representationCleanupService.CleanupPreviousRepresentationAsync(
-            previousState,
-            result,
-            cancellationToken);
+        if (!skipLeafWrite)
+        {
+            await representationCleanupService.CleanupPreviousRepresentationAsync(
+                previousState,
+                result,
+                cancellationToken);
+        }
 
         if (request.SyncProfileId.HasValue)
         {
@@ -659,7 +695,7 @@ public class AkeneoProductBatchSyncService(
                 source.Uuid,
                 source.Parent,
                 result,
-                ComputeDesiredStateHash(source));
+                desiredStateHash);
         }
 
         transaction.Complete();
@@ -674,6 +710,8 @@ public class AkeneoProductBatchSyncService(
         IDictionary<string, Product> parentProductCache,
         IDictionary<string, AkeneoProductDefinition> productModelCache,
         bool prepareOnly,
+        bool skipLeafWrite,
+        ResolvedDesiredState resolvedDesiredState,
         IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
         CancellationToken cancellationToken)
     {
@@ -692,12 +730,30 @@ public class AkeneoProductBatchSyncService(
 
         if (string.IsNullOrWhiteSpace(immediateParentCode))
         {
-            var standaloneContext = await productSyncService.PrepareAsync(
-                source,
-                AkeneoEntityType.Product,
-                request,
-                result,
-                cancellationToken);
+            if (skipLeafWrite)
+            {
+                if (!prepareOnly)
+                {
+                    ApplyPreviousStateBinding(result, previousState);
+                    result.ActionType = SyncItemActionType.Skipped;
+                    result.AddMessage(
+                        "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A full run will still verify destination state.");
+                }
+
+                return result;
+            }
+
+            var standaloneContext = resolvedDesiredState?.EffectiveLeafIntent != null
+                ? await productSyncService.PrepareFromIntentAsync(
+                    resolvedDesiredState.EffectiveLeafIntent,
+                    result,
+                    cancellationToken)
+                : await productSyncService.PrepareAsync(
+                    source,
+                    AkeneoEntityType.Product,
+                    request,
+                    result,
+                    cancellationToken);
             standaloneContext.PreloadedAssetBinaries = assetBinaryCache;
 
             if (prepareOnly)
@@ -742,12 +798,17 @@ public class AkeneoProductBatchSyncService(
 
         // Prepare the unflattened leaf first so a standalone submodel rule can
         // still opt out of inherited values.
-        var rawLeafContext = await productSyncService.PrepareAsync(
-            source,
-            AkeneoEntityType.Product,
-            request,
-            result,
-            cancellationToken);
+        var rawLeafContext = resolvedDesiredState?.RawLeafIntent != null
+            ? await productSyncService.PrepareFromIntentAsync(
+                resolvedDesiredState.RawLeafIntent,
+                result,
+                cancellationToken)
+            : await productSyncService.PrepareAsync(
+                source,
+                AkeneoEntityType.Product,
+                request,
+                result,
+                cancellationToken);
         rawLeafContext.PreloadedAssetBinaries = assetBinaryCache;
 
         if (!result.Success)
@@ -781,19 +842,38 @@ public class AkeneoProductBatchSyncService(
                     // deliberately imports it as a standalone nopCommerce
                     // product. Pass the destination role explicitly so
                     // variant-only mappings are not applied to it.
-                    var effectiveContext = await productSyncService.PrepareAsync(
-                        standaloneSource,
-                        AkeneoEntityType.Product,
-                        request,
-                        result,
-                        familyCode,
-                        AkeneoAttributeMappingEntityScope.StandaloneProduct,
-                        cancellationToken);
+                    var effectiveContext = resolvedDesiredState?.StandaloneIntent != null
+                        ? await productSyncService.PrepareFromIntentAsync(
+                            resolvedDesiredState.StandaloneIntent,
+                            result,
+                            cancellationToken)
+                        : await productSyncService.PrepareAsync(
+                            standaloneSource,
+                            AkeneoEntityType.Product,
+                            request,
+                            result,
+                            familyCode,
+                            AkeneoAttributeMappingEntityScope.StandaloneProduct,
+                            cancellationToken);
                     effectiveContext.PreloadedAssetBinaries = assetBinaryCache;
 
                     if (!result.Success)
                     {
                         result.ActionType = SyncItemActionType.Failed;
+                        return result;
+                    }
+
+                    if (skipLeafWrite)
+                    {
+                        if (!prepareOnly)
+                        {
+                            ApplyPreviousStateBinding(result, previousState);
+                            result.Sku = effectiveContext.Sku;
+                            result.ActionType = SyncItemActionType.Skipped;
+                            result.AddMessage(
+                                "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A full run will still verify destination state.");
+                        }
+
                         return result;
                     }
 
@@ -820,12 +900,17 @@ public class AkeneoProductBatchSyncService(
         var effectiveSource = hierarchy.EffectiveLeaf;
         var leafContext = ReferenceEquals(effectiveSource, source)
             ? rawLeafContext
-            : await productSyncService.PrepareAsync(
-                effectiveSource,
-                AkeneoEntityType.Product,
-                request,
-                result,
-                cancellationToken);
+            : resolvedDesiredState?.EffectiveLeafIntent != null
+                ? await productSyncService.PrepareFromIntentAsync(
+                    resolvedDesiredState.EffectiveLeafIntent,
+                    result,
+                    cancellationToken)
+                : await productSyncService.PrepareAsync(
+                    effectiveSource,
+                    AkeneoEntityType.Product,
+                    request,
+                    result,
+                    cancellationToken);
         leafContext.PreloadedAssetBinaries = assetBinaryCache;
 
         if (!result.Success)
@@ -838,7 +923,13 @@ public class AkeneoProductBatchSyncService(
         {
             // Download the leaf's binaries, plus the parent product model's,
             // into the shared item cache. No nopCommerce writes happen here.
-            await productSyncService.RunPrepareAsync(leafContext, cancellationToken);
+            if (!skipLeafWrite)
+            {
+                await productSyncService.RunPrepareAsync(
+                    leafContext,
+                    cancellationToken);
+            }
+
             await PrepareParentAssetsAsync(
                 hierarchy.EffectiveParentProductModel,
                 familyCode,
@@ -866,8 +957,22 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
+        if (skipLeafWrite)
+        {
+            ApplyPreviousStateBinding(result, previousState);
+            result.Sku = leafContext.Sku;
+            result.ActionType = parentSync.Changed
+                ? SyncItemActionType.Updated
+                : SyncItemActionType.Skipped;
+            result.AddMessage(
+                parentSync.Changed
+                    ? "Leaf reconciliation was skipped because its resolved desired-state hash is unchanged; the parent product model was reconciled and changed."
+                    : "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this delta item.");
+            return result;
+        }
+
         var variantContext = await BuildVariantImportContextAsync(
-            effectiveSource,
+            leafContext.Source,
             familyCode,
             familyConfiguration,
             request,
@@ -1614,6 +1719,12 @@ public class AkeneoProductBatchSyncService(
         result.NopProductAttributeValueId = null;
     }
 
+    private sealed record ResolvedDesiredState(
+        string Hash,
+        AkeneoResolvedProductIntent RawLeafIntent,
+        AkeneoResolvedProductIntent EffectiveLeafIntent,
+        AkeneoResolvedProductIntent StandaloneIntent);
+
     private static string GetIdentity(AkeneoProductImportResult result) =>
         result.Sku ??
         result.AkeneoIdentifier ??
@@ -1623,14 +1734,576 @@ public class AkeneoProductBatchSyncService(
     private static string SerializeSnapshot(AkeneoProductDefinition source) =>
         JsonSerializer.Serialize(source, SnapshotSerializerOptions).Truncate(12000);
 
-    private static string ComputeDesiredStateHash(
-        AkeneoProductDefinition source)
+    private async Task<ResolvedDesiredState> TryResolveDesiredStateAsync(
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductSyncState previousState,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var hashResult = CreateInitialResult(source);
+            var immediateParentCode = source.Parent?.Trim();
+
+            if (string.IsNullOrWhiteSpace(immediateParentCode))
+            {
+                var intent = await productSyncService.ResolveIntentAsync(
+                    source,
+                    AkeneoEntityType.Product,
+                    request,
+                    cancellationToken);
+                var context = await productSyncService.PrepareFromIntentAsync(
+                    intent,
+                    hashResult,
+                    cancellationToken);
+
+                var hash = await BuildResolvedContextHashAsync(
+                    context,
+                    request,
+                    new
+                    {
+                        Path = "standalone",
+                        ParentCode = (string)null
+                    },
+                    cancellationToken);
+
+                return string.IsNullOrWhiteSpace(hash)
+                    ? null
+                    : new ResolvedDesiredState(
+                        hash,
+                        RawLeafIntent: null,
+                        EffectiveLeafIntent: intent,
+                        StandaloneIntent: null);
+            }
+
+            var familyCode = source.Family?.Trim();
+            var familyConfiguration = await familyMappingService
+                .GetByFamilyCodeAsync(familyCode);
+            var ancestors = await GetProductModelAncestorsAsync(
+                source,
+                productModelCache,
+                cancellationToken);
+
+            if (ancestors.Count == 0)
+                return null;
+
+            var hierarchyMode = familyConfiguration is { Enabled: true }
+                ? familyConfiguration.ProductModelHierarchyMode
+                : AkeneoProductModelHierarchyMode.ImmediateParentProductModel;
+            var hierarchy = productModelHierarchyResolver.Resolve(
+                source,
+                ancestors,
+                hierarchyMode);
+
+            var rawLeafIntent = await productSyncService.ResolveIntentAsync(
+                source,
+                AkeneoEntityType.Product,
+                request,
+                cancellationToken);
+            var rawLeafContext = await productSyncService.PrepareFromIntentAsync(
+                rawLeafIntent,
+                hashResult,
+                cancellationToken);
+
+            if (!hashResult.Success)
+                return null;
+
+            AkeneoVariantRelationshipMode? forcedMode = null;
+            var overrideRule = await ResolveSubModelOverrideAsync(
+                familyConfiguration,
+                source,
+                hierarchy.ImmediateParentModel);
+
+            if (overrideRule != null)
+            {
+                if (overrideRule.VariantRelationshipOverrideMode ==
+                    AkeneoVariantRelationshipMode.None)
+                {
+                    var existingMode = await leafRepresentationClassifier.ClassifyAsync(
+                        rawLeafContext.ExistingProduct,
+                        rawLeafContext.Sku);
+
+                    if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                    {
+                        var standaloneSource = overrideRule.MergeAncestorValues
+                            ? hierarchy.LeafWithInheritedValues
+                            : source;
+                        var standaloneIntent = await productSyncService.ResolveIntentAsync(
+                            standaloneSource,
+                            AkeneoEntityType.Product,
+                            request,
+                            familyCode,
+                            AkeneoAttributeMappingEntityScope.StandaloneProduct,
+                            cancellationToken);
+                        var context = await productSyncService.PrepareFromIntentAsync(
+                            standaloneIntent,
+                            hashResult,
+                            cancellationToken);
+
+                        var hash = await BuildResolvedContextHashAsync(
+                            context,
+                            request,
+                            new
+                            {
+                                Path = "submodel-standalone",
+                                ParentCode = immediateParentCode,
+                                MergeAncestorValues = overrideRule.MergeAncestorValues,
+                                OverrideRule = BuildSubModelRuleFingerprint(overrideRule)
+                            },
+                            cancellationToken);
+
+                        return string.IsNullOrWhiteSpace(hash)
+                            ? null
+                            : new ResolvedDesiredState(
+                                hash,
+                                RawLeafIntent: rawLeafIntent,
+                                EffectiveLeafIntent: null,
+                                StandaloneIntent: standaloneIntent);
+                    }
+                }
+                else
+                {
+                    forcedMode = overrideRule.VariantRelationshipOverrideMode;
+                }
+            }
+
+            var effectiveSource = hierarchy.EffectiveLeaf;
+            var leafIntent = ReferenceEquals(effectiveSource, source)
+                ? rawLeafIntent
+                : await productSyncService.ResolveIntentAsync(
+                    effectiveSource,
+                    AkeneoEntityType.Product,
+                    request,
+                    cancellationToken);
+            var leafContext = ReferenceEquals(leafIntent, rawLeafIntent)
+                ? rawLeafContext
+                : await productSyncService.PrepareFromIntentAsync(
+                    leafIntent,
+                    hashResult,
+                    cancellationToken);
+
+            if (!hashResult.Success)
+                return null;
+
+            var variantContext = await BuildVariantImportContextAsync(
+                leafIntent.Source,
+                familyCode,
+                familyConfiguration,
+                request,
+                leafContext,
+                previousState,
+                cancellationToken);
+
+            IReadOnlyList<AkeneoFamilyVariantAxisMapping> axisMappings =
+                familyConfiguration is { Enabled: true }
+                    ? (await familyMappingService.GetAxisMappingsAsync(
+                        familyConfiguration.Id)).ToList()
+                    : Array.Empty<AkeneoFamilyVariantAxisMapping>();
+
+            var desiredStateHash = await BuildResolvedContextHashAsync(
+                leafContext,
+                request,
+                new
+                {
+                    Path = "variant",
+                    ImmediateParentCode = hierarchy.ImmediateParentModel?.Code?.Trim(),
+                    EffectiveParentCode = hierarchy.EffectiveParentProductModel?.Code?.Trim(),
+                    HierarchyMode = (int)hierarchy.Mode,
+                    IsFlattened = hierarchy.IsFlattened,
+                    ForcedMode = forcedMode.HasValue ? (int?)forcedMode.Value : null,
+                    Family = BuildFamilyMappingFingerprint(familyConfiguration),
+                    OverrideRule = BuildSubModelRuleFingerprint(overrideRule),
+                    AxisMappings = axisMappings
+                        .OrderBy(axis => axis.DisplayOrder)
+                        .ThenBy(axis => axis.Id)
+                        .Select(axis => new
+                        {
+                            axis.AkeneoAttributeCode,
+                            axis.NopProductAttributeId,
+                            axis.IsRequired,
+                            axis.DisplayOrder,
+                            axis.AkeneoVariantAxisLevel
+                        })
+                        .ToList(),
+                    AxisValues = variantContext.AxisValuesByAkeneoCode
+                        .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                        .Select(pair => new
+                        {
+                            AttributeCode = pair.Key,
+                            pair.Value.AkeneoOptionCode,
+                            pair.Value.DisplayName
+                        })
+                        .ToList(),
+                    variantContext.Price,
+                    variantContext.StockQuantity
+                },
+                cancellationToken);
+
+            return string.IsNullOrWhiteSpace(desiredStateHash)
+                ? null
+                : new ResolvedDesiredState(
+                    desiredStateHash,
+                    RawLeafIntent: rawLeafIntent,
+                    EffectiveLeafIntent: leafIntent,
+                    StandaloneIntent: null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Desired-state analysis is an optimization only. Any uncertainty
+            // falls back to the normal transactional reconciliation path.
+            return null;
+        }
+    }
+
+    internal async Task<string> BuildResolvedContextHashAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductImportRequest request,
+        object representation,
+        CancellationToken cancellationToken)
+    {
+        if (context == null || !context.Result.Success)
+            return null;
+
+        var preview = new AkeneoProductMappingPreviewModel
+        {
+            AkeneoProductUuid = context.SourceUuid,
+            AkeneoIdentifier = context.SourceCode,
+            AkeneoEntityTypeId = (int)context.SourceEntityType,
+            SyncProfileId = request.SyncProfileId,
+            Locale = request.Locale,
+            Channel = request.Channel,
+            Currency = request.Currency,
+            NopProductFound = context.ExistingProduct != null,
+            NopProductId = context.ExistingProduct?.Id,
+            AkeneoProductFound = true,
+            HasSearched = true
+        };
+
+        await dryRunChangeAnalyzer.AnalyzeAsync(
+            context,
+            preview,
+            cancellationToken);
+
+        if (preview.Errors.Any() || context.Result.Errors.Any())
+            return null;
+
+        var assets = await BuildResolvedAssetFingerprintAsync(
+            context,
+            cancellationToken);
+
+        if (assets == null)
+            return null;
+
+        var categories = await BuildCategoryDestinationFingerprintAsync(
+            context,
+            cancellationToken);
+
+        var payload = new
+        {
+            Version = 2,
+            Request = BuildWritePolicyFingerprint(request),
+            Representation = representation,
+            Context = new
+            {
+                context.SourceCode,
+                context.SourceUuid,
+                context.MappingFamilyCode,
+                MappingEntityScope = (int)context.MappingEntityScope,
+                context.Sku,
+                SourceEnabled = context.Source.Enabled,
+                SourceParent = context.Source.Parent?.Trim()
+            },
+            MappedValues = context.MappedValues
+                .OrderBy(value => value.Mapping?.Id ?? 0)
+                .ThenBy(value => value.Mapping?.MappingKey, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(value => value.Mapping?.AkeneoAttributeCode, StringComparer.OrdinalIgnoreCase)
+                .Select(value => new
+                {
+                    Mapping = value.Mapping == null
+                        ? null
+                        : new
+                        {
+                            value.Mapping.MappingKey,
+                            value.Mapping.Name,
+                            value.Mapping.ValueModeId,
+                            value.Mapping.ValueTemplate,
+                            value.Mapping.AkeneoFamilyCode,
+                            value.Mapping.AkeneoAttributeCode,
+                            value.Mapping.AkeneoAttributeTypeId,
+                            value.Mapping.AkeneoReferenceEntityCode,
+                            value.Mapping.AkeneoReferenceEntityAttributeCode,
+                            value.Mapping.NopTargetTypeId,
+                            value.Mapping.NopTargetEntityId,
+                            value.Mapping.NopTargetKey,
+                            value.Mapping.SpecificationMissingValueHandlingId,
+                            value.Mapping.Locale,
+                            value.Mapping.Channel,
+                            value.Mapping.TransformRuleJson,
+                            value.Mapping.IsRequired,
+                            value.Mapping.EntityScopeId
+                        },
+                    value.HasValue,
+                    value.ResolvedSourceDisplayName,
+                    Value = value.Value == null
+                        ? null
+                        : new
+                        {
+                            value.Value.AttributeCode,
+                            value.Value.Locale,
+                            value.Value.Channel,
+                            value.Value.Currency,
+                            value.Value.SourceAttributeType,
+                            value.Value.ReferenceDataName,
+                            RawData = value.Value.RawData.HasValue
+                                ? value.Value.RawData.Value.GetRawText()
+                                : null,
+                            value.Value.DisplayValue,
+                            DisplayValues = value.Value.DisplayValues?.ToList()
+                        }
+                })
+                .ToList(),
+            Categories = categories,
+            Assets = assets,
+            DesiredOperations = preview.Operations
+                .Where(operation => operation.ChangeType !=
+                    AkeneoDryRunOperationType.Review)
+                .OrderBy(operation => operation.Area, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(operation => operation.Target, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(operation => operation.AkeneoSource, StringComparer.OrdinalIgnoreCase)
+                .Select(operation => new
+                {
+                    operation.Area,
+                    operation.Target,
+                    operation.AkeneoSource,
+                    operation.ProposedValue,
+                    operation.IsRequired
+                })
+                .ToList()
+        };
+
+        return ComputeHash(payload);
+    }
+
+    private async Task<object> BuildResolvedAssetFingerprintAsync(
+        AkeneoProductSyncContext context,
+        CancellationToken cancellationToken)
+    {
+        if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
+            return Array.Empty<object>();
+
+        var mappings = await assetMappingService
+            .GetEffectiveMappingsAsync(context.MappingFamilyCode);
+        var currentScope = AkeneoAttributeMappingScopeHelper.NormalizeCurrentScope(
+            context.MappingEntityScope,
+            context.Source,
+            context.SourceEntityType);
+        var resolved = new List<object>();
+
+        foreach (var mapping in mappings
+                     .Where(mapping => mapping.Enabled &&
+                         AkeneoAttributeMappingScopeHelper
+                             .NormalizeConfiguredScope(mapping.EntityScopeId)
+                             .HasFlag(currentScope))
+                     .OrderBy(mapping => mapping.DisplayOrder)
+                     .ThenBy(mapping => mapping.Id))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var resolution = await assetResolver.ResolveAsync(
+                context,
+                mapping,
+                cancellationToken);
+
+            if (!resolution.CanReconcile)
+                return null;
+
+            resolved.Add(new
+            {
+                Mapping = new
+                {
+                    mapping.MappingKey,
+                    mapping.Name,
+                    mapping.SourceTypeId,
+                    mapping.SourceAttributeCode,
+                    mapping.FallbackSourceAttributeCode,
+                    mapping.AssetFamilyCode,
+                    mapping.AssetMediaAttributeCode,
+                    mapping.AssetMediaType,
+                    mapping.DestinationTypeId,
+                    mapping.StorageModeId,
+                    mapping.EntityScopeId,
+                    mapping.RoleAttributeCode,
+                    mapping.RoleValuesCsv,
+                    mapping.SortOrderAttributeCode,
+                    mapping.AltTextTemplate,
+                    mapping.TitleTextTemplate,
+                    mapping.SeoFilenameTemplate,
+                    mapping.CustomPropertyKey,
+                    mapping.DisplayOrder,
+                    mapping.MaxAssets
+                },
+                Assets = resolution.Assets
+                    .OrderBy(asset => asset.DisplayOrder)
+                    .ThenBy(asset => asset.SourceIdentityHash, StringComparer.OrdinalIgnoreCase)
+                    .Select(asset => new
+                    {
+                        asset.SourceIdentityHash,
+                        asset.SourceFingerprint,
+                        asset.SourceAttributeCode,
+                        asset.AssetFamilyCode,
+                        asset.AssetCode,
+                        asset.MediaFileCode,
+                        asset.ExternalUrl,
+                        asset.MimeType,
+                        asset.OriginalFileName,
+                        asset.AltText,
+                        asset.TitleText,
+                        asset.SeoFilename,
+                        asset.DisplayOrder,
+                        asset.SourceUpdatedOnUtc
+                    })
+                    .ToList()
+            });
+        }
+
+        return resolved;
+    }
+
+    private async Task<IReadOnlyList<object>> BuildCategoryDestinationFingerprintAsync(
+        AkeneoProductSyncContext context,
+        CancellationToken cancellationToken)
+    {
+        var categoryCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var code in context.Source.Categories ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(code))
+                categoryCodes.Add(code.Trim());
+        }
+
+        foreach (var mapped in context
+                     .GetMappings(NopTargetType.Category)
+                     .Where(value => value.HasValue))
+        {
+            foreach (var code in AkeneoSyncValueHelper.GetRawItems(mapped))
+            {
+                if (!string.IsNullOrWhiteSpace(code))
+                    categoryCodes.Add(code.Trim());
+            }
+        }
+
+        var result = new List<object>();
+
+        foreach (var code in categoryCodes.OrderBy(
+                     value => value,
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var nopCategoryId = await entityMappingService
+                .GetMappedNopEntityIdByAkeneoCodeAsync(
+                    AkeneoEntityType.Category,
+                    code,
+                    NopEntityType.Category);
+
+            result.Add(new
+            {
+                AkeneoCategoryCode = code,
+                NopCategoryId = nopCategoryId
+            });
+        }
+
+        return result;
+    }
+
+    private static object BuildWritePolicyFingerprint(
+        AkeneoProductImportRequest request)
+    {
+        var batchRequest = request as AkeneoProductBatchImportRequest;
+
+        return new
+        {
+            request.Locale,
+            request.Channel,
+            request.Currency,
+            request.CreateNewProducts,
+            request.UpdateExistingProducts,
+            ProductFieldMissingValueBehavior =
+                (int)request.ProductFieldMissingValueBehavior,
+            SeoFieldMissingValueBehavior =
+                (int)request.SeoFieldMissingValueBehavior,
+            CustomPropertyMissingValueBehavior =
+                (int)request.CustomPropertyMissingValueBehavior,
+            CategorySyncMode = (int)request.CategorySyncMode,
+            SpecificationAttributeSyncMode =
+                (int)request.SpecificationAttributeSyncMode,
+            ProductAttributeSyncMode = (int)request.ProductAttributeSyncMode,
+            AssetSyncMode = (int)request.AssetSyncMode,
+            request.CreateMissingProductAttributeValues,
+            UnmappedAttributeBehavior = batchRequest == null
+                ? (int?)null
+                : (int)batchRequest.UnmappedAttributeBehavior
+        };
+    }
+
+    private static object BuildFamilyMappingFingerprint(
+        AkeneoFamilyMapping configuration) => configuration == null
+        ? null
+        : new
+        {
+            configuration.AkeneoFamilyCode,
+            configuration.Enabled,
+            configuration.VariantRelationshipModeId,
+            configuration.ProductModelHierarchyModeId,
+            configuration.PreserveExistingNopVariantStructure,
+            configuration.AssociatedProductAttributeId,
+            configuration.AssociatedValueNameTemplate,
+            configuration.HideChildProductsWhenRepresentedByParent
+        };
+
+    private static object BuildSubModelRuleFingerprint(
+        AkeneoFamilySubModelRule rule) => rule == null
+        ? null
+        : new
+        {
+            rule.AkeneoAxisAttributeCode,
+            rule.TriggerValue,
+            rule.VariantAxisAttributeCode,
+            rule.VariantTriggerValue,
+            rule.VariantRelationshipOverrideModeId,
+            rule.MergeAncestorValues,
+            rule.DisplayOrder
+        };
+
+    private static string ComputeHash(object value)
     {
         var bytes = SHA256.HashData(
             Encoding.UTF8.GetBytes(
-                JsonSerializer.Serialize(source, SnapshotSerializerOptions)));
+                JsonSerializer.Serialize(value, SnapshotSerializerOptions)));
 
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static void ApplyPreviousStateBinding(
+        AkeneoProductImportResult result,
+        AkeneoProductSyncState previousState)
+    {
+        if (previousState == null)
+            return;
+
+        result.DestinationKind =
+            (AkeneoProductDestinationKind)previousState.DestinationKindId;
+        result.NopProductId = previousState.NopProductId;
+        result.NopParentProductId = previousState.NopParentProductId;
+        result.NopProductAttributeCombinationId =
+            previousState.NopProductAttributeCombinationId;
+        result.NopProductAttributeValueId =
+            previousState.NopProductAttributeValueId;
     }
 
     private async Task<DateTime> RenewLeaseIfDueAsync(

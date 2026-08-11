@@ -4,12 +4,73 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
-public sealed class AkeneoDryRunChangeAnalyzer(
-    IEnumerable<IAkeneoDryRunSectionPlanner> sectionPlanners)
+/// <summary>
+/// Builds Dry Run from the exact plan providers owned by the registered write
+/// synchronizers, plus the small number of supplemental planners that describe
+/// behavior above/beyond individual write sections (hierarchy and coverage).
+/// This makes analyzer/write parity an enforced registration invariant instead
+/// of relying on a parallel list of adapter registrations.
+/// </summary>
+public sealed class AkeneoDryRunChangeAnalyzer
     : IAkeneoDryRunChangeAnalyzer
 {
-    private readonly IReadOnlyList<IAkeneoDryRunSectionPlanner> _sectionPlanners =
-        sectionPlanners.OrderBy(planner => planner.Order).ToList();
+    private readonly IReadOnlyList<PlannerInvocation> _planners;
+
+    /// <summary>
+    /// Compatibility constructor for focused unit tests or callers that supply
+    /// a complete planner list directly. Production DI uses the synchronizer +
+    /// supplemental-planner constructor below so write/analyzer parity is
+    /// enforced automatically.
+    /// </summary>
+    public AkeneoDryRunChangeAnalyzer(
+        IEnumerable<IAkeneoDryRunSectionPlanner> sectionPlanners)
+    {
+        _planners = sectionPlanners
+            .Select(planner => new PlannerInvocation(
+                planner.Order,
+                planner.GetType().Name,
+                planner.PlanAsync))
+            .OrderBy(planner => planner.Order)
+            .ThenBy(planner => planner.Name, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public AkeneoDryRunChangeAnalyzer(
+        IEnumerable<IAkeneoProductSectionSynchronizer> synchronizers,
+        IEnumerable<IAkeneoDryRunSectionPlanner> supplementalPlanners)
+    {
+        var planners = new List<PlannerInvocation>();
+
+        foreach (var synchronizer in synchronizers)
+        {
+            if (synchronizer is not IAkeneoSectionDryRunPlanProvider planProvider)
+            {
+                throw new InvalidOperationException(
+                    $"Synchronization section '{synchronizer.GetType().Name}' " +
+                    "does not implement IAkeneoSectionDryRunPlanProvider. " +
+                    "Every destination-writing section must expose its read-only " +
+                    "plan so desired-state hashing cannot silently diverge from writes.");
+            }
+
+            planners.Add(new PlannerInvocation(
+                planProvider.Order,
+                synchronizer.GetType().Name,
+                planProvider.PlanAsync));
+        }
+
+        foreach (var planner in supplementalPlanners)
+        {
+            planners.Add(new PlannerInvocation(
+                planner.Order,
+                planner.GetType().Name,
+                planner.PlanAsync));
+        }
+
+        _planners = planners
+            .OrderBy(planner => planner.Order)
+            .ThenBy(planner => planner.Name, StringComparer.Ordinal)
+            .ToList();
+    }
 
     public async Task AnalyzeAsync(
         AkeneoProductSyncContext context,
@@ -21,7 +82,7 @@ public sealed class AkeneoDryRunChangeAnalyzer(
 
         model.Operations.Clear();
 
-        foreach (var planner in _sectionPlanners)
+        foreach (var planner in _planners)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -36,7 +97,7 @@ public sealed class AkeneoDryRunChangeAnalyzer(
             catch (Exception ex)
             {
                 model.Errors.Add(
-                    $"Dry-run planning failed in {planner.GetType().Name}: {ex.Message}");
+                    $"Dry-run planning failed in {planner.Name}: {ex.Message}");
             }
         }
 
@@ -81,4 +142,10 @@ public sealed class AkeneoDryRunChangeAnalyzer(
                    ? $" {model.ReviewCount} item(s) require review."
                    : string.Empty);
     }
+
+    private sealed record PlannerInvocation(
+        int Order,
+        string Name,
+        Func<AkeneoProductSyncContext, AkeneoProductMappingPreviewModel,
+            CancellationToken, Task> PlanAsync);
 }

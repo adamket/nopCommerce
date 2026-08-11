@@ -22,26 +22,23 @@ public class AkeneoProductSyncService(
     IAkeneoProductSyncPipeline syncPipeline)
     : IAkeneoProductSyncService
 {
-    public Task<AkeneoProductSyncContext> PrepareAsync(
+    public async Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         CancellationToken cancellationToken = default)
     {
-        return PrepareAsync(
+        var intent = await ResolveIntentAsync(
             source,
             sourceEntityType,
             request,
-            result,
-            source?.Family,
-            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
-                source,
-                sourceEntityType),
             cancellationToken);
+
+        return await PrepareFromIntentAsync(intent, result, cancellationToken);
     }
 
-    public Task<AkeneoProductSyncContext> PrepareAsync(
+    public async Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,
         AkeneoProductImportRequest request,
@@ -49,16 +46,14 @@ public class AkeneoProductSyncService(
         string mappingFamilyCode,
         CancellationToken cancellationToken = default)
     {
-        return PrepareAsync(
+        var intent = await ResolveIntentAsync(
             source,
             sourceEntityType,
             request,
-            result,
             mappingFamilyCode,
-            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
-                source,
-                sourceEntityType),
             cancellationToken);
+
+        return await PrepareFromIntentAsync(intent, result, cancellationToken);
     }
 
     public async Task<AkeneoProductSyncContext> PrepareAsync(
@@ -70,12 +65,66 @@ public class AkeneoProductSyncService(
         AkeneoAttributeMappingEntityScope mappingEntityScope,
         CancellationToken cancellationToken = default)
     {
+        var intent = await ResolveIntentAsync(
+            source,
+            sourceEntityType,
+            request,
+            mappingFamilyCode,
+            mappingEntityScope,
+            cancellationToken);
+
+        return await PrepareFromIntentAsync(intent, result, cancellationToken);
+    }
+
+    public Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return ResolveIntentAsync(
+            source,
+            sourceEntityType,
+            request,
+            source?.Family,
+            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                source,
+                sourceEntityType),
+            cancellationToken);
+    }
+
+    public Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        CancellationToken cancellationToken = default)
+    {
+        return ResolveIntentAsync(
+            source,
+            sourceEntityType,
+            request,
+            mappingFamilyCode,
+            AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                source,
+                sourceEntityType),
+            cancellationToken);
+    }
+
+    public async Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(result);
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        var resolutionResult = new AkeneoProductImportResult();
         var sourceCode = sourceEntityType == AkeneoEntityType.ProductModel
             ? source.Code?.Trim()
             : source.Identifier?.Trim();
@@ -86,13 +135,9 @@ public class AkeneoProductSyncService(
 
         var productKey = sourceUuid ?? sourceCode;
 
-        result.AkeneoProductUuid = sourceUuid;
-        result.AkeneoIdentifier = sourceCode;
-        result.AkeneoProductKey = productKey;
-
         if (string.IsNullOrWhiteSpace(productKey))
         {
-            result.AddError(
+            resolutionResult.AddError(
                 sourceEntityType == AkeneoEntityType.ProductModel
                     ? "Akeneo product model does not contain a code."
                     : "Akeneo product does not contain a UUID or identifier.");
@@ -149,7 +194,7 @@ public class AkeneoProductSyncService(
             fallbackSourcesByMappingId,
             mappingFamilyCode,
             request,
-            result,
+            resolutionResult,
             cancellationToken);
 
         // A configured mapping that does not apply to this destination role is
@@ -161,7 +206,7 @@ public class AkeneoProductSyncService(
             fallbackSourcesByMappingId,
             handledAssetAttributeCodes,
             request,
-            result,
+            resolutionResult,
             mappedValues);
 
         var sku = ResolveSku(
@@ -169,29 +214,11 @@ public class AkeneoProductSyncService(
             sourceEntityType,
             mappedValues);
 
-        result.Sku = sku;
-
-        Product existingProduct = null;
-        AkeneoProductSyncState existingState = null;
-
-        if (result.Success)
-        {
-            (existingProduct, existingState) = await ResolveNopProductAsync(
-                sourceEntityType,
-                sourceCode,
-                sourceUuid,
-                sku,
-                !string.IsNullOrWhiteSpace(source.Parent),
-                request,
-                result);
-        }
-
-        return new AkeneoProductSyncContext
+        return new AkeneoResolvedProductIntent
         {
             Source = source,
             SourceEntityType = sourceEntityType,
             Request = request,
-            Result = result,
             MappedValues = mappedValues.ToList(),
             SourceCode = sourceCode,
             SourceUuid = sourceUuid,
@@ -199,9 +226,83 @@ public class AkeneoProductSyncService(
             MappingEntityScope = mappingEntityScope,
             ProductKey = productKey,
             Sku = sku,
+            Messages = resolutionResult.Messages.ToList(),
+            Warnings = resolutionResult.Warnings.ToList(),
+            Errors = resolutionResult.Errors.ToList()
+        };
+    }
+
+    public async Task<AkeneoProductSyncContext> PrepareFromIntentAsync(
+        AkeneoResolvedProductIntent intent,
+        AkeneoProductImportResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        ArgumentNullException.ThrowIfNull(result);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ApplyIntentToResult(intent, result);
+
+        Product existingProduct = null;
+        AkeneoProductSyncState existingState = null;
+
+        if (result.Success)
+        {
+            (existingProduct, existingState) = await ResolveNopProductAsync(
+                intent.SourceEntityType,
+                intent.SourceCode,
+                intent.SourceUuid,
+                intent.Sku,
+                !string.IsNullOrWhiteSpace(intent.Source.Parent),
+                intent.Request,
+                result);
+        }
+
+        return new AkeneoProductSyncContext
+        {
+            Source = intent.Source,
+            SourceEntityType = intent.SourceEntityType,
+            Request = intent.Request,
+            Result = result,
+            MappedValues = intent.MappedValues,
+            SourceCode = intent.SourceCode,
+            SourceUuid = intent.SourceUuid,
+            MappingFamilyCode = intent.MappingFamilyCode,
+            MappingEntityScope = intent.MappingEntityScope,
+            ProductKey = intent.ProductKey,
+            Sku = intent.Sku,
             ExistingProduct = existingProduct,
             ExistingSyncState = existingState
         };
+    }
+
+    private static void ApplyIntentToResult(
+        AkeneoResolvedProductIntent intent,
+        AkeneoProductImportResult result)
+    {
+        result.AkeneoProductUuid = intent.SourceUuid;
+        result.AkeneoIdentifier = intent.SourceCode;
+        result.AkeneoProductKey = intent.ProductKey;
+        result.Sku = intent.Sku;
+
+        foreach (var message in intent.Messages)
+        {
+            if (!result.Messages.Contains(message, StringComparer.Ordinal))
+                result.AddMessage(message);
+        }
+
+        foreach (var warning in intent.Warnings)
+        {
+            if (!result.Warnings.Contains(warning, StringComparer.Ordinal))
+                result.AddWarning(warning);
+        }
+
+        foreach (var error in intent.Errors)
+        {
+            if (!result.Errors.Contains(error, StringComparer.Ordinal))
+                result.AddError(error);
+        }
     }
 
     public async Task<Product> SynchronizeAsync(
