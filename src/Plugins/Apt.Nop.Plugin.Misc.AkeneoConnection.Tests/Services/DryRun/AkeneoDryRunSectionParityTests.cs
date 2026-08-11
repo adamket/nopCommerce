@@ -1009,7 +1009,6 @@ public class AkeneoDryRunSectionParityTests
                 SpecificationAttributeSyncMode = AkeneoCollectionSyncMode.Merge,
                 ProductAttributeSyncMode = AkeneoCollectionSyncMode.Merge,
                 AssetSyncMode = AkeneoCollectionSyncMode.Merge,
-                CreateMissingSpecificationAttributeOptions = true,
                 CreateMissingProductAttributeValues = true
             },
             Result = new AkeneoProductImportResult(),
