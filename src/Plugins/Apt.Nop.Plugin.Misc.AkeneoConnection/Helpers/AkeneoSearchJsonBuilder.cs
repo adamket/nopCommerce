@@ -23,6 +23,7 @@ public class AkeneoProductSearchJsonBuilder
         AddParentSearch(search, request);
 
         MergeAdditionalSearchJson(search, request.AdditionalSearchJson);
+        AddCompletenessSearch(search, request);
 
         return search.Count == 0
             ? null
@@ -109,6 +110,35 @@ public class AkeneoProductSearchJsonBuilder
         }
     }
 
+    private static void AddCompletenessSearch(
+        JsonObject search,
+        AkeneoProductBatchImportRequest request)
+    {
+        if (request.CompletenessFilter != AkeneoCompletenessFilter.RequiredComplete)
+            return;
+
+        if (string.IsNullOrWhiteSpace(request.Channel))
+        {
+            throw new InvalidOperationException(
+                "An Akeneo channel is required when completeness is required.");
+        }
+
+        // The explicit profile/full-run rule is authoritative. Remove any
+        // completeness criterion supplied through AdditionalSearchJson so it
+        // cannot weaken or conflict with the required 100% filter.
+        search.Remove("completeness");
+
+        AddSearchCriterion(
+            search,
+            "completeness",
+            "=",
+            100,
+            new Dictionary<string, object>
+            {
+                ["scope"] = request.Channel.Trim()
+            });
+    }
+
     private static void AddUpdatedSearch(
         JsonObject search,
         AkeneoProductBatchImportRequest request)
@@ -184,7 +214,8 @@ public class AkeneoProductSearchJsonBuilder
         JsonObject search,
         string fieldName,
         string operatorName,
-        object value = null)
+        object value = null,
+        IReadOnlyDictionary<string, object> additionalProperties = null)
     {
         var criterion = new JsonObject
         {
@@ -193,6 +224,12 @@ public class AkeneoProductSearchJsonBuilder
 
         if (value != null)
             criterion["value"] = JsonSerializer.SerializeToNode(value);
+
+        if (additionalProperties != null)
+        {
+            foreach (var property in additionalProperties)
+                criterion[property.Key] = JsonSerializer.SerializeToNode(property.Value);
+        }
 
         if (!search.TryGetPropertyValue(fieldName, out var existingNode) ||
             existingNode is not JsonArray criteria)

@@ -20,6 +20,8 @@ public class AkeneoProductBatchImportRequest : AkeneoProductImportRequest
 
     public AkeneoProductEnabledFilter ProductEnabledFilter { get; set; }
 
+    public AkeneoCompletenessFilter CompletenessFilter { get; set; }
+
     public DateTime? UpdatedAfterUtc { get; set; }
 
     public bool IncludeLinkedAssetUpdates { get; set; }

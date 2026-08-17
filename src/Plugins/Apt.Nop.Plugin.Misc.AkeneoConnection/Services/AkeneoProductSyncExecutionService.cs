@@ -40,7 +40,7 @@ public class AkeneoProductSyncExecutionService(
         try
         {
             var runMode = ResolveRunMode(syncType);
-            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            var scopeHash = AkeneoSyncScopeHasher.Build(profile, runMode);
             DateTime? previousWatermarkUtc = null;
 
             if (runMode == AkeneoRunMode.Delta &&
@@ -120,7 +120,9 @@ public class AkeneoProductSyncExecutionService(
 
         try
         {
-            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            var scopeHash = AkeneoSyncScopeHasher.Build(
+                profile,
+                AkeneoRunMode.SingleProduct);
             var runRecord = CreateRunRecord(
                 profile.Id,
                 SyncType.ManualProductSync,
@@ -248,7 +250,9 @@ public class AkeneoProductSyncExecutionService(
 
         try
         {
-            var scopeHash = AkeneoSyncScopeHasher.Build(profile);
+            var scopeHash = AkeneoSyncScopeHasher.Build(
+                profile,
+                AkeneoRunMode.SingleProduct);
             var runRecord = CreateRunRecord(
                 profile.Id,
                 SyncType.ManualProductSync,

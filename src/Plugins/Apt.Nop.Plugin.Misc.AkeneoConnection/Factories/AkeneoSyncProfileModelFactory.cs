@@ -49,6 +49,7 @@ public class AkeneoSyncProfileModelFactory(
 
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
             ProductEnabledFilterId = (int)AkeneoProductEnabledFilter.Any,
+            CompletenessFilterId = (int)AkeneoCompletenessFilter.None,
             ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any,
             CurrencyCode = "USD",
 
@@ -107,6 +108,7 @@ public class AkeneoSyncProfileModelFactory(
           
             model.CategoryFilterModeId = profile.CategoryFilterModeId;
             model.ProductEnabledFilterId = profile.ProductEnabledFilterId;
+            model.CompletenessFilterId = profile.CompletenessFilterId;
             model.UpdatedAfter = profile.UpdatedAfterUtc.HasValue
                 ? dateTimeHelper.ConvertToUserTime(
                     DateTime.SpecifyKind(
@@ -528,6 +530,11 @@ public class AkeneoSyncProfileModelFactory(
             model.ProductEnabledFilterId,
             GetProductEnabledFilterText);
 
+        model.AvailableCompletenessFilters = BuildSelectList(
+            Enum.GetValues<AkeneoCompletenessFilter>(),
+            model.CompletenessFilterId,
+            GetCompletenessFilterText);
+
         model.AvailableProductParentFilterModes = BuildSelectList(
             Enum.GetValues<AkeneoProductParentFilterMode>(),
             model.ProductParentFilterModeId,
@@ -556,6 +563,11 @@ public class AkeneoSyncProfileModelFactory(
             Enum.IsDefined(typeof(AkeneoProductEnabledFilter), model.ProductEnabledFilterId)
                 ? (AkeneoProductEnabledFilter)model.ProductEnabledFilterId
                 : AkeneoProductEnabledFilter.Any);
+
+        model.CompletenessFilterName = GetCompletenessFilterText(
+            Enum.IsDefined(typeof(AkeneoCompletenessFilter), model.CompletenessFilterId)
+                ? (AkeneoCompletenessFilter)model.CompletenessFilterId
+                : AkeneoCompletenessFilter.None);
 
         model.ProductParentFilterModeName = GetProductParentFilterModeText(
             Enum.IsDefined(typeof(AkeneoProductParentFilterMode), model.ProductParentFilterModeId)
@@ -643,6 +655,16 @@ public class AkeneoSyncProfileModelFactory(
             AkeneoProductEnabledFilter.Any => "Any",
             AkeneoProductEnabledFilter.EnabledOnly => "Enabled only",
             AkeneoProductEnabledFilter.DisabledOnly => "Disabled only",
+            _ => filter.ToString()
+        };
+    }
+
+    private static string GetCompletenessFilterText(AkeneoCompletenessFilter filter)
+    {
+        return filter switch
+        {
+            AkeneoCompletenessFilter.None => "No condition on completeness",
+            AkeneoCompletenessFilter.RequiredComplete => "Required Complete",
             _ => filter.ToString()
         };
     }

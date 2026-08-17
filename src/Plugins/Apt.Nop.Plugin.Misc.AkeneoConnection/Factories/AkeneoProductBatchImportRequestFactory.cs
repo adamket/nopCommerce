@@ -24,7 +24,7 @@ public class AkeneoProductBatchImportRequestFactory(
             SyncRunRecordId = syncRunRecordId,
             SyncProfileId = profile.Id,
             RunMode = runMode,
-            ScopeHash = AkeneoSyncScopeHasher.Build(profile),
+            ScopeHash = AkeneoSyncScopeHasher.Build(profile, runMode),
 
             Channel = profile.AkeneoChannel,
 
@@ -101,6 +101,10 @@ public class AkeneoProductBatchImportRequestFactory(
             ProductEnabledFilter =
                 (AkeneoProductEnabledFilter)
                     profile.ProductEnabledFilterId,
+
+            CompletenessFilter = runMode == AkeneoRunMode.Full
+                ? AkeneoCompletenessFilter.RequiredComplete
+                : (AkeneoCompletenessFilter)profile.CompletenessFilterId,
 
             UpdatedAfterUtc = runMode == AkeneoRunMode.Full
                 ? null

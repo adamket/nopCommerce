@@ -168,6 +168,7 @@ public class AkeneoSyncProfileController(
 
         profile.CategoryFilterModeId = model.CategoryFilterModeId;
         profile.ProductEnabledFilterId = model.ProductEnabledFilterId;
+        profile.CompletenessFilterId = model.CompletenessFilterId;
         profile.UpdatedAfterUtc = model.UpdatedAfter.HasValue
             ? dateTimeHelper.ConvertToUtcTime(
                 DateTime.SpecifyKind(
@@ -242,6 +243,15 @@ public class AkeneoSyncProfileController(
             !model.SelectedAkeneoLocaleCodes.Any(locale => !string.IsNullOrWhiteSpace(locale)))
         {
             ModelState.AddModelError(nameof(model.SelectedAkeneoLocaleCodes), "At least one Akeneo locale is required.");
+        }
+
+        if (!Enum.IsDefined(
+                typeof(AkeneoCompletenessFilter),
+                model.CompletenessFilterId))
+        {
+            ModelState.AddModelError(
+                nameof(model.CompletenessFilterId),
+                "Select a valid completeness rule.");
         }
 
         ValidateUpdatedFilter(model);

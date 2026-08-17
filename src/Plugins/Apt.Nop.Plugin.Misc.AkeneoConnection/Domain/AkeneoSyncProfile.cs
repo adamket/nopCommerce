@@ -63,6 +63,8 @@ public class AkeneoSyncProfile : BaseEntity
 
     public int ProductEnabledFilterId { get; set; }
 
+    public int CompletenessFilterId { get; set; }
+
     public int ProductParentFilterModeId { get; set; }
 
     public int UpdatedFilterModeId { get; set; }
@@ -128,6 +130,12 @@ public enum AkeneoProductEnabledFilter
     Any = 0,
     EnabledOnly = 10,
     DisabledOnly = 20
+}
+
+public enum AkeneoCompletenessFilter
+{
+    None = 0,
+    RequiredComplete = 10
 }
 
 public enum AkeneoProductParentFilterMode

@@ -8,9 +8,16 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 
 public static class AkeneoSyncScopeHasher
 {
-    public static string Build(AkeneoSyncProfile profile)
+    public static string Build(
+        AkeneoSyncProfile profile,
+        AkeneoRunMode? runMode = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
+
+        var effectiveCompletenessFilterId =
+            runMode == AkeneoRunMode.Full
+                ? (int)AkeneoCompletenessFilter.RequiredComplete
+                : profile.CompletenessFilterId;
 
         var scope = new
         {
@@ -21,6 +28,7 @@ public static class AkeneoSyncScopeHasher
             Groups = Normalize(profile.AkeneoProductGroupCodes.SplitCsv()),
             profile.CategoryFilterModeId,
             profile.ProductEnabledFilterId,
+            CompletenessFilterId = effectiveCompletenessFilterId,
             profile.ProductParentFilterModeId,
             profile.IncludeLinkedAssetUpdates,
             AdditionalSearchJson = NormalizeJson(profile.AdditionalSearchJson)

@@ -59,6 +59,10 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public string ProductEnabledFilterName { get; set; }
 
+    public int CompletenessFilterId { get; set; }
+
+    public string CompletenessFilterName { get; set; }
+
     [UIHint("DateTimeNullable")]
     public DateTime? UpdatedAfter { get; set; }
 
@@ -82,6 +86,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableCategoryFilterModes { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductEnabledFilters { get; set; } = new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableCompletenessFilters { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableProductParentFilterModes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableCategorySyncModes { get; set; } = new List<SelectListItem>();

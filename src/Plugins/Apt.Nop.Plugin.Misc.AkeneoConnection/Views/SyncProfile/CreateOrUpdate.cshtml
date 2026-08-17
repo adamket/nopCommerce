@@ -62,7 +62,7 @@
                         class="btn btn-warning"
                         data-run-url="@Url.Action("ImportProductsByProfile", "AkeneoSync", new { id = Model.Id, fullSync = true })"
                         @(Model.Enabled ? null : "disabled")
-                        title="Runs a complete authoritative profile pass. Missing-product lifecycle rules are applied only if every page completes successfully.">
+                        title="Runs a complete authoritative profile pass using only 100% complete Akeneo products. Missing-product lifecycle rules are applied only if every page completes successfully.">
                     <i class="fas fa-sync-alt"></i>
                     Run Full Reconciliation
                 </button>
@@ -453,6 +453,19 @@
                         </div>
                     </div>
                     
+                    <div class="form-group row">
+                        <div class="col-md-3 text-right">
+                            <label asp-for="CompletenessFilterId" class="control-label">Completeness rule</label>
+                        </div>
+                        <div class="col-md-9">
+                            <nop-select asp-for="CompletenessFilterId" asp-items="Model.AvailableCompletenessFilters" />
+                            <span asp-validation-for="CompletenessFilterId"></span>
+                            <span class="form-text text-muted">
+                                Controls completeness filtering for normal profile runs. Full reconciliation runs always require 100% completeness for the selected Akeneo channel.
+                            </span>
+                        </div>
+                    </div>
+
                     <div class="form-group row">
                         <div class="col-md-3 text-right">
                             <label asp-for="UpdatedFilterModeId" class="control-label">Updated filter mode</label>
@@ -956,7 +969,7 @@
             fullRunButton.on('click', function () {
                 showConfirmModal({
                     title: 'Run Full Akeneo Reconciliation',
-                    message: 'Run a complete authoritative sync now? Updated-date filters are ignored. If every page succeeds, configured missing-product lifecycle rules will be applied.',
+                    message: 'Run a complete authoritative sync now? Updated-date filters are ignored and only 100% complete products are included. If every page succeeds, configured missing-product lifecycle rules will be applied.',
                     confirmButtonText: '<i class="fas fa-sync-alt"></i> Run Full Reconciliation',
                     confirmButtonClass: 'btn-warning',
                     onConfirm: function () { runProfile(fullRunButton); }
