@@ -123,6 +123,33 @@ public class AkeneoValueTemplateRendererTests
         Assert.That(result.Value, Is.EqualTo("Red Maple, tree"));
     }
 
+    [Test]
+    public void Render_family_variant_token_uses_resolved_context_value_for_leaf()
+    {
+        var product = AkeneoTestData.Product(identifier: "SKU-1");
+        product.Parent = "red_maple_potted";
+        product.FamilyVariant = null;
+
+        var result = _renderer.Render(
+            "{family_variant}",
+            new AkeneoValueTemplateContext
+            {
+                Source = product,
+                Locale = "en_US",
+                Channel = "ecommerce",
+                Currency = "USD",
+                FamilyCode = product.Family,
+                FamilyVariantCode = "nursery_potted",
+                Sku = "SKU-1"
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Value, Is.EqualTo("nursery_potted"));
+        });
+    }
+
     private static AkeneoValueTemplateContext Context(
         AkeneoProductDefinition product,
         string? sku = null) => new()

@@ -376,16 +376,63 @@ public class AkeneoApiClient : IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(familyCode))
-            throw new ArgumentException("Family code is required.", nameof(familyCode));
-
-        var variants = await GetSimpleCollectionAsync<AkeneoFamilyVariantDefinition>(
-            $"api/rest/v1/families/{Uri.EscapeDataString(familyCode)}/variants",
-            limit, cancellationToken);
+        var variants = await GetFamilyVariantsAsync(
+            familyCode,
+            limit,
+            cancellationToken);
 
         // A family can define several variants; union their axes across levels, then
         // dedupe by code (keeping the lowest level if one repeats) so the caller gets
         // one entry per axis attribute.
+        return BuildFamilyAxes(variants);
+    }
+
+    public async Task<IReadOnlyList<AkeneoFamilyVariantDefinition>>
+        GetFamilyVariantsAsync(
+            string familyCode,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(familyCode))
+            throw new ArgumentException("Family code is required.", nameof(familyCode));
+
+        return await GetSimpleCollectionAsync<AkeneoFamilyVariantDefinition>(
+            $"api/rest/v1/families/{Uri.EscapeDataString(familyCode.Trim())}/variants",
+            limit,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AkeneoFamilyAxis>>
+        GetFamilyVariantAxesForVariantAsync(
+            string familyCode,
+            string familyVariantCode,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(familyVariantCode))
+        {
+            return await GetFamilyVariantAxesAsync(
+                familyCode,
+                limit,
+                cancellationToken);
+        }
+
+        var variants = await GetFamilyVariantsAsync(
+            familyCode,
+            limit,
+            cancellationToken);
+
+        var selected = variants.Where(variant => string.Equals(
+            variant.Code?.Trim(),
+            familyVariantCode.Trim(),
+            StringComparison.OrdinalIgnoreCase));
+
+        return BuildFamilyAxes(selected);
+    }
+
+    private static IReadOnlyList<AkeneoFamilyAxis> BuildFamilyAxes(
+        IEnumerable<AkeneoFamilyVariantDefinition> variants)
+    {
         return variants
             .SelectMany(variant => variant.VariantAttributeSets
                 .SelectMany(set => set.Axes

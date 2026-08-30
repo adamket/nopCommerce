@@ -68,7 +68,9 @@ public partial class AkeneoProductAttributeSynchronizer
             ? new List<ProductAttributeCombination>()
             : (await _productAttributeService
                 .GetAllProductAttributeCombinationsAsync(product.Id)).ToList();
-        var variantAxisCodes = await GetVariantAxisCodesAsync(context.MappingFamilyCode);
+        var variantAxisCodes = await GetVariantAxisCodesAsync(
+            context.MappingFamilyCode,
+            context.MappingFamilyVariantCode);
         var nextMappingDisplayOrder = productMappings.Count + 1;
 
         foreach (var mapped in mappings)
@@ -603,15 +605,19 @@ public partial class AkeneoProductAttributeSynchronizer
         return plan;
     }
 
-    private async Task<HashSet<string>> GetVariantAxisCodesAsync(string familyCode)
+    private async Task<HashSet<string>> GetVariantAxisCodesAsync(
+        string familyCode,
+        string familyVariantCode)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (string.IsNullOrWhiteSpace(familyCode))
             return result;
 
-        var family = await _familyMappingService.GetByFamilyCodeAsync(familyCode);
-        if (family == null)
+        var family = await _familyMappingService.GetEffectiveMappingAsync(
+            familyCode,
+            familyVariantCode);
+        if (family is not { Enabled: true })
             return result;
 
         var axes = await _familyMappingService.GetAxisMappingsAsync(family.Id);

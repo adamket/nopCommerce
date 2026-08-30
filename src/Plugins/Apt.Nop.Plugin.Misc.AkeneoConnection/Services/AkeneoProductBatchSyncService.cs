@@ -770,10 +770,6 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
-        var familyCode = source.Family?.Trim();
-        var familyConfiguration = await familyMappingService
-            .GetByFamilyCodeAsync(familyCode);
-
         var ancestors = await GetProductModelAncestorsAsync(
             source,
             productModelCache,
@@ -786,6 +782,23 @@ public class AkeneoProductBatchSyncService(
             result.ActionType = SyncItemActionType.Failed;
             return result;
         }
+
+        var familyCode = source.Family?.Trim();
+        var familyVariantResolution = AkeneoLeafFamilyVariantResolver.Resolve(
+            source,
+            ancestors);
+
+        if (!familyVariantResolution.Success)
+        {
+            result.AddError(familyVariantResolution.Error);
+            result.ActionType = SyncItemActionType.Failed;
+            return result;
+        }
+
+        var familyVariantCode = familyVariantResolution.FamilyVariantCode;
+
+        var familyConfiguration = await familyMappingService
+            .GetEffectiveMappingAsync(familyCode, familyVariantCode);
 
         var hierarchyMode = familyConfiguration is { Enabled: true }
             ? familyConfiguration.ProductModelHierarchyMode
@@ -808,6 +821,11 @@ public class AkeneoProductBatchSyncService(
                 AkeneoEntityType.Product,
                 request,
                 result,
+                familyCode,
+                familyVariantCode,
+                AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                    source,
+                    AkeneoEntityType.Product),
                 cancellationToken);
         rawLeafContext.PreloadedAssetBinaries = assetBinaryCache;
 
@@ -853,6 +871,7 @@ public class AkeneoProductBatchSyncService(
                             request,
                             result,
                             familyCode,
+                            familyVariantCode,
                             AkeneoAttributeMappingEntityScope.StandaloneProduct,
                             cancellationToken);
                     effectiveContext.PreloadedAssetBinaries = assetBinaryCache;
@@ -910,6 +929,11 @@ public class AkeneoProductBatchSyncService(
                     AkeneoEntityType.Product,
                     request,
                     result,
+                    familyCode,
+                    familyVariantCode,
+                    AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                        effectiveSource,
+                        AkeneoEntityType.Product),
                     cancellationToken);
         leafContext.PreloadedAssetBinaries = assetBinaryCache;
 
@@ -1095,6 +1119,7 @@ public class AkeneoProductBatchSyncService(
             AkeneoIdentifier = source.Identifier?.Trim(),
             AkeneoUuid = source.Uuid?.Trim(),
             AkeneoFamilyCode = familyCode,
+            AkeneoFamilyVariantCode = leafContext.MappingFamilyVariantCode,
             Sku = leafContext.Sku,
             SyncProfileId = request.SyncProfileId,
             SyncRunRecordId = request.SyncRunRecordId,
@@ -1444,7 +1469,9 @@ public class AkeneoProductBatchSyncService(
         }
 
         var familyConfiguration = await familyMappingService
-            .GetByFamilyCodeAsync(productModel.Family);
+            .GetEffectiveMappingAsync(
+                productModel.Family,
+                productModel.FamilyVariant);
 
         var hierarchyMode = familyConfiguration is { Enabled: true }
             ? familyConfiguration.ProductModelHierarchyMode
@@ -1777,9 +1804,6 @@ public class AkeneoProductBatchSyncService(
                         StandaloneIntent: null);
             }
 
-            var familyCode = source.Family?.Trim();
-            var familyConfiguration = await familyMappingService
-                .GetByFamilyCodeAsync(familyCode);
             var ancestors = await GetProductModelAncestorsAsync(
                 source,
                 productModelCache,
@@ -1787,6 +1811,24 @@ public class AkeneoProductBatchSyncService(
 
             if (ancestors.Count == 0)
                 return null;
+
+            var familyCode = source.Family?.Trim();
+            var familyVariantResolution = AkeneoLeafFamilyVariantResolver.Resolve(
+                source,
+                ancestors);
+
+            if (!familyVariantResolution.Success)
+            {
+                hashResult.AddError(familyVariantResolution.Error);
+                return null;
+            }
+
+            var familyVariantCode = familyVariantResolution.FamilyVariantCode;
+
+            var familyConfiguration = await familyMappingService
+                .GetEffectiveMappingAsync(
+                    familyCode,
+                    familyVariantCode);
 
             var hierarchyMode = familyConfiguration is { Enabled: true }
                 ? familyConfiguration.ProductModelHierarchyMode
@@ -1800,6 +1842,11 @@ public class AkeneoProductBatchSyncService(
                 source,
                 AkeneoEntityType.Product,
                 request,
+                familyCode,
+                familyVariantCode,
+                AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                    source,
+                    AkeneoEntityType.Product),
                 cancellationToken);
             var rawLeafContext = await productSyncService.PrepareFromIntentAsync(
                 rawLeafIntent,
@@ -1834,6 +1881,7 @@ public class AkeneoProductBatchSyncService(
                             AkeneoEntityType.Product,
                             request,
                             familyCode,
+                            familyVariantCode,
                             AkeneoAttributeMappingEntityScope.StandaloneProduct,
                             cancellationToken);
                         var context = await productSyncService.PrepareFromIntentAsync(
@@ -1875,6 +1923,11 @@ public class AkeneoProductBatchSyncService(
                     effectiveSource,
                     AkeneoEntityType.Product,
                     request,
+                    familyCode,
+                    familyVariantCode,
+                    AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
+                        effectiveSource,
+                        AkeneoEntityType.Product),
                     cancellationToken);
             var leafContext = ReferenceEquals(leafIntent, rawLeafIntent)
                 ? rawLeafContext
@@ -2005,7 +2058,7 @@ public class AkeneoProductBatchSyncService(
 
         var payload = new
         {
-            Version = 2,
+            Version = 3,
             Request = BuildWritePolicyFingerprint(request),
             Representation = representation,
             Context = new
@@ -2013,6 +2066,7 @@ public class AkeneoProductBatchSyncService(
                 context.SourceCode,
                 context.SourceUuid,
                 context.MappingFamilyCode,
+                context.MappingFamilyVariantCode,
                 MappingEntityScope = (int)context.MappingEntityScope,
                 context.Sku,
                 SourceEnabled = context.Source.Enabled,
@@ -2257,6 +2311,7 @@ public class AkeneoProductBatchSyncService(
         : new
         {
             configuration.AkeneoFamilyCode,
+            configuration.AkeneoFamilyVariantCode,
             configuration.Enabled,
             configuration.VariantRelationshipModeId,
             configuration.ProductModelHierarchyModeId,

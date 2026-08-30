@@ -34,6 +34,7 @@ public class AkeneoFamilyMappingModelFactory
                 {
                     Id = x.Id,
                     AkeneoFamilyCode = x.AkeneoFamilyCode,
+                    AkeneoFamilyVariantCode = x.AkeneoFamilyVariantCode,
                     Enabled = x.Enabled,
                     VariantRelationshipModeId = x.VariantRelationshipModeId,
                     ProductModelHierarchyModeId = x.ProductModelHierarchyModeId,
@@ -62,6 +63,7 @@ public class AkeneoFamilyMappingModelFactory
         {
             model.Id = configuration.Id;
             model.AkeneoFamilyCode = configuration.AkeneoFamilyCode;
+            model.AkeneoFamilyVariantCode = configuration.AkeneoFamilyVariantCode;
             model.Enabled = configuration.Enabled;
             model.VariantRelationshipModeId = configuration.VariantRelationshipModeId;
             model.ProductModelHierarchyModeId = configuration.ProductModelHierarchyModeId;
@@ -81,7 +83,8 @@ public class AkeneoFamilyMappingModelFactory
                     AkeneoAttributeCode = x.AkeneoAttributeCode,
                     NopProductAttributeId = x.NopProductAttributeId,
                     IsRequired = x.IsRequired,
-                    DisplayOrder = x.DisplayOrder
+                    DisplayOrder = x.DisplayOrder,
+                    AkeneoVariantAxisLevel = x.AkeneoVariantAxisLevel
                 })
                 .ToList();
 
@@ -150,6 +153,11 @@ public class AkeneoFamilyMappingModelFactory
             .ToList();
         model.AvailableAkeneoFamilies.Insert(0, new SelectListItem("Select Akeneo family", string.Empty));
 
+        model.AvailableAkeneoFamilyVariants = new List<SelectListItem>
+        {
+            new("All family variants (default)", string.Empty)
+        };
+
         model.AvailableAkeneoAttributes = new List<SelectListItem>();
         model.AvailableSubModelAxisAttributes = new List<SelectListItem>
         {
@@ -163,7 +171,35 @@ public class AkeneoFamilyMappingModelFactory
         if (string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
             return;
 
-        var axes = await _akeneoApiClient.GetFamilyVariantAxesAsync(model.AkeneoFamilyCode);
+        var variants = await _akeneoApiClient.GetFamilyVariantsAsync(
+            model.AkeneoFamilyCode);
+
+        foreach (var variant in variants
+                     .Where(x => !string.IsNullOrWhiteSpace(x.Code))
+                     .OrderBy(x => x.GetLabel())
+                     .ThenBy(x => x.Code))
+        {
+            model.AvailableAkeneoFamilyVariants.Add(
+                new SelectListItem(variant.GetDisplayName(), variant.Code));
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.AkeneoFamilyVariantCode) &&
+            !model.AvailableAkeneoFamilyVariants.Any(x => string.Equals(
+                x.Value,
+                model.AkeneoFamilyVariantCode,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            model.AvailableAkeneoFamilyVariants.Add(new SelectListItem(
+                $"{model.AkeneoFamilyVariantCode} (not currently returned by Akeneo)",
+                model.AkeneoFamilyVariantCode));
+        }
+
+        var axes = string.IsNullOrWhiteSpace(model.AkeneoFamilyVariantCode)
+            ? await _akeneoApiClient.GetFamilyVariantAxesAsync(
+                model.AkeneoFamilyCode)
+            : await _akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
+                model.AkeneoFamilyCode,
+                model.AkeneoFamilyVariantCode);
 
         model.AvailableAkeneoAttributes = axes
             .Select(a => new SelectListItem($"{a.AttributeCode} (level {a.Level})", a.AttributeCode))

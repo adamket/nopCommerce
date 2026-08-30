@@ -20,13 +20,16 @@ public class AkeneoVariantRelationshipResolver : IAkeneoVariantRelationshipResol
 
     public async Task<AkeneoVariantRelationshipResolution> ResolveAsync(
         Product parentProduct,
-        string akeneoFamilyCode)
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode = null)
     {
         if (parentProduct == null)
             throw new ArgumentNullException(nameof(parentProduct));
 
         var familyOptions =
-            await _familyConfigurationService.BuildOptionsForFamilyAsync(akeneoFamilyCode);
+            await _familyConfigurationService.BuildOptionsForFamilyAsync(
+                akeneoFamilyCode,
+                akeneoFamilyVariantCode);
 
         var preserveExistingStructure =
             familyOptions?.PreserveExistingNopVariantStructure ?? true;
@@ -47,6 +50,7 @@ public class AkeneoVariantRelationshipResolver : IAkeneoVariantRelationshipResol
                 {
                     Enabled = true,
                     AkeneoFamilyCode = akeneoFamilyCode,
+                    AkeneoFamilyVariantCode = akeneoFamilyVariantCode,
                     PreserveExistingNopVariantStructure = true,
                     Mode = detected.Mode.Value
                 };
@@ -68,9 +72,13 @@ public class AkeneoVariantRelationshipResolver : IAkeneoVariantRelationshipResol
 
         if (familyOptions == null)
         {
+            var scope = string.IsNullOrWhiteSpace(akeneoFamilyVariantCode)
+                ? $"family '{akeneoFamilyCode}'"
+                : $"family '{akeneoFamilyCode}', variant '{akeneoFamilyVariantCode}'";
+
             throw new NopException(
-                $"No Akeneo family variant import configuration exists for family '{akeneoFamilyCode}'. " +
-                "Create a family import configuration before importing variants for this family.");
+                $"No enabled Akeneo family variant import configuration exists for {scope}. " +
+                "Create an exact family-variant configuration or an enabled family-wide default before importing variants for this scope.");
         }
 
         return new AkeneoVariantRelationshipResolution

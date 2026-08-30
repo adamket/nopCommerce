@@ -11,6 +11,8 @@ public class AkeneoVariantImportContext
 
     public string AkeneoFamilyCode { get; set; }
 
+    public string AkeneoFamilyVariantCode { get; set; }
+
     public string Sku { get; set; }
 
     public int? StockQuantity { get; set; }

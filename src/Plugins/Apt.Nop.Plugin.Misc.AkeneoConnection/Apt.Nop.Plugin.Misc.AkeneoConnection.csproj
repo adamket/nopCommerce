@@ -19,6 +19,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="logo.png" />
     <None Remove="plugin.json" />
     <None Remove="Views\Configure.cshtml" />

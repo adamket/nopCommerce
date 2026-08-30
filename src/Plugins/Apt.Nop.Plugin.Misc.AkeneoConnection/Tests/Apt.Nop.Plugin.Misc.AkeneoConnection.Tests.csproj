@@ -5,7 +5,10 @@
     <IsPackable>false</IsPackable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <SolutionDir Condition="'$(SolutionDir)' == '' Or '$(SolutionDir)' == '*Undefined*'">$(MSBuildThisFileDirectory)..\..\</SolutionDir>
+    <!-- The plugin project resolves its OutputPath from $(SolutionDir); this
+         project sits one level deeper than a normal plugin folder, so the
+         fallback has to climb three directories to reach the solution root. -->
+    <SolutionDir Condition="'$(SolutionDir)' == '' Or '$(SolutionDir)' == '*Undefined*'">$(MSBuildThisFileDirectory)..\..\..\</SolutionDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Apt.Nop.Plugin.Misc.AkeneoConnection\Apt.Nop.Plugin.Misc.AkeneoConnection.csproj" />
+    <ProjectReference Include="..\Apt.Nop.Plugin.Misc.AkeneoConnection.csproj" />
   </ItemGroup>
 </Project>

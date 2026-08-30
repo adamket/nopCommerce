@@ -247,7 +247,8 @@ public sealed class AkeneoValueTemplateRenderer(
             "identifier" => source.Identifier,
             "parent" => source.Parent,
             "family" => context.FamilyCode ?? source.Family,
-            "family_variant" or "familyvariant" => source.FamilyVariant,
+            "family_variant" or "familyvariant" =>
+                context.FamilyVariantCode ?? source.FamilyVariant,
             "enabled" => source.Enabled.HasValue
                 ? source.Enabled.Value.ToString().ToLowerInvariant()
                 : null,

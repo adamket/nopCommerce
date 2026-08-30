@@ -7,6 +7,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 {
     public string AkeneoFamilyCode { get; set; }
 
+    public string AkeneoFamilyVariantCode { get; set; }
+
     public bool Enabled { get; set; } = true;
 
     public int VariantRelationshipModeId { get; set; }
@@ -39,6 +41,9 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
         new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } =
+        new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableAkeneoFamilyVariants { get; set; } =
         new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableAkeneoAttributes { get; set; } =

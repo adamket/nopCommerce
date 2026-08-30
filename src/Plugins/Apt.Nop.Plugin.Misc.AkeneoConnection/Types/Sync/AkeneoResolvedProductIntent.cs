@@ -27,6 +27,8 @@ public sealed class AkeneoResolvedProductIntent
 
     public string MappingFamilyCode { get; init; }
 
+    public string MappingFamilyVariantCode { get; init; }
+
     public AkeneoAttributeMappingEntityScope MappingEntityScope { get; init; }
 
     public string ProductKey { get; init; }

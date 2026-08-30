@@ -5,6 +5,8 @@ public class AkeneoFamilyMapping : BaseEntity
 {
     public string AkeneoFamilyCode { get; set; }
 
+    public string AkeneoFamilyVariantCode { get; set; } = string.Empty;
+
     public bool Enabled { get; set; } = true;
 
     public int VariantRelationshipModeId { get; set; }

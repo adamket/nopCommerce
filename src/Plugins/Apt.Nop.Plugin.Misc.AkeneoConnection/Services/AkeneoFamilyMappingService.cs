@@ -16,13 +16,50 @@ public class AkeneoFamilyMappingService(
 
     public async Task<AkeneoFamilyMapping> GetByFamilyCodeAsync(string akeneoFamilyCode)
     {
+        return await GetByFamilyAndVariantCodeAsync(akeneoFamilyCode, null);
+    }
+
+    public async Task<AkeneoFamilyMapping> GetByFamilyAndVariantCodeAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode)
+    {
         if (string.IsNullOrWhiteSpace(akeneoFamilyCode))
             return null;
 
         akeneoFamilyCode = akeneoFamilyCode.Trim();
+        akeneoFamilyVariantCode = NormalizeVariantCode(akeneoFamilyVariantCode);
 
         return await configurationRepository.Table
-            .FirstOrDefaultAsync(x => x.AkeneoFamilyCode == akeneoFamilyCode);
+            .FirstOrDefaultAsync(x =>
+                x.AkeneoFamilyCode == akeneoFamilyCode &&
+                (x.AkeneoFamilyVariantCode ?? string.Empty) ==
+                    akeneoFamilyVariantCode);
+    }
+
+    public async Task<AkeneoFamilyMapping> GetEffectiveMappingAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode)
+    {
+        if (string.IsNullOrWhiteSpace(akeneoFamilyCode))
+            return null;
+
+        var normalizedVariantCode = NormalizeVariantCode(
+            akeneoFamilyVariantCode);
+
+        if (!string.IsNullOrWhiteSpace(normalizedVariantCode))
+        {
+            var exact = await GetByFamilyAndVariantCodeAsync(
+                akeneoFamilyCode,
+                normalizedVariantCode);
+
+            if (exact is { Enabled: true })
+                return exact;
+        }
+
+        var familyDefault = await GetByFamilyCodeAsync(akeneoFamilyCode);
+        return familyDefault is { Enabled: true }
+            ? familyDefault
+            : null;
     }
 
     public async Task<IList<AkeneoFamilyMapping>> GetAllAsync()
@@ -30,6 +67,7 @@ public class AkeneoFamilyMappingService(
         return await configurationRepository.Table
             .OrderBy(x => x.DisplayOrder)
             .ThenBy(x => x.AkeneoFamilyCode)
+            .ThenBy(x => x.AkeneoFamilyVariantCode)
             .ToListAsync();
     }
 
@@ -77,9 +115,13 @@ public class AkeneoFamilyMappingService(
         await axisMappingRepository.DeleteAsync(mapping);
     }
 
-    public async Task<AkeneoVariantRelationshipOptions> BuildOptionsForFamilyAsync(string akeneoFamilyCode)
+    public async Task<AkeneoVariantRelationshipOptions> BuildOptionsForFamilyAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode = null)
     {
-        var configuration = await GetByFamilyCodeAsync(akeneoFamilyCode);
+        var configuration = await GetEffectiveMappingAsync(
+            akeneoFamilyCode,
+            akeneoFamilyVariantCode);
 
         if (configuration == null || !configuration.Enabled)
             return null;
@@ -90,6 +132,8 @@ public class AkeneoFamilyMappingService(
         {
             FamilyVariantImportConfigurationId = configuration.Id,
             AkeneoFamilyCode = configuration.AkeneoFamilyCode,
+            AkeneoFamilyVariantCode = NormalizeVariantCode(
+                configuration.AkeneoFamilyVariantCode),
             Enabled = configuration.Enabled,
             PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure,
             Mode = configuration.VariantRelationshipMode,
@@ -105,6 +149,9 @@ public class AkeneoFamilyMappingService(
                 .ToList()
         };
     }
+
+    private static string NormalizeVariantCode(string value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 
     public async Task<IList<AkeneoFamilySubModelRule>> GetSubModelRulesAsync(int familyMappingId)
     {

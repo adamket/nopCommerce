@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using System.Text.Json;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
@@ -65,11 +66,33 @@ public class AkeneoProductSyncService(
         AkeneoAttributeMappingEntityScope mappingEntityScope,
         CancellationToken cancellationToken = default)
     {
+        return await PrepareAsync(
+            source,
+            sourceEntityType,
+            request,
+            result,
+            mappingFamilyCode,
+            ResolveImplicitFamilyVariantCode(source, sourceEntityType),
+            mappingEntityScope,
+            cancellationToken);
+    }
+
+    public async Task<AkeneoProductSyncContext> PrepareAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        string mappingFamilyCode,
+        string mappingFamilyVariantCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default)
+    {
         var intent = await ResolveIntentAsync(
             source,
             sourceEntityType,
             request,
             mappingFamilyCode,
+            mappingFamilyVariantCode,
             mappingEntityScope,
             cancellationToken);
 
@@ -87,6 +110,7 @@ public class AkeneoProductSyncService(
             sourceEntityType,
             request,
             source?.Family,
+            ResolveImplicitFamilyVariantCode(source, sourceEntityType),
             AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
                 source,
                 sourceEntityType),
@@ -105,6 +129,7 @@ public class AkeneoProductSyncService(
             sourceEntityType,
             request,
             mappingFamilyCode,
+            ResolveImplicitFamilyVariantCode(source, sourceEntityType),
             AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
                 source,
                 sourceEntityType),
@@ -119,12 +144,43 @@ public class AkeneoProductSyncService(
         AkeneoAttributeMappingEntityScope mappingEntityScope,
         CancellationToken cancellationToken = default)
     {
+        return await ResolveIntentAsync(
+            source,
+            sourceEntityType,
+            request,
+            mappingFamilyCode,
+            ResolveImplicitFamilyVariantCode(source, sourceEntityType),
+            mappingEntityScope,
+            cancellationToken);
+    }
+
+    public async Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        string mappingFamilyVariantCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(request);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         var resolutionResult = new AkeneoProductImportResult();
+
+        if (sourceEntityType == AkeneoEntityType.Product &&
+            !string.IsNullOrWhiteSpace(source.Parent) &&
+            string.IsNullOrWhiteSpace(mappingFamilyVariantCode))
+        {
+            var productIdentity = source.Identifier?.Trim()
+                ?? source.Uuid?.Trim()
+                ?? "(unknown product)";
+            resolutionResult.AddError(
+                $"Akeneo variant product '{productIdentity}' references parent product model '{source.Parent.Trim()}', but no resolved family-variant code was supplied to synchronization. Akeneo leaf payloads do not expose family_variant; resolve it from the immediate parent product model before preparing or resolving this product.");
+        }
+
         var sourceCode = sourceEntityType == AkeneoEntityType.ProductModel
             ? source.Code?.Trim()
             : source.Identifier?.Trim();
@@ -146,6 +202,10 @@ public class AkeneoProductSyncService(
         mappingFamilyCode = !string.IsNullOrWhiteSpace(mappingFamilyCode)
             ? mappingFamilyCode.Trim()
             : source.Family?.Trim();
+
+        mappingFamilyVariantCode = !string.IsNullOrWhiteSpace(mappingFamilyVariantCode)
+            ? mappingFamilyVariantCode.Trim()
+            : null;
 
         mappingEntityScope =
             AkeneoAttributeMappingScopeHelper.NormalizeCurrentScope(
@@ -193,6 +253,7 @@ public class AkeneoProductSyncService(
             applicableMappings,
             fallbackSourcesByMappingId,
             mappingFamilyCode,
+            mappingFamilyVariantCode,
             request,
             resolutionResult,
             cancellationToken);
@@ -223,6 +284,7 @@ public class AkeneoProductSyncService(
             SourceCode = sourceCode,
             SourceUuid = sourceUuid,
             MappingFamilyCode = mappingFamilyCode,
+            MappingFamilyVariantCode = mappingFamilyVariantCode,
             MappingEntityScope = mappingEntityScope,
             ProductKey = productKey,
             Sku = sku,
@@ -269,6 +331,7 @@ public class AkeneoProductSyncService(
             SourceCode = intent.SourceCode,
             SourceUuid = intent.SourceUuid,
             MappingFamilyCode = intent.MappingFamilyCode,
+            MappingFamilyVariantCode = intent.MappingFamilyVariantCode,
             MappingEntityScope = intent.MappingEntityScope,
             ProductKey = intent.ProductKey,
             Sku = intent.Sku,
@@ -374,6 +437,7 @@ public class AkeneoProductSyncService(
         IList<AkeneoAttributeMapping> mappings,
         IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
         string mappingFamilyCode,
+        string mappingFamilyVariantCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         CancellationToken cancellationToken)
@@ -390,6 +454,7 @@ public class AkeneoProductSyncService(
                 source,
                 mapping,
                 fallbackSourcesByMappingId,
+                mappingFamilyVariantCode,
                 request,
                 result,
                 cancellationToken));
@@ -418,6 +483,7 @@ public class AkeneoProductSyncService(
                 mapping,
                 effectiveSku,
                 mappingFamilyCode,
+                mappingFamilyVariantCode,
                 request,
                 result));
         }
@@ -430,6 +496,7 @@ public class AkeneoProductSyncService(
             AkeneoProductDefinition source,
             AkeneoAttributeMapping mapping,
             IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
+            string mappingFamilyVariantCode,
             AkeneoProductImportRequest request,
             AkeneoProductImportResult result,
             CancellationToken cancellationToken)
@@ -466,6 +533,7 @@ public class AkeneoProductSyncService(
             var candidateValue = await ResolveSourceValueAsync(
                 source,
                 sourceMapping,
+                mappingFamilyVariantCode,
                 locale,
                 channel,
                 request.Currency,
@@ -507,11 +575,32 @@ public class AkeneoProductSyncService(
         };
     }
 
+    private static string ResolveImplicitFamilyVariantCode(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType)
+    {
+        if (source == null)
+            return null;
+
+        // Only product models actually expose family_variant in Akeneo payloads.
+        // A leaf with a parent must use the explicit overload after its hierarchy
+        // has been resolved; returning null here intentionally activates the
+        // guard in ResolveIntentAsync instead of reviving the old silent fallback.
+        if (sourceEntityType == AkeneoEntityType.Product &&
+            !string.IsNullOrWhiteSpace(source.Parent))
+        {
+            return null;
+        }
+
+        return source.FamilyVariant?.Trim();
+    }
+
     private AkeneoResolvedMappedValue ResolveTemplateMapping(
         AkeneoProductDefinition source,
         AkeneoAttributeMapping mapping,
         string effectiveSku,
         string mappingFamilyCode,
+        string mappingFamilyVariantCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result)
     {
@@ -545,6 +634,7 @@ public class AkeneoProductSyncService(
                 Channel = channel,
                 Currency = request.Currency,
                 FamilyCode = mappingFamilyCode,
+                FamilyVariantCode = mappingFamilyVariantCode,
                 Sku = effectiveSku
             });
 
@@ -642,11 +732,29 @@ public class AkeneoProductSyncService(
     private async Task<AkeneoResolvedProductValue> ResolveSourceValueAsync(
         AkeneoProductDefinition source,
         AkeneoAttributeMapping sourceMapping,
+        string mappingFamilyVariantCode,
         string locale,
         string channel,
         string currency,
         CancellationToken cancellationToken)
     {
+        if (IsFamilyVariantRootField(sourceMapping.AkeneoAttributeCode) &&
+            !string.IsNullOrWhiteSpace(mappingFamilyVariantCode))
+        {
+            var normalizedVariantCode = mappingFamilyVariantCode.Trim();
+            return new AkeneoResolvedProductValue
+            {
+                AttributeCode = sourceMapping.AkeneoAttributeCode,
+                Locale = locale,
+                Channel = channel,
+                Currency = currency,
+                SourceAttributeType = "root_field",
+                RawData = JsonSerializer.SerializeToElement(normalizedVariantCode),
+                DisplayValue = normalizedVariantCode,
+                DisplayValues = new[] { normalizedVariantCode }
+            };
+        }
+
         if (AkeneoMappingHelper.IsReferenceEntityMapping(sourceMapping) &&
             !string.IsNullOrWhiteSpace(
                 sourceMapping.AkeneoReferenceEntityAttributeCode))
@@ -670,6 +778,16 @@ public class AkeneoProductSyncService(
                 ? value
                 : null;
     }
+
+    private static bool IsFamilyVariantRootField(string attributeCode) =>
+        string.Equals(
+            attributeCode,
+            "family_variant",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            attributeCode,
+            "familyVariant",
+            StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<AkeneoAttributeMapping>
         BuildOrderedSourceMappings(

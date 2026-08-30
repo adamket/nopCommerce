@@ -8,6 +8,14 @@ public interface IAkeneoFamilyMappingService
 
     Task<AkeneoFamilyMapping> GetByFamilyCodeAsync(string akeneoFamilyCode);
 
+    Task<AkeneoFamilyMapping> GetByFamilyAndVariantCodeAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode);
+
+    Task<AkeneoFamilyMapping> GetEffectiveMappingAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode);
+
     Task<IList<AkeneoFamilyMapping>> GetAllAsync();
 
     Task<IList<AkeneoFamilyVariantAxisMapping>> GetAxisMappingsAsync(int configurationId);
@@ -23,7 +31,9 @@ public interface IAkeneoFamilyMappingService
 
     Task DeleteAxisMappingAsync(AkeneoFamilyVariantAxisMapping mapping);
 
-    Task<AkeneoVariantRelationshipOptions> BuildOptionsForFamilyAsync(string akeneoFamilyCode);
+    Task<AkeneoVariantRelationshipOptions> BuildOptionsForFamilyAsync(
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode = null);
 
     Task<IList<AkeneoFamilySubModelRule>> GetSubModelRulesAsync(int familyMappingId);
     Task InsertSubModelRuleAsync(AkeneoFamilySubModelRule rule);

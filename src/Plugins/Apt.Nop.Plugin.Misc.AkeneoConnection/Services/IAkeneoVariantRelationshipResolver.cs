@@ -6,5 +6,6 @@ public interface IAkeneoVariantRelationshipResolver
 {
     Task<AkeneoVariantRelationshipResolution> ResolveAsync(
         Product parentProduct,
-        string akeneoFamilyCode);
+        string akeneoFamilyCode,
+        string akeneoFamilyVariantCode = null);
 }

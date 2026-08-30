@@ -63,6 +63,7 @@ public sealed class AkeneoConfigurationExportService(
         var familyMappings = (await familyMappingsTask)
             .OrderBy(mapping => mapping.DisplayOrder)
             .ThenBy(mapping => mapping.AkeneoFamilyCode)
+            .ThenBy(mapping => mapping.AkeneoFamilyVariantCode)
             .ThenBy(mapping => mapping.Id)
             .ToList();
 

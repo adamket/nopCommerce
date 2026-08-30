@@ -7,6 +7,8 @@ public class AkeneoVariantRelationshipOptions
 
     public string AkeneoFamilyCode { get; set; }
 
+    public string AkeneoFamilyVariantCode { get; set; }
+
     public bool Enabled { get; set; }
 
     public bool PreserveExistingNopVariantStructure { get; set; } = true;

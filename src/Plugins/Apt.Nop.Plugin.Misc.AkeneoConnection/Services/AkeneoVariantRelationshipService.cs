@@ -26,7 +26,8 @@ public class AkeneoVariantRelationshipService(
 
         var resolution = await relationshipResolver.ResolveAsync(
             parentProduct,
-            context.AkeneoFamilyCode);
+            context.AkeneoFamilyCode,
+            context.AkeneoFamilyVariantCode);
 
         var effectiveMode =
             resolution.Source == AkeneoVariantRelationshipSource.ExistingNopParent
@@ -37,6 +38,7 @@ public class AkeneoVariantRelationshipService(
         {
             Enabled = true,
             AkeneoFamilyCode = context.AkeneoFamilyCode,
+            AkeneoFamilyVariantCode = context.AkeneoFamilyVariantCode,
             Mode = effectiveMode,
             PreserveExistingNopVariantStructure = true
         };

@@ -33,6 +33,12 @@ public sealed class AkeneoProductSyncContext
     public string MappingFamilyCode { get; init; }
 
     /// <summary>
+    /// Family-variant code used to resolve variant-structure configuration.
+    /// Attribute and asset mappings remain family-scoped.
+    /// </summary>
+    public string MappingFamilyVariantCode { get; init; }
+
+    /// <summary>
     /// The nopCommerce product role used to filter attribute mappings for this
     /// synchronization context.
     /// </summary>

@@ -9,10 +9,10 @@ using Nop.Data.Migrations;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
 [NopMigration(
-    "2026-07-21 01:00:00",
-    "AkeneoConnection: Add managed asset synchronization",
+    "2026-07-23 01:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, assets, sync state, family-variant scope)",
     MigrationProcessType.NoMatter)]
-public sealed class AkeneoConnectionMigration : MigrationBase
+public sealed class AkeneoConnectionMigration : Migration
 {
     public override void Up()
     {
@@ -216,6 +216,17 @@ public sealed class AkeneoConnectionMigration : MigrationBase
 
         if (!ColumnExists(
                 table,
+                nameof(AkeneoFamilyMapping.AkeneoFamilyVariantCode)))
+        {
+            Create.Column(nameof(AkeneoFamilyMapping.AkeneoFamilyVariantCode))
+                .OnTable(table)
+                .AsString(100)
+                .NotNullable()
+                .WithDefaultValue(string.Empty);
+        }
+
+        if (!ColumnExists(
+                table,
                 nameof(
                     AkeneoFamilyMapping
                         .ProductModelHierarchyModeId)))
@@ -243,7 +254,13 @@ public sealed class AkeneoConnectionMigration : MigrationBase
     private void EnsureFamilyCodeIndex()
     {
         var table = GetTableName<AkeneoFamilyMapping>();
-        var indexName = $"IX_{table}_AkeneoFamilyCode";
+        var legacyIndexName = $"IX_{table}_AkeneoFamilyCode";
+        var indexName = $"IX_{table}_FamilyVariantScope";
+
+        // Drop the legacy family-code-only unique index first; it would
+        // otherwise reject a second mapping row for the same family.
+        if (IndexExists(table, legacyIndexName))
+            Delete.Index(legacyIndexName).OnTable(table);
 
         if (IndexExists(table, indexName))
             return;
@@ -251,6 +268,8 @@ public sealed class AkeneoConnectionMigration : MigrationBase
         Create.Index(indexName)
             .OnTable(table)
             .OnColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyCode))
+            .Ascending()
+            .OnColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyVariantCode))
             .Ascending()
             .WithOptions()
             .Unique();
@@ -378,6 +397,13 @@ public sealed class AkeneoConnectionMigration : MigrationBase
     {
         var table = GetTableName<AkeneoAssetMapping>();
 
+        // Databases whose asset mapping table predates this column need it added
+        // before the AlterColumn calls below can touch it.
+        EnsureNullableStringColumn(
+            table,
+            nameof(AkeneoAssetMapping.FallbackSourceAttributeCode),
+            255);
+
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.MappingKey)).AsString(100).NotNullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.Name)).AsString(255).NotNullable();
         Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).AsString(255).Nullable();
@@ -485,6 +511,16 @@ public sealed class AkeneoConnectionMigration : MigrationBase
                 .WithDefaultValue(false);
         }
 
+        if (!ColumnExists(
+                table,
+                nameof(AkeneoSyncProfile.CompletenessFilterId)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.CompletenessFilterId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCompletenessFilter.None);
+        }
     }
 
     #endregion

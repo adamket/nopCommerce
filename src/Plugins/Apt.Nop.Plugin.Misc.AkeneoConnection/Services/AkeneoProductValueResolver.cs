@@ -129,6 +129,11 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
         if (string.Equals(attributeCode, "family_variant", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(attributeCode, "familyVariant", StringComparison.OrdinalIgnoreCase))
         {
+            // Akeneo leaf product payloads do not expose family_variant. Normal
+            // leaf synchronization resolves it from the immediate parent and
+            // supplies it through the sync/template context instead of relying
+            // on this raw DTO field. Product-model and explicitly synthetic
+            // sources may still populate FamilyVariant directly.
             return TryCreateStringJsonValue(product.FamilyVariant, out value);
         }
 

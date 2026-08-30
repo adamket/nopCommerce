@@ -202,6 +202,7 @@ public sealed class AkeneoAssetResolver(
         var mimeType = metadata?.MimeType;
         var templateSource = BuildTemplateSource(
             context.Source,
+            context.MappingFamilyVariantCode,
             null,
             mediaFileCode,
             fileName,
@@ -290,6 +291,7 @@ public sealed class AkeneoAssetResolver(
         var displayOrder = ResolveAssetDisplayOrder(asset.Values, mapping, context, defaultDisplayOrder);
         var templateSource = BuildTemplateSource(
             context.Source,
+            context.MappingFamilyVariantCode,
             asset.Values,
             asset.Code,
             originalFileName,
@@ -376,6 +378,7 @@ public sealed class AkeneoAssetResolver(
             Channel = context.Request.Channel,
             Currency = context.Request.Currency,
             FamilyCode = context.MappingFamilyCode,
+            FamilyVariantCode = context.MappingFamilyVariantCode,
             Sku = context.Sku
         };
 
@@ -599,6 +602,7 @@ public sealed class AkeneoAssetResolver(
 
     private static AkeneoProductDefinition BuildTemplateSource(
         AkeneoProductDefinition product,
+        string familyVariantCode,
         JsonElement? assetValues,
         string assetCode,
         string fileName,
@@ -627,7 +631,9 @@ public sealed class AkeneoAssetResolver(
             Identifier = product.Identifier,
             Code = product.Code,
             Family = product.Family,
-            FamilyVariant = product.FamilyVariant,
+            FamilyVariant = !string.IsNullOrWhiteSpace(familyVariantCode)
+                ? familyVariantCode.Trim()
+                : product.FamilyVariant,
             Parent = product.Parent,
             Enabled = product.Enabled,
             Categories = product.Categories?.ToList() ?? new List<string>(),

@@ -19,6 +19,12 @@ public sealed class AkeneoValueTemplateContext
     public string FamilyCode { get; init; }
 
     /// <summary>
+    /// Effective family-variant code resolved from the product-model hierarchy.
+    /// Leaf product payloads do not expose family_variant directly.
+    /// </summary>
+    public string FamilyVariantCode { get; init; }
+
+    /// <summary>
     /// The effective product SKU resolved from ordinary mappings, falling back
     /// to the Akeneo identifier or product-model code.
     /// </summary>

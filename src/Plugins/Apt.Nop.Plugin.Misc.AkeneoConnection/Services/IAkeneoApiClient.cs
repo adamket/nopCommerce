@@ -91,6 +91,17 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<AkeneoFamilyVariantDefinition>> GetFamilyVariantsAsync(
+        string familyCode,
+        int limit = 100,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesForVariantAsync(
+        string familyCode,
+        string familyVariantCode,
+        int limit = 100,
+        CancellationToken cancellationToken = default);
+
     Task<bool> KnockAsync(
         CancellationToken cancellationToken = default);
 

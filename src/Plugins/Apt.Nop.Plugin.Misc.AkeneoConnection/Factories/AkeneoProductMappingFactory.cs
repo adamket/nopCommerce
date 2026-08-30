@@ -120,15 +120,28 @@ public sealed class AkeneoProductMappingFactory(
             return model;
         }
 
-        var previewSource = sourceEntityType == AkeneoEntityType.ProductModel
-            ? await BuildEffectiveProductModelPreviewSourceAsync(
-                akeneoSource,
-                model,
-                cancellationToken)
-            : await BuildEffectivePreviewSourceAsync(
+        AkeneoProductDefinition previewSource;
+        string mappingFamilyVariantCode;
+
+        if (sourceEntityType == AkeneoEntityType.ProductModel)
+        {
+            previewSource = await BuildEffectiveProductModelPreviewSourceAsync(
                 akeneoSource,
                 model,
                 cancellationToken);
+            mappingFamilyVariantCode = previewSource.FamilyVariant?.Trim()
+                ?? akeneoSource.FamilyVariant?.Trim();
+        }
+        else
+        {
+            var previewResolution = await BuildEffectivePreviewSourceAsync(
+                akeneoSource,
+                model,
+                cancellationToken);
+            previewSource = previewResolution.Source;
+            mappingFamilyVariantCode = previewResolution.FamilyVariantCode;
+
+        }
 
         if (sourceEntityType == AkeneoEntityType.ProductModel)
             model.AkeneoProductModelCode = previewSource.Code;
@@ -165,6 +178,7 @@ public sealed class AkeneoProductMappingFactory(
             request,
             result,
             mappingFamilyCode,
+            mappingFamilyVariantCode,
             mappingEntityScope,
             cancellationToken);
 
@@ -217,7 +231,8 @@ public sealed class AkeneoProductMappingFactory(
         return model;
     }
 
-    private async Task<AkeneoProductDefinition> BuildEffectivePreviewSourceAsync(
+    private async Task<(AkeneoProductDefinition Source, string FamilyVariantCode)>
+        BuildEffectivePreviewSourceAsync(
         AkeneoProductDefinition product,
         AkeneoProductMappingPreviewModel model,
         CancellationToken cancellationToken)
@@ -227,7 +242,7 @@ public sealed class AkeneoProductMappingFactory(
             model.HierarchyDecision =
                 $"Akeneo product '{product.Identifier ?? product.Uuid}' is standalone and will synchronize directly to one nopCommerce product.";
             model.HierarchyRequiresReview = false;
-            return product;
+            return (product, null);
         }
 
         var ancestors = new List<AkeneoProductDefinition>();
@@ -266,7 +281,7 @@ public sealed class AkeneoProductMappingFactory(
             model.HierarchyDecision =
                 $"Akeneo product '{product.Identifier ?? product.Uuid}' references parent model '{product.Parent}', but the model hierarchy could not be resolved completely.";
             model.HierarchyRequiresReview = true;
-            return product;
+            return (product, null);
         }
 
         if (cycleDetected)
@@ -275,8 +290,29 @@ public sealed class AkeneoProductMappingFactory(
                 $"A product-model inheritance cycle was detected at '{currentCode}'. Preview used the values resolved before the cycle.");
         }
 
+        var familyVariantResolution = AkeneoLeafFamilyVariantResolver.Resolve(
+            product,
+            ancestors);
+
+        if (!familyVariantResolution.Success)
+        {
+            model.ImmediateParentProductModelCode =
+                familyVariantResolution.ImmediateParentCode;
+            model.EffectiveParentProductModelCode =
+                familyVariantResolution.ImmediateParentCode;
+            model.HierarchyDecision =
+                $"Akeneo leaf '{product.Identifier ?? product.Uuid}' references parent model '{familyVariantResolution.ImmediateParentCode}', but the parent does not expose a family-variant code.";
+            model.HierarchyRequiresReview = true;
+            model.Errors.Add(familyVariantResolution.Error);
+            return (product, null);
+        }
+
+        var familyVariantCode = familyVariantResolution.FamilyVariantCode;
+
         var familyMapping = await familyMappingService
-            .GetByFamilyCodeAsync(product.Family);
+            .GetEffectiveMappingAsync(
+                product.Family,
+                familyVariantCode);
 
         var hierarchyMode = familyMapping is { Enabled: true }
             ? familyMapping.ProductModelHierarchyMode
@@ -295,7 +331,7 @@ public sealed class AkeneoProductMappingFactory(
             $"Akeneo leaf '{product.Identifier ?? product.Uuid}' uses {FormatHierarchyMode(hierarchy.Mode)}: " +
             $"immediate parent '{model.ImmediateParentProductModelCode}', effective nopCommerce parent '{model.EffectiveParentProductModelCode}'.";
 
-        return hierarchy.EffectiveLeaf;
+        return (hierarchy.EffectiveLeaf, familyVariantCode);
     }
 
     private async Task<AkeneoProductDefinition>
@@ -347,7 +383,9 @@ public sealed class AkeneoProductMappingFactory(
         }
 
         var familyMapping = await familyMappingService
-            .GetByFamilyCodeAsync(productModel.Family);
+            .GetEffectiveMappingAsync(
+                productModel.Family,
+                productModel.FamilyVariant);
 
         var hierarchyMode = familyMapping is { Enabled: true }
             ? familyMapping.ProductModelHierarchyMode
@@ -451,6 +489,7 @@ public sealed class AkeneoProductMappingFactory(
             request,
             parentResult,
             originalSource.Family,
+            context.MappingFamilyVariantCode,
             AkeneoAttributeMappingEntityScope.ProductModel,
             cancellationToken);
 
@@ -460,7 +499,9 @@ public sealed class AkeneoProductMappingFactory(
             : $"Existing nopCommerce parent product #{parentContext.ExistingProduct.Id} for model '{effectiveParentCode}' would be synchronized before the leaf representation is applied.";
 
         var familyMapping = await familyMappingService
-            .GetByFamilyCodeAsync(originalSource.Family);
+            .GetEffectiveMappingAsync(
+                originalSource.Family,
+                context.MappingFamilyVariantCode);
         AkeneoProductDefinition immediateParentModel = null;
         if (string.Equals(
                 model.ImmediateParentProductModelCode,
@@ -524,7 +565,8 @@ public sealed class AkeneoProductMappingFactory(
             {
                 var resolution = await variantRelationshipResolver.ResolveAsync(
                     parentContext.ExistingProduct,
-                    originalSource.Family);
+                    originalSource.Family,
+                    context.MappingFamilyVariantCode);
                 representation = FormatVariantMode(resolution.Mode);
                 decisionSource = resolution.Source ==
                     AkeneoVariantRelationshipSource.ExistingNopParent

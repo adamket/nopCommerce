@@ -15,6 +15,7 @@
         {
             id = x.Id,
             akeneoFamilyCode = x.AkeneoFamilyCode,
+            akeneoFamilyVariantCode = x.AkeneoFamilyVariantCode,
             enabled = x.Enabled,
             variantRelationshipModeId = x.VariantRelationshipModeId,
             productModelHierarchyModeId = x.ProductModelHierarchyModeId,
@@ -71,6 +72,10 @@
                                             <div class="akeneo-col">
                                                 <div class="akeneo-code" v-text="item.akeneoFamilyCode"></div>
                                                 <div class="akeneo-label">Akeneo family code</div>
+                                                <div class="akeneo-summary-target-detail">
+                                                    Family variant:
+                                                    <span v-text="item.akeneoFamilyVariantCode || 'All (default fallback)'"></span>
+                                                </div>
                                             </div>
 
                                             <div class="akeneo-col">
@@ -154,7 +159,14 @@
                         if (displayOrderCompare !== 0)
                             return displayOrderCompare;
 
-                        return (a.akeneoFamilyCode || '').localeCompare(b.akeneoFamilyCode || '');
+                        const familyCompare = (a.akeneoFamilyCode || '')
+                            .localeCompare(b.akeneoFamilyCode || '');
+
+                        if (familyCompare !== 0)
+                            return familyCompare;
+
+                        return (a.akeneoFamilyVariantCode || '')
+                            .localeCompare(b.akeneoFamilyVariantCode || '');
                     });
                 }
             },

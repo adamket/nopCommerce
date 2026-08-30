@@ -12,4 +12,6 @@ public record AkeneoFamilyVariantAxisMappingModel : BaseNopEntityModel
     public bool IsRequired { get; set; } = true;
 
     public int DisplayOrder { get; set; }
+
+    public int AkeneoVariantAxisLevel { get; set; } = 1;
 }

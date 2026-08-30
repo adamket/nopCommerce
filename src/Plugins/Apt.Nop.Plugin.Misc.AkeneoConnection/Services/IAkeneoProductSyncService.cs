@@ -35,6 +35,21 @@ public interface IAkeneoProductSyncService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Resolves source intent using an explicitly resolved family-variant code.
+    /// Leaf product payloads do not carry family_variant, so callers that have
+    /// already resolved the product-model hierarchy should pass the immediate
+    /// parent's family-variant code here instead of relying on Source.FamilyVariant.
+    /// </summary>
+    Task<AkeneoResolvedProductIntent> ResolveIntentAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        string mappingFamilyCode,
+        string mappingFamilyVariantCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates a fresh destination-bound synchronization context from a
     /// previously resolved source intent. Destination state is deliberately
     /// re-read so intent reuse cannot make the write path stale.
@@ -75,6 +90,21 @@ public interface IAkeneoProductSyncService
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
         string mappingFamilyCode,
+        AkeneoAttributeMappingEntityScope mappingEntityScope,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Prepares a synchronization context with an explicitly resolved
+    /// family-variant code. This is the preferred overload for leaf variants,
+    /// because Akeneo product payloads expose parent but not family_variant.
+    /// </summary>
+    Task<AkeneoProductSyncContext> PrepareAsync(
+        AkeneoProductDefinition source,
+        AkeneoEntityType sourceEntityType,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        string mappingFamilyCode,
+        string mappingFamilyVariantCode,
         AkeneoAttributeMappingEntityScope mappingEntityScope,
         CancellationToken cancellationToken = default);
 

@@ -8,5 +8,9 @@ public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<Ak
     public override void MapEntity(CreateTableExpressionBuilder table)
     {
         table.WithColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyCode)).AsString(100);
+        table.WithColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyVariantCode))
+            .AsString(100)
+            .NotNullable()
+            .WithDefaultValue(string.Empty);
     }
 }

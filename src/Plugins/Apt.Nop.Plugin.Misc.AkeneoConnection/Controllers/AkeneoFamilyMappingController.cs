@@ -73,7 +73,9 @@ public class AkeneoFamilyMappingController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
-    public async Task<IActionResult> GetFamilyRuleFields(string familyCode)
+    public async Task<IActionResult> GetFamilyRuleFields(
+        string familyCode,
+        string familyVariantCode)
     {
         if (string.IsNullOrWhiteSpace(familyCode))
         {
@@ -87,7 +89,11 @@ public class AkeneoFamilyMappingController(
         familyCode = familyCode.Trim();
 
         var family = await akeneoApiClient.GetFamilyByCodeAsync(familyCode);
-        var axes = await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode);
+        var axes = string.IsNullOrWhiteSpace(familyVariantCode)
+            ? await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode)
+            : await akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
+                familyCode,
+                familyVariantCode);
         var attributes = await akeneoApiClient.GetAttributesAsync();
 
         var familyAttributeCodes = family?.Attributes?
@@ -135,6 +141,34 @@ public class AkeneoFamilyMappingController(
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
+    public async Task<IActionResult> GetFamilyVariants(string familyCode)
+    {
+        var result = new List<object>
+        {
+            new { text = "All family variants (default)", value = string.Empty }
+        };
+
+        if (string.IsNullOrWhiteSpace(familyCode))
+            return Json(result);
+
+        var variants = await akeneoApiClient.GetFamilyVariantsAsync(
+            familyCode.Trim());
+
+        result.AddRange(variants
+            .Where(variant => !string.IsNullOrWhiteSpace(variant.Code))
+            .OrderBy(variant => variant.GetLabel())
+            .ThenBy(variant => variant.Code)
+            .Select(variant => (object)new
+            {
+                text = variant.GetDisplayName(),
+                value = variant.Code
+            }));
+
+        return Json(result);
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/family-mapping/create")]
     public async Task<IActionResult> Create()
     {
@@ -164,6 +198,8 @@ public class AkeneoFamilyMappingController(
         var configuration = new AkeneoFamilyMapping
         {
             AkeneoFamilyCode = model.AkeneoFamilyCode?.Trim(),
+            AkeneoFamilyVariantCode = NormalizeVariantCode(
+                model.AkeneoFamilyVariantCode),
             Enabled = model.Enabled,
             VariantRelationshipModeId = model.VariantRelationshipModeId,
             ProductModelHierarchyModeId = model.ProductModelHierarchyModeId,
@@ -229,6 +265,8 @@ public class AkeneoFamilyMappingController(
         }
 
         configuration.AkeneoFamilyCode = model.AkeneoFamilyCode?.Trim();
+        configuration.AkeneoFamilyVariantCode = NormalizeVariantCode(
+            model.AkeneoFamilyVariantCode);
         configuration.Enabled = model.Enabled;
         configuration.VariantRelationshipModeId = model.VariantRelationshipModeId;
         configuration.ProductModelHierarchyModeId = model.ProductModelHierarchyModeId;
@@ -296,12 +334,16 @@ public class AkeneoFamilyMappingController(
             return;
         }
 
-        var existing = await familyMappingService.GetByFamilyCodeAsync(model.AkeneoFamilyCode);
+        var existing = await familyMappingService.GetByFamilyAndVariantCodeAsync(
+            model.AkeneoFamilyCode,
+            model.AkeneoFamilyVariantCode);
         if (existing != null && existing.Id != model.Id)
         {
             ModelState.AddModelError(
-                nameof(model.AkeneoFamilyCode),
-                "A configuration for this family already exists.");
+                nameof(model.AkeneoFamilyVariantCode),
+                string.IsNullOrWhiteSpace(model.AkeneoFamilyVariantCode)
+                    ? "A family-wide default configuration already exists for this family."
+                    : "A configuration for this family and family variant already exists.");
         }
 
 
@@ -414,7 +456,10 @@ public class AkeneoFamilyMappingController(
                 AkeneoAttributeCode = model.AkeneoAttributeCode.Trim(),
                 NopProductAttributeId = model.NopProductAttributeId,
                 IsRequired = model.IsRequired,
-                DisplayOrder = model.DisplayOrder
+                DisplayOrder = model.DisplayOrder,
+                AkeneoVariantAxisLevel = model.AkeneoVariantAxisLevel > 0
+                    ? model.AkeneoVariantAxisLevel
+                    : 1
             };
 
             await familyMappingService.InsertAxisMappingAsync(mapping);
@@ -457,4 +502,7 @@ public class AkeneoFamilyMappingController(
             await familyMappingService.InsertSubModelRuleAsync(rule);
         }
     }
+
+    private static string NormalizeVariantCode(string value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 }

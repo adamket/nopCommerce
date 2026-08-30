@@ -24,6 +24,7 @@
         {
             id = Model.Id,
             akeneoFamilyCode = Model.AkeneoFamilyCode,
+            akeneoFamilyVariantCode = Model.AkeneoFamilyVariantCode,
             enabled = Model.Enabled,
             variantRelationshipModeId = Model.VariantRelationshipModeId,
             productModelHierarchyModeId = Model.ProductModelHierarchyModeId,
@@ -39,7 +40,8 @@
                 akeneoAttributeCode = x.AkeneoAttributeCode,
                 nopProductAttributeId = x.NopProductAttributeId,
                 isRequired = x.IsRequired,
-                displayOrder = x.DisplayOrder
+                displayOrder = x.DisplayOrder,
+                akeneoVariantAxisLevel = x.AkeneoVariantAxisLevel
             }),
             subModelRules = Model.SubModelRules.Select(x => new
             {
@@ -59,6 +61,11 @@
                 value = x.Value
             }),
             availableAkeneoFamilies = Model.AvailableAkeneoFamilies.Select(x => new
+            {
+                text = x.Text,
+                value = x.Value
+            }),
+            availableAkeneoFamilyVariants = Model.AvailableAkeneoFamilyVariants.Select(x => new
             {
                 text = x.Text,
                 value = x.Value
@@ -85,6 +92,10 @@
             }),
             familyRuleFieldsUrl = Url.Action(
                 "GetFamilyRuleFields",
+                "AkeneoFamilyMapping"),
+
+            familyVariantsUrl = Url.Action(
+                "GetFamilyVariants",
                 "AkeneoFamilyMapping"),
 
             attributeOptionsUrl = Url.Action(
@@ -193,6 +204,28 @@
                                                 </label>
                                             </div>
                                             <span asp-validation-for="Enabled"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label asp-for="AkeneoFamilyVariantCode">Akeneo family variant</label>
+                                            <select asp-for="AkeneoFamilyVariantCode"
+                                                    class="form-control"
+                                                    v-model="form.akeneoFamilyVariantCode"
+                                                    v-bind:disabled="!form.akeneoFamilyCode">
+                                                <option v-for="variant in availableAkeneoFamilyVariants"
+                                                        v-bind:key="variant.value || 'family-default'"
+                                                        v-bind:value="variant.value">
+                                                    {{ variant.text }}
+                                                </option>
+                                            </select>
+                                            <span asp-validation-for="AkeneoFamilyVariantCode"></span>
+                                            <div class="form-text">
+                                                Choose a specific family variant for an exact mapping, or use the default to provide fallback behavior for variants without an enabled exact mapping.
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -395,6 +428,10 @@
                                                             <input type="hidden"
                                                                    v-bind:name="axisName(index, 'FamilyVariantImportConfigurationId')"
                                                                    v-bind:value="row.familyVariantImportConfigurationId" />
+
+                                                            <input type="hidden"
+                                                                   v-bind:name="axisName(index, 'AkeneoVariantAxisLevel')"
+                                                                   v-bind:value="row.akeneoVariantAxisLevel" />
 
                                                             <input type="text"
                                                                    class="form-control"
@@ -813,12 +850,14 @@
                     },
                     availableProductAttributes: initialModel.availableProductAttributes,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
+                    availableAkeneoFamilyVariants: initialModel.availableAkeneoFamilyVariants,
                     availableSubModelAxisAttributes: initialModel.availableSubModelAxisAttributes,
                     availableVariantAttributes: initialModel.availableVariantAttributes,
                     availableVariantRelationshipModes: initialModel.availableVariantRelationshipModes,
                     availableProductModelHierarchyModes: initialModel.availableProductModelHierarchyModes,
                     form: {
                         ...initialModel,
+                        akeneoFamilyVariantCode: initialModel.akeneoFamilyVariantCode || '',
                         associatedProductAttributeId: initialModel.associatedProductAttributeId ?? '',
                         axisMappings: initialModel.axisMappings.map((row, index) => ({
                             uid: `${Date.now()}-axis-${index}`,
@@ -827,7 +866,8 @@
                             akeneoAttributeCode: row.akeneoAttributeCode || '',
                             nopProductAttributeId: row.nopProductAttributeId || '',
                             isRequired: row.isRequired !== false,
-                            displayOrder: row.displayOrder || index + 1
+                            displayOrder: row.displayOrder || index + 1,
+                            akeneoVariantAxisLevel: row.akeneoVariantAxisLevel || 1
                         })),
                             subModelRules: initialModel.subModelRules.map((row, index) => ({
                             uid: `${Date.now()}-rule-${index}`,
@@ -873,14 +913,29 @@
             },
 
             watch: {
-                'form.akeneoFamilyCode': function (
+                'form.akeneoFamilyCode': async function (
                     newFamilyCode,
                     oldFamilyCode) {
 
                     if (newFamilyCode === oldFamilyCode)
                         return;
 
-                    this.loadFamilyRuleFields(newFamilyCode);
+                    await this.loadFamilyVariants(newFamilyCode, false);
+                    await this.loadFamilyRuleFields(
+                        newFamilyCode,
+                        this.form.akeneoFamilyVariantCode);
+                },
+
+                'form.akeneoFamilyVariantCode': function (
+                    newFamilyVariantCode,
+                    oldFamilyVariantCode) {
+
+                    if (newFamilyVariantCode === oldFamilyVariantCode)
+                        return;
+
+                    this.loadFamilyRuleFields(
+                        this.form.akeneoFamilyCode,
+                        newFamilyVariantCode);
                 }
             },
 
@@ -889,8 +944,12 @@
                     this.addAxisMapping();
 
                 if (this.form.akeneoFamilyCode) {
+                    await this.loadFamilyVariants(
+                        this.form.akeneoFamilyCode,
+                        true);
                     await this.loadFamilyRuleFields(
-                        this.form.akeneoFamilyCode);
+                        this.form.akeneoFamilyCode,
+                        this.form.akeneoFamilyVariantCode);
                 }
             },
 
@@ -898,7 +957,78 @@
                 newUid() {
                     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
                 },
-                async loadFamilyRuleFields(familyCode) {
+                async loadFamilyVariants(
+                    familyCode,
+                    preserveSelection = true) {
+
+                    const defaultOption = {
+                        text: 'All family variants (default)',
+                        value: ''
+                    };
+
+                    if (!familyCode) {
+                        this.availableAkeneoFamilyVariants = [defaultOption];
+                        this.form.akeneoFamilyVariantCode = '';
+                        return;
+                    }
+
+                    const selected = preserveSelection
+                        ? (this.form.akeneoFamilyVariantCode || '')
+                        : '';
+
+                    try {
+                        const separator =
+                            initialModel.familyVariantsUrl.includes('?')
+                                ? '&'
+                                : '?';
+
+                        const response = await fetch(
+                            `${initialModel.familyVariantsUrl}` +
+                            `${separator}familyCode=${encodeURIComponent(familyCode)}`,
+                            {
+                                method: 'GET',
+                                headers: { Accept: 'application/json' }
+                            });
+
+                        if (!response.ok) {
+                            throw new Error(
+                                `Unable to load family variants. HTTP ${response.status}.`);
+                        }
+
+                        this.availableAkeneoFamilyVariants = await response.json();
+
+                        const selectionExists =
+                            this.availableAkeneoFamilyVariants.some(option =>
+                                String(option.value || '').toLowerCase() ===
+                                String(selected).toLowerCase());
+
+                        if (selected && !selectionExists) {
+                            this.availableAkeneoFamilyVariants.push({
+                                text: `${selected} (not currently returned by Akeneo)`,
+                                value: selected
+                            });
+                        }
+
+                        this.form.akeneoFamilyVariantCode = selected;
+                    }
+                    catch (error) {
+                        console.error(
+                            'Unable to load Akeneo family variants.',
+                            error);
+
+                        this.availableAkeneoFamilyVariants = [defaultOption];
+                        if (selected) {
+                            this.availableAkeneoFamilyVariants.push({
+                                text: `${selected} (not currently returned by Akeneo)`,
+                                value: selected
+                            });
+                        }
+                        this.form.akeneoFamilyVariantCode = selected;
+                    }
+                },
+                async loadFamilyRuleFields(
+                    familyCode,
+                    familyVariantCode) {
                     const emptySubModelOption = {
                         text: 'No sub-model condition',
                         value: ''
@@ -930,7 +1060,8 @@
 
                         const response = await fetch(
                             `${initialModel.familyRuleFieldsUrl}` +
-                            `${separator}familyCode=${encodeURIComponent(familyCode)}`,
+                            `${separator}familyCode=${encodeURIComponent(familyCode)}` +
+                            `&familyVariantCode=${encodeURIComponent(familyVariantCode || '')}`,
                             {
                                 method: 'GET',
                                 headers: {
@@ -1116,7 +1247,8 @@
                         akeneoAttributeCode: '',
                         nopProductAttributeId: '',
                         isRequired: true,
-                        displayOrder: this.form.axisMappings.length + 1
+                        displayOrder: this.form.axisMappings.length + 1,
+                        akeneoVariantAxisLevel: 1
                     });
 
                     this.axisMappingsOpen = true;
