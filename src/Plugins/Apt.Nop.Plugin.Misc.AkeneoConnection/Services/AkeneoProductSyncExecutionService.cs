@@ -17,11 +17,30 @@ public class AkeneoProductSyncExecutionService(
 {
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
 
+    private const string FullSyncUnavailableMessage =
+        "Full sync is currently unavailable. Only delta syncs can be run.";
+
     public async Task<AkeneoProductSyncExecutionResult> ImportProductsByProfileAsync(
         int profileId,
         SyncType syncType,
         CancellationToken cancellationToken = default)
     {
+        // Full (non-delta) runs are disabled until existing nopCommerce products
+        // are bound to their Akeneo product models; an authoritative pass could
+        // otherwise create duplicate parents and apply missing-product rules.
+        if (ResolveRunMode(syncType) == AkeneoRunMode.Full)
+        {
+            return new AkeneoProductSyncExecutionResult
+            {
+                Success = false,
+                FullSyncUnavailable = true,
+                ProfileId = profileId,
+                SyncStatus = SyncStatus.Failed,
+                Message = FullSyncUnavailableMessage,
+                Errors = new List<string> { FullSyncUnavailableMessage }
+            };
+        }
+
         var validation = await ValidateProfileAsync(profileId);
         if (validation.Result != null)
             return validation.Result;

@@ -205,7 +205,7 @@ public class AkeneoSyncController(
             });
         }
 
-        if (result.ProfileDisabled)
+        if (result.ProfileDisabled || result.FullSyncUnavailable)
         {
             return BadRequest(new
             {

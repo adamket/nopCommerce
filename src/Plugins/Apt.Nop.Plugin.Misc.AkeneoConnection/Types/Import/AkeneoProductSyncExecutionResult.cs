@@ -14,6 +14,8 @@ public class AkeneoProductSyncExecutionResult
 
     public bool ProfileDisabled { get; set; }
 
+    public bool FullSyncUnavailable { get; set; }
+
     public int? ProfileId { get; set; }
 
     public int? SyncRunRecordId { get; set; }
