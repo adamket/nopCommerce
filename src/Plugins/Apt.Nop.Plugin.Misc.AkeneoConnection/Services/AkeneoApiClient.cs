@@ -16,6 +16,7 @@ public class AkeneoApiClient : IAkeneoApiClient
     private const int TokenCacheTimeMinutes = 60 * 24 * 30;
     private const int TokenExpirationBufferMinutes = 1;
     private const int DefaultTokenLifetimeSeconds = 3600;
+    private const int IdentifierAttributeCacheMinutes = 60;
     private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(30);
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
@@ -165,8 +166,12 @@ public class AkeneoApiClient : IAkeneoApiClient
         if (!string.IsNullOrWhiteSpace(searchJson))
             query["search"] = searchJson;
 
-        return await GetPagedCollectionAsync<AkeneoProductDefinition>(
+        var products = await GetPagedCollectionAsync<AkeneoProductDefinition>(
             "api/rest/v1/products-uuid", query, cancellationToken, apiCredentials);
+
+        await PopulateProductIdentifiersAsync(products, cancellationToken);
+
+        return products;
     }
 
     public async Task<AkeneoProductDefinition> GetProductModelByCodeAsync(
@@ -188,9 +193,14 @@ public class AkeneoApiClient : IAkeneoApiClient
         if (string.IsNullOrWhiteSpace(uuid))
             throw new ArgumentException("Product UUID is required.", nameof(uuid));
 
-        return await GetObjectOrNullAsync<AkeneoProductDefinition>(
+        var product = await GetObjectOrNullAsync<AkeneoProductDefinition>(
             $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true",
             cancellationToken);
+
+        if (product != null)
+            await PopulateProductIdentifiersAsync(new[] { product }, cancellationToken);
+
+        return product;
     }
 
     public async Task<IReadOnlyList<AkeneoProductDefinition>> GetChangedProductsAsync(
@@ -364,11 +374,98 @@ public class AkeneoApiClient : IAkeneoApiClient
         var page = document.RootElement.Deserialize<PagedCollection<AkeneoProductDefinition>>(
             SnakeCaseJsonOptions);
 
+        var items = page?.Embedded?.Items ?? new List<AkeneoProductDefinition>();
+        await PopulateProductIdentifiersAsync(items, cancellationToken);
+
         return new AkeneoProductPageResult
         {
-            Items = page?.Embedded?.Items ?? new List<AkeneoProductDefinition>(),
+            Items = items,
             SearchAfter = ExtractQueryStringValue(page?.Links?.Next?.Href, "search_after")
         };
+    }
+
+    /// <summary>
+    /// Akeneo's UUID product endpoints do not return a top-level
+    /// <c>identifier</c>; the identifier is an ordinary value of the catalog's
+    /// identifier attribute (e.g. <c>values.sku</c>). Fill
+    /// <see cref="AkeneoProductDefinition.Identifier"/> from that value so
+    /// SKU-based matching works. Product models (which carry a code) are skipped.
+    /// </summary>
+    private async Task PopulateProductIdentifiersAsync(
+        IEnumerable<AkeneoProductDefinition> products,
+        CancellationToken cancellationToken)
+    {
+        var missing = products
+            .Where(product =>
+                product != null &&
+                string.IsNullOrWhiteSpace(product.Identifier) &&
+                string.IsNullOrWhiteSpace(product.Code))
+            .ToList();
+
+        if (missing.Count == 0)
+            return;
+
+        var attributeCode = await GetIdentifierAttributeCodeAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(attributeCode))
+            return;
+
+        foreach (var product in missing)
+            product.Identifier = ReadScalarValue(product.Values, attributeCode);
+    }
+
+    private async Task<string> GetIdentifierAttributeCodeAsync(CancellationToken cancellationToken)
+    {
+        var cacheKey = new CacheKey(
+            "Apt.Nop.Plugin.Misc.AkeneoConnection.IdentifierAttribute." +
+            CreateSha256Hash(NormalizeBaseUrl(_settings.AkeneoConnectionBaseUrl ?? _baseUrl)))
+        {
+            CacheTime = IdentifierAttributeCacheMinutes
+        };
+
+        return await _staticCacheManager.GetAsync(cacheKey, async () =>
+        {
+            var identifiers = (await GetAttributesAsync(cancellationToken: cancellationToken))
+                .Where(attribute => string.Equals(
+                    attribute.Type,
+                    "pim_catalog_identifier",
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var main = identifiers.FirstOrDefault(attribute => attribute.IsMainIdentifier == true)
+                       ?? identifiers.FirstOrDefault();
+
+            if (main == null)
+            {
+                await _logger.WarningAsync(
+                    "Akeneo has no pim_catalog_identifier attribute; product identifiers cannot be resolved.");
+            }
+
+            return main?.Code;
+        });
+    }
+
+    private static string ReadScalarValue(JsonElement values, string attributeCode)
+    {
+        if (values.ValueKind != JsonValueKind.Object ||
+            !values.TryGetProperty(attributeCode, out var entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("data", out var data) &&
+                data.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(data.GetString()))
+            {
+                return data.GetString().Trim();
+            }
+        }
+
+        return null;
     }
 
     public async Task<IReadOnlyList<AkeneoFamilyAxis>> GetFamilyVariantAxesAsync(

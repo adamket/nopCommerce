@@ -75,6 +75,14 @@ public class AdminMenuConsumer(IPermissionService permissionService) : IConsumer
                 new()
                 {
                     IconClass = "far fa-circle",
+                    SystemName = "AkeneoIntegration.CatalogBinding",
+                    Title = "Catalog Binding",
+                    Url = "/admin/akeneo-connection/catalog-binding",
+                    Visible = true
+                },
+                new()
+                {
+                    IconClass = "far fa-circle",
                     SystemName = "AkeneoIntegration.DryRun",
                     Title = "Dry Run",
                     Url = eventMessage.GetMenuItemUrl("AkeneoSync", "DryRun"),

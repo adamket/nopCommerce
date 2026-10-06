@@ -43,6 +43,12 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } =
         new List<SelectListItem>();
 
+    /// <summary>
+    /// Set when the selected Akeneo family is missing or could not be loaded.
+    /// The page still renders with the saved values preserved.
+    /// </summary>
+    public string AkeneoFamilyError { get; set; }
+
     public IList<SelectListItem> AvailableAkeneoFamilyVariants { get; set; } =
         new List<SelectListItem>();
 

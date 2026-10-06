@@ -30,4 +30,10 @@ public class AkeneoAttributeDefinition : LocalizableDefinition
 
     [JsonPropertyName("useable_as_grid_filter")]
     public bool UseableAsGridFilter { get; set; }
+
+    /// <summary>
+    /// Akeneo 7+: marks the main identifier when several identifier attributes exist.
+    /// </summary>
+    [JsonPropertyName("is_main_identifier")]
+    public bool? IsMainIdentifier { get; set; }
 }

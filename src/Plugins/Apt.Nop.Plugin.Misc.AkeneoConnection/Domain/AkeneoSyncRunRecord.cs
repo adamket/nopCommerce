@@ -56,14 +56,16 @@ public enum SyncType
     ManualProductSync = 30,
     ManualProfileSync = 40,
     ManualFullProfileSync = 50,
-    ScheduledFullSync = 60
+    ScheduledFullSync = 60,
+    CatalogBinding = 70
 }
 
 public enum AkeneoRunMode
 {
     Full = 10,
     Delta = 20,
-    SingleProduct = 30
+    SingleProduct = 30,
+    Binding = 40
 }
 
 public enum SyncStatus

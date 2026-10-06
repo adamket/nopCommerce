@@ -29,7 +29,7 @@ public class AkeneoVariantRelationshipResolverTests
             AkeneoVariantRelationshipMode.GroupedProducts,
             preserveExisting: true);
         _familyService
-            .Setup(service => service.BuildOptionsForFamilyAsync("trees"))
+            .Setup(service => service.BuildOptionsForFamilyAsync("trees", It.IsAny<string>()))
             .ReturnsAsync(familyOptions);
         _detector
             .Setup(detector => detector.DetectAsync(parent))
@@ -55,7 +55,7 @@ public class AkeneoVariantRelationshipResolverTests
     {
         var parent = new Product { Id = 12 };
         _familyService
-            .Setup(service => service.BuildOptionsForFamilyAsync("trees"))
+            .Setup(service => service.BuildOptionsForFamilyAsync("trees", It.IsAny<string>()))
             .ReturnsAsync(Options(AkeneoVariantRelationshipMode.GroupedProducts, true));
         _detector
             .Setup(detector => detector.DetectAsync(parent))
@@ -73,7 +73,7 @@ public class AkeneoVariantRelationshipResolverTests
             AkeneoVariantRelationshipMode.ProductAttributeCombinations,
             preserveExisting: true);
         _familyService
-            .Setup(service => service.BuildOptionsForFamilyAsync("trees"))
+            .Setup(service => service.BuildOptionsForFamilyAsync("trees", It.IsAny<string>()))
             .ReturnsAsync(familyOptions);
         _detector
             .Setup(detector => detector.DetectAsync(parent))
@@ -97,7 +97,7 @@ public class AkeneoVariantRelationshipResolverTests
             AkeneoVariantRelationshipMode.GroupedProducts,
             preserveExisting: false);
         _familyService
-            .Setup(service => service.BuildOptionsForFamilyAsync("trees"))
+            .Setup(service => service.BuildOptionsForFamilyAsync("trees", It.IsAny<string>()))
             .ReturnsAsync(familyOptions);
 
         var result = await _resolver.ResolveAsync(parent, "trees");
@@ -111,7 +111,7 @@ public class AkeneoVariantRelationshipResolverTests
     {
         var parent = new Product { Id = 12 };
         _familyService
-            .Setup(service => service.BuildOptionsForFamilyAsync("trees"))
+            .Setup(service => service.BuildOptionsForFamilyAsync("trees", It.IsAny<string>()))
             .ReturnsAsync((AkeneoVariantRelationshipOptions?)null);
         _detector
             .Setup(detector => detector.DetectAsync(parent))

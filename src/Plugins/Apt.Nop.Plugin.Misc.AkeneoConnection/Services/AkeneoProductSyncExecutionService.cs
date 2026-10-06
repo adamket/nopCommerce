@@ -638,7 +638,7 @@ public class AkeneoProductSyncExecutionService(
     // Profiles may overlap until an explicit ownership/priority policy is
     // configured, so serialize catalog writers by default.
     private static string BuildLockKey(int? profileId) =>
-        "akeneo-catalog-writer";
+        AkeneoConnectionConstants.CatalogWriterLockKey;
 
     private static AkeneoProductSyncExecutionResult BuildAlreadyRunningResult(
         int? profileId,

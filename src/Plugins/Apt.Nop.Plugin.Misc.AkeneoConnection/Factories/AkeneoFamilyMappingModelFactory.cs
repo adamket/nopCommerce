@@ -1,6 +1,8 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Services.Catalog;
 
@@ -171,8 +173,45 @@ public class AkeneoFamilyMappingModelFactory
         if (string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
             return;
 
-        var variants = await _akeneoApiClient.GetFamilyVariantsAsync(
-            model.AkeneoFamilyCode);
+        var familyCode = model.AkeneoFamilyCode.Trim();
+        IReadOnlyList<AkeneoFamilyVariantDefinition> variants =
+            Array.Empty<AkeneoFamilyVariantDefinition>();
+        IReadOnlyList<AkeneoFamilyAxis> axes = Array.Empty<AkeneoFamilyAxis>();
+
+        if (!families.Any(family => string.Equals(
+                family.Code,
+                familyCode,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            // The mapping points at a family Akeneo no longer has. Keep it
+            // selectable so the saved values survive, and skip the variant
+            // and axis lookups, which would 404.
+            model.AkeneoFamilyError =
+                $"The Akeneo family '{familyCode}' was not found in Akeneo. It may have been " +
+                "deleted or renamed. Choose an existing family, or delete this mapping.";
+
+            model.AvailableAkeneoFamilies.Add(new SelectListItem(
+                $"{familyCode} (not found in Akeneo)",
+                familyCode));
+        }
+        else
+        {
+            try
+            {
+                variants = await _akeneoApiClient.GetFamilyVariantsAsync(familyCode);
+
+                axes = string.IsNullOrWhiteSpace(model.AkeneoFamilyVariantCode)
+                    ? await _akeneoApiClient.GetFamilyVariantAxesAsync(familyCode)
+                    : await _akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
+                        familyCode,
+                        model.AkeneoFamilyVariantCode);
+            }
+            catch (AkeneoApiException ex)
+            {
+                model.AkeneoFamilyError =
+                    $"The variants of Akeneo family '{familyCode}' could not be loaded. {ex.Message}";
+            }
+        }
 
         foreach (var variant in variants
                      .Where(x => !string.IsNullOrWhiteSpace(x.Code))
@@ -194,16 +233,18 @@ public class AkeneoFamilyMappingModelFactory
                 model.AkeneoFamilyVariantCode));
         }
 
-        var axes = string.IsNullOrWhiteSpace(model.AkeneoFamilyVariantCode)
-            ? await _akeneoApiClient.GetFamilyVariantAxesAsync(
-                model.AkeneoFamilyCode)
-            : await _akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
-                model.AkeneoFamilyCode,
-                model.AkeneoFamilyVariantCode);
-
         model.AvailableAkeneoAttributes = axes
             .Select(a => new SelectListItem($"{a.AttributeCode} (level {a.Level})", a.AttributeCode))
             .ToList();
+
+        // Keep saved axis mappings selectable when their axis is no longer reported.
+        foreach (var code in model.AxisMappings
+                     .Select(x => x.AkeneoAttributeCode)
+                     .Where(x => !string.IsNullOrWhiteSpace(x))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AddMissingOption(model.AvailableAkeneoAttributes, code);
+        }
 
         foreach (var axis in axes.Where(x => x.Level == 1))
         {

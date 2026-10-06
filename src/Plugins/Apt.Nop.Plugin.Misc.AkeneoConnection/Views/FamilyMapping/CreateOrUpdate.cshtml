@@ -171,6 +171,12 @@
                                                 </option>
                                             </select>
                                             <span asp-validation-for="AkeneoFamilyCode"></span>
+                                            <div class="alert alert-danger mt-2 mb-0"
+                                                 role="alert"
+                                                 v-if="familyError">
+                                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                {{ familyError }}
+                                            </div>
                                             <div class="form-text">
                                                 Select the Akeneo family this configuration applies to.
                                             </div>
@@ -851,6 +857,7 @@
                     },
                     availableProductAttributes: initialModel.availableProductAttributes,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
+                    familyError: initialModel.akeneoFamilyError || '',
                     availableAkeneoFamilyVariants: initialModel.availableAkeneoFamilyVariants,
                     availableSubModelAxisAttributes: initialModel.availableSubModelAxisAttributes,
                     availableVariantAttributes: initialModel.availableVariantAttributes,
@@ -921,6 +928,9 @@
                     if (newFamilyCode === oldFamilyCode)
                         return;
 
+                    // A newly chosen family comes from Akeneo's own list.
+                    this.familyError = '';
+
                     await this.loadFamilyVariants(newFamilyCode, false);
                     await this.loadFamilyRuleFields(
                         newFamilyCode,
@@ -944,7 +954,9 @@
                 if (this.form.axisMappings.length === 0)
                     this.addAxisMapping();
 
-                if (this.form.akeneoFamilyCode) {
+                // The server already reported a missing family; its variant and
+                // axis lookups would only 404.
+                if (this.form.akeneoFamilyCode && !this.familyError) {
                     await this.loadFamilyVariants(
                         this.form.akeneoFamilyCode,
                         true);

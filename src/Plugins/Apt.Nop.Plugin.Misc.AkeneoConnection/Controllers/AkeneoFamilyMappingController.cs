@@ -4,6 +4,9 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Filters;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Services.Messages;
 using Nop.Services.Security;
@@ -89,11 +92,25 @@ public class AkeneoFamilyMappingController(
         familyCode = familyCode.Trim();
 
         var family = await akeneoApiClient.GetFamilyByCodeAsync(familyCode);
-        var axes = string.IsNullOrWhiteSpace(familyVariantCode)
-            ? await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode)
-            : await akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
-                familyCode,
-                familyVariantCode);
+
+        if (family == null)
+            return FamilyNotLoaded(familyCode);
+
+        IReadOnlyList<AkeneoFamilyAxis> axes;
+
+        try
+        {
+            axes = string.IsNullOrWhiteSpace(familyVariantCode)
+                ? await akeneoApiClient.GetFamilyVariantAxesAsync(familyCode)
+                : await akeneoApiClient.GetFamilyVariantAxesForVariantAsync(
+                    familyCode,
+                    familyVariantCode);
+        }
+        catch (AkeneoApiException)
+        {
+            return FamilyNotLoaded(familyCode);
+        }
+
         var attributes = await akeneoApiClient.GetAttributesAsync();
 
         var familyAttributeCodes = family?.Attributes?
@@ -152,8 +169,17 @@ public class AkeneoFamilyMappingController(
         if (string.IsNullOrWhiteSpace(familyCode))
             return Json(result);
 
-        var variants = await akeneoApiClient.GetFamilyVariantsAsync(
-            familyCode.Trim());
+        IReadOnlyList<AkeneoFamilyVariantDefinition> variants;
+
+        try
+        {
+            variants = await akeneoApiClient.GetFamilyVariantsAsync(
+                familyCode.Trim());
+        }
+        catch (AkeneoApiException)
+        {
+            return FamilyNotLoaded(familyCode);
+        }
 
         result.AddRange(variants
             .Where(variant => !string.IsNullOrWhiteSpace(variant.Code))
@@ -168,11 +194,38 @@ public class AkeneoFamilyMappingController(
         return Json(result);
     }
 
+    /// <summary>
+    /// Prepares the edit model and surfaces a missing or unloadable Akeneo
+    /// family as an error alert instead of failing the page.
+    /// </summary>
+    private async Task<AkeneoFamilyMappingModel> PrepareModelAsync(
+        AkeneoFamilyMappingModel model,
+        AkeneoFamilyMapping configuration = null)
+    {
+        model = await modelFactory.PrepareModelAsync(model, configuration);
+
+        if (!string.IsNullOrWhiteSpace(model.AkeneoFamilyError))
+            notificationService.ErrorNotification(model.AkeneoFamilyError);
+
+        return model;
+    }
+
+    private JsonResult FamilyNotLoaded(string familyCode)
+    {
+        Response.StatusCode = StatusCodes.Status404NotFound;
+
+        return Json(new
+        {
+            success = false,
+            message = $"The Akeneo family '{familyCode?.Trim()}' was not found in Akeneo."
+        });
+    }
+
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/family-mapping/create")]
     public async Task<IActionResult> Create()
     {
-        var model = await modelFactory.PrepareModelAsync(null);
+        var model = await PrepareModelAsync(null);
 
         return View(EditViewPath, model);
     }
@@ -191,7 +244,7 @@ public class AkeneoFamilyMappingController(
         await ValidateModelAsync(model);
         if (!ModelState.IsValid)
         {
-            model = await modelFactory.PrepareModelAsync(model);
+            model = await PrepareModelAsync(model);
             return View(EditViewPath, model);
         }
 
@@ -236,7 +289,7 @@ public class AkeneoFamilyMappingController(
         if (configuration == null)
             return RedirectToAction(nameof(List));
 
-        var model = await modelFactory.PrepareModelAsync(null, configuration);
+        var model = await PrepareModelAsync(null, configuration);
 
         return View(EditViewPath, model);
     }
@@ -260,7 +313,7 @@ public class AkeneoFamilyMappingController(
 
         if (!ModelState.IsValid)
         {
-            model = await modelFactory.PrepareModelAsync(model, configuration);
+            model = await PrepareModelAsync(model, configuration);
             return View(EditViewPath, model);
         }
 

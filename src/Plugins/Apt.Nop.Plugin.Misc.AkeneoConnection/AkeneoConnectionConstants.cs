@@ -9,6 +9,12 @@ public static class AkeneoConnectionConstants
     public const string TablePrefix = "Apt_";
     public const string PathToPlugin = "~/Plugins/Apt.Misc.AkeneoConnection";
 
+    /// <summary>
+    /// Lease key that serializes every catalog writer (profile syncs and
+    /// catalog binding).
+    /// </summary>
+    public const string CatalogWriterLockKey = "akeneo-catalog-writer";
+
     private const string EntityName = "Apt.akeneoattributemapping";
 
     public static CacheKey AttributeMappingsAllCacheKey => new($"{EntityName}.all");

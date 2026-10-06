@@ -1124,7 +1124,8 @@ public class AkeneoProductBatchSyncService(
             SyncProfileId = request.SyncProfileId,
             SyncRunRecordId = request.SyncRunRecordId,
             ExistingProductAttributeCombinationId =
-                previousState?.NopProductAttributeCombinationId,
+                previousState?.NopProductAttributeCombinationId ??
+                await GetBoundCombinationIdAsync(source),
             ExistingAssociatedProductAttributeValueId =
                 previousState?.NopProductAttributeValueId,
             SourceProduct = source,
@@ -1164,7 +1165,7 @@ public class AkeneoProductBatchSyncService(
                 continue;
             }
 
-            var axisValue = CreateAxisValue(
+            var axisValue = AkeneoVariantAxisValueFactory.Create(
                 axis.AkeneoAttributeCode,
                 resolved);
 
@@ -1178,48 +1179,35 @@ public class AkeneoProductBatchSyncService(
         return context;
     }
 
-    private static AkeneoVariantAxisValue CreateAxisValue(
-        string attributeCode,
-        AkeneoResolvedProductValue resolved)
+    /// <summary>
+    /// Falls back to the profile-independent catalog binding when this
+    /// profile has not yet recorded which combination represents the leaf.
+    /// </summary>
+    private async Task<int?> GetBoundCombinationIdAsync(
+        AkeneoProductDefinition source)
     {
-        if (resolved == null)
-            return null;
+        var uuid = source.Uuid?.Trim();
 
-        string optionCode = null;
-
-        if (resolved.RawData.HasValue)
+        if (!string.IsNullOrWhiteSpace(uuid))
         {
-            var data = resolved.RawData.Value;
-            optionCode = data.ValueKind switch
-            {
-                JsonValueKind.String => data.GetString(),
-                JsonValueKind.Number => data.GetRawText(),
-                JsonValueKind.Array => data.EnumerateArray()
-                    .Select(item => item.ValueKind == JsonValueKind.String
-                        ? item.GetString()
-                        : item.GetRawText())
-                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)),
-                _ => null
-            };
+            var byUuid = await entityMappingService
+                .GetMappedNopEntityIdByAkeneoUuidAsync(
+                    AkeneoEntityType.Product,
+                    uuid,
+                    NopEntityType.ProductAttributeCombination);
+
+            if (byUuid.HasValue)
+                return byUuid;
         }
 
-        var displayName = resolved.DisplayValues?.FirstOrDefault(value =>
-                              !string.IsNullOrWhiteSpace(value))
-                          ?? resolved.DisplayValue
-                          ?? optionCode;
+        var identifier = source.Identifier?.Trim();
 
-        if (string.IsNullOrWhiteSpace(displayName) &&
-            string.IsNullOrWhiteSpace(optionCode))
-        {
-            return null;
-        }
-
-        return new AkeneoVariantAxisValue
-        {
-            AkeneoAttributeCode = attributeCode,
-            AkeneoOptionCode = optionCode?.Trim(),
-            DisplayName = displayName?.Trim()
-        };
+        return string.IsNullOrWhiteSpace(identifier)
+            ? null
+            : await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.Product,
+                identifier,
+                NopEntityType.ProductAttributeCombination);
     }
 
     private static decimal? TryResolveDecimalTarget(
