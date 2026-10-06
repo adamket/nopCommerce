@@ -1672,3 +1672,78 @@
 .akeneo-connection .akeneo-asset-capability-note {
     border-left-width: 4px;
 }
+
+/* ===========================================================
+   Attribute rows as panels
+   Each top-level attribute row (and its edit panel) renders as a
+   card matching .akeneo-toolbar-panel. Reference entity containers
+   and their field rows keep their own styling.
+   =========================================================== */
+
+.akeneo-connection .akeneo-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 18px var(--ak-row-indent);
+}
+
+  .akeneo-connection .akeneo-group-items > .akeneo-reference-container {
+    margin: 0;
+  }
+
+/* Card */
+.akeneo-connection .akeneo-group-items > .akeneo-row-shell {
+  background: var(--ak-surface);
+  border: 1px solid var(--ak-line);
+  border-radius: 12px;
+  box-shadow: var(--ak-shadow);
+}
+
+  .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-row {
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+  }
+
+    .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-row:hover {
+      background: #fafbff;
+    }
+
+    /* Status edge sits over the card's left border */
+    .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-row::before {
+      left: -1px;
+      top: -1px;
+      bottom: -1px;
+      border-radius: 12px 0 0 12px;
+    }
+
+  /* While editing, the row is the card's header and the detail is its body */
+  .akeneo-connection .akeneo-group-items > .akeneo-row-shell:has(> .akeneo-mapping-detail) > .akeneo-row {
+    border-radius: 12px 12px 0 0;
+  }
+
+    .akeneo-connection .akeneo-group-items > .akeneo-row-shell:has(> .akeneo-mapping-detail) > .akeneo-row::before {
+      bottom: 0;
+      border-radius: 12px 0 0 0;
+    }
+
+  .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-mapping-detail {
+    margin-left: 0;
+    width: 100%;
+    border: 0;
+    border-top: 1px solid var(--ak-line);
+    border-radius: 0 0 12px 12px;
+  }
+
+    .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-mapping-detail::before {
+      left: -1px;
+      bottom: -1px;
+      border-radius: 0 0 0 12px;
+    }
+
+@media (max-width: 1199px) {
+  /* Rows keep their 980px minimum; let the card grow with them. */
+  .akeneo-connection .akeneo-group-items > .akeneo-row-shell {
+    min-width: 982px;
+  }
+}
