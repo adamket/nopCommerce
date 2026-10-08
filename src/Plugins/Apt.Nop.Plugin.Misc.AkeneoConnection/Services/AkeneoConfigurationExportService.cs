@@ -151,7 +151,7 @@ public sealed class AkeneoConfigurationExportService(
                     .ToArray(),
             ["purpose"] =
                 "Diagnostic snapshot for reviewing expected synchronization behavior. " +
-                "This is not an import or backup format.",
+                "Mapping sections can be imported to replace mapping configuration. Connection settings and sync profiles are not imported.",
             ["excludedOperationalData"] = new[]
             {
                 "sync run records and item logs",

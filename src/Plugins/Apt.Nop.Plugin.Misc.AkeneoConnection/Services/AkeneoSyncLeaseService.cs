@@ -83,18 +83,45 @@ public class AkeneoSyncLeaseService(
         await repository.UpdateAsync(lease);
     }
 
-    public async Task RenewByIdAsync(
+    public async Task<bool> RenewByIdAsync(
         int syncLeaseId,
         TimeSpan duration)
     {
         if (syncLeaseId <= 0)
-            return;
+            return true;
 
         var lease = await repository.GetByIdAsync(syncLeaseId);
         if (lease == null)
-            return;
+            return false;
 
         await RenewAsync(lease, duration);
+        return true;
+    }
+
+    public async Task<AkeneoSyncLease> GetLeaseAsync(string lockKey)
+    {
+        if (string.IsNullOrWhiteSpace(lockKey))
+            return null;
+
+        lockKey = lockKey.KeyPart();
+
+        return await repository.Table.FirstOrDefaultAsync(item =>
+            item.LockKey == lockKey);
+    }
+
+    public async Task<AkeneoSyncLease> ForceReleaseAsync(string lockKey)
+    {
+        var lease = await GetLeaseAsync(lockKey);
+        if (lease == null)
+            return null;
+
+        await repository.DeleteAsync(lease);
+
+        await logger.WarningAsync(
+            $"Akeneo sync lock '{lease.LockKey}' (run record {lease.SyncRunRecordId}, " +
+            $"acquired {lease.AcquiredOnUtc:u}, last heartbeat {lease.HeartbeatOnUtc:u}) was released manually.");
+
+        return lease;
     }
 
     public async Task ReleaseAsync(AkeneoSyncLease lease)

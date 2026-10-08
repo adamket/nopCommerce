@@ -2207,3 +2207,83 @@
     margin: 0;
     white-space: nowrap;
   }
+
+/* ===========================================================
+   Sync profile (Vue) page
+   =========================================================== */
+
+.akeneo-connection .akeneo-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.akeneo-connection .akeneo-unsaved-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-right: 6px;
+  color: var(--ak-attention-ink);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+  .akeneo-connection .akeneo-unsaved-indicator i {
+    font-size: .5rem;
+  }
+
+.akeneo-connection .akeneo-input-short {
+  max-width: 160px;
+}
+
+.akeneo-connection .akeneo-input-medium {
+  max-width: 280px;
+}
+
+.akeneo-connection .akeneo-run-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+/* Validation state for the combo box */
+.akeneo-connection .akeneo-combobox.is-invalid .akeneo-combobox-control {
+  border-color: var(--ak-danger);
+}
+
+/* "Add <typed value>" row for allow-custom combo boxes */
+.akeneo-connection .akeneo-combobox-add {
+  color: var(--ak-accent-ink);
+  font-weight: 600;
+}
+
+  .akeneo-connection .akeneo-combobox-add i {
+    flex: none;
+    width: 16px;
+    text-align: center;
+    font-size: .75rem;
+  }
+
+/* Sync lock notice on the sync profile page */
+.akeneo-connection .akeneo-lock-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.akeneo-connection .akeneo-lock-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+  .akeneo-connection .akeneo-lock-alert-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+  }

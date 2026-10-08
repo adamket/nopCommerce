@@ -34,6 +34,9 @@
                 </a>
             }
 
+            <button type="button" class="btn btn-info mr-1" data-toggle="modal" data-target="#import-configuration-modal">
+                <i class="fas fa-file-import"></i> Import Configuration
+            </button>
             <button type="submit" name="save" class="btn btn-primary" onclick="$('#submit-connection-info').submit()">
                 <i class="far fa-save"></i>
                 @T("Admin.Common.Save")
@@ -144,6 +147,33 @@
             </div>
         </form>
 
+        <div class="modal fade" id="import-configuration-modal" tabindex="-1" role="dialog"
+             aria-labelledby="import-configuration-title" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <form asp-controller="AkeneoConnectionConfiguration" asp-action="ImportConfiguration"
+                      method="post" enctype="multipart/form-data" class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="import-configuration-title">Import configuration</h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Upload a file created by Export Configuration JSON. This replaces all global and family attribute mappings, fallback sources, family and variant rules, asset mappings, and category mappings across all stores.</p>
+                        <p>Connection settings, sync profiles, products, and sync history are preserved. Destination IDs in the file must refer to this store's existing nopCommerce attributes and categories.</p>
+                        <p>Export the current configuration first if you want to keep a copy.</p>
+                        <label for="configuration-file">Configuration JSON (maximum 10 MB)</label>
+                        <input type="file" id="configuration-file" name="configurationFile" accept=".json,application/json" class="form-control" required />
+                        <div class="form-check mt-3">
+                            <input type="checkbox" class="form-check-input" id="confirm-replace" name="confirmReplace" value="true" required />
+                            <label class="form-check-label" for="confirm-replace">Replace all existing mapping configuration with this file.</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Import and replace mappings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
         <div class="modal fade" id="test-connection-modal" tabindex="-1" role="dialog"
              aria-labelledby="test-connection-modal-title" aria-hidden="true">
             <div class="modal-dialog" role="document">

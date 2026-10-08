@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
@@ -40,7 +41,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoProductModelDeltaFanOutService productModelDeltaFanOutService,
     IAkeneoDryRunChangeAnalyzer dryRunChangeAnalyzer,
     IAkeneoAssetMappingService assetMappingService,
-    IAkeneoAssetResolver assetResolver)
+    IAkeneoAssetResolver assetResolver,
+    IAkeneoWritePolicyGate writePolicyGate = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
@@ -221,11 +223,13 @@ public class AkeneoProductBatchSyncService(
 
             return result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
             result.Canceled = true;
             result.CompletedAllPages = false;
-            result.AddError("Product synchronization was canceled.");
+            result.AddError(ex is AkeneoSyncLeaseLostException
+                ? ex.Message
+                : "Product synchronization was canceled.");
             return result;
         }
         catch (Exception ex)
@@ -598,6 +602,25 @@ public class AkeneoProductBatchSyncService(
                 source.Uuid)
             : null;
 
+        // Update-only profiles: skip products that cannot match anything in
+        // nopCommerce before resolving mappings or downloading assets, which
+        // is where nearly all of a product's cost is. Only products this
+        // profile has never bound are eligible, so reconciliation state is
+        // never affected.
+        var updateOnlySkipReason = await GetUpdateOnlySkipReasonAsync(
+            source,
+            request,
+            previousState,
+            productModelCache,
+            cancellationToken);
+
+        if (updateOnlySkipReason != null)
+        {
+            result.ActionType = SyncItemActionType.Skipped;
+            result.AddMessage(updateOnlySkipReason);
+            return result;
+        }
+
         // Build a read-only fingerprint of the resolved nopCommerce desired
         // state before downloading asset binaries or opening a transaction.
         // Full runs intentionally never use this as a skip gate: they remain
@@ -677,6 +700,17 @@ public class AkeneoProductBatchSyncService(
         if (!result.Success || result.ActionType == SyncItemActionType.Failed)
             return result; // scope left uncompleted -> rollback
 
+        // Skipped with nothing in nopCommerce (e.g. the profile only updates
+        // and no destination exists): there is no binding to record. Writing
+        // a state here would create a row pointing at product 0.
+        if (result.ActionType == SyncItemActionType.Skipped &&
+            result.NopProductId <= 0 &&
+            previousState == null)
+        {
+            transaction.Complete();
+            return result;
+        }
+
         if (!skipLeafWrite)
         {
             await representationCleanupService.CleanupPreviousRepresentationAsync(
@@ -700,6 +734,41 @@ public class AkeneoProductBatchSyncService(
 
         transaction.Complete();
         return result;
+    }
+
+    private async Task<string> GetUpdateOnlySkipReasonAsync(
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductSyncState previousState,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
+    {
+        if (writePolicyGate == null ||
+            request.CreateNewProducts ||
+            previousState != null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<AkeneoProductDefinition> ancestors =
+            Array.Empty<AkeneoProductDefinition>();
+
+        if (!string.IsNullOrWhiteSpace(source.Parent))
+        {
+            ancestors = await GetProductModelAncestorsAsync(
+                source,
+                productModelCache,
+                cancellationToken);
+
+            // Let the normal path report a missing product model as an error.
+            if (ancestors.Count == 0)
+                return null;
+        }
+
+        return await writePolicyGate.GetUpdateOnlySkipReasonAsync(
+            source,
+            ancestors,
+            cancellationToken);
     }
 
     private async Task<AkeneoProductImportResult> ImportProductAsync(
@@ -977,6 +1046,17 @@ public class AkeneoProductBatchSyncService(
 
         if (parentProduct == null)
         {
+            // The profile cannot create the missing parent, so this variant has
+            // nothing to update: skip it rather than failing the run (failures
+            // stop the delta watermark from advancing).
+            if (parentSync?.BlockedByWritePolicy == true && result.Success)
+            {
+                result.ActionType = SyncItemActionType.Skipped;
+                result.AddMessage(
+                    "Skipped: the parent product does not exist in nopCommerce and the sync profile only updates existing products.");
+                return result;
+            }
+
             result.ActionType = SyncItemActionType.Failed;
             return result;
         }
@@ -1269,9 +1349,15 @@ public class AkeneoProductBatchSyncService(
             return null;
         }
 
-        // This cache contains only parents synchronized during the current run.
+        // This cache contains parents resolved during the current run. A null
+        // entry is a parent that could not be resolved (write policy blocked
+        // it, or it failed): replay that outcome instead of preparing the same
+        // product model, and downloading its assets, again for every sibling.
         if (parentProductCache.TryGetValue(parentCode, out var cached))
         {
+            if (cached == null)
+                return ReplayUnavailableParent(parentProductCache, parentCode, result);
+
             var fresh = await productService.GetProductByIdAsync(cached.Id);
 
             if (fresh != null)
@@ -1313,7 +1399,26 @@ public class AkeneoProductBatchSyncService(
             $"Product model '{parentCode}'");
 
         if (parentProduct == null)
-            return null;
+        {
+            // A parent that does not exist while the profile cannot create
+            // products is a deliberate skip, not a failure.
+            var blockedByWritePolicy =
+                parentResult.Success &&
+                parentContext.ExistingProduct == null &&
+                !request.CreateNewProducts;
+
+            RememberUnavailableParent(
+                parentProductCache,
+                parentCode,
+                new UnavailableParent(
+                    blockedByWritePolicy,
+                    parentResult.Errors.ToList()));
+
+            return new ParentProductSyncOutcome(
+                null,
+                Changed: false,
+                BlockedByWritePolicy: blockedByWritePolicy);
+        }
 
         parentProductCache[parentCode] = parentProduct;
 
@@ -1321,6 +1426,56 @@ public class AkeneoProductBatchSyncService(
             SyncItemActionType.Created or SyncItemActionType.Updated;
 
         return new ParentProductSyncOutcome(parentProduct, changed);
+    }
+
+    private sealed record UnavailableParent(
+        bool BlockedByWritePolicy,
+        IReadOnlyList<string> Errors);
+
+    // Why each null parent-cache entry is null, keyed by the per-run cache
+    // instance so no extra state has to be threaded through every call.
+    private static readonly ConditionalWeakTable<
+        IDictionary<string, Product>,
+        Dictionary<string, UnavailableParent>> UnavailableParents = new();
+
+    private static void RememberUnavailableParent(
+        IDictionary<string, Product> parentProductCache,
+        string parentCode,
+        UnavailableParent unavailable)
+    {
+        parentProductCache[parentCode] = null;
+
+        UnavailableParents
+            .GetValue(parentProductCache, _ =>
+                new Dictionary<string, UnavailableParent>(StringComparer.OrdinalIgnoreCase))
+            [parentCode] = unavailable;
+    }
+
+    private static ParentProductSyncOutcome ReplayUnavailableParent(
+        IDictionary<string, Product> parentProductCache,
+        string parentCode,
+        AkeneoProductImportResult result)
+    {
+        UnavailableParent unavailable = null;
+
+        if (UnavailableParents.TryGetValue(parentProductCache, out var byCode))
+            byCode.TryGetValue(parentCode, out unavailable);
+
+        if (unavailable == null || unavailable.BlockedByWritePolicy)
+        {
+            result.AddMessage(
+                $"Product model '{parentCode}': no nopCommerce product exists and the sync profile only updates existing products.");
+
+            return new ParentProductSyncOutcome(null, Changed: false, BlockedByWritePolicy: true);
+        }
+
+        foreach (var error in unavailable.Errors)
+            result.AddError($"Product model '{parentCode}': {error}");
+
+        if (!unavailable.Errors.Any())
+            result.AddError($"Product model '{parentCode}' could not be synchronized earlier in this run.");
+
+        return new ParentProductSyncOutcome(null, Changed: false);
     }
 
     /// <summary>
@@ -1392,7 +1547,8 @@ public class AkeneoProductBatchSyncService(
 
     private sealed record ParentProductSyncOutcome(
         Product Product,
-        bool Changed);
+        bool Changed,
+        bool BlockedByWritePolicy = false);
 
     private static void CopyMessages(
         AkeneoProductImportResult source,
@@ -2360,9 +2516,14 @@ public class AkeneoProductBatchSyncService(
         if (now - lastRenewalUtc < LeaseRenewalInterval)
             return lastRenewalUtc;
 
-        await syncLeaseService.RenewByIdAsync(
+        var stillHeld = await syncLeaseService.RenewByIdAsync(
             request.SyncLeaseId.Value,
             LeaseDuration);
+
+        // The lock was released manually (another run may already hold it):
+        // stop at this checkpoint so two writers never overlap.
+        if (!stillHeld)
+            throw new AkeneoSyncLeaseLostException();
 
         return now;
     }

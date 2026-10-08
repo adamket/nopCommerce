@@ -22,9 +22,110 @@ public class AkeneoSyncProfileController(
     INotificationService notificationService,
     IAkeneoSyncRunRecordService syncRunRecordService,
     IAkeneoProductBatchSyncService productImportService,
-    IDateTimeHelper dateTimeHelper)
+    IDateTimeHelper dateTimeHelper,
+    IAkeneoSyncLeaseService syncLeaseService)
     : BaseAdminController
 {
+    // A live run renews its lease every 5 minutes; a heartbeat older than this
+    // means the holder has almost certainly stopped.
+    private static readonly TimeSpan StaleHeartbeatAge = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// The catalog writer lock shared by every sync profile and catalog binding.
+    /// </summary>
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
+    public async Task<IActionResult> LockStatus()
+    {
+        var lease = await syncLeaseService.GetLeaseAsync(
+            AkeneoConnectionConstants.CatalogWriterLockKey);
+
+        return Json(await BuildLockStatusAsync(lease));
+    }
+
+    /// <summary>
+    /// Releases the catalog writer lock regardless of its holder, and marks the
+    /// run that held it as cancelled if it is still recorded as started. A run
+    /// that is genuinely still running stops at its next lease renewal.
+    /// </summary>
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> ReleaseLock()
+    {
+        var lease = await syncLeaseService.ForceReleaseAsync(
+            AkeneoConnectionConstants.CatalogWriterLockKey);
+
+        if (lease == null)
+        {
+            return Json(new
+            {
+                success = true,
+                message = "No sync lock was held.",
+                status = await BuildLockStatusAsync(null)
+            });
+        }
+
+        if (lease.SyncRunRecordId > 0)
+        {
+            var runRecord = await syncRunRecordService
+                .GetAkeneoSyncRunRecordByIdAsync(lease.SyncRunRecordId);
+
+            if (runRecord != null &&
+                runRecord.SyncStatusId == (int)SyncStatus.Started)
+            {
+                runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
+                runRecord.FinishedOnUtc ??= DateTime.UtcNow;
+                runRecord.ErrorSummary =
+                    "The sync lock was released manually; this run did not finish.";
+
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+            }
+        }
+
+        return Json(new
+        {
+            success = true,
+            message = lease.SyncRunRecordId > 0
+                ? $"Sync lock released. Run record {lease.SyncRunRecordId} was marked as cancelled."
+                : "Sync lock released.",
+            status = await BuildLockStatusAsync(null)
+        });
+    }
+
+    private async Task<object> BuildLockStatusAsync(AkeneoSyncLease lease)
+    {
+        if (lease == null)
+            return new { held = false };
+
+        var now = DateTime.UtcNow;
+        var runRecord = lease.SyncRunRecordId > 0
+            ? await syncRunRecordService.GetAkeneoSyncRunRecordByIdAsync(lease.SyncRunRecordId)
+            : null;
+
+        async Task<string> ToStoreTimeAsync(DateTime utc) =>
+            (await dateTimeHelper.ConvertToUserTimeAsync(
+                DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+                DateTimeKind.Utc)).ToString("yyyy-MM-dd HH:mm");
+
+        return new
+        {
+            held = true,
+            expired = lease.ExpiresOnUtc <= now,
+            stale = now - lease.HeartbeatOnUtc > StaleHeartbeatAge,
+            heartbeatMinutesAgo = (int)Math.Max(0, (now - lease.HeartbeatOnUtc).TotalMinutes),
+            runRecordId = lease.SyncRunRecordId > 0 ? lease.SyncRunRecordId : (int?)null,
+            runStatus = runRecord != null && Enum.IsDefined(typeof(SyncStatus), runRecord.SyncStatusId)
+                ? ((SyncStatus)runRecord.SyncStatusId).ToString()
+                : null,
+            runType = runRecord != null && Enum.IsDefined(typeof(SyncType), runRecord.SyncTypeId)
+                ? ((SyncType)runRecord.SyncTypeId).ToString()
+                : null,
+            acquired = await ToStoreTimeAsync(lease.AcquiredOnUtc),
+            lastHeartbeat = await ToStoreTimeAsync(lease.HeartbeatOnUtc),
+            expires = await ToStoreTimeAsync(lease.ExpiresOnUtc)
+        };
+    }
+
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/sync-profiles/list")]
     public async Task<IActionResult> List()
@@ -44,31 +145,6 @@ public class AkeneoSyncProfileController(
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
-    [HttpPost("admin/akeneo-connection/sync-profiles/create")]
-    public async Task<IActionResult> Create(
-        AkeneoSyncProfileModel model)
-    {
-        ValidateAkeneoScope(model);
-
-        if (!ModelState.IsValid)
-        {
-            await syncProfileModelFactory.PrepareAvailableOptionsAsync(model);
-
-            return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
-        }
-
-        var profile = new AkeneoSyncProfile();
-
-        ApplyModelToEntity(model, profile);
-
-        await syncProfileService.InsertAkeneoSyncProfileAsync(profile);
-
-        notificationService.SuccessNotification("Akeneo sync profile created successfully.");
-
-        return RedirectToAction(nameof(Edit), new { id = profile.Id });
-    }
-
-    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/sync-profiles/edit/{id}")]
     public async Task<IActionResult> Edit(
         int id)
@@ -83,32 +159,73 @@ public class AkeneoSyncProfileController(
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
 
+    /// <summary>
+    /// AJAX save for the create/edit page. Creates the profile when Id is 0.
+    /// Returns field-keyed validation errors instead of re-rendering the view.
+    /// </summary>
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
-    [HttpPost("admin/akeneo-connection/sync-profiles/edit/{id}")]
-    public async Task<IActionResult> Edit(
+    [HttpPost]
+    public async Task<IActionResult> Save(
         AkeneoSyncProfileModel model)
     {
-        var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(model.Id);
+        var isNew = model.Id <= 0;
+        AkeneoSyncProfile profile = null;
 
-        if (profile == null)
-            return RedirectToAction(nameof(List));
+        if (!isNew)
+        {
+            profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(model.Id);
+
+            if (profile == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "This sync profile no longer exists. It may have been deleted.",
+                    errors = new Dictionary<string, string[]>()
+                });
+            }
+        }
 
         ValidateAkeneoScope(model);
 
         if (!ModelState.IsValid)
         {
-            await syncProfileModelFactory.PrepareAvailableOptionsAsync(model);
-
-            return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
+            return Json(new
+            {
+                success = false,
+                message = "The profile was not saved. Fix the highlighted fields and try again.",
+                errors = ModelState
+                    .Where(entry => entry.Value?.Errors.Count > 0)
+                    .ToDictionary(
+                        entry => entry.Key,
+                        entry => entry.Value.Errors
+                            .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                                ? $"'{entry.Value.AttemptedValue}' is not a valid value."
+                                : error.ErrorMessage)
+                            .ToArray())
+            });
         }
+
+        profile ??= new AkeneoSyncProfile();
 
         ApplyModelToEntity(model, profile);
 
-        await syncProfileService.UpdateAkeneoSyncProfileAsync(profile);
+        if (isNew)
+            await syncProfileService.InsertAkeneoSyncProfileAsync(profile);
+        else
+            await syncProfileService.UpdateAkeneoSyncProfileAsync(profile);
 
-        notificationService.SuccessNotification("Akeneo sync profile updated successfully.");
-
-        return RedirectToAction(nameof(Edit), new { id = profile.Id });
+        return Json(new
+        {
+            success = true,
+            created = isNew,
+            id = profile.Id,
+            enabled = profile.Enabled,
+            message = isNew
+                ? "Akeneo sync profile created."
+                : "Akeneo sync profile saved.",
+            urls = BuildProfileUrls(profile.Id)
+        });
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
@@ -118,15 +235,31 @@ public class AkeneoSyncProfileController(
     {
         var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(id);
 
-        if (profile == null)
-            return RedirectToAction(nameof(List));
+        if (profile != null)
+        {
+            await syncProfileService.DeleteAkeneoSyncProfileAsync(profile);
 
-        await syncProfileService.DeleteAkeneoSyncProfileAsync(profile);
+            // Shown on the list page the client navigates to next.
+            notificationService.SuccessNotification("Akeneo sync profile deleted successfully.");
+        }
 
-        notificationService.SuccessNotification("Akeneo sync profile deleted successfully.");
-
-        return RedirectToAction(nameof(List));
+        return Json(new
+        {
+            success = true,
+            redirectUrl = Url.Action(nameof(List))
+        });
     }
+
+    /// <summary>
+    /// URLs the create/edit page needs once a profile has an id.
+    /// </summary>
+    private object BuildProfileUrls(int id) => new
+    {
+        edit = Url.Action(nameof(Edit), new { id }),
+        delete = Url.Action(nameof(Delete), new { id }),
+        run = Url.Action("ImportProductsByProfile", "AkeneoSync", new { id }),
+        fullRun = Url.Action("ImportProductsByProfile", "AkeneoSync", new { id, fullSync = true })
+    };
 
 
 

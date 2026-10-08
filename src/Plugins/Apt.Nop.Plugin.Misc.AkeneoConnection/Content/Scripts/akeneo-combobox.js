@@ -23,6 +23,8 @@
  *   addPlaceholder  Shown when something is selected (multiple only).
  *   itemName        Used in accessible labels ("Remove family", "Clear all families").
  *   emptyText       Shown when there are no options at all.
+ *   allowCustom     Multiple only. Lets the user add typed values that are not in
+ *                   options (Enter or comma), e.g. free-form codes.
  */
 (function () {
     var instanceCounter = 0;
@@ -37,7 +39,8 @@
             placeholder: { type: String, default: 'Select · type to filter' },
             addPlaceholder: { type: String, default: 'Add…' },
             itemName: { type: String, default: 'item' },
-            emptyText: { type: String, default: 'No options are available.' }
+            emptyText: { type: String, default: 'No options are available.' },
+            allowCustom: { type: Boolean, default: false }
         },
         emits: ['update:modelValue', 'change'],
         data: function () {
@@ -76,6 +79,26 @@
                     : this.selected.length
                         ? ''
                         : this.placeholder;
+            },
+            /** The typed value that would be added as a custom entry, or ''. */
+            customCandidate: function () {
+                if (!this.allowCustom || !this.multiple)
+                    return '';
+
+                var term = this.search.trim();
+
+                if (!term)
+                    return '';
+
+                var lower = term.toLowerCase();
+                var matchesOption = this.options.some(function (option) {
+                    return String(option.value).toLowerCase() === lower;
+                });
+                var alreadySelected = this.selected.some(function (value) {
+                    return String(value).toLowerCase() === lower;
+                });
+
+                return matchesOption || alreadySelected ? '' : term;
             },
             activeDescendant: function () {
                 return this.open && this.filtered.length
@@ -176,6 +199,16 @@
                     this.scrollActiveIntoView();
                 }
             },
+            addCustom: function () {
+                var value = this.customCandidate;
+
+                if (!value || this.disabled)
+                    return;
+
+                this.emit(this.selected.concat([value]));
+                this.search = '';
+                this.activeIndex = 0;
+            },
             remove: function (value) {
                 this.emit(this.selected.filter(function (item) { return item !== value; }));
             },
@@ -215,10 +248,20 @@
                     case 'Enter':
                         event.preventDefault();
 
-                        if (this.open && this.filtered[this.activeIndex])
+                        // With nothing matching the typed text, Enter adds it.
+                        if (this.customCandidate && !this.filtered.length)
+                            this.addCustom();
+                        else if (this.open && this.filtered[this.activeIndex])
                             this.toggle(this.filtered[this.activeIndex].value);
                         else
                             this.openMenu();
+                        break;
+
+                    case ',':
+                        if (this.customCandidate) {
+                            event.preventDefault();
+                            this.addCustom();
+                        }
                         break;
 
                     case 'Escape':
@@ -305,8 +348,15 @@
             <span class="akeneo-combobox-option-label">{{ option.label }}</span>
             <span class="akeneo-combobox-option-code" v-if="hintFor(option)">{{ hintFor(option) }}</span>
         </li>
-        <li class="akeneo-combobox-empty" v-if="!filtered.length">
-            <template v-if="options.length">No match for “{{ search }}”.</template>
+        <li class="akeneo-combobox-option akeneo-combobox-add"
+            v-if="customCandidate"
+            v-on:mousedown.prevent="addCustom">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+            <span class="akeneo-combobox-option-label">Add “{{ customCandidate }}”</span>
+            <span class="akeneo-combobox-option-code">Enter</span>
+        </li>
+        <li class="akeneo-combobox-empty" v-if="!filtered.length && !customCandidate">
+            <template v-if="options.length && search">No match for “{{ search }}”.</template>
             <template v-else>{{ emptyText }}</template>
         </li>
     </ul>

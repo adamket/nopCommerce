@@ -1,6 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
@@ -20,6 +21,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 public class AkeneoConnectionConfigurationController(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoConfigurationExportService configurationExportService,
+    IAkeneoConfigurationImportService configurationImportService,
     ILanguageService languageService,
     ILocalizationService localizationService,
     INotificationService notificationService,
@@ -76,6 +78,42 @@ public class AkeneoConnectionConfigurationController(
         return File(exportBytes, "application/json", fileName);
     }
 
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost("admin/akeneo-connection/import-configuration")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<IActionResult> ImportConfiguration(
+        IFormFile configurationFile,
+        bool confirmReplace,
+        CancellationToken cancellationToken)
+    {
+        if (!confirmReplace)
+        {
+            notificationService.ErrorNotification("Confirm replacement of all mapping configuration before importing.");
+            return RedirectToAction(nameof(Configure));
+        }
+        if (configurationFile == null || configurationFile.Length == 0 || configurationFile.Length > 10 * 1024 * 1024)
+        {
+            notificationService.ErrorNotification("Choose a non-empty configuration JSON file no larger than 10 MB.");
+            return RedirectToAction(nameof(Configure));
+        }
+        using var reader = new StreamReader(configurationFile.OpenReadStream());
+        var json = await reader.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await configurationImportService.ImportAsync(json, cancellationToken);
+            notificationService.SuccessNotification("Mapping configuration replaced successfully. Connection settings and sync profiles were preserved.");
+        }
+        catch (ArgumentException exception)
+        {
+            notificationService.ErrorNotification(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            notificationService.ErrorNotification(exception.Message);
+        }
+        return RedirectToAction(nameof(Configure));
+    }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet("admin/akeneo-connection/configure")]
