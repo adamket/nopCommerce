@@ -146,7 +146,7 @@
                 </span>
             </span>
 
-            <div class="mt-2">
+            <div class="akeneo-row-buttons mt-2">
                 <button type="button"
                         class="btn btn-sm btn-primary akeneo-edit-row"
                         v-on:click="edit(m)"
@@ -157,7 +157,7 @@
                     {{
                     selectedFamilyCode &&
                     (m.isInherited || Number(m.id) === 0)
-                    ? 'Create override'
+                    ? 'Edit'
                     : Number(m.id) === 0
                     ? 'Create mapping'
                     : 'Edit'
@@ -165,7 +165,7 @@
                 </button>
 
                 <button type="button"
-                        class="btn btn-sm btn-danger ml-1 mt-2"
+                        class="btn btn-sm btn-danger"
                         v-if="canDeleteMapping(m)"
                         v-show="!m.editing"
                         v-on:click="requestDeleteMapping(m)"

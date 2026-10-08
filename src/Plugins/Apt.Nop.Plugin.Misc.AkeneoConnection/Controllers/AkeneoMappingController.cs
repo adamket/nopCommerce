@@ -418,8 +418,8 @@ public class AkeneoMappingController(
         {
             return !string.IsNullOrWhiteSpace(model.MappingKey) &&
                 string.Equals(
-                    mapping.MappingKey,
-                    model.MappingKey,
+                    mapping.MappingKey?.Trim(),
+                    model.MappingKey.Trim(),
                     StringComparison.OrdinalIgnoreCase);
         }
 
@@ -530,8 +530,11 @@ public class AkeneoMappingController(
 
             try
             {
+                // A real Akeneo attribute wins over a built-in product field
+                // with the same code, matching what the mapping page lists.
                 var attribute = await akeneoApiClient.GetAttributeByCodeAsync(
-                    source.AkeneoAttributeCode);
+                                    source.AkeneoAttributeCode) ??
+                                AkeneoBuiltInSources.Find(source.AkeneoAttributeCode);
 
                 if (attribute == null)
                 {
@@ -625,8 +628,11 @@ public class AkeneoMappingController(
 
         try
         {
+            // A real Akeneo attribute wins over a built-in product field with
+            // the same code, matching what the mapping page lists.
             var attribute = await akeneoApiClient.GetAttributeByCodeAsync(
-                model.AkeneoAttributeCode);
+                                model.AkeneoAttributeCode) ??
+                            AkeneoBuiltInSources.Find(model.AkeneoAttributeCode);
 
             if (attribute == null)
             {

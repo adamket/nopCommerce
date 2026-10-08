@@ -465,9 +465,6 @@
 
                                                     <div class="akeneo-col">
                                                         <label class="akeneo-switch">
-                                                            <input type="hidden"
-                                                                   v-bind:name="axisName(index, 'IsRequired')"
-                                                                   value="false" />
                                                             <input type="checkbox"
                                                                    v-bind:name="axisName(index, 'IsRequired')"
                                                                    value="true"
@@ -479,6 +476,10 @@
                                                                 {{ row.isRequired ? 'Required' : 'Optional' }}
                                                             </span>
                                                         </label>
+                                                        @* Must follow the checkbox: a bool binds from the first posted value. *@
+                                                        <input type="hidden"
+                                                               v-bind:name="axisName(index, 'IsRequired')"
+                                                               value="false" />
                                                     </div>
 
                                                     <div class="akeneo-col">
@@ -725,9 +726,6 @@
                                                             <label>Ancestor values</label>
                                                             <div>
                                                                 <label class="akeneo-switch">
-                                                                    <input type="hidden"
-                                                                           v-bind:name="subModelRuleName(index, 'MergeAncestorValues')"
-                                                                           value="false" />
                                                                     <input type="checkbox"
                                                                            v-bind:name="subModelRuleName(index, 'MergeAncestorValues')"
                                                                            value="true"
@@ -739,6 +737,10 @@
                                                                         {{ row.mergeAncestorValues ? 'Merge ancestor values' : 'Leaf values only' }}
                                                                     </span>
                                                                 </label>
+                                                                @* Must follow the checkbox: a bool binds from the first posted value. *@
+                                                                <input type="hidden"
+                                                                       v-bind:name="subModelRuleName(index, 'MergeAncestorValues')"
+                                                                       value="false" />
                                                             </div>
                                                         </div>
                                                     </div>

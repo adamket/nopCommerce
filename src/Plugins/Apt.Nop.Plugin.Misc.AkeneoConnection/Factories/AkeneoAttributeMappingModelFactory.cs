@@ -58,6 +58,17 @@ public class AkeneoAttributeMappingModelFactory(
                     .ToList();
             }
 
+            // Product fields such as "enabled" belong to every family but are
+            // not Akeneo attributes, so add them unless an attribute already
+            // uses the same code.
+            akeneoAttributes = akeneoAttributes
+                .Concat(AkeneoBuiltInSources.All.Where(source =>
+                    !akeneoAttributes.Any(attribute => string.Equals(
+                        attribute.Code,
+                        source.Code,
+                        StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+
             akeneoFamilies = await akeneoApiClient.GetFamiliesAsync();
 
             model.AvailableAkeneoFamilies = akeneoFamilies
@@ -108,7 +119,8 @@ public class AkeneoAttributeMappingModelFactory(
             productAttributes);
         model.NopTargetKeyMap = BuildNopTargetKeyMap();
 
-        if (!akeneoAttributes.Any())
+        if (!akeneoAttributes.Any(attribute =>
+                AkeneoBuiltInSources.Find(attribute.Code) == null))
         {
             model.Warnings.Add(
                 "No Akeneo attributes were found. Existing computed mappings remain available, but attribute tokens cannot be added until the Akeneo connection returns attributes.");
@@ -933,6 +945,9 @@ public class AkeneoAttributeMappingModelFactory(
 
         if (string.Equals(group, "ungrouped", StringComparison.OrdinalIgnoreCase))
             return "Ungrouped";
+
+        if (string.Equals(group, AkeneoBuiltInSources.GroupCode, StringComparison.OrdinalIgnoreCase))
+            return "Akeneo product fields";
 
         return group
             .Replace("_", " ")

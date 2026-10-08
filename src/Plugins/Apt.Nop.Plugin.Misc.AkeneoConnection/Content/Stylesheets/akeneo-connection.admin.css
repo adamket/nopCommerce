@@ -726,20 +726,29 @@
   color: #c0392b !important;
 }
 
-.akeneo-detail-none .akeneo-none-hint {
-  margin-top: .25rem;
+/* Field labels in the edit panel are blocks so every column starts at the same
+   height: an inline-block label sits inside a taller line box (and the spacer
+   label beside the "ignored" hint would otherwise share the hint's line). */
+.akeneo-connection .akeneo-mapping-detail .form-row > .form-group > label {
+  display: block;
 }
 
+/* Same height as a Bootstrap .form-control so the hint lines up with the select. */
 .akeneo-connection .akeneo-detail-none .akeneo-none-hint {
   display: inline-flex;
   align-items: center;
   gap: .5rem;
+  box-sizing: border-box;
+  min-height: calc(1.5rem + .75rem + 2px);
+  margin-top: 0;
+  vertical-align: top;
   color: var(--ak-muted);
   font-size: .85rem;
+  line-height: 1.3;
   background: var(--ak-canvas);
   border: 1px dashed var(--ak-line-strong);
   border-radius: 9px;
-  padding: 10px 14px;
+  padding: 6px 14px;
 }
 
 .akeneo-connection .akeneo-row-errors {
@@ -1691,17 +1700,20 @@
     margin: 0;
   }
 
-/* Card */
+/* Card. The left side is square so the colored status edge runs flat top to
+   bottom; only the right corners are rounded. It clips its own content so the
+   edges stay inside the card. */
 .akeneo-connection .akeneo-group-items > .akeneo-row-shell {
   background: var(--ak-surface);
   border: 1px solid var(--ak-line);
-  border-radius: 12px;
+  border-radius: 0 12px 12px 0;
   box-shadow: var(--ak-shadow);
+  overflow: hidden;
 }
 
   .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-row {
     border: 0;
-    border-radius: 12px;
+    border-radius: 0;
     background: transparent;
   }
 
@@ -1709,36 +1721,28 @@
       background: #fafbff;
     }
 
-    /* Status edge sits over the card's left border */
+    /* Status edge runs flush along the card's inner left side */
     .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-row::before {
-      left: -1px;
-      top: -1px;
-      bottom: -1px;
-      border-radius: 12px 0 0 12px;
-    }
-
-  /* While editing, the row is the card's header and the detail is its body */
-  .akeneo-connection .akeneo-group-items > .akeneo-row-shell:has(> .akeneo-mapping-detail) > .akeneo-row {
-    border-radius: 12px 12px 0 0;
-  }
-
-    .akeneo-connection .akeneo-group-items > .akeneo-row-shell:has(> .akeneo-mapping-detail) > .akeneo-row::before {
+      left: 0;
+      top: 0;
       bottom: 0;
-      border-radius: 12px 0 0 0;
+      border-radius: 0;
     }
 
+  /* The row is the card's header and the detail (when present) is its body */
   .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-mapping-detail {
     margin-left: 0;
     width: 100%;
     border: 0;
     border-top: 1px solid var(--ak-line);
-    border-radius: 0 0 12px 12px;
+    border-radius: 0;
   }
 
     .akeneo-connection .akeneo-group-items > .akeneo-row-shell > .akeneo-mapping-detail::before {
-      left: -1px;
-      bottom: -1px;
-      border-radius: 0 0 0 12px;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 0;
     }
 
 @media (max-width: 1199px) {
@@ -2185,3 +2189,21 @@
 .akeneo-connection .akeneo-binding-table .akeneo-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+/* Row action buttons (Edit / Remove override): one right-aligned row with an
+   even gap; in a narrow column they wrap without staggering. */
+.akeneo-connection .akeneo-row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+  .akeneo-connection .akeneo-row-buttons .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin: 0;
+    white-space: nowrap;
+  }
