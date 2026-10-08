@@ -66,15 +66,17 @@ public class AkeneoWritePolicyGate(
         foreach (var nopEntityType in new[] { NopEntityType.Product, NopEntityType.ProductAttributeCombination })
         {
             if (!string.IsNullOrWhiteSpace(uuid) &&
-                await entityMappingService.GetMappedNopEntityIdByAkeneoUuidAsync(
-                    AkeneoEntityType.Product, uuid, nopEntityType) != null)
+                await IsLiveTargetAsync(nopEntityType,
+                    await entityMappingService.GetMappedNopEntityIdByAkeneoUuidAsync(
+                        AkeneoEntityType.Product, uuid, nopEntityType)))
             {
                 return true;
             }
 
             if (!string.IsNullOrWhiteSpace(identifier) &&
-                await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
-                    AkeneoEntityType.Product, identifier, nopEntityType) != null)
+                await IsLiveTargetAsync(nopEntityType,
+                    await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                        AkeneoEntityType.Product, identifier, nopEntityType)))
             {
                 return true;
             }
@@ -83,14 +85,50 @@ public class AkeneoWritePolicyGate(
         if (string.IsNullOrWhiteSpace(identifier))
             return false;
 
-        return await productService.GetProductBySkuAsync(identifier) != null ||
-               await productAttributeService.GetProductAttributeCombinationBySkuAsync(identifier) != null;
+        // GetProductBySkuAsync already excludes deleted products.
+        if (await productService.GetProductBySkuAsync(identifier) != null)
+            return true;
+
+        var combination = await productAttributeService
+            .GetProductAttributeCombinationBySkuAsync(identifier);
+
+        return combination != null &&
+               await IsLiveProductAsync(combination.ProductId);
     }
 
     private async Task<bool> ProductModelExistsAsync(string code) =>
-        await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
-            AkeneoEntityType.ProductModel, code, NopEntityType.Product) != null ||
+        await IsLiveProductAsync(
+            await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.ProductModel, code, NopEntityType.Product)) ||
         await productService.GetProductBySkuAsync(code) != null;
+
+    // Deleted products are never sync destinations, so bindings to them (or
+    // to combinations of a deleted parent) do not count as a match.
+    private async Task<bool> IsLiveTargetAsync(NopEntityType nopEntityType, int? entityId)
+    {
+        if (!entityId.HasValue || entityId.Value <= 0)
+            return false;
+
+        if (nopEntityType == NopEntityType.ProductAttributeCombination)
+        {
+            var combination = await productAttributeService
+                .GetProductAttributeCombinationByIdAsync(entityId.Value);
+
+            return combination != null &&
+                   await IsLiveProductAsync(combination.ProductId);
+        }
+
+        return await IsLiveProductAsync(entityId);
+    }
+
+    private async Task<bool> IsLiveProductAsync(int? productId)
+    {
+        if (!productId.HasValue || productId.Value <= 0)
+            return false;
+
+        var product = await productService.GetProductByIdAsync(productId.Value);
+        return product is { Deleted: false };
+    }
 
     private async Task<bool> HasSkuMappingAsync(string familyCode)
     {

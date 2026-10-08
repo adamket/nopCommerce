@@ -117,19 +117,9 @@ public partial class AkeneoProductCoreSynchronizer
                 "The synchronization pipeline restores purchasing before applying mapped values.");
         }
 
-        if (lifecycleStatus == AkeneoProductLifecycleStatus.SoftDeleted)
-        {
-            AddBooleanAssignment(
-                plan,
-                product,
-                "Product lifecycle",
-                "Deleted",
-                "Previous Akeneo lifecycle state",
-                product.Deleted,
-                false,
-                value => product.Deleted = value,
-                "The synchronization pipeline restores a soft-deleted product before applying mapped values.");
-        }
+        // Soft-deleted products are never restored: they are not resolved as
+        // sync destinations at all (see AkeneoProductSyncService), so a product
+        // reaching this point is live and Deleted is left untouched.
 
         var hasPublishedMapping = context
             .GetMappings(NopTargetType.ProductField)

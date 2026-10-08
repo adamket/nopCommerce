@@ -1,5 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
+using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -50,11 +51,16 @@ public class AkeneoVariantRepresentationCleanupService(
 
             if (combination != null)
             {
-                await managedVariantCleanupService
-                    .DeleteCombinationAndUnusedAxisValuesAsync(
-                        previousState.SyncProfileId,
-                        combination,
-                        cancellationToken);
+                // Deleted products are ignored: leave a deleted parent's
+                // combinations exactly as they are.
+                if (!await IsDeletedProductAsync(combination.ProductId))
+                {
+                    await managedVariantCleanupService
+                        .DeleteCombinationAndUnusedAxisValuesAsync(
+                            previousState.SyncProfileId,
+                            combination,
+                            cancellationToken);
+                }
             }
             else
             {
@@ -73,7 +79,7 @@ public class AkeneoVariantRepresentationCleanupService(
                 .GetProductAttributeValueByIdAsync(
                     previousState.NopProductAttributeValueId.Value);
 
-            if (value != null)
+            if (value != null && !await IsValueOwnerDeletedAsync(value))
                 await productAttributeService.DeleteProductAttributeValueAsync(value);
 
             await DeleteManagedRelationAsync(
@@ -89,7 +95,7 @@ public class AkeneoVariantRepresentationCleanupService(
             var oldChild = await productService
                 .GetProductByIdAsync(previousState.NopProductId);
 
-            if (oldChild != null && oldChild.ParentGroupedProductId != 0)
+            if (oldChild is { Deleted: false } && oldChild.ParentGroupedProductId != 0)
             {
                 oldChild.ParentGroupedProductId = 0;
                 oldChild.UpdatedOnUtc = DateTime.UtcNow;
@@ -110,7 +116,7 @@ public class AkeneoVariantRepresentationCleanupService(
             var oldChild = await productService
                 .GetProductByIdAsync(previousState.NopProductId);
 
-            if (oldChild != null)
+            if (oldChild is { Deleted: false })
             {
                 oldChild.ParentGroupedProductId = 0;
                 oldChild.VisibleIndividually = false;
@@ -119,6 +125,23 @@ public class AkeneoVariantRepresentationCleanupService(
                 await productService.UpdateProductAsync(oldChild);
             }
         }
+    }
+
+    private async Task<bool> IsDeletedProductAsync(int productId)
+    {
+        if (productId <= 0)
+            return false;
+
+        var product = await productService.GetProductByIdAsync(productId);
+        return product is { Deleted: true };
+    }
+
+    private async Task<bool> IsValueOwnerDeletedAsync(ProductAttributeValue value)
+    {
+        var mapping = await productAttributeService
+            .GetProductAttributeMappingByIdAsync(value.ProductAttributeMappingId);
+
+        return mapping != null && await IsDeletedProductAsync(mapping.ProductId);
     }
 
     private async Task DeleteManagedRelationAsync(

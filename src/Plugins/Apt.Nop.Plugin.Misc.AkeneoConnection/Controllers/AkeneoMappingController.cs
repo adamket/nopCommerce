@@ -4,6 +4,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Services.Configuration;
@@ -347,11 +348,59 @@ public class AkeneoMappingController(
                         $"Template token '{{{attributeCode}}}' refers to an Akeneo attribute that is not available in this mapping scope.");
                 }
             }
+
+            await ValidateTemplateReferenceFieldsAsync(
+                validation.ReferenceFields
+                    .Where(field => availableCodes.Contains(field.AttributeCode))
+                    .ToList(),
+                errors);
         }
         catch (Exception ex)
         {
             errors.Add(
                 $"Could not validate template attributes against Akeneo: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Checks <c>{attribute.field}</c> tokens: the attribute must link a
+    /// reference entity, and the field must be one of that entity's attributes.
+    /// </summary>
+    private async Task ValidateTemplateReferenceFieldsAsync(
+        IList<AkeneoTemplateReferenceField> referenceFields,
+        IList<string> errors)
+    {
+        foreach (var group in referenceFields.GroupBy(
+                     field => field.AttributeCode,
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            var attribute = await akeneoApiClient.GetAttributeByCodeAsync(group.Key);
+
+            if (attribute == null ||
+                !AkeneoMappingHelper.IsReferenceEntityType(
+                    targetTypeResolver.ResolveAkeneoAttributeType(attribute)) ||
+                string.IsNullOrWhiteSpace(attribute.ReferenceDataName))
+            {
+                errors.Add(
+                    $"Template token '{{{group.Key}.…}}' needs a reference-entity attribute, but '{group.Key}' is not one. Use '{{{group.Key}}}' for its value.");
+                continue;
+            }
+
+            var fieldCodes = (await akeneoApiClient.GetReferenceEntityAttributesAsync(
+                    attribute.ReferenceDataName.Trim()))
+                .Where(field => !string.IsNullOrWhiteSpace(field.Code))
+                .Select(field => field.Code.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var field in group)
+            {
+                if (!fieldCodes.Contains(field.FieldCode))
+                {
+                    errors.Add(
+                        $"Template token '{{{field.Key}}}': reference entity '{attribute.ReferenceDataName}' has no field '{field.FieldCode}'." +
+                        (fieldCodes.Count > 0 ? $" Available fields: {string.Join(", ", fieldCodes.OrderBy(code => code))}." : string.Empty));
+                }
+            }
         }
     }
 

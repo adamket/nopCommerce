@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 
@@ -13,9 +14,15 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// language rather than evaluating arbitrary expressions.
 /// </summary>
 public sealed class AkeneoValueTemplateRenderer(
-    IAkeneoProductValueResolver productValueResolver)
+    IAkeneoProductValueResolver productValueResolver,
+    IAkeneoReferenceEntityValueResolver referenceEntityValueResolver = null,
+    IAkeneoApiClient akeneoApiClient = null)
     : IAkeneoValueTemplateRenderer
 {
+    // Reference entity code behind each reference-entity attribute (per scope).
+    private readonly ConcurrentDictionary<string, string> _referenceEntityCodes =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private static readonly ConcurrentDictionary<string, ParsedTemplate>
         ParsedTemplateCache = new(StringComparer.Ordinal);
 
@@ -48,8 +55,89 @@ public sealed class AkeneoValueTemplateRenderer(
         return new AkeneoValueTemplateValidationResult
         {
             ReferencedAttributeCodes = GetReferencedAttributeCodes(parsed),
+            ReferenceFields = GetReferenceFields(parsed),
             Errors = parsed.Errors
         };
+    }
+
+    public async Task<AkeneoValueTemplateRenderResult> RenderAsync(
+        string template,
+        AkeneoValueTemplateContext context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(context.Source);
+
+        var parsed = Parse(template);
+        var referenceFields = GetReferenceFields(parsed);
+
+        if (parsed.Errors.Count > 0 ||
+            referenceFields.Count == 0 ||
+            referenceEntityValueResolver == null)
+        {
+            return Render(template, context);
+        }
+
+        var values = new Dictionary<string, AkeneoResolvedProductValue>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in referenceFields)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var resolved = await referenceEntityValueResolver.ResolveAsync(
+                    context.Source,
+                    new AkeneoAttributeMapping
+                    {
+                        AkeneoAttributeCode = field.AttributeCode,
+                        AkeneoAttributeTypeId = (int)AkeneoAttributeType.ReferenceEntity,
+                        AkeneoReferenceEntityCode = await GetReferenceEntityCodeAsync(
+                            field.AttributeCode,
+                            cancellationToken),
+                        AkeneoReferenceEntityAttributeCode = field.FieldCode
+                    },
+                    context.Locale,
+                    context.Channel,
+                    context.Currency,
+                    cancellationToken);
+
+                if (resolved != null)
+                    values[field.Key] = resolved;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // An unreadable record leaves the token unresolved, which the
+                // render reports as a missing token for this product.
+            }
+        }
+
+        return Render(template, context.WithReferenceFieldValues(values));
+    }
+
+    /// <summary>
+    /// The reference entity linked by a reference-entity attribute. Null lets
+    /// the record resolver fall back to the product value's own metadata.
+    /// </summary>
+    private async Task<string> GetReferenceEntityCodeAsync(
+        string attributeCode,
+        CancellationToken cancellationToken)
+    {
+        if (akeneoApiClient == null)
+            return null;
+
+        if (_referenceEntityCodes.TryGetValue(attributeCode, out var cached))
+            return cached;
+
+        var attribute = await akeneoApiClient.GetAttributeByCodeAsync(
+            attributeCode,
+            cancellationToken);
+
+        var code = attribute?.ReferenceDataName?.Trim();
+        _referenceEntityCodes[attributeCode] = code;
+
+        return code;
     }
 
     public AkeneoValueTemplateRenderResult Render(
@@ -149,6 +237,16 @@ public sealed class AkeneoValueTemplateRenderer(
         if (token.IsBuiltIn)
             return ResolveBuiltInToken(token.Name, context);
 
+        if (token.ReferenceFieldCode != null)
+        {
+            if (!TryGetReferenceFieldValue(token, context, out var fieldValue))
+                return null;
+
+            return token.OutputMode == TemplateTokenOutputMode.Code
+                ? FormatRawValue(fieldValue.RawData, context.Currency) ?? fieldValue.DisplayValue
+                : fieldValue.DisplayValue;
+        }
+
         if (!productValueResolver.TryGetValue(
                 context.Source,
                 token.AttributeCode,
@@ -206,6 +304,21 @@ public sealed class AkeneoValueTemplateRenderer(
             return string.IsNullOrWhiteSpace(builtInValue)
                 ? Array.Empty<string>()
                 : new[] { builtInValue };
+        }
+
+        if (token.ReferenceFieldCode != null)
+        {
+            if (!TryGetReferenceFieldValue(token, context, out var fieldValue))
+                return Array.Empty<string>();
+
+            var rawValues = token.OutputMode == TemplateTokenOutputMode.Code
+                ? FormatRawValues(fieldValue.RawData, context.Currency)
+                : Array.Empty<string>();
+
+            return (rawValues.Count > 0 ? rawValues : fieldValue.DisplayValues ?? Array.Empty<string>())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Select(item => item.Trim())
+                .ToList();
         }
 
         if (!productValueResolver.TryGetValue(
@@ -380,6 +493,33 @@ public sealed class AkeneoValueTemplateRenderer(
         }
 
         return string.Join(Environment.NewLine, normalizedLines);
+    }
+
+    private static bool TryGetReferenceFieldValue(
+        TemplateToken token,
+        AkeneoValueTemplateContext context,
+        out AkeneoResolvedProductValue value)
+    {
+        value = null;
+
+        return context.ReferenceFieldValues != null &&
+               context.ReferenceFieldValues.TryGetValue(
+                   new AkeneoTemplateReferenceField(token.AttributeCode, token.ReferenceFieldCode).Key,
+                   out value) &&
+               value != null;
+    }
+
+    private static IReadOnlyList<AkeneoTemplateReferenceField> GetReferenceFields(
+        ParsedTemplate parsed)
+    {
+        return parsed.Tokens
+            .Where(token => token.ReferenceFieldCode != null)
+            .Select(token => new AkeneoTemplateReferenceField(
+                token.AttributeCode,
+                token.ReferenceFieldCode))
+            .GroupBy(field => field.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
     }
 
     private static IReadOnlyList<string> GetReferencedAttributeCodes(
@@ -1059,7 +1199,31 @@ public sealed class AkeneoValueTemplateRenderer(
             return null;
         }
 
-        var isBuiltIn = !explicitAttribute && BuiltInTokens.Contains(name);
+        // {attribute.field}: a field of the linked reference-entity record(s).
+        string referenceFieldCode = null;
+        var dotIndex = name.IndexOf('.');
+
+        if (dotIndex >= 0)
+        {
+            var attributePart = name[..dotIndex].Trim();
+            var fieldPart = name[(dotIndex + 1)..].Trim();
+
+            if (attributePart.Length == 0 ||
+                fieldPart.Length == 0 ||
+                fieldPart.Contains('.'))
+            {
+                errors.Add(
+                    $"Template token '{{{tokenText}}}' must name a reference-entity attribute and one of its record fields, for example {{root_variant.label}}.");
+                return null;
+            }
+
+            referenceFieldCode = fieldPart;
+            name = attributePart;
+        }
+
+        var isBuiltIn = !explicitAttribute &&
+                        referenceFieldCode == null &&
+                        BuiltInTokens.Contains(name);
 
         return new TemplateToken
         {
@@ -1067,6 +1231,7 @@ public sealed class AkeneoValueTemplateRenderer(
             Name = name,
             IsBuiltIn = isBuiltIn,
             AttributeCode = isBuiltIn ? null : name,
+            ReferenceFieldCode = referenceFieldCode,
             OutputMode = modifier == "code"
                 ? TemplateTokenOutputMode.Code
                 : TemplateTokenOutputMode.Label
@@ -1118,6 +1283,9 @@ public sealed class AkeneoValueTemplateRenderer(
         public bool IsBuiltIn { get; init; }
 
         public string AttributeCode { get; init; }
+
+        /// <summary>Record field for an <c>{attribute.field}</c> token; otherwise null.</summary>
+        public string ReferenceFieldCode { get; init; }
 
         public TemplateTokenOutputMode OutputMode { get; init; }
     }

@@ -511,7 +511,10 @@
                                     Attribute tokens use localized display values by default.
                                     Use <code>{attribute:code}</code> for the raw Akeneo value,
                                     <code>{attr:attribute}</code> to disambiguate an attribute
-                                    from a built-in token, and
+                                    from a built-in token,
+                                    <code>{root_variant.label}</code> for a field of the record a
+                                    reference-entity attribute links to (<code>{root_variant}</code>
+                                    alone gives the record code), and
                                     <code>{root_type == bare_root ? "this" : "that"}</code>
                                     for conditional text. Conditions compare the raw Akeneo code
                                     by default and support <code>==</code> and <code>!=</code>.
@@ -899,6 +902,16 @@
 
                         var attributes = this.availableFallbackSources.map(function (source) {
                             var attributeCode = source.akeneoAttributeCode;
+                            var referenceField = source.akeneoReferenceEntityAttributeCode;
+
+                            // A reference-entity field source becomes {attribute.field}.
+                            if (referenceField && referenceField !== '@@code') {
+                                return {
+                                    key: attributeCode + '.' + referenceField,
+                                    text: source.text
+                                };
+                            }
+
                             var collidesWithBuiltIn = builtInKeys.indexOf(
                                 attributeCode.toLowerCase()) >= 0;
 
@@ -910,7 +923,28 @@
                                     ? source.text + ' (Akeneo attribute)'
                                     : source.text
                             };
-                        }).filter(function (item, index, all) {
+                        });
+
+                        // Every field of every reference entity, as {attribute.field},
+                        // plus {attribute} for the linked record code.
+                        this.referenceEntityAttributes.forEach(function (definition) {
+                            attributes.push({
+                                key: definition.code,
+                                text: definition.label + ' (record code)'
+                            });
+
+                            (definition.availableReferenceEntityAttributes || []).forEach(function (field) {
+                                if (!field.value || field.value === '@@code')
+                                    return;
+
+                                attributes.push({
+                                    key: definition.code + '.' + field.value,
+                                    text: definition.label + ' → ' + field.text
+                                });
+                            });
+                        });
+
+                        attributes = attributes.filter(function (item, index, all) {
                             return all.findIndex(function (candidate) {
                                 return candidate.key.toLowerCase() === item.key.toLowerCase();
                             }) === index;

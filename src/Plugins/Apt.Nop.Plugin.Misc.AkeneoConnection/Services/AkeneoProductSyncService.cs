@@ -478,14 +478,15 @@ public class AkeneoProductSyncService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            resolved.Add(ResolveTemplateMapping(
+            resolved.Add(await ResolveTemplateMappingAsync(
                 source,
                 mapping,
                 effectiveSku,
                 mappingFamilyCode,
                 mappingFamilyVariantCode,
                 request,
-                result));
+                result,
+                cancellationToken));
         }
 
         return resolved;
@@ -595,14 +596,15 @@ public class AkeneoProductSyncService(
         return source.FamilyVariant?.Trim();
     }
 
-    private AkeneoResolvedMappedValue ResolveTemplateMapping(
+    private async Task<AkeneoResolvedMappedValue> ResolveTemplateMappingAsync(
         AkeneoProductDefinition source,
         AkeneoAttributeMapping mapping,
         string effectiveSku,
         string mappingFamilyCode,
         string mappingFamilyVariantCode,
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result)
+        AkeneoProductImportResult result,
+        CancellationToken cancellationToken)
     {
         var sourceDisplayName =
             $"Template '{mapping.Name ?? mapping.MappingKey}'";
@@ -625,7 +627,8 @@ public class AkeneoProductSyncService(
             ? mapping.Channel
             : request.Channel;
 
-        var rendered = valueTemplateRenderer.Render(
+        // RenderAsync also resolves {attribute.field} reference-entity tokens.
+        var rendered = await valueTemplateRenderer.RenderAsync(
             mapping.ValueTemplate,
             new AkeneoValueTemplateContext
             {
@@ -636,7 +639,8 @@ public class AkeneoProductSyncService(
                 FamilyCode = mappingFamilyCode,
                 FamilyVariantCode = mappingFamilyVariantCode,
                 Sku = effectiveSku
-            });
+            },
+            cancellationToken);
 
         var resolvedSuccessfully = rendered.Success &&
             !string.IsNullOrWhiteSpace(rendered.Value);
@@ -1088,6 +1092,16 @@ public class AkeneoProductSyncService(
             return null;
 
         var product = await productService.GetProductByIdAsync(mappedProductId.Value);
+
+        // A soft-deleted product is never a sync destination: treat it as
+        // missing (the SKU fallback also excludes deleted products), so it is
+        // neither updated nor restored.
+        if (product is { Deleted: true })
+        {
+            result.AddMessage(
+                $"Ignored nopCommerce product ID {product.Id} for {mappingDescription} because it is deleted.");
+            return null;
+        }
 
         if (product != null)
             return product;

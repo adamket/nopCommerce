@@ -1360,7 +1360,7 @@ public class AkeneoProductBatchSyncService(
 
             var fresh = await productService.GetProductByIdAsync(cached.Id);
 
-            if (fresh != null)
+            if (fresh is { Deleted: false })
                 return new ParentProductSyncOutcome(fresh, Changed: false);
 
             parentProductCache.Remove(parentCode);

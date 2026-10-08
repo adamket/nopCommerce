@@ -77,6 +77,19 @@ public class AkeneoCatalogReconciliationService(
     {
         var destinationKind = (AkeneoProductDestinationKind)state.DestinationKindId;
 
+        // Deleted products are always ignored: never unpublish, detach or delete
+        // them, nor their combinations or associated values. NopProductId is the
+        // product itself, or the parent product for a combination.
+        var product = await productService.GetProductByIdAsync(state.NopProductId);
+
+        if (product is { Deleted: true })
+        {
+            await syncStateService.UpdateLifecycleStatusAsync(
+                state,
+                AkeneoProductLifecycleStatus.MissingFromAuthoritativeScope);
+            return false;
+        }
+
         // A missing combination represents one removed variant, not a missing
         // parent product. Remove the combination for any active lifecycle policy.
         if (destinationKind == AkeneoProductDestinationKind.ProductAttributeCombination)
@@ -127,8 +140,6 @@ public class AkeneoCatalogReconciliationService(
 
             await managedRelationService.DeleteAsync(relation);
         }
-
-        var product = await productService.GetProductByIdAsync(state.NopProductId);
 
         if (product == null)
         {
