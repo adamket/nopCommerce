@@ -1,4 +1,5 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
+using Nop.Core.Domain.Seo;
 using Nop.Services.Catalog;
 using Nop.Services.Seo;
 
@@ -10,13 +11,16 @@ public partial class AkeneoProductSeoSynchronizer
 {
     private readonly IProductService _productService;
     private readonly IUrlRecordService _urlRecordService;
+    private readonly SeoSettings _seoSettings;
 
     public AkeneoProductSeoSynchronizer(
         IProductService productService,
-        IUrlRecordService urlRecordService)
+        IUrlRecordService urlRecordService,
+        SeoSettings seoSettings = null)
     {
         _productService = productService;
         _urlRecordService = urlRecordService;
+        _seoSettings = seoSettings ?? new SeoSettings();
     }
 
     public int Order => 200;

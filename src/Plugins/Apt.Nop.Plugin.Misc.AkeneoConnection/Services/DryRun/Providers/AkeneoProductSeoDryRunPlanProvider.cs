@@ -237,6 +237,13 @@ public partial class AkeneoProductSeoSynchronizer
             ? AkeneoDryRunOperationType.Create
             : DetermineExactScalarChangeType(current, proposed, ignoreCase: true);
 
+        var adjustmentWarning = mapped.HasValue
+            ? await DescribeSlugAdjustmentAsync(requested, proposed)
+            : null;
+
+        if (adjustmentWarning != null)
+            plan.Warnings.Add(adjustmentWarning);
+
         plan.AddOperation(
             "SEO fields",
             "SeName",
@@ -244,6 +251,7 @@ public partial class AkeneoProductSeoSynchronizer
             current,
             proposed,
             type,
+            adjustmentWarning ??
             "The proposed value is the validated slug that nopCommerce would save.",
             mapped.Mapping.IsRequired,
             executeAsync: type is AkeneoDryRunOperationType.Create or
@@ -251,6 +259,42 @@ public partial class AkeneoProductSeoSynchronizer
                 AkeneoDryRunOperationType.Clear
                 ? async _ => await SaveSlugIfChangedAsync(context, proposed)
                 : null);
+    }
+
+    /// <summary>
+    /// Explains why the slug nopCommerce will save differs from the Akeneo
+    /// value, or returns null when they match. "Already in use" means
+    /// nopCommerce had to add a number to keep the slug unique; otherwise it
+    /// only cleaned up characters, spacing or case.
+    /// </summary>
+    private async Task<string> DescribeSlugAdjustmentAsync(
+        string requested,
+        string proposed)
+    {
+        requested = requested?.Trim();
+
+        if (string.IsNullOrWhiteSpace(requested) ||
+            string.Equals(requested, proposed, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // The Akeneo value as nopCommerce would clean it, before uniqueness.
+        var cleaned = await _urlRecordService.GetSeNameAsync(
+            requested,
+            _seoSettings.ConvertNonWesternChars,
+            _seoSettings.AllowUnicodeCharsInUrls);
+
+        if (!string.IsNullOrWhiteSpace(cleaned) &&
+            string.Equals(cleaned, proposed, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"The Akeneo URL slug '{requested}' was adjusted to '{proposed}' because it contained characters nopCommerce does not allow in URLs.";
+        }
+
+        var clashing = string.IsNullOrWhiteSpace(cleaned) ? requested : cleaned;
+
+        return $"The Akeneo URL slug '{requested}' is already in use by another nopCommerce page, so the product uses '{proposed}' instead. " +
+               $"It will switch to '{clashing}' automatically once that slug is free.";
     }
 
     private static string ResolveProductNameForSeo(

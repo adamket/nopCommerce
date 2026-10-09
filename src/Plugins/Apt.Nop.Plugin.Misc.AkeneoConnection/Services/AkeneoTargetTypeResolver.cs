@@ -137,7 +137,17 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.CustomProperty
             ],
 
-            "pim_catalog_number" or
+            // A plain number can hold a single price (e.g. membership_price),
+            // so it can also feed one tier price.
+            "pim_catalog_number" =>
+            [
+                NopTargetType.Ignore,
+                NopTargetType.ProductField,
+                NopTargetType.SpecificationAttribute,
+                NopTargetType.CustomProperty,
+                NopTargetType.TierPrice
+            ],
+
             "pim_catalog_metric" or
             "pim_catalog_date" =>
             [

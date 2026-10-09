@@ -1840,11 +1840,15 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportResult result,
         string rawPayloadSnapshot)
     {
+        // Only persist items that changed nopCommerce (created/updated), failed,
+        // or carry warnings. Unchanged items, including ones a delta merely
+        // picked up, are not logged so the table does not grow with every run.
         var shouldWrite =
-            result.ActionType != SyncItemActionType.Skipped ||
+            result.ActionType is SyncItemActionType.Created or
+                SyncItemActionType.Updated or
+                SyncItemActionType.Failed ||
             result.Errors.Any() ||
-            result.Warnings.Any() ||
-            HasDeltaInclusionReason(result.InclusionReason);
+            result.Warnings.Any();
 
         if (!shouldWrite)
             return;

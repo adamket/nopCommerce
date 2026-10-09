@@ -580,8 +580,19 @@ public partial class AkeneoProductSpecificationSynchronizer
                 }
             }
 
+            // Merge keeps extra values, except for a single-value source
+            // (simple select, text, number...): a changed Akeneo value then
+            // replaces the plugin-owned assignment it wrote before instead of
+            // adding a second one.
+            var replacesSingleValue =
+                context.Request.SpecificationAttributeSyncMode ==
+                    AkeneoCollectionSyncMode.Merge &&
+                mapped.HasValue &&
+                IsSingleValueSource(mapped.Mapping);
+
             if (context.Request.SpecificationAttributeSyncMode ==
-                AkeneoCollectionSyncMode.Merge)
+                    AkeneoCollectionSyncMode.Merge &&
+                !replacesSingleValue)
             {
                 continue;
             }
@@ -676,7 +687,9 @@ public partial class AkeneoProductSpecificationSynchronizer
                     GetAssignmentRepresentation(assignment, options),
                     "Removed",
                     AkeneoDryRunOperationType.Remove,
-                    "This specification assignment is plugin-owned and stale for this mapping.",
+                    replacesSingleValue
+                        ? "The Akeneo value changed, so it replaces the value this mapping wrote before."
+                        : "This specification assignment is plugin-owned and stale for this mapping.",
                     mapped.Mapping.IsRequired,
                     async _ =>
                     {
@@ -690,6 +703,11 @@ public partial class AkeneoProductSpecificationSynchronizer
 
         return plan;
     }
+
+    private static bool IsSingleValueSource(AkeneoAttributeMapping mapping) =>
+        (AkeneoAttributeType)mapping.AkeneoAttributeTypeId is not
+            (AkeneoAttributeType.MultiSelect or
+             AkeneoAttributeType.ReferenceEntityCollection);
 
     private static AkeneoSpecificationMissingValueHandling
         ResolveMissingValueHandling(AkeneoAttributeMapping mapping)
