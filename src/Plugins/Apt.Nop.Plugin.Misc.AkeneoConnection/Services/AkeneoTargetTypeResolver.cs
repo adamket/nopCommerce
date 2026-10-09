@@ -106,7 +106,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
             "pim_catalog_price_collection" =>
             [
                 NopTargetType.Ignore,
-                NopTargetType.ProductField
+                NopTargetType.ProductField,
+                NopTargetType.TierPrice
             ],
 
             "pim_catalog_simpleselect" =>

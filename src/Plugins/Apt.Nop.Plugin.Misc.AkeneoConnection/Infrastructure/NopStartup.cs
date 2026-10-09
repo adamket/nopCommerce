@@ -132,6 +132,12 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
             provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
 
+        services.AddScoped<AkeneoProductTierPriceSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
+
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
 

@@ -165,5 +165,6 @@ public enum NopTargetType
     Manufacturer = 40,
     Category = 50,
     SeoField = 60,
-    CustomProperty = 70
+    CustomProperty = 70,
+    TierPrice = 80
 }

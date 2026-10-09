@@ -233,11 +233,14 @@ public class AkeneoMappingController(
 
         // Only persist the entity id for target types that use one, so
         // switching targets cannot leave a stale destination id behind.
+        // (A tier price stores its customer role here.)
         mapping.NopTargetEntityId =
             model.NopTargetTypeId ==
                 (int)NopTargetType.SpecificationAttribute ||
             model.NopTargetTypeId ==
-                (int)NopTargetType.ProductAttribute
+                (int)NopTargetType.ProductAttribute ||
+            model.NopTargetTypeId ==
+                (int)NopTargetType.TierPrice
                 ? model.NopTargetEntityId
                 : null;
 
@@ -417,12 +420,13 @@ public class AkeneoMappingController(
         if (targetType is not (
                 NopTargetType.ProductField or
                 NopTargetType.SeoField or
-                NopTargetType.CustomProperty))
+                NopTargetType.CustomProperty or
+                NopTargetType.TierPrice))
         {
             return;
         }
 
-        var familyCode = model.AkeneoFamilyCode.TrimAndNormalizeText(); 
+        var familyCode = model.AkeneoFamilyCode.TrimAndNormalizeText();
 
         var effectiveMappings = await attributeMappingService
             .GetEffectiveMappingsAsync(familyCode);
@@ -430,6 +434,8 @@ public class AkeneoMappingController(
             AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(
                 model.EntityScopeId);
 
+        // A tier price's destination is its customer role (entity id) plus
+        // minimum quantity (target key); other targets are just the key.
         var conflictingMapping = effectiveMappings.FirstOrDefault(mapping =>
             mapping.Id != model.Id &&
             !IsSameLogicalSlot(mapping, model, valueMode) &&
@@ -438,12 +444,21 @@ public class AkeneoMappingController(
                 mapping.NopTargetKey?.Trim(),
                 model.NopTargetKey?.Trim(),
                 StringComparison.OrdinalIgnoreCase) &&
+            (targetType != NopTargetType.TierPrice ||
+             mapping.NopTargetEntityId == model.NopTargetEntityId) &&
             (AkeneoAttributeMappingScopeHelper
                  .NormalizeConfiguredScopeId(mapping.EntityScopeId) &
              requestedScope) != 0);
 
         if (conflictingMapping == null)
             return;
+
+        if (targetType == NopTargetType.TierPrice)
+        {
+            errors.Add(
+                $"'{AkeneoMappingHelper.GetSourceDisplayName(conflictingMapping)}' already writes a tier price for this customer role and minimum quantity to the same product roles. Adjust the Apply mapping to switches or edit the existing mapping instead.");
+            return;
+        }
 
         var conflictingName = conflictingMapping.ValueModeId ==
             (int)AkeneoAttributeMappingValueMode.Template
@@ -875,6 +890,28 @@ public class AkeneoMappingController(
             (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId <= 0))
         {
             errors.Add("Product Attribute is required when Target Type is Product Attribute.");
+        }
+
+        if (targetType == NopTargetType.TierPrice)
+        {
+            if (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId <= 0)
+                errors.Add("Customer role is required when Target Type is Tier Price.");
+
+            // The target key holds the minimum quantity; blank means 1.
+            var quantityText = model.NopTargetKey?.Trim();
+
+            if (string.IsNullOrEmpty(quantityText))
+            {
+                model.NopTargetKey = AkeneoProductTierPriceSynchronizer.DefaultMinimumQuantity.ToString();
+            }
+            else if (!int.TryParse(quantityText, out var quantity) || quantity < 1)
+            {
+                errors.Add("Minimum quantity must be a whole number of 1 or more.");
+            }
+            else
+            {
+                model.NopTargetKey = quantity.ToString();
+            }
         }
 
         return errors;

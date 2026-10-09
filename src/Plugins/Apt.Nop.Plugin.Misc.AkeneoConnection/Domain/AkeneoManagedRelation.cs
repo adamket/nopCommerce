@@ -35,5 +35,6 @@ public enum AkeneoManagedRelationType
     ProductAttributeValue = 40,
     ProductAttributeCombination = 50,
     AssociatedProductAttributeValue = 60,
-    GroupedProductRelationship = 70
+    GroupedProductRelationship = 70,
+    TierPrice = 80
 }

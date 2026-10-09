@@ -7,6 +7,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
+using Nop.Services.Customers;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
@@ -16,7 +17,8 @@ public class AkeneoAttributeMappingModelFactory(
     IAkeneoNopEntityMappingService akeneoNopEntityMappingService,
     ISpecificationAttributeService specificationAttributeService,
     IProductAttributeService productAttributeService,
-    IAkeneoTargetTypeResolver targetTypeResolver)
+    IAkeneoTargetTypeResolver targetTypeResolver,
+    ICustomerService customerService)
     : IAkeneoAttributeMappingModelFactory
 {
     public async Task<AkeneoAttributeMappingListModel> PrepareAttributeMappingListModelAsync(string akeneoFamilyCode = null)
@@ -117,6 +119,10 @@ public class AkeneoAttributeMappingModelFactory(
             specificationAttributes);
         model.AvailableProductAttributes = BuildProductAttributeOptions(
             productAttributes);
+        model.AvailableCustomerRoles = (await customerService.GetAllCustomerRolesAsync(showHidden: true))
+            .OrderBy(role => role.Name)
+            .Select(role => new SelectListItem(role.Name, role.Id.ToString()))
+            .ToList();
         model.NopTargetKeyMap = BuildNopTargetKeyMap();
 
         if (!akeneoAttributes.Any(attribute =>
@@ -928,6 +934,7 @@ public class AkeneoAttributeMappingModelFactory(
             NopTargetType.Category => "Category",
             NopTargetType.SeoField => "SEO Field",
             NopTargetType.CustomProperty => "Custom Property",
+            NopTargetType.TierPrice => "Tier Price",
             _ => targetType.ToString()
         };
     }

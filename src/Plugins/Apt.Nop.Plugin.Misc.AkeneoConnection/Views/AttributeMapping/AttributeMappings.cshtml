@@ -32,7 +32,8 @@
             seoField = (int)NopTargetType.SeoField,
             customProperty = (int)NopTargetType.CustomProperty,
             specificationAttribute = (int)NopTargetType.SpecificationAttribute,
-            productAttribute = (int)NopTargetType.ProductAttribute
+            productAttribute = (int)NopTargetType.ProductAttribute,
+            tierPrice = (int)NopTargetType.TierPrice
         },
         valueModes = new
         {
@@ -53,7 +54,8 @@
             new { value = ((int)NopTargetType.SpecificationAttribute).ToString(), text = "Specification Attribute" },
             new { value = ((int)NopTargetType.ProductAttribute).ToString(), text = "Product Attribute" },
             new { value = ((int)NopTargetType.SeoField).ToString(), text = "SEO Field" },
-            new { value = ((int)NopTargetType.CustomProperty).ToString(), text = "Custom Property" }
+            new { value = ((int)NopTargetType.CustomProperty).ToString(), text = "Custom Property" },
+            new { value = ((int)NopTargetType.TierPrice).ToString(), text = "Tier Price" }
         },
         specificationMissingValueHandlingOptions = new[]
         {
@@ -80,6 +82,9 @@
             .Select(option => new { value = option.Value, text = option.Text })
             .ToList(),
         availableProductAttributes = Model.AvailableProductAttributes
+            .Select(option => new { value = option.Value, text = option.Text })
+            .ToList(),
+        availableCustomerRoles = Model.AvailableCustomerRoles
             .Select(option => new { value = option.Value, text = option.Text })
             .ToList(),
         availableFallbackSources = Model.AvailableFallbackSources.Select(source => new
@@ -688,6 +693,7 @@
                             appData.specificationMissingValueHandlingOptions || [],
                         availableSpecificationAttributes: appData.availableSpecificationAttributes || [],
                         availableProductAttributes: appData.availableProductAttributes || [],
+                        availableCustomerRoles: appData.availableCustomerRoles || [],
                         availableFallbackSources: appData.availableFallbackSources || [],
                         expanded: {},
                         referenceExpanded: {},
@@ -831,8 +837,11 @@
                     isProductType: function (t) {
                         return Number(t) === this.targetTypes.productAttribute;
                     },
+                    isTierPriceType: function (t) {
+                        return Number(t) === this.targetTypes.tierPrice;
+                    },
                     isNoneType: function (t) {
-                        return !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t);
+                        return !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t) && !this.isTierPriceType(t);
                     },
                     targetTypeText: function (m) {
                         var found = m.availableTargetTypes.find(function (o) { return o.value === m.nopTargetTypeId; });
@@ -980,6 +989,12 @@
                         if (this.isProductType(t)) {
                             var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
                             return (m.nopTargetEntityId && p) ? 'Product Attribute: ' + p.text : 'No product attribute selected';
+                        }
+                        if (this.isTierPriceType(t)) {
+                            var role = this.availableCustomerRoles.find(function (o) { return o.value === String(m.nopTargetEntityId); });
+                            return role
+                                ? role.text + ' · minimum quantity ' + (m.nopTargetKey || '1')
+                                : 'No customer role selected';
                         }
                         return 'No additional target selected';
                     },
@@ -1211,6 +1226,10 @@
                         }
 
                         m.draft.nopTargetEntityId = '';
+
+                        // A tier price keeps its minimum quantity in the target key.
+                        if (this.isTierPriceType(m.draft.nopTargetTypeId))
+                            m.draft.nopTargetKey = '1';
                     },
                     notify: function (text) {
                         var self = this;

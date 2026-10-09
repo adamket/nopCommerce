@@ -19,6 +19,9 @@ public class AkeneoAttributeMappingListModel
     public IList<SelectListItem> AvailableTargetTypes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableSpecificationAttributes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableProductAttributes { get; set; } = new List<SelectListItem>();
+
+    /// <summary>nopCommerce customer roles, for Tier Price mappings.</summary>
+    public IList<SelectListItem> AvailableCustomerRoles { get; set; } = new List<SelectListItem>();
     /// <summary>
     /// Standard, computed, and saved reference-entity field mappings.
     /// Unlike a standard attribute row, an unmapped reference-entity attribute
