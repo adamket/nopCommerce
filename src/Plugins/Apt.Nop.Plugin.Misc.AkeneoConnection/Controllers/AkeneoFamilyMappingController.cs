@@ -23,7 +23,8 @@ public class AkeneoFamilyMappingController(
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoFamilyMappingModelFactory modelFactory,
     IAkeneoApiClient akeneoApiClient,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    IAkeneoValueTemplateRenderer valueTemplateRenderer)
     : BasePluginController
 {
     private const string ListViewPath =
@@ -412,13 +413,21 @@ public class AkeneoFamilyMappingController(
         }
 
         if (mode == AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue &&
-            !AkeneoAssociatedValueNameTemplate.TryValidate(
-                model.AssociatedValueNameTemplate,
-                out var templateError))
+            !string.IsNullOrWhiteSpace(model.AssociatedValueNameTemplate))
         {
-            ModelState.AddModelError(
-                nameof(model.AssociatedValueNameTemplate),
-                templateError);
+            // Same language as computed mapping templates; legacy {axes},
+            // {axis:code} and {attribute:code} tokens are still accepted.
+            var validation = valueTemplateRenderer.Validate(
+                AkeneoAssociatedValueNameTemplate.ToValueTemplate(
+                    model.AssociatedValueNameTemplate,
+                    axisValues: null));
+
+            foreach (var error in validation.Errors)
+            {
+                ModelState.AddModelError(
+                    nameof(model.AssociatedValueNameTemplate),
+                    error);
+            }
         }
 
         model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();

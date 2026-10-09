@@ -42,7 +42,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoDryRunChangeAnalyzer dryRunChangeAnalyzer,
     IAkeneoAssetMappingService assetMappingService,
     IAkeneoAssetResolver assetResolver,
-    IAkeneoWritePolicyGate writePolicyGate = null)
+    IAkeneoWritePolicyGate writePolicyGate = null,
+    IProductAttributeService productAttributeService = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
@@ -636,6 +637,9 @@ public class AkeneoProductBatchSyncService(
             : null;
         var desiredStateHash = resolvedDesiredState?.Hash;
 
+        // The hash says the Akeneo side is unchanged; it says nothing about
+        // nopCommerce. Only skip when the previously written destination still
+        // exists, so products deleted in nopCommerce are written again.
         var skipLeafWrite = request.RunMode == AkeneoRunMode.Delta &&
                             previousState != null &&
                             previousState.LifecycleStatusId ==
@@ -644,7 +648,8 @@ public class AkeneoProductBatchSyncService(
                             string.Equals(
                                 previousState.LastDesiredStateHash,
                                 desiredStateHash,
-                                StringComparison.OrdinalIgnoreCase);
+                                StringComparison.OrdinalIgnoreCase) &&
+                            await IsPreviousDestinationLiveAsync(previousState);
 
         // One binary cache per item, shared by the parent and every leaf/child
         // context so the prepare pass and the write pass agree on cache hits.
@@ -734,6 +739,41 @@ public class AkeneoProductBatchSyncService(
 
         transaction.Complete();
         return result;
+    }
+
+    /// <summary>
+    /// True when everything the previous sync wrote for this leaf still exists:
+    /// the product (the parent product for a combination) is present and not
+    /// deleted, and any bound combination or associated value is present.
+    /// </summary>
+    private async Task<bool> IsPreviousDestinationLiveAsync(
+        AkeneoProductSyncState previousState)
+    {
+        var product = previousState.NopProductId > 0
+            ? await productService.GetProductByIdAsync(previousState.NopProductId)
+            : null;
+
+        if (product is not { Deleted: false })
+            return false;
+
+        if (productAttributeService == null)
+            return true;
+
+        if (previousState.NopProductAttributeCombinationId.HasValue &&
+            await productAttributeService.GetProductAttributeCombinationByIdAsync(
+                previousState.NopProductAttributeCombinationId.Value) == null)
+        {
+            return false;
+        }
+
+        if (previousState.NopProductAttributeValueId.HasValue &&
+            await productAttributeService.GetProductAttributeValueByIdAsync(
+                previousState.NopProductAttributeValueId.Value) == null)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private async Task<string> GetUpdateOnlySkipReasonAsync(

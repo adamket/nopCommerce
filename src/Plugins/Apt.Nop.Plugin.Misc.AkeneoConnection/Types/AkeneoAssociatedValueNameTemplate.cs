@@ -23,6 +23,67 @@ public static class AkeneoAssociatedValueNameTemplate
     private static readonly Regex TokenPattern =
         new(@"\{(?<token>[^}]+)\}", RegexOptions.Compiled);
 
+    // Legacy tokens, matched only as whole single-brace tokens (never inside
+    // a {{ }} literal escape).
+    private static readonly Regex LegacyAxesToken = new(
+        @"(?<!\{)\{\s*axes\s*\}(?!\})",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex LegacyAxisToken = new(
+        @"(?<!\{)\{\s*axis\s*:\s*(?<code>[^{}:\s]+)\s*\}(?!\})",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex LegacyAttributeToken = new(
+        @"(?<!\{)\{\s*attribute\s*:\s*(?<code>[^{}:\s]+)\s*\}(?!\})",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Converts a name template into the value-template language used by
+    /// computed mappings (conditionals, {attribute.field} reference fields,
+    /// built-ins such as {sku}), keeping the legacy tokens working:
+    /// {attribute:code} becomes {attr:code}; {axes} and {axis:code} are
+    /// replaced with the variant's axis values as literal text.
+    /// </summary>
+    /// <param name="axisValues">
+    /// Axis values to substitute; null when only validating, in which case
+    /// axis tokens become a placeholder so the template still has content.
+    /// </param>
+    public static string ToValueTemplate(
+        string template,
+        IReadOnlyList<(string AxisCode, string DisplayValue)> axisValues)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+            template = Default;
+
+        string Literal(string value) =>
+            (value ?? string.Empty).Replace("{", "{{").Replace("}", "}}");
+
+        var converted = LegacyAxesToken.Replace(template, _ => axisValues == null
+            ? "axes"
+            : Literal(string.Join(AxesJoin, axisValues
+                .Select(axis => axis.DisplayValue)
+                .Where(value => !string.IsNullOrWhiteSpace(value)))));
+
+        converted = LegacyAxisToken.Replace(converted, match =>
+        {
+            if (axisValues == null)
+                return "axis";
+
+            var code = match.Groups["code"].Value;
+
+            return Literal(axisValues
+                .FirstOrDefault(axis => string.Equals(
+                    axis.AxisCode,
+                    code,
+                    StringComparison.OrdinalIgnoreCase))
+                .DisplayValue);
+        });
+
+        return LegacyAttributeToken.Replace(
+            converted,
+            match => "{attr:" + match.Groups["code"].Value + "}");
+    }
+
     public static string Render(
         string template,
         IReadOnlyList<(string AxisCode, string DisplayValue)> axisValues,

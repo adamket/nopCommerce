@@ -339,14 +339,17 @@
                                                 <input asp-for="AssociatedValueNameTemplate"
                                                        class="form-control"
                                                        v-model="form.associatedValueNameTemplate"
-                                                       placeholder="{attribute:variant_name}" />
+                                                       placeholder="{root_variant.label}{root_variant == potted ? &quot; {container_size}&quot; : &quot;&quot;}" />
 
                                                 <span asp-validation-for="AssociatedValueNameTemplate"></span>
 
                                                 <div class="form-text">
-                                                    Supports {sku}, {identifier}, {axes}, {axis:attribute_code},
-                                                    and {attribute:attribute_code}. Example:
-                                                    {attribute:variant_name} ({sku})
+                                                    Uses the same template language as computed attribute mappings:
+                                                    attribute tokens such as {container_size} (label) or {container_size:code},
+                                                    reference-entity fields such as {root_variant.label}, built-ins {sku} and {identifier},
+                                                    and conditionals such as {root_variant == potted ? " {container_size}" : ""}.
+                                                    {axes}, {axis:code} and {attribute:code} still work.
+                                                    If any value is missing, the SKU is used as the name.
                                                 </div>
                                             </div>
                                         </div>

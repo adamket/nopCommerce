@@ -11,9 +11,9 @@ public class AkeneoVariantRelationshipService(
     IAkeneoVariantRelationshipResolver relationshipResolver,
     IProductService productService,
     IProductAttributeService productAttributeService,
-    IAkeneoProductValueResolver productValueResolver,
     IAkeneoNopEntityMappingService entityMappingService,
-    IAkeneoManagedRelationService managedRelationService)
+    IAkeneoManagedRelationService managedRelationService,
+    IAkeneoValueTemplateRenderer valueTemplateRenderer)
     : IAkeneoVariantRelationshipService
 {
     public async Task<AkeneoVariantSyncResult> ApplyAsync(
@@ -241,7 +241,7 @@ public class AkeneoVariantRelationshipService(
         var values = await productAttributeService
             .GetProductAttributeValuesAsync(mappingResult.Mapping.Id);
 
-        var valueName = BuildAssociatedValueName(context);
+        var valueName = await BuildAssociatedValueNameAsync(context);
         ProductAttributeValue existingValue = null;
 
         if (context.ExistingAssociatedProductAttributeValueId.HasValue)
@@ -668,7 +668,15 @@ public class AkeneoVariantRelationshipService(
         return product;
     }
 
-    private string BuildAssociatedValueName(AkeneoVariantImportContext context)
+    /// <summary>
+    /// Renders the family mapping's associated value name template with the
+    /// same engine as computed mappings (conditionals, {attribute.field}
+    /// reference-entity fields). Legacy {axes}, {axis:code} and
+    /// {attribute:code} tokens are translated first. As with computed
+    /// mappings, a token without a value leaves the whole name unrendered, and
+    /// the SKU is used instead.
+    /// </summary>
+    private async Task<string> BuildAssociatedValueNameAsync(AkeneoVariantImportContext context)
     {
         var axisValues = context.AxisValuesByAkeneoCode.Values
             .Select(item => (
@@ -676,17 +684,22 @@ public class AkeneoVariantRelationshipService(
                 DisplayValue: item.DisplayName))
             .ToList();
 
-        var valueName = AkeneoAssociatedValueNameTemplate.Render(
-            context.Options?.AssociatedValueNameTemplate,
-            axisValues,
-            context.Sku,
-            context.AkeneoIdentifier,
-            attributeCode => productValueResolver.GetValue(
-                context.SourceProduct,
-                attributeCode,
-                context.Locale,
-                context.Channel,
-                context.Currency));
+        var rendered = await valueTemplateRenderer.RenderAsync(
+            AkeneoAssociatedValueNameTemplate.ToValueTemplate(
+                context.Options?.AssociatedValueNameTemplate,
+                axisValues),
+            new AkeneoValueTemplateContext
+            {
+                Source = context.SourceProduct,
+                Locale = context.Locale,
+                Channel = context.Channel,
+                Currency = context.Currency,
+                FamilyCode = context.AkeneoFamilyCode,
+                FamilyVariantCode = context.AkeneoFamilyVariantCode,
+                Sku = context.Sku
+            });
+
+        var valueName = rendered.Success ? rendered.Value : null;
 
         if (!string.IsNullOrWhiteSpace(valueName))
             return valueName.Trim();
