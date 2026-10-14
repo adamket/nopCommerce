@@ -219,13 +219,13 @@ public class AkeneoSyncProfileModelFactory(
 
             foreach (var family in families
                          .Where(family => !string.IsNullOrWhiteSpace(family.Code))
-                         .OrderBy(family => family.GetDisplayName(labelLocale), StringComparer.OrdinalIgnoreCase))
+                         .OrderBy(family => family.GetLabel(labelLocale), StringComparer.OrdinalIgnoreCase))
             {
                 var code = family.Code.Trim();
 
                 options.Add(new SelectListItem
                 {
-                    Text = family.GetDisplayName(labelLocale),
+                    Text = family.GetLabelWithCode(labelLocale),
                     Value = code,
                     Selected = selectedFamilyCodes.Contains(code, StringComparer.OrdinalIgnoreCase)
                 });

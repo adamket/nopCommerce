@@ -149,9 +149,7 @@ public class AkeneoFamilyMappingModelFactory
 
         var families = await _akeneoApiClient.GetFamiliesAsync();
         model.AvailableAkeneoFamilies = families
-            .Select(f => new SelectListItem(
-                f.GetLabel() == f.Code ? f.Code : $"{f.GetLabel()} ({f.Code})",
-                f.Code))
+            .Select(f => new SelectListItem(f.GetLabelWithCode(), f.Code))
             .ToList();
         model.AvailableAkeneoFamilies.Insert(0, new SelectListItem("Select Akeneo family", string.Empty));
 

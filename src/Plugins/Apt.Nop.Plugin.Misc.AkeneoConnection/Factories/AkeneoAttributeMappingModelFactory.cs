@@ -77,7 +77,7 @@ public class AkeneoAttributeMappingModelFactory(
                 .OrderBy(family => family.GetLabel())
                 .Select(family => new SelectListItem
                 {
-                    Text = family.GetLabel(),
+                    Text = family.GetLabelWithCode(),
                     Value = family.Code,
                     Selected = string.Equals(
                         family.Code,

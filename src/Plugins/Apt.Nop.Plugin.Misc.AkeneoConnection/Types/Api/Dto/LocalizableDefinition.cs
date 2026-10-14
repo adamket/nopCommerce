@@ -52,4 +52,21 @@ public abstract class LocalizableDefinition
         return $"{label} ({code})";
     }
 
+    /// <summary>
+    /// "Label (code)" for selection lists. Unlike <see cref="GetDisplayName"/>, a label that
+    /// differs from the code only by case is still shown ("Nursery (nursery)"). Only a missing
+    /// label, or one identical to the code, falls back to the code alone.
+    /// </summary>
+    public string GetLabelWithCode(string locale = "en_US")
+    {
+        var code = Code?.Trim();
+        var label = GetLabel(locale)?.Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
+            return label ?? string.Empty;
+
+        return string.IsNullOrWhiteSpace(label) || string.Equals(code, label, StringComparison.Ordinal)
+            ? code
+            : $"{label} ({code})";
+    }
 }

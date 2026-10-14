@@ -26,11 +26,11 @@ public sealed class AkeneoAssetMappingModelFactory(
             var families = await apiClient.GetFamiliesAsync();
             model.AvailableAkeneoFamilies = families
                 .Where(family => !string.IsNullOrWhiteSpace(family.Code))
-                .OrderBy(family => family.GetDisplayName("en_US"), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(family => family.GetLabel("en_US"), StringComparer.OrdinalIgnoreCase)
                 .Select(family => new SelectListItem
                 {
-                    Value = family.Code,
-                    Text = family.GetDisplayName("en_US")
+                    Value = family.Code.Trim(),
+                    Text = family.GetLabelWithCode("en_US")
                 })
                 .ToList();
         }

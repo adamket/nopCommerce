@@ -351,6 +351,15 @@ public class AkeneoProductBatchSyncService(
                     ClearRolledBackDestination(itemResult);
                 }
 
+                foreach (var related in TakeCommittedRelatedResults(itemResult))
+                {
+                    ApplyItemResultToBatchResult(result, related);
+                    await SaveBatchItemLogIfNeededAsync(request, related, null);
+
+                    if (ShouldKeepItemResultInMemory(related))
+                        result.LoggedItemResults.Add(related);
+                }
+
                 ApplyItemResultToBatchResult(result, itemResult);
                 await SaveBatchItemLogIfNeededAsync(request, itemResult, snapshot);
 
@@ -1105,13 +1114,9 @@ public class AkeneoProductBatchSyncService(
         {
             ApplyPreviousStateBinding(result, previousState);
             result.Sku = leafContext.Sku;
-            result.ActionType = parentSync.Changed
-                ? SyncItemActionType.Updated
-                : SyncItemActionType.Skipped;
+            result.ActionType = SyncItemActionType.Skipped;
             result.AddMessage(
-                parentSync.Changed
-                    ? "Leaf reconciliation was skipped because its resolved desired-state hash is unchanged; the parent product model was reconciled and changed."
-                    : "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this delta item.");
+                "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this delta item.");
             return result;
         }
 
@@ -1145,16 +1150,9 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
+        // Parent product-model changes are logged and counted on the parent's
+        // own entry (RelatedResults), so they no longer promote this leaf.
         ApplyVariantResult(result, variantResult, previousState);
-
-        // Parent product-model changes are part of this leaf reconciliation
-        // unit. Promote an otherwise skipped leaf so the run counters and item
-        // logs accurately show that the synchronization changed nopCommerce.
-        if (parentSync.Changed &&
-            result.ActionType == SyncItemActionType.Skipped)
-        {
-            result.ActionType = SyncItemActionType.Updated;
-        }
 
         if (variantResult.Mode ==
             AkeneoVariantRelationshipMode.ProductAttributeCombinations)
@@ -1433,13 +1431,15 @@ public class AkeneoProductBatchSyncService(
             parentContext,
             cancellationToken);
 
-        CopyMessages(
-            parentResult,
-            result,
-            $"Product model '{parentCode}'");
-
         if (parentProduct == null)
         {
+            // No separate parent entry is logged, so its messages stay with
+            // this item.
+            CopyMessages(
+                parentResult,
+                result,
+                $"Product model '{parentCode}'");
+
             // A parent that does not exist while the profile cannot create
             // products is a deliberate skip, not a failure.
             var blockedByWritePolicy =
@@ -1464,6 +1464,23 @@ public class AkeneoProductBatchSyncService(
 
         var changed = parentResult.ActionType is
             SyncItemActionType.Created or SyncItemActionType.Updated;
+
+        // The parent product gets its own log entry and count, so a change to
+        // the product model is not reported against whichever SKU happened to
+        // reconcile it first.
+        parentResult.NopProductId = parentProduct.Id;
+        parentResult.AddMessage(
+            $"Reconciled as the parent of '{GetIdentity(result)}'.");
+        result.RelatedResults.Add(parentResult);
+
+        foreach (var error in parentResult.Errors)
+            result.AddError($"Product model '{parentCode}': {error}");
+
+        if (changed)
+        {
+            result.AddMessage(
+                $"Parent product model '{parentCode}' (nopCommerce product ID {parentProduct.Id}) was {parentResult.ActionType.ToString().ToLowerInvariant()}; see its own log entry.");
+        }
 
         return new ParentProductSyncOutcome(parentProduct, changed);
     }
@@ -1872,8 +1889,40 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportResult result,
         string rawPayloadSnapshot)
     {
+        foreach (var related in TakeCommittedRelatedResults(result))
+            await SaveBatchItemLogIfNeededAsync(request, related, null);
+
         await SaveBatchItemLogIfNeededAsync(request, result, rawPayloadSnapshot);
         return result;
+    }
+
+    /// <summary>
+    /// Returns the related results (e.g. the parent product model) to log as
+    /// their own entries. When the item failed its unit rolled back, so those
+    /// changes never happened: their notes are folded into the item's entry
+    /// instead. Errors were already copied to the item when they occurred.
+    /// </summary>
+    private static IReadOnlyList<AkeneoProductImportResult> TakeCommittedRelatedResults(
+        AkeneoProductImportResult item)
+    {
+        var related = item.RelatedResults.ToList();
+        item.RelatedResults.Clear();
+
+        if (item.Success && item.ActionType != SyncItemActionType.Failed)
+            return related;
+
+        foreach (var entry in related)
+        {
+            var prefix = $"Product model '{entry.AkeneoIdentifier}'";
+
+            foreach (var warning in entry.Warnings)
+                item.AddWarning($"{prefix}: {warning}");
+
+            foreach (var message in entry.Messages)
+                item.AddMessage($"{prefix} (rolled back): {message}");
+        }
+
+        return [];
     }
 
     private static string BuildLogMessage(AkeneoProductImportResult result)

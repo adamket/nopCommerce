@@ -34,6 +34,14 @@ public class AkeneoProductImportResult
 
     public IList<string> Errors { get; } = new List<string>();
 
+    /// <summary>
+    /// Other nopCommerce products reconciled inside this item's unit, such as
+    /// the parent product model. They get their own log entries and counts
+    /// once the unit commits.
+    /// </summary>
+    public IList<AkeneoProductImportResult> RelatedResults { get; } =
+        new List<AkeneoProductImportResult>();
+
     public bool Success => !Errors.Any();
 
     public void AddMessage(string message)
