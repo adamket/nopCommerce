@@ -2,6 +2,7 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Planning;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
@@ -15,15 +16,88 @@ public partial class AkeneoProductSpecificationSynchronizer
     private readonly ISpecificationAttributeService _specificationAttributeService;
     private readonly IAkeneoNopEntityMappingService _entityMappingService;
     private readonly IAkeneoManagedRelationService _managedRelationService;
+    private readonly IAkeneoApiClient _akeneoApiClient;
+
+    // Per sync scope: attribute code -> option code -> Akeneo option, read once per attribute.
+    private readonly Dictionary<string, Dictionary<string, AkeneoAttributeOptionDefinition>>
+        _attributeOptions = new(StringComparer.OrdinalIgnoreCase);
 
     public AkeneoProductSpecificationSynchronizer(
         ISpecificationAttributeService specificationAttributeService,
         IAkeneoNopEntityMappingService entityMappingService,
-        IAkeneoManagedRelationService managedRelationService)
+        IAkeneoManagedRelationService managedRelationService,
+        IAkeneoApiClient akeneoApiClient = null)
     {
         _specificationAttributeService = specificationAttributeService;
         _entityMappingService = entityMappingService;
         _managedRelationService = managedRelationService;
+        _akeneoApiClient = akeneoApiClient;
+    }
+
+    // The payload's attribute_type when present, else the mapping's stored attribute type.
+    private static bool IsOptionSource(AkeneoResolvedMappedValue mapped) =>
+        !string.IsNullOrWhiteSpace(mapped.Value?.AttributeCode) &&
+        (string.IsNullOrWhiteSpace(mapped.Value.SourceAttributeType)
+            ? (AkeneoAttributeType)mapped.Mapping.AkeneoAttributeTypeId is
+                AkeneoAttributeType.Select or AkeneoAttributeType.MultiSelect
+            : mapped.Value.SourceAttributeType is "pim_catalog_simpleselect" or "pim_catalog_multiselect");
+
+    /// <summary>
+    /// The option's Akeneo label: the request locale, then en_US, then any locale. Null when
+    /// the option has no label at all; the code is never substituted. The attribute's option
+    /// list is authoritative; without an API client the product payload's linked_data label
+    /// is used, and only when it is a real label rather than the code it falls back to.
+    /// </summary>
+    private async Task<string> ResolveOptionLabelAsync(
+        string attributeCode,
+        AkeneoResolvedOptionItem optionItem,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var code = optionItem.AkeneoOptionCode?.Trim();
+        if (string.IsNullOrWhiteSpace(code))
+            return null;
+
+        if (_akeneoApiClient == null)
+        {
+            var payloadLabel = optionItem.DisplayName?.Trim();
+            return string.IsNullOrWhiteSpace(payloadLabel) ||
+                   string.Equals(payloadLabel, code, StringComparison.Ordinal)
+                ? null
+                : payloadLabel;
+        }
+
+        if (!_attributeOptions.TryGetValue(attributeCode, out var options))
+        {
+            options = (await _akeneoApiClient.GetAttributeOptionDefinitionsAsync(
+                    attributeCode,
+                    cancellationToken: cancellationToken))
+                .Where(option => !string.IsNullOrWhiteSpace(option.Code))
+                .GroupBy(option => option.Code.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            _attributeOptions[attributeCode] = options;
+        }
+
+        return options.TryGetValue(code, out var option) ? GetLabelOnly(option, locale) : null;
+    }
+
+    private static string GetLabelOnly(AkeneoAttributeOptionDefinition option, string locale)
+    {
+        var labels = option.Labels;
+        if (labels == null || labels.Count == 0)
+            return null;
+
+        foreach (var key in new[] { locale?.Trim(), "en_US" })
+        {
+            if (!string.IsNullOrWhiteSpace(key) &&
+                labels.TryGetValue(key, out var label) &&
+                !string.IsNullOrWhiteSpace(label))
+            {
+                return label.Trim();
+            }
+        }
+
+        return labels.Values.FirstOrDefault(label => !string.IsNullOrWhiteSpace(label))?.Trim();
     }
 
     public int Order => 400;
@@ -117,8 +191,36 @@ public partial class AkeneoProductSpecificationSynchronizer
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var optionName = optionItem.DisplayName?.Trim() ??
+                // For select attributes the option's Akeneo label is the only name ever
+                // matched against or written to nopCommerce; the code never is.
+                string optionName;
+                if (IsOptionSource(mapped))
+                {
+                    optionName = await ResolveOptionLabelAsync(
+                        mapped.Value.AttributeCode,
+                        optionItem,
+                        context.Request.Locale,
+                        cancellationToken);
+
+                    if (optionName == null)
+                    {
+                        desiredStateComplete = false;
+                        plan.AddReview(
+                            "Specification attributes",
+                            $"{definition.Name}: {optionItem.AkeneoOptionCode}",
+                            sourceDisplayName,
+                            $"Akeneo option '{optionItem.AkeneoOptionCode}' of '{mapped.Value.AttributeCode}' has no label in any locale, so it was not matched to or created as a nopCommerce option. Add a label in Akeneo.",
+                            mapped.Mapping.IsRequired,
+                            "Label missing",
+                            "Not assigned");
+                        continue;
+                    }
+                }
+                else
+                {
+                    optionName = optionItem.DisplayName?.Trim() ??
                                  optionItem.AkeneoOptionCode?.Trim();
+                }
 
                 if (string.IsNullOrWhiteSpace(optionName))
                     continue;
@@ -171,6 +273,12 @@ public partial class AkeneoProductSpecificationSynchronizer
                     if (state.Option != null)
                     {
                         state.LinkOptionMapping = true;
+                        // Matched ignoring case: correct the name to the exact label too,
+                        // e.g. an option earlier created from the code "acidic" -> "Acidic".
+                        state.RenameOption = !string.Equals(
+                            state.Option.Name,
+                            optionName,
+                            StringComparison.Ordinal);
                     }
                     else if (missingValueHandling ==
                              AkeneoSpecificationMissingValueHandling
@@ -304,6 +412,16 @@ public partial class AkeneoProductSpecificationSynchronizer
                                 state.Option.Name = optionName;
                                 await _specificationAttributeService
                                     .UpdateSpecificationAttributeOptionAsync(state.Option);
+                                if (state.LinkOptionMapping)
+                                {
+                                    await _entityMappingService
+                                        .UpsertAkeneoNopEntityMappingAsync(
+                                            AkeneoEntityType.Option,
+                                            mappingCode,
+                                            null,
+                                            NopEntityType.SpecificationAttributeOption,
+                                            state.Option.Id);
+                                }
                                 return true;
                             });
                     }

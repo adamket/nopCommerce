@@ -274,6 +274,28 @@ public class AkeneoApiClient : IAkeneoApiClient
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AkeneoReferenceEntityAttributeOptionDefinition>>
+        GetReferenceEntityAttributeOptionsAsync(
+            string referenceEntityCode,
+            string attributeCode,
+            CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceEntityCode))
+        {
+            throw new ArgumentException(
+                "Reference entity code is required.",
+                nameof(referenceEntityCode));
+        }
+
+        if (string.IsNullOrWhiteSpace(attributeCode))
+            throw new ArgumentException("Attribute code is required.", nameof(attributeCode));
+
+        // Akeneo returns this list as a plain JSON array.
+        return await GetArrayOrEmbeddedCollectionAsync<AkeneoReferenceEntityAttributeOptionDefinition>(
+            $"api/rest/v1/reference-entities/{Uri.EscapeDataString(referenceEntityCode.Trim())}/attributes/{Uri.EscapeDataString(attributeCode.Trim())}/options",
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<JsonElement>> GetLocalesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/locales", limit, cancellationToken);

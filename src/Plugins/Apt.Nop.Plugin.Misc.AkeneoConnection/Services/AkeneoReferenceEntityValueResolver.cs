@@ -80,6 +80,13 @@ public class AkeneoReferenceEntityValueResolver(
 
         var resolvedItems = new List<ResolvedReferenceEntityFieldValue>();
 
+        // Null unless the field is a single_option / multiple_options attribute.
+        var optionLabels = await GetOptionLabelsAsync(
+            referenceEntityCode,
+            selectedField,
+            locale,
+            cancellationToken);
+
         foreach (var recordCode in recordCodes)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -98,6 +105,24 @@ public class AkeneoReferenceEntityValueResolver(
                     currency,
                     out var fieldValues))
             {
+                continue;
+            }
+
+            if (optionLabels != null)
+            {
+                // The record stores option codes. Each value is the option's label,
+                // keyed by its code so the key is stable however the record orders
+                // its options. An option with no label in any locale is left out:
+                // its code is never presented as a value.
+                foreach (var optionCode in fieldValues
+                             .Where(value => !string.IsNullOrWhiteSpace(value))
+                             .Select(value => value.Trim())
+                             .Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (optionLabels.TryGetValue(optionCode, out var label))
+                        resolvedItems.Add(new ResolvedReferenceEntityFieldValue(optionCode, label));
+                }
+
                 continue;
             }
 
@@ -140,6 +165,73 @@ public class AkeneoReferenceEntityValueResolver(
             currency,
             referenceEntityCode,
             linkedValue.SourceAttributeType);
+    }
+
+    /// <summary>
+    /// Option code to label for a reference-entity option attribute: the requested locale,
+    /// then en_US, then any locale. Options with no label are omitted. Null when the field
+    /// is not an option attribute (or the record code pseudo-field).
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> GetOptionLabelsAsync(
+        string referenceEntityCode,
+        string fieldCode,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var attributes = await staticCacheManager.GetAsync(
+            staticCacheManager.PrepareKeyForDefaultCache(
+                AkeneoConnectionConstants.ReferenceEntityAttributesCacheKey,
+                referenceEntityCode.KeyPart()),
+            async () => await akeneoApiClient.GetReferenceEntityAttributesAsync(
+                referenceEntityCode,
+                cancellationToken));
+
+        var attribute = attributes?.FirstOrDefault(item =>
+            string.Equals(item.Code?.Trim(), fieldCode, StringComparison.OrdinalIgnoreCase));
+
+        if (attribute?.Type is not ("single_option" or "multiple_options"))
+            return null;
+
+        var options = await staticCacheManager.GetAsync(
+            staticCacheManager.PrepareKeyForDefaultCache(
+                AkeneoConnectionConstants.ReferenceEntityAttributeOptionsCacheKey,
+                referenceEntityCode.KeyPart(),
+                fieldCode.KeyPart()),
+            async () => await akeneoApiClient.GetReferenceEntityAttributeOptionsAsync(
+                referenceEntityCode,
+                attribute.Code,
+                cancellationToken));
+
+        var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var option in options ?? [])
+        {
+            var code = option.Code?.Trim();
+            var label = GetLabelOnly(option, locale);
+            if (!string.IsNullOrWhiteSpace(code) && label != null)
+                labels.TryAdd(code, label);
+        }
+
+        return labels;
+    }
+
+    private static string GetLabelOnly(LocalizableDefinition option, string locale)
+    {
+        if (option.Labels == null || option.Labels.Count == 0)
+            return null;
+
+        foreach (var key in new[] { locale?.Trim(), "en_US" })
+        {
+            if (!string.IsNullOrWhiteSpace(key) &&
+                option.Labels.TryGetValue(key, out var label) &&
+                !string.IsNullOrWhiteSpace(label))
+            {
+                return label.Trim();
+            }
+        }
+
+        return option.Labels.Values
+            .FirstOrDefault(label => !string.IsNullOrWhiteSpace(label))
+            ?.Trim();
     }
 
     private async Task<AkeneoReferenceEntityRecordDefinition> GetRecordAsync(

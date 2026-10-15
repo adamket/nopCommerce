@@ -1339,10 +1339,27 @@
   min-width: 0;
 }
 
+  /* Code over label: both are inline spans, so stack them explicitly. */
+  .akeneo-connection
+  .akeneo-reference-container-title
+  .akeneo-code,
+  .akeneo-connection
+  .akeneo-reference-container-title
+  .akeneo-label {
+    display: block;
+  }
+
   .akeneo-connection
   .akeneo-reference-container-title
   .akeneo-code {
     margin-bottom: 3px;
+  }
+
+  /* The code's margin already spaces them; drop the label's own top margin. */
+  .akeneo-connection
+  .akeneo-reference-container-title
+  .akeneo-label {
+    margin-top: 0;
   }
 
 .akeneo-connection .akeneo-reference-container-meta {
