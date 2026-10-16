@@ -52,6 +52,7 @@ public class NopStartup : INopStartup
             IAkeneoProductModelDeltaFanOutService,
             AkeneoProductModelDeltaFanOutService>();
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
+        services.AddScoped<IAkeneoSyncLogRetentionService, AkeneoSyncLogRetentionService>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
         services.AddScoped<IAkeneoProductSyncExecutionService, AkeneoProductSyncExecutionService>();

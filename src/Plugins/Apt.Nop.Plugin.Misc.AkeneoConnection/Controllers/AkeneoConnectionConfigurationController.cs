@@ -191,7 +191,6 @@ public class AkeneoConnectionConfigurationController(
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultChannelCode, model.DefaultChannelCode_OverrideForStore, storeScope, false);
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultLocaleCode, model.DefaultLocaleCode_OverrideForStore, storeScope, false);
         //await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultCurrencyCode, model.DefaultCurrencyCode_OverrideForStore, storeScope, false);
-
         //now clear settings cache
         await settingService.ClearCacheAsync();
 

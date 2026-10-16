@@ -286,6 +286,9 @@ public class AkeneoSyncProfileController(
         profile.MaxProducts = model.MaxProducts;
         profile.ContinueOnError = model.ContinueOnError;
         profile.SaveRawPayloadSnapshot = model.SaveRawPayloadSnapshot;
+        profile.SyncLogRetentionEnabled = model.SyncLogRetentionEnabled;
+        profile.SyncItemLogRetentionDays = model.SyncItemLogRetentionDays ?? 30;
+        profile.SyncRunRecordRetentionDays = model.SyncRunRecordRetentionDays ?? 90;
 
         //profile.AddMappedCategories = model.AddMappedCategories;
         
@@ -443,6 +446,19 @@ public class AkeneoSyncProfileController(
             ModelState.AddModelError(
                 nameof(model.UpdatedSinceLastNDays),
                 "Updated since last N days must be greater than zero when the rolling-days filter mode is selected.");
+        }
+
+        if (model.SyncLogRetentionEnabled)
+        {
+            if (model.SyncItemLogRetentionDays is not (>= 1 and <= 3650))
+                ModelState.AddModelError(
+                    nameof(model.SyncItemLogRetentionDays),
+                    "Keep item logs must be between 1 and 3650 days.");
+
+            if (model.SyncRunRecordRetentionDays is not (>= 1 and <= 3650))
+                ModelState.AddModelError(
+                    nameof(model.SyncRunRecordRetentionDays),
+                    "Keep run records must be between 1 and 3650 days.");
         }
     }
 }

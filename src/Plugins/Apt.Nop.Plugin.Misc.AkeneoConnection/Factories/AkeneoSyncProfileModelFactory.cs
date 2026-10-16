@@ -44,6 +44,9 @@ public class AkeneoSyncProfileModelFactory(
             PageSize = 100,
             ContinueOnError = true,
             SaveRawPayloadSnapshot = false,
+            SyncLogRetentionEnabled = false,
+            SyncItemLogRetentionDays = 30,
+            SyncRunRecordRetentionDays = 90,
          //   AddMappedManufacturers = false,
             CreateMissingProductAttributeValues = true,
 
@@ -101,6 +104,9 @@ public class AkeneoSyncProfileModelFactory(
             model.MaxProducts = profile.MaxProducts;
             model.ContinueOnError = profile.ContinueOnError;
             model.SaveRawPayloadSnapshot = profile.SaveRawPayloadSnapshot;
+            model.SyncLogRetentionEnabled = profile.SyncLogRetentionEnabled;
+            model.SyncItemLogRetentionDays = profile.SyncItemLogRetentionDays;
+            model.SyncRunRecordRetentionDays = profile.SyncRunRecordRetentionDays;
 
             model.CategorySyncModeId = profile.CategorySyncModeId;
           //  model.AddMappedManufacturers = profile.AddMappedManufacturers;

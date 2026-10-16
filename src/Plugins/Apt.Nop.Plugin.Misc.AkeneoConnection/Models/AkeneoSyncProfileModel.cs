@@ -42,6 +42,12 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public bool SaveRawPayloadSnapshot { get; set; }
 
+    public bool SyncLogRetentionEnabled { get; set; }
+
+    public int? SyncItemLogRetentionDays { get; set; }
+
+    public int? SyncRunRecordRetentionDays { get; set; }
+
 
    // public bool AddMappedManufacturers { get; set; }
 

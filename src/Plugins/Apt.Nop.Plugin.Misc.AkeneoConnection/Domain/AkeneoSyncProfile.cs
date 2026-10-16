@@ -52,6 +52,18 @@ public class AkeneoSyncProfile : BaseEntity
 
     public bool SaveRawPayloadSnapshot { get; set; }
 
+    // Sync log retention, applied by the daily retention task
+    public bool SyncLogRetentionEnabled { get; set; }
+
+    /// <summary>Item logs (including raw payload snapshots) older than this are deleted.</summary>
+    public int SyncItemLogRetentionDays { get; set; } = 30;
+
+    /// <summary>
+    /// Finished run records older than this are deleted with their item logs,
+    /// except the latest successful run per scope.
+    /// </summary>
+    public int SyncRunRecordRetentionDays { get; set; } = 90;
+
     // Akeneo filters
     public string AkeneoFamilyCodes { get; set; }
 

@@ -44,6 +44,9 @@ public class AkeneoConnectionPlugin(
         await DeleteScheduleTaskAsync(
             typeof(AkeneoProductFullSyncScheduleTask).FullName);
 
+        await DeleteScheduleTaskAsync(
+            typeof(AkeneoSyncLogRetentionScheduleTask).FullName);
+
         await base.UninstallAsync();
     }
 
@@ -60,6 +63,13 @@ public class AkeneoConnectionPlugin(
             "Akeneo Connection - Full Product Reconciliation",
             seconds: 60 * 60 * 24 * 7,
             enabled: false);
+
+        // Enabled, but it deletes nothing until a sync profile turns retention on.
+        await EnsureScheduleTaskAsync(
+            typeof(AkeneoSyncLogRetentionScheduleTask).FullName,
+            "Akeneo Connection - Sync Log Retention",
+            seconds: 60 * 60 * 24,
+            enabled: true);
     }
 
     private async Task EnsureScheduleTaskAsync(

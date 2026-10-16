@@ -902,13 +902,15 @@
                     addMapping: function () {
                         if (this.newMappingKind === 'computed') {
                             this.addComputedMapping();
+                            // The new row is open for editing below; the creator has done its job.
+                            this.showMappingCreator = false;
                             return;
                         }
                         var source = this.selectedSource;
                         if (!source)
                             return;
                         if (source.isReferenceEntityAttribute) {
-                            this.addReferenceMapping({
+                            var entry = {
                                 key: source.key,
                                 definition: source,
                                 isReferenceEntity: true,
@@ -916,7 +918,11 @@
                                     return mapping.isReferenceEntityAttribute &&
                                         this.referenceContainerKeyForMapping(mapping) === source.key;
                                 }, this)
-                            });
+                            };
+                            // Keep the creator open when nothing could be added, so the reason stays visible.
+                            if (!this.canAddReferenceMapping(entry))
+                                return;
+                            this.addReferenceMapping(entry);
                         } else {
                             var mapping = hydrateMapping(source, true);
                             // The catalog may describe a previously deleted mapping.
@@ -929,6 +935,7 @@
                         }
                         this.expanded[source.groupLabel || 'Ungrouped'] = true;
                         this.newSourceCode = '';
+                        this.showMappingCreator = false;
                     },
                     isIgnoreType: function (t) {
                         return Number(t) === this.targetTypes.ignore;
@@ -1112,7 +1119,7 @@
                         }
                         if (this.isSpecType(t)) {
                             var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
-                            return (m.nopTargetEntityId && s) ? 'Specification Attribute: ' + s.text : 'No specification attribute selected';
+                            return (m.nopTargetEntityId && s) ? s.text : 'No specification attribute selected';
                         }
                         if (this.isProductType(t)) {
                             var p = m.availableProductAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });
