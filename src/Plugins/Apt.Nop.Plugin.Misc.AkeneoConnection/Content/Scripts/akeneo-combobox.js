@@ -19,6 +19,8 @@
  *   multiple        Default true. When false, picking an option replaces the
  *                   selection and closes the menu.
  *   disabled        Disables the whole control.
+ *   clearable       Default true. False requires choosing an explicit option.
+ *   inputId         Optional ID for the search input, for an external label.
  *   placeholder     Shown when nothing is selected.
  *   addPlaceholder  Shown when something is selected (multiple only).
  *   itemName        Used in accessible labels ("Remove family", "Clear all families").
@@ -36,6 +38,8 @@
             options: { type: Array, default: function () { return []; } },
             multiple: { type: Boolean, default: true },
             disabled: { type: Boolean, default: false },
+            clearable: { type: Boolean, default: true },
+            inputId: { type: String, default: null },
             placeholder: { type: String, default: 'Select · type to filter' },
             addPlaceholder: { type: String, default: 'Add…' },
             itemName: { type: String, default: 'item' },
@@ -58,7 +62,8 @@
                 if (this.multiple)
                     return Array.isArray(this.modelValue) ? this.modelValue : [];
 
-                return this.modelValue === null || this.modelValue === undefined || this.modelValue === ''
+                return this.modelValue === null || this.modelValue === undefined ||
+                    (this.modelValue === '' && !this.options.some(function (option) { return option.value === ''; }))
                     ? []
                     : [this.modelValue];
             },
@@ -74,11 +79,21 @@
                 });
             },
             inputPlaceholder: function () {
+                if (!this.multiple && this.selected.length)
+                    return this.labelFor(this.modelValue);
                 return this.selected.length && this.multiple
                     ? this.addPlaceholder
                     : this.selected.length
                         ? ''
                         : this.placeholder;
+            },
+            inputValue: {
+                get: function () {
+                    return !this.multiple && !this.open && this.selected.length
+                        ? this.labelFor(this.modelValue)
+                        : this.search;
+                },
+                set: function (value) { this.search = value; }
             },
             /** The typed value that would be added as a custom entry, or ''. */
             customCandidate: function () {
@@ -174,7 +189,10 @@
                     return;
 
                 if (!this.multiple) {
-                    this.emit([value]);
+                    // Match native select semantics: reselecting the current
+                    // value must not reload a scope or reset dependent fields.
+                    if (this.modelValue !== value)
+                        this.emit([value]);
                     this.close();
                     return;
                 }
@@ -210,9 +228,13 @@
                 this.activeIndex = 0;
             },
             remove: function (value) {
+                if (this.disabled || !this.clearable)
+                    return;
                 this.emit(this.selected.filter(function (item) { return item !== value; }));
             },
             clear: function () {
+                if (this.disabled || !this.clearable)
+                    return;
                 this.emit([]);
                 this.$refs.input.focus();
             },
@@ -234,6 +256,8 @@
                 }.bind(this));
             },
             onKeydown: function (event) {
+                if (this.disabled)
+                    return;
                 switch (event.key) {
                     case 'ArrowDown':
                     case 'ArrowUp':
@@ -276,7 +300,7 @@
                         break;
 
                     case 'Backspace':
-                        if (!this.search && this.selected.length)
+                        if (this.clearable && !this.search && this.selected.length)
                             this.remove(this.selected[this.selected.length - 1]);
                         break;
                 }
@@ -288,11 +312,13 @@
     <div class="akeneo-combobox-control"
          v-on:mousedown.self.prevent="focusInput">
         <span class="akeneo-combobox-chip"
+              v-show="multiple"
               v-for="value in selected"
               v-bind:key="value"
               v-bind:title="value">
             <span class="akeneo-combobox-chip-text">{{ labelFor(value) }}</span>
             <button type="button"
+                    v-if="clearable"
                     class="akeneo-combobox-chip-remove"
                     v-bind:aria-label="'Remove ' + itemName + ' ' + labelFor(value)"
                     v-bind:disabled="disabled"
@@ -301,6 +327,8 @@
         </span>
 
         <input ref="input"
+               v-bind:id="inputId"
+               v-bind:aria-label="itemName"
                type="text"
                class="akeneo-combobox-input"
                role="combobox"
@@ -310,7 +338,7 @@
                v-bind:aria-activedescendant="activeDescendant"
                v-bind:placeholder="inputPlaceholder"
                v-bind:disabled="disabled"
-               v-model="search"
+               v-model="inputValue"
                v-on:focus="openMenu"
                v-on:click="openMenu"
                v-on:input="onInput"
@@ -320,7 +348,7 @@
                 class="akeneo-combobox-clear"
                 v-bind:title="'Clear all ' + itemName + 's'"
                 v-bind:aria-label="'Clear all ' + itemName + 's'"
-                v-if="selected.length && !disabled"
+                v-if="clearable && selected.length && !disabled"
                 v-on:mousedown.prevent
                 v-on:click.stop="clear">
         </button>

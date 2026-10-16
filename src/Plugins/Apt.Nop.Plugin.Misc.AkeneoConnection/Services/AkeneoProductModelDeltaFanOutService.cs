@@ -14,7 +14,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// would otherwise miss inherited changes.
 /// </summary>
 public class AkeneoProductModelDeltaFanOutService(
-    IAkeneoApiClient akeneoApiClient)
+    IAkeneoApiClient akeneoApiClient,
+    IAkeneoAttributeMappingService attributeMappingService = null,
+    IAkeneoValueTemplateRenderer templateRenderer = null)
     : IAkeneoProductModelDeltaFanOutService
 {
     private const int MaximumPageSize = 100;
@@ -211,6 +213,142 @@ public class AkeneoProductModelDeltaFanOutService(
 
         plan.DescendantProductModelCount = descendantCodes.Count;
         return plan;
+    }
+
+    public async Task<IReadOnlyList<AkeneoReferenceEntityRecordChange>> FindChangedReferenceEntityRecordsAsync(
+        AkeneoProductBatchImportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Editing a record does not change the products that link it, so the
+        // products endpoint's updated filter never returns them.
+        var updatedAfterUtc = ResolveUpdatedAfterUtc(request);
+        if (request.RunMode != AkeneoRunMode.Delta || !updatedAfterUtc.HasValue)
+            return Array.Empty<AkeneoReferenceEntityRecordChange>();
+
+        // Only attributes whose record *fields* a mapping reads can change a product
+        // when a record is edited. With none, the phase makes no Akeneo calls.
+        var watched = await GetWatchedReferenceEntityAttributesAsync(cancellationToken);
+        if (watched.Count == 0)
+            return Array.Empty<AkeneoReferenceEntityRecordChange>();
+
+        var linkingAttributes = new List<(string AttributeCode, string EntityCode)>();
+        foreach (var (attributeCode, mappedEntityCode) in watched)
+        {
+            var entityCode = mappedEntityCode;
+            if (string.IsNullOrWhiteSpace(entityCode))
+            {
+                var attribute = await akeneoApiClient.GetAttributeByCodeAsync(
+                    attributeCode,
+                    cancellationToken);
+                entityCode = attribute?.Type is "akeneo_reference_entity" or "akeneo_reference_entity_collection"
+                    ? attribute.ReferenceDataName?.Trim()
+                    : null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entityCode))
+                linkingAttributes.Add((attributeCode, entityCode));
+        }
+
+        var changes = new List<AkeneoReferenceEntityRecordChange>();
+        foreach (var entity in linkingAttributes.GroupBy(
+                     attribute => attribute.EntityCode,
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var recordCodes = await akeneoApiClient.GetUpdatedReferenceEntityRecordCodesAsync(
+                entity.Key,
+                updatedAfterUtc.Value,
+                cancellationToken);
+            if (recordCodes.Count == 0)
+                continue;
+
+            changes.AddRange(entity.Select(attribute =>
+                new AkeneoReferenceEntityRecordChange(attribute.AttributeCode, entity.Key, recordCodes)));
+        }
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Product attribute code -> reference entity code (null when the mapping leaves it to
+    /// Akeneo) for every attribute whose linked records a non-ignored mapping reads a field
+    /// of: a mapping or fallback source with a reference-entity field, or a template token
+    /// such as {plant_info.scientific_name}. Mappings that use only the record code are
+    /// left out, since editing a record never changes its code.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> GetWatchedReferenceEntityAttributesAsync(
+        CancellationToken cancellationToken)
+    {
+        var watched = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (attributeMappingService == null)
+            return watched;
+
+        void Watch(string attributeCode, string entityCode)
+        {
+            var code = attributeCode?.Trim();
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+            var entity = string.IsNullOrWhiteSpace(entityCode) ? null : entityCode.Trim();
+            if (!watched.TryGetValue(code, out var known) || known == null)
+                watched[code] = entity;
+        }
+
+        var mappings = (await attributeMappingService.GetAllAkeneoAttributeMappingsAsync())
+            .Where(mapping => (NopTargetType)mapping.NopTargetTypeId != NopTargetType.Ignore)
+            .ToList();
+        var activeIds = mappings.Select(mapping => mapping.Id).ToHashSet();
+
+        foreach (var mapping in mappings)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if ((AkeneoAttributeMappingValueMode)mapping.ValueModeId == AkeneoAttributeMappingValueMode.Template)
+            {
+                if (templateRenderer == null || string.IsNullOrWhiteSpace(mapping.ValueTemplate))
+                    continue;
+                foreach (var field in templateRenderer.Validate(mapping.ValueTemplate).ReferenceFields ?? [])
+                    Watch(field.AttributeCode, null);
+            }
+            else if (!string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode))
+            {
+                Watch(mapping.AkeneoAttributeCode, mapping.AkeneoReferenceEntityCode);
+            }
+        }
+
+        foreach (var fallback in await attributeMappingService.GetAllFallbackSourcesAsync())
+        {
+            if (activeIds.Contains(fallback.AttributeMappingId) &&
+                !string.IsNullOrWhiteSpace(fallback.AkeneoReferenceEntityAttributeCode))
+            {
+                Watch(fallback.AkeneoAttributeCode, fallback.AkeneoReferenceEntityCode);
+            }
+        }
+
+        return watched;
+    }
+
+    public string BuildReferenceEntityProductSearchJson(
+        AkeneoProductBatchImportRequest request,
+        string attributeCode,
+        IEnumerable<string> recordCodes)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(attributeCode);
+
+        var codes = NormalizeCodes(recordCodes);
+        if (codes.Count == 0)
+            throw new ArgumentException("At least one record code is required.", nameof(recordCodes));
+
+        // Keep the profile's scope (family, categories, ...) but select by the
+        // changed records instead of by product update time.
+        var search = ParseSearch(request.SearchJson);
+        RemoveUpdatedCriteria(search);
+        search.Remove(attributeCode.Trim());
+        AddCriterion(search, attributeCode.Trim(), "IN", codes);
+        return SerializeSearch(search);
     }
 
     private async Task<HashSet<string>> ReadProductModelCodesAsync(

@@ -3,9 +3,6 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
-using Nop.Core.Caching;
-using Nop.Core.Configuration;
-using Nop.Core.Infrastructure;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 
@@ -16,12 +13,6 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 [TestFixture]
 public class AkeneoReferenceEntityOptionLabelTests
 {
-    // CacheKey reads its default cache time from AppSettings, which the nopCommerce engine
-    // normally registers at startup.
-    [OneTimeSetUp]
-    public void RegisterAppSettings() =>
-        Singleton<AppSettings>.Instance ??= new AppSettings([new CacheConfig()]);
-
     [Test]
     public async Task OptionFieldResolvesToLabelsKeyedByOptionCode()
     {
@@ -66,15 +57,8 @@ public class AkeneoReferenceEntityOptionLabelTests
                     $$"""{"{{field}}":[{"locale":null,"channel":null,"data":{{recordData}}}]}""").RootElement.Clone()
             });
 
-        // Pass-through cache: always runs the loader.
-        var cache = new Mock<IStaticCacheManager>();
-        cache.Setup(manager => manager.PrepareKeyForDefaultCache(It.IsAny<CacheKey>(), It.IsAny<object[]>()))
-            .Returns((CacheKey key, object[] _) => key);
-        cache.Setup(manager => manager.GetAsync(It.IsAny<CacheKey>(), It.IsAny<Func<Task<It.IsAnyType>>>()))
-            .Returns(new InvocationFunc(invocation => ((Delegate)invocation.Arguments[1]).DynamicInvoke()!));
-
         var resolver = new AkeneoReferenceEntityValueResolver(
-            new AkeneoProductValueResolver(), api.Object, cache.Object);
+            new AkeneoProductValueResolver(), api.Object);
         var product = new AkeneoProductDefinition
         {
             Identifier = "1038",

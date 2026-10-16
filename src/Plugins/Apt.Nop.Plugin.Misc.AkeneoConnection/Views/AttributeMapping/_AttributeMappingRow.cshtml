@@ -221,15 +221,9 @@
                         Reference Entity Field
                     </label>
 
-                    <select class="form-control akeneo-edit-reference-entity-field"
-                            v-model="m.draft.referenceEntityAttributeCode">
-
-                        <option v-for="o in referenceFieldOptions(m)"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-reference-entity-field" item-name="Reference entity field"
+                            v-model="m.draft.referenceEntityAttributeCode"
+                            v-bind:options="dropdownOptions(referenceFieldOptions(m))"></akeneo-search-select>
 
                     <small class="form-text text-muted">
                         Read this field from each linked
@@ -242,16 +236,10 @@
                         Target Type
                     </label>
 
-                    <select class="form-control akeneo-edit-target-type"
+                    <akeneo-search-select class="akeneo-edit-target-type" item-name="Target type"
                             v-model="m.draft.nopTargetTypeId"
-                            v-on:change="onTypeChange(m)">
-
-                        <option v-for="o in m.availableTargetTypes"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                            v-bind:options="dropdownOptions(m.availableTargetTypes)"
+                            v-on:change="onTypeChange(m)"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -261,17 +249,9 @@
                         Target Key
                     </label>
 
-                    <select class="form-control akeneo-edit-target-key"
-                            v-model="m.draft.nopTargetKey">
-
-                        <option value="">None</option>
-
-                        <option v-for="o in keyOptions(m.draft.nopTargetTypeId)"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-target-key" item-name="Target key"
+                            v-model="m.draft.nopTargetKey"
+                            v-bind:options="dropdownOptions(keyOptions(m.draft.nopTargetTypeId), 'None')"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -281,15 +261,9 @@
                         Specification Attribute
                     </label>
 
-                    <select class="form-control akeneo-edit-specification-attribute"
-                            v-model="m.draft.nopTargetEntityId">
-
-                        <option v-for="o in m.availableSpecificationAttributes"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-specification-attribute" item-name="Specification attribute"
+                            v-model="m.draft.nopTargetEntityId"
+                            v-bind:options="dropdownOptions(m.availableSpecificationAttributes)"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -299,15 +273,9 @@
                         Missing Value Handling
                     </label>
 
-                    <select class="form-control akeneo-edit-specification-missing-value-handling"
-                            v-model="m.draft.specificationMissingValueHandlingId">
-
-                        <option v-for="o in specificationMissingValueHandlingOptions"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-specification-missing-value-handling" item-name="Missing value handling"
+                            v-model="m.draft.specificationMissingValueHandlingId"
+                            v-bind:options="dropdownOptions(specificationMissingValueHandlingOptions)"></akeneo-search-select>
 
                     <small class="form-text text-muted">
                         Applied only when no matching nopCommerce specification
@@ -322,15 +290,9 @@
                         Product Attribute
                     </label>
 
-                    <select class="form-control akeneo-edit-product-attribute"
-                            v-model="m.draft.nopTargetEntityId">
-
-                        <option v-for="o in m.availableProductAttributes"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-product-attribute" item-name="Product attribute"
+                            v-model="m.draft.nopTargetEntityId"
+                            v-bind:options="dropdownOptions(m.availableProductAttributes)"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -340,15 +302,9 @@
                         Customer Role
                     </label>
 
-                    <select class="form-control akeneo-edit-tier-price-role"
-                            v-model="m.draft.nopTargetEntityId">
-                        <option value="">Select a customer role</option>
-                        <option v-for="o in availableCustomerRoles"
-                                v-bind:key="o.value"
-                                v-bind:value="o.value">
-                            {{ o.text }}
-                        </option>
-                    </select>
+                    <akeneo-search-select class="akeneo-edit-tier-price-role" item-name="Customer role"
+                            v-model="m.draft.nopTargetEntityId"
+                            v-bind:options="dropdownOptions(availableCustomerRoles, 'Select a customer role')"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -422,15 +378,9 @@
                               placeholder="{sku} - {root_type} {pack_size}"></textarea>
 
                     <div class="akeneo-template-token-toolbar mt-2">
-                        <select class="form-control form-control-sm"
-                                v-model="m.draft.selectedTemplateToken">
-                            <option value="">Insert a token...</option>
-                            <option v-for="option in templateTokenOptions()"
-                                    v-bind:key="option.key"
-                                    v-bind:value="option.key">
-                                {{ option.text }} — {{ '{' + option.key + '}' }}
-                            </option>
-                        </select>
+                        <akeneo-search-select item-name="Template token"
+                            v-model="m.draft.selectedTemplateToken"
+                            v-bind:options="dropdownOptions(templateTokenOptions(), 'Select a token')"></akeneo-search-select>
 
                         <button type="button"
                                 class="btn btn-sm btn-primary ml-2"
@@ -465,16 +415,10 @@
                             Fallback {{ fallbackIndex + 1 }}
                         </span>
 
-                        <select class="form-control form-control-sm akeneo-fallback-source-select"
-                                v-model="fallback.sourceKey"
-                                v-on:change="onFallbackSourceChanged(fallback)">
-                            <option value="">Select an Akeneo attribute</option>
-                            <option v-for="option in fallbackOptions(m, fallbackIndex)"
-                                    v-bind:key="option.key"
-                                    v-bind:value="option.key">
-                                {{ option.text }}
-                            </option>
-                        </select>
+                        <akeneo-search-select class="akeneo-fallback-source-select" item-name="Fallback source"
+                            v-model="fallback.sourceKey"
+                            v-bind:options="dropdownOptions(fallbackOptions(m, fallbackIndex), 'Select an Akeneo attribute')"
+                            v-on:change="onFallbackSourceChanged(fallback)"></akeneo-search-select>
 
                         <button type="button"
                                 class="btn btn-sm btn-default ml-2"

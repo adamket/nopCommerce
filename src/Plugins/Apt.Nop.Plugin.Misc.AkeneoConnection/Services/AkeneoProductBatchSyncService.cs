@@ -204,6 +204,70 @@ public class AkeneoProductBatchSyncService(
                 }
             }
 
+            // Reference entity records (e.g. plant_info) changed since the watermark:
+            // re-process the products that link them, which a product-only delta misses.
+            if (request.RunMode == AkeneoRunMode.Delta &&
+                !result.WasTruncated &&
+                (request.ContinueOnError || result.FailedCount == 0))
+            {
+                lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(
+                    request,
+                    lastLeaseRenewalUtc);
+
+                var recordChanges = await productModelDeltaFanOutService
+                    .FindChangedReferenceEntityRecordsAsync(request, cancellationToken);
+
+                if (recordChanges.Count > 0)
+                {
+                    result.AddMessage(
+                        "Reference entity delta found changed record(s): " +
+                        string.Join("; ", recordChanges
+                            .GroupBy(change => change.ReferenceEntityCode)
+                            .Select(group =>
+                                $"{group.Key}: {string.Join(", ", group.First().RecordCodes.Take(10))}" +
+                                (group.First().RecordCodes.Count > 10 ? ", ..." : string.Empty))) +
+                        ".");
+                }
+
+                foreach (var change in recordChanges)
+                {
+                    foreach (var recordCodeBatch in change.RecordCodes.Chunk(ProductModelCodeBatchSize))
+                    {
+                        if (result.WasTruncated ||
+                            (!request.ContinueOnError && result.FailedCount > 0))
+                        {
+                            completedAllPhases = false;
+                            break;
+                        }
+
+                        var recordPhase = await ProcessProductSearchAsync(
+                            request,
+                            result,
+                            productModelDeltaFanOutService.BuildReferenceEntityProductSearchJson(
+                                request,
+                                change.AttributeCode,
+                                recordCodeBatch),
+                            null,
+                            _ => AkeneoSyncInclusionReason.LinkedReferenceEntityRecordChange,
+                            processedProductKeys,
+                            parentProductCache,
+                            productModelCache,
+                            pageSize,
+                            lastLeaseRenewalUtc,
+                            cancellationToken);
+
+                        lastLeaseRenewalUtc = recordPhase.LastLeaseRenewalUtc;
+                        completedAllPhases &= recordPhase.CompletedAllPages;
+
+                        if (recordPhase.StopRun || result.WasTruncated)
+                        {
+                            completedAllPhases = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
             result.CompletedAllPages = completedAllPhases && !result.WasTruncated;
 
             if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
@@ -1968,6 +2032,9 @@ public class AkeneoProductBatchSyncService(
 
         if (reason.HasFlag(AkeneoSyncInclusionReason.LinkedAssetChange))
             reasons.Add("linked asset change");
+
+        if (reason.HasFlag(AkeneoSyncInclusionReason.LinkedReferenceEntityRecordChange))
+            reasons.Add("linked reference entity record change");
 
         return reasons.Count == 0
             ? "profile scope"

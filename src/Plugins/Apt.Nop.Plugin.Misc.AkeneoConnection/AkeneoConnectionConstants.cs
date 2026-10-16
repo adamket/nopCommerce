@@ -51,19 +51,5 @@ public static class AkeneoConnectionConstants
         "Apt.Nop.Plugin.Misc.AkeneoConnection.EntityMapping.";
 
 
-    /// <summary>
-    /// {0}: reference entity code; {1}: record code.
-    /// </summary>
-    public static CacheKey ReferenceEntityRecordCacheKey =>
-        new("Apt.Nop.Plugin.Misc.AkeneoConnection.ReferenceEntity.{0}.Record.{1}");
-
-    /// <summary>{0}: reference entity code.</summary>
-    public static CacheKey ReferenceEntityAttributesCacheKey =>
-        new("Apt.Nop.Plugin.Misc.AkeneoConnection.ReferenceEntity.{0}.Attributes");
-
-    /// <summary>{0}: reference entity code; {1}: attribute code.</summary>
-    public static CacheKey ReferenceEntityAttributeOptionsCacheKey =>
-        new("Apt.Nop.Plugin.Misc.AkeneoConnection.ReferenceEntity.{0}.Attribute.{1}.Options");
-
 
 }

@@ -42,6 +42,12 @@ public interface IAkeneoApiClient
             string attributeCode,
             CancellationToken cancellationToken = default);
 
+    /// <summary>Codes of the reference entity's records updated after the given time.</summary>
+    Task<IReadOnlyList<string>> GetUpdatedReferenceEntityRecordCodesAsync(
+        string referenceEntityCode,
+        DateTime updatedAfterUtc,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<JsonElement>> GetAttributeOptionsAsync(
         string attributeCode,
         int limit = 100,

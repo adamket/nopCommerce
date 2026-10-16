@@ -13,11 +13,20 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// </summary>
 public class AkeneoReferenceEntityValueResolver(
     IAkeneoProductValueResolver productValueResolver,
-    IAkeneoApiClient akeneoApiClient,
-    IStaticCacheManager staticCacheManager)
+    IAkeneoApiClient akeneoApiClient)
     : IAkeneoReferenceEntityValueResolver
 {
     public const string RecordCodeField = "@code";
+
+    // Cached for this resolver's lifetime only. It is scoped, so each sync run (or
+    // request) reads records fresh: an edited record is never served stale for the
+    // 60-minute static-cache lifetime, yet each record is fetched once per run.
+    private readonly Dictionary<string, AkeneoReferenceEntityRecordDefinition> _records =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeDefinition>> _attributes =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<AkeneoReferenceEntityAttributeOptionDefinition>> _options =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<AkeneoResolvedProductValue> ResolveAsync(
         AkeneoProductDefinition product,
@@ -178,13 +187,13 @@ public class AkeneoReferenceEntityValueResolver(
         string locale,
         CancellationToken cancellationToken)
     {
-        var attributes = await staticCacheManager.GetAsync(
-            staticCacheManager.PrepareKeyForDefaultCache(
-                AkeneoConnectionConstants.ReferenceEntityAttributesCacheKey,
-                referenceEntityCode.KeyPart()),
-            async () => await akeneoApiClient.GetReferenceEntityAttributesAsync(
+        if (!_attributes.TryGetValue(referenceEntityCode, out var attributes))
+        {
+            attributes = await akeneoApiClient.GetReferenceEntityAttributesAsync(
                 referenceEntityCode,
-                cancellationToken));
+                cancellationToken);
+            _attributes[referenceEntityCode] = attributes;
+        }
 
         var attribute = attributes?.FirstOrDefault(item =>
             string.Equals(item.Code?.Trim(), fieldCode, StringComparison.OrdinalIgnoreCase));
@@ -192,15 +201,15 @@ public class AkeneoReferenceEntityValueResolver(
         if (attribute?.Type is not ("single_option" or "multiple_options"))
             return null;
 
-        var options = await staticCacheManager.GetAsync(
-            staticCacheManager.PrepareKeyForDefaultCache(
-                AkeneoConnectionConstants.ReferenceEntityAttributeOptionsCacheKey,
-                referenceEntityCode.KeyPart(),
-                fieldCode.KeyPart()),
-            async () => await akeneoApiClient.GetReferenceEntityAttributeOptionsAsync(
+        var optionsKey = $"{referenceEntityCode}|{fieldCode}";
+        if (!_options.TryGetValue(optionsKey, out var options))
+        {
+            options = await akeneoApiClient.GetReferenceEntityAttributeOptionsAsync(
                 referenceEntityCode,
                 attribute.Code,
-                cancellationToken));
+                cancellationToken);
+            _options[optionsKey] = options;
+        }
 
         var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var option in options ?? [])
@@ -239,17 +248,17 @@ public class AkeneoReferenceEntityValueResolver(
         string recordCode,
         CancellationToken cancellationToken)
     {
-        var cacheKey = staticCacheManager.PrepareKeyForDefaultCache(
-            AkeneoConnectionConstants.ReferenceEntityRecordCacheKey,
-            referenceEntityCode.KeyPart(),
-            recordCode.KeyPart());
-
-        return await staticCacheManager.GetAsync(
-            cacheKey,
-            async () => await akeneoApiClient.GetReferenceEntityRecordAsync(
+        var key = $"{referenceEntityCode}|{recordCode}";
+        if (!_records.TryGetValue(key, out var record))
+        {
+            record = await akeneoApiClient.GetReferenceEntityRecordAsync(
                 referenceEntityCode,
                 recordCode,
-                cancellationToken));
+                cancellationToken);
+            _records[key] = record;
+        }
+
+        return record;
     }
 
     private static bool TryResolveRecordField(

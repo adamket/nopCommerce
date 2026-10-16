@@ -296,6 +296,44 @@ public class AkeneoApiClient : IAkeneoApiClient
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> GetUpdatedReferenceEntityRecordCodesAsync(
+        string referenceEntityCode,
+        DateTime updatedAfterUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceEntityCode))
+        {
+            throw new ArgumentException(
+                "Reference entity code is required.",
+                nameof(referenceEntityCode));
+        }
+
+        // The records endpoint filters on ISO 8601 timestamps and pages with _links.next.
+        var search = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["updated"] = new[]
+            {
+                new
+                {
+                    @operator = ">",
+                    value = updatedAfterUtc.ToUniversalTime()
+                        .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
+                }
+            }
+        });
+
+        var records = await GetPagedCollectionAsync<AkeneoReferenceEntityRecordDefinition>(
+            $"api/rest/v1/reference-entities/{Uri.EscapeDataString(referenceEntityCode.Trim())}/records",
+            new Dictionary<string, string?> { ["search"] = search },
+            cancellationToken);
+
+        return records
+            .Select(record => record.Code?.Trim())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList()!;
+    }
+
     public async Task<IReadOnlyList<JsonElement>> GetLocalesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync("api/rest/v1/locales", limit, cancellationToken);

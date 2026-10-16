@@ -5,6 +5,7 @@
 <!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
     Layout = "_AdminLayout";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-combobox.js");
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     //  NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
@@ -213,17 +214,10 @@
                                 <span>Mapping scope</span>
                             </div>
                             <div class="akeneo-toolbar-panel-body">
-                                <select id="akeneo-family-scope"
-                                        class="form-control"
-                                        v-model="selectedFamilyCode"
-                                        v-on:change="changeFamilyScope">
-                                    <option value="">Global defaults</option>
-                                    <option v-for="family in availableFamilies"
-                                            v-bind:key="family.value"
-                                            v-bind:value="family.value">
-                                        {{ family.text }}
-                                    </option>
-                                </select>
+                                <akeneo-search-select input-id="akeneo-family-scope" item-name="Mapping scope"
+                                    v-model="selectedFamilyCode"
+                                    v-bind:options="dropdownOptions(availableFamilies, 'Global defaults')"
+                                    v-on:change="changeFamilyScope"></akeneo-search-select>
                                 <div class="akeneo-toolbar-panel-hint">
                                     <template v-if="selectedFamilyCode">
                                         Editing overrides for <strong>{{ selectedFamilyLabel }}</strong>. Rows marked
@@ -236,30 +230,74 @@
                             </div>
                         </div>
 
-                        <div class="akeneo-toolbar-panel akeneo-toolbar-panel--actions">
+                        <div class="akeneo-mapping-actions">
+                            <button type="button" class="btn btn-primary"
+                                    v-if="!showMappingCreator"
+                                    aria-controls="akeneo-mapping-creator-panel"
+                                    aria-expanded="false"
+                                    v-on:click="showMappingCreator = true">
+                                <i class="fas fa-plus"></i>
+                                Add mapping
+                            </button>
+                            <div id="akeneo-mapping-creator-panel"
+                                 class="akeneo-toolbar-panel akeneo-toolbar-panel--actions"
+                                 v-if="showMappingCreator">
                             <div class="akeneo-toolbar-panel-label">
-                                <i class="fas fa-bolt"></i>
-                                <span>Actions</span>
+                                <i class="fas fa-plus"></i>
+                                <span>Add mapping</span>
+                                <button type="button" class="close ml-auto"
+                                        aria-label="Close add mapping"
+                                        title="Close add mapping"
+                                        v-on:click="showMappingCreator = false">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
                             </div>
                             <div class="akeneo-toolbar-panel-body">
-                                <button type="button"
-                                        class="btn btn-primary"
-                                        v-on:click="addComputedMapping">
-                                    <i class="fas fa-plus"></i>
-                                    Add computed mapping
-                                </button>
-                                <div class="akeneo-toolbar-panel-hint">
-                                    Build one nopCommerce value from multiple Akeneo attributes.
+                                <div class="akeneo-mapping-creator">
+                                    <div>
+                                        <label for="akeneo-mapping-kind">Mapping type</label>
+                                        <akeneo-search-select input-id="akeneo-mapping-kind" item-name="Mapping type"
+                                            v-model="newMappingKind"
+                                            v-bind:options="[{ value: 'attribute', label: 'Akeneo attribute' }, { value: 'computed', label: 'Computed value' }]"></akeneo-search-select>
+                                    </div>
+                                    <template v-if="newMappingKind === 'attribute'">
+                                        <div class="akeneo-mapping-source">
+                                            <label for="akeneo-mapping-source">{{ selectedFamilyCode ? 'Family attribute' : 'Akeneo attribute' }}</label>
+                                            <akeneo-search-select input-id="akeneo-mapping-source" item-name="Family attribute"
+                                                v-model="newSourceCode"
+                                                v-bind:options="availableSourceOptions"
+                                                placeholder="Search attributes by label or code"
+                                                empty-text="No attributes are available to add."></akeneo-search-select>
+                                        </div>
+                                    </template>
+                                    <div class="akeneo-toolbar-panel-hint" aria-live="polite">
+                                        <template v-if="newMappingKind === 'computed'">
+                                            Build a value using a template with one or more Akeneo attributes.
+                                        </template>
+                                        <template v-else-if="!attributeSources.length && !referenceEntityAttributes.length">
+                                            No attributes are available. Check the Akeneo connection and selected family, then reload.
+                                        </template>
+                                        <template v-else-if="!availableSourceOptions.length">All available attributes have been added. Edit an existing mapping below.</template>
+                                        <template v-else>
+                                            Add only the attributes you need. For reference entities, choose a field in the mapping editor.
+                                        </template>
+                                    </div>
+                                    <button type="button" class="btn btn-primary"
+                                            v-bind:disabled="newMappingKind === 'attribute' && !selectedSource"
+                                            v-on:click="addMapping">
+                                        <i class="fas fa-plus"></i>
+                                        Add mapping
+                                    </button>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="p-4" v-if="!groups.length">
                         <div class="alert alert-info mb-0">
-                            {{ selectedFamilyCode
-                            ? 'No Akeneo attributes were found for the selected family.'
-                            : 'No Akeneo attributes were found. Check the Sync Context connection, then reload this page.' }}
+                            <strong>No mappings yet.</strong>
+                            Click Add mapping to choose an Akeneo attribute or a computed value and create your first mapping.
                         </div>
                     </div>
 
@@ -671,7 +709,14 @@
                 });
             }
 
-            var mappings = appData.mappings.map(function (m) {
+            // Keep the complete source catalog for creation; only configured
+            // mappings belong in the working list. Saved Ignore overrides matter too.
+            var attributeSources = appData.mappings.filter(function (m) {
+                return !m.isComputed && !m.isReferenceEntityAttribute;
+            });
+            var mappings = appData.mappings.filter(function (m) {
+                return Number(m.id) > 0 || m.isInherited;
+            }).map(function (m) {
                 return hydrateMapping(m, false);
             });
 
@@ -682,6 +727,10 @@
                 data: function () {
                     return {
                         mappings: mappings,
+                        attributeSources: attributeSources,
+                        newMappingKind: 'attribute',
+                        showMappingCreator: false,
+                        newSourceCode: '',
                         referenceEntityAttributes: referenceEntityAttributes,
                         selectedFamilyCode: appData.selectedFamilyCode || '',
                         availableFamilies: appData.availableFamilies || [],
@@ -707,6 +756,42 @@
                     };
                 },
                 computed: {
+                    availableSources: function () {
+                        var standard = this.attributeSources.filter(function (source) {
+                            return !this.mappings.some(function (mapping) {
+                                return !mapping.isComputed &&
+                                    String(mapping.code).toLowerCase() === String(source.code).toLowerCase();
+                            });
+                        }, this);
+                        var references = this.referenceEntityAttributes.filter(function (definition) {
+                            return this.canAddReferenceMapping({
+                                isReferenceEntity: true,
+                                definition: definition,
+                                items: this.mappings.filter(function (mapping) {
+                                    return mapping.isReferenceEntityAttribute &&
+                                        this.referenceContainerKeyForMapping(mapping) === definition.key;
+                                }, this)
+                            });
+                        }, this);
+                        return standard.concat(references);
+                    },
+                    availableSourceOptions: function () {
+                        return this.availableSources.map(function (source) {
+                            return {
+                                value: source.code,
+                                label: source.label + ' (' + source.code + ')' +
+                                    (source.isReferenceEntityAttribute ? ' · Reference entity' : ''),
+                                hint: source.groupLabel || 'Ungrouped'
+                            };
+                        }).sort(function (a, b) {
+                            return a.hint.localeCompare(b.hint) || a.label.localeCompare(b.label);
+                        });
+                    },
+                    selectedSource: function () {
+                        return this.availableSources.find(function (source) {
+                            return source.code === this.newSourceCode;
+                        }, this);
+                    },
                     selectedFamilyLabel: function () {
                         if (!this.selectedFamilyCode)
                             return 'Global defaults';
@@ -754,10 +839,6 @@
                         });
 
                         this.referenceEntityAttributes.forEach(function (definition) {
-                            var group = ensureGroup(
-                                definition.groupLabel,
-                                definition.group);
-
                             var items = this.mappings.filter(function (mapping) {
                                 return mapping.isReferenceEntityAttribute &&
                                     String(mapping.code || '').toLowerCase() ===
@@ -768,6 +849,10 @@
                                         String(definition.referenceEntityCode || '').toLowerCase();
                             });
 
+                            if (!items.length)
+                                return;
+
+                            var group = ensureGroup(definition.groupLabel, definition.group);
                             group.entries.push({
                                 key: definition.key,
                                 isReferenceEntity: true,
@@ -802,6 +887,49 @@
                     }
                 },
                 methods: {
+                    dropdownOptions: function (options, emptyLabel) {
+                        var result = (options || []).map(function (option) {
+                            return {
+                                value: option.value === undefined ? option.key : option.value,
+                                label: option.text,
+                                hint: option.key ? '{' + option.key + '}' : ''
+                            };
+                        });
+                        if (emptyLabel !== undefined)
+                            result.unshift({ value: '', label: emptyLabel, hint: '' });
+                        return result;
+                    },
+                    addMapping: function () {
+                        if (this.newMappingKind === 'computed') {
+                            this.addComputedMapping();
+                            return;
+                        }
+                        var source = this.selectedSource;
+                        if (!source)
+                            return;
+                        if (source.isReferenceEntityAttribute) {
+                            this.addReferenceMapping({
+                                key: source.key,
+                                definition: source,
+                                isReferenceEntity: true,
+                                items: this.mappings.filter(function (mapping) {
+                                    return mapping.isReferenceEntityAttribute &&
+                                        this.referenceContainerKeyForMapping(mapping) === source.key;
+                                }, this)
+                            });
+                        } else {
+                            var mapping = hydrateMapping(source, true);
+                            // The catalog may describe a previously deleted mapping.
+                            // Start with clean values, never resurrect its saved settings.
+                            this.resetStandardMappingAfterDelete(mapping);
+                            mapping.clientAdded = true;
+                            mapping.editing = true;
+                            mapping.akeneoFamilyCode = this.selectedFamilyCode || '';
+                            this.mappings.push(mapping);
+                        }
+                        this.expanded[source.groupLabel || 'Ungrouped'] = true;
+                        this.newSourceCode = '';
+                    },
                     isIgnoreType: function (t) {
                         return Number(t) === this.targetTypes.ignore;
                     },
@@ -817,10 +945,10 @@
                         };
                     },
                     isExpanded: function (key) {
-                        return !!this.expanded[key];
+                        return this.expanded[key] !== false;
                     },
                     toggleGroup: function (key) {
-                        this.expanded[key] = !this.expanded[key];
+                        this.expanded[key] = !this.isExpanded(key);
                     },
                     keyOptions: function (typeId) {
                         return this.targetKeyMap[String(typeId)] || [];
@@ -1010,6 +1138,8 @@
                         return option ? option.text : 'Create missing values as specification options';
                     },
                     statusFor: function (m) {
+                        if (m.clientAdded)
+                            return { cls: 'is-attention', text: 'Unsaved' };
                         if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
                             return { cls: 'is-ignored', text: 'Ignored' };
                         }
@@ -1040,7 +1170,7 @@
                         }
 
                         return {
-                            text: 'No mapping',
+                              text: 'New family mapping',
                             badgeClass: 'badge-warning'
                         };
                     },
@@ -1246,12 +1376,18 @@
                         if (!entry || !entry.isReferenceEntity)
                             return false;
 
-                        // Allow zero saved mappings. Block only while an actual
-                        // client-side draft is already open for this definition.
-                        return !entry.items.some(function (mapping) {
+                        if (entry.items.some(function (mapping) {
                             return mapping.clientAdded &&
                                 Number(mapping.id) === 0;
-                        });
+                        }))
+                            return false;
+
+                        return entry.definition.availableReferenceEntityAttributes.some(function (field) {
+                            return field.value && !entry.items.some(function (mapping) {
+                                return String(this.activeReferenceFieldCode(mapping)).toLowerCase() ===
+                                    String(field.value).toLowerCase();
+                            }, this);
+                        }, this);
                     },
                     referenceFieldOptions: function (m) {
                         if (!m.isReferenceEntityAttribute)
@@ -1326,6 +1462,8 @@
                         this.expanded['Computed mappings'] = true;
                     },
                     addReferenceMapping: function (entry) {
+                        if (!this.canAddReferenceMapping(entry))
+                            return;
                         var definition = entry.definition;
                         var defaultTargetType = String(this.targetTypes.ignore);
 
@@ -1494,11 +1632,8 @@
                                     self.applyReplacementMapping(
                                         m,
                                         res.replacementMapping);
-                                } else if (m.isComputed ||
-                                           m.isReferenceEntityAttribute) {
-                                    self.removeMappingFromClient(m);
                                 } else {
-                                    self.resetStandardMappingAfterDelete(m);
+                                    self.removeMappingFromClient(m);
                                 }
 
                                 self.deleteConfirmation.visible = false;
@@ -1771,6 +1906,12 @@
                             }
                         });
                     }
+                }
+            }).component('akeneo-search-select', {
+                extends: window.AkeneoCombobox,
+                props: {
+                    multiple: { type: Boolean, default: false },
+                    clearable: { type: Boolean, default: false }
                 }
             }).mount('#akeneo-mapping-app');
         })();

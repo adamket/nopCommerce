@@ -24,5 +24,11 @@ public enum AkeneoSyncInclusionReason
     /// The product or one of its ancestor product models was selected only
     /// because a linked asset changed after the delta watermark.
     /// </summary>
-    LinkedAssetChange = 4
+    LinkedAssetChange = 4,
+
+    /// <summary>
+    /// The product links a reference entity record (directly or through an
+    /// ancestor product model) that was updated after the delta watermark.
+    /// </summary>
+    LinkedReferenceEntityRecordChange = 8
 }
