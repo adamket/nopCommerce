@@ -145,6 +145,13 @@
     border-color: var(--ak-accent-ink);
   }
 
+/* Keep disabled primary buttons purple instead of the admin theme's blue. */
+.akeneo-connection .btn-primary:disabled,
+.akeneo-connection .btn-primary.disabled {
+  background: var(--ak-accent);
+  border-color: var(--ak-accent);
+}
+
 .akeneo-connection .btn-default {
   background: var(--ak-surface);
   border: 1px solid var(--ak-line-strong);
