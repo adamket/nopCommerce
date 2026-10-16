@@ -1,4 +1,4 @@
-﻿@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoAttributeMappingListModel
@@ -1108,7 +1108,7 @@
 
                         if (this.isKeyType(t)) {
                             var k = this.keyOptions(t).find(function (o) { return o.value === m.nopTargetKey; });
-                            return (m.nopTargetKey && k) ? 'Target Key: ' + k.text : 'No target key selected';
+                            return (m.nopTargetKey && k) ? k.text : 'No target key selected';
                         }
                         if (this.isSpecType(t)) {
                             var s = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopTargetEntityId ; });

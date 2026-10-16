@@ -1,4 +1,4 @@
-﻿<div class="akeneo-row-shell"
+<div class="akeneo-row-shell"
      v-bind:class="{
          'akeneo-reference-field-shell': m.isReferenceEntityAttribute,
          'akeneo-computed-mapping-shell': m.isComputed
@@ -90,13 +90,12 @@
 
         <div class="akeneo-col akeneo-col-maps">
             <div>
-                <i class="fas fa-arrow-right akeneo-maps-arrow"></i>
                 <span class="akeneo-summary-target-type">
                     {{ targetTypeText(m) }}
                 </span>
             </div>
 
-            <div class="akeneo-summary-target-detail">
+            <div class="akeneo-summary-target-detail akeneo-summary-target-key">
                 {{ detail(m) }}
             </div>
 
