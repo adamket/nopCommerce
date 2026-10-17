@@ -673,9 +673,43 @@ public class AkeneoVariantRelationshipService(
     /// same engine as computed mappings (conditionals, {attribute.field}
     /// reference-entity fields). Legacy {axes}, {axis:code} and
     /// {attribute:code} tokens are translated first. As with computed
-    /// mappings, a token without a value leaves the whole name unrendered, and
-    /// the SKU is used instead.
+    /// mappings, a token without a value leaves an alternative unrendered. The
+    /// template's || alternatives are tried in order, so
+    /// "{attribute:variant_name} || {axes}" uses variant_name when it has a
+    /// value; when none renders, the SKU is used instead.
     /// </summary>
+    /// <summary>
+    /// The first || alternative of <paramref name="template"/> that renders a
+    /// non-empty name, or null when none does. An alternative that is plain
+    /// text once axis values are substituted (such as "{axes}") is used as is.
+    /// </summary>
+    internal static async Task<string> RenderAssociatedValueNameAsync(
+        IAkeneoValueTemplateRenderer renderer,
+        string template,
+        IReadOnlyList<(string AxisCode, string DisplayValue)> axisValues,
+        AkeneoValueTemplateContext templateContext)
+    {
+        foreach (var alternative in AkeneoAssociatedValueNameTemplate.SplitAlternatives(template))
+        {
+            var valueTemplate = AkeneoAssociatedValueNameTemplate.ToValueTemplate(alternative, axisValues);
+
+            if (AkeneoAssociatedValueNameTemplate.TryGetLiteral(valueTemplate, out var literal))
+            {
+                if (!string.IsNullOrWhiteSpace(literal))
+                    return literal.Trim();
+
+                continue;
+            }
+
+            var rendered = await renderer.RenderAsync(valueTemplate, templateContext);
+
+            if (rendered.Success && !string.IsNullOrWhiteSpace(rendered.Value))
+                return rendered.Value.Trim();
+        }
+
+        return null;
+    }
+
     private async Task<string> BuildAssociatedValueNameAsync(AkeneoVariantImportContext context)
     {
         var axisValues = context.AxisValuesByAkeneoCode.Values
@@ -684,25 +718,25 @@ public class AkeneoVariantRelationshipService(
                 DisplayValue: item.DisplayName))
             .ToList();
 
-        var rendered = await valueTemplateRenderer.RenderAsync(
-            AkeneoAssociatedValueNameTemplate.ToValueTemplate(
-                context.Options?.AssociatedValueNameTemplate,
-                axisValues),
-            new AkeneoValueTemplateContext
-            {
-                Source = context.SourceProduct,
-                Locale = context.Locale,
-                Channel = context.Channel,
-                Currency = context.Currency,
-                FamilyCode = context.AkeneoFamilyCode,
-                FamilyVariantCode = context.AkeneoFamilyVariantCode,
-                Sku = context.Sku
-            });
+        var templateContext = new AkeneoValueTemplateContext
+        {
+            Source = context.SourceProduct,
+            Locale = context.Locale,
+            Channel = context.Channel,
+            Currency = context.Currency,
+            FamilyCode = context.AkeneoFamilyCode,
+            FamilyVariantCode = context.AkeneoFamilyVariantCode,
+            Sku = context.Sku
+        };
 
-        var valueName = rendered.Success ? rendered.Value : null;
+        var valueName = await RenderAssociatedValueNameAsync(
+            valueTemplateRenderer,
+            context.Options?.AssociatedValueNameTemplate,
+            axisValues,
+            templateContext);
 
-        if (!string.IsNullOrWhiteSpace(valueName))
-            return valueName.Trim();
+        if (valueName != null)
+            return valueName;
 
         return context.Sku
             ?? context.AkeneoIdentifier

@@ -68,6 +68,23 @@ public partial class AkeneoProductCoreSynchronizer
         }
     }
 
+    /// <summary>
+    /// What creating the product leads to. The core section always creates a
+    /// simple, individually visible product; the family mapping's variant
+    /// relationship then sets the final shape: a parent becomes a grouped
+    /// product in Grouped products mode and always stays visible, while a
+    /// child's visibility follows "Hide child products when represented by
+    /// parent".
+    /// </summary>
+    private static string CreateProductNote(AkeneoEntityType sourceEntityType) =>
+        sourceEntityType == AkeneoEntityType.ProductModel
+            ? "A new nopCommerce product would be created before mapped sections are synchronized. " +
+              "As a parent it stays visible individually; it is a simple product unless the family mapping " +
+              "uses Grouped products mode, which makes it a grouped product."
+            : "A new simple nopCommerce product would be created before mapped sections are synchronized. " +
+              "It is visible individually unless the family mapping represents it as a child of its parent " +
+              "(associated-to-product or grouped mode) with \"Hide child products when represented by parent\" turned on.";
+
     private static void AddLifecycleOperations(
         AkeneoProductSyncContext context,
         AkeneoExecutableSectionPlan plan,
@@ -83,7 +100,7 @@ public partial class AkeneoProductCoreSynchronizer
                 null,
                 "Create product",
                 AkeneoDryRunOperationType.Create,
-                "A new simple, individually visible nopCommerce product would be created before mapped sections are synchronized.");
+                CreateProductNote(context.SourceEntityType));
             return;
         }
 

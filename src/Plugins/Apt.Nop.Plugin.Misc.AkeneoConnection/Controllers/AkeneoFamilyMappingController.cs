@@ -417,16 +417,35 @@ public class AkeneoFamilyMappingController(
         {
             // Same language as computed mapping templates; legacy {axes},
             // {axis:code} and {attribute:code} tokens are still accepted.
-            var validation = valueTemplateRenderer.Validate(
-                AkeneoAssociatedValueNameTemplate.ToValueTemplate(
-                    model.AssociatedValueNameTemplate,
-                    axisValues: null));
-
-            foreach (var error in validation.Errors)
+            // Each || alternative is validated on its own.
+            foreach (var alternative in AkeneoAssociatedValueNameTemplate.SplitAlternatives(
+                         model.AssociatedValueNameTemplate))
             {
-                ModelState.AddModelError(
-                    nameof(model.AssociatedValueNameTemplate),
-                    error);
+                if (string.IsNullOrWhiteSpace(alternative))
+                {
+                    ModelState.AddModelError(
+                        nameof(model.AssociatedValueNameTemplate),
+                        "Each || alternative in the value name template must have content.");
+                    continue;
+                }
+
+                var valueTemplate = AkeneoAssociatedValueNameTemplate.ToValueTemplate(
+                    alternative,
+                    axisValues: null);
+
+                // Axis-only alternatives such as {axes} become plain text, which
+                // is used as the name as-is and needs no value token.
+                if (AkeneoAssociatedValueNameTemplate.TryGetLiteral(valueTemplate, out _))
+                    continue;
+
+                var validation = valueTemplateRenderer.Validate(valueTemplate);
+
+                foreach (var error in validation.Errors)
+                {
+                    ModelState.AddModelError(
+                        nameof(model.AssociatedValueNameTemplate),
+                        error);
+                }
             }
         }
 

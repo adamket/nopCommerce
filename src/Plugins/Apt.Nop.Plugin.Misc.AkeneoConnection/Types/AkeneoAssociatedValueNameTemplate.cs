@@ -14,6 +14,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 ///   {attribute:code}         any value on the leaf Akeneo variant
 ///
 /// Unknown tokens are left literal. Missing axis or attribute values render empty.
+///
+/// Alternatives separated by || (outside braces) are tried in order and the
+/// first that renders a non-empty name wins, e.g.
+/// "{attribute:variant_name} || {axes}".
 /// </summary>
 public static class AkeneoAssociatedValueNameTemplate
 {
@@ -82,6 +86,69 @@ public static class AkeneoAssociatedValueNameTemplate
         return LegacyAttributeToken.Replace(
             converted,
             match => "{attr:" + match.Groups["code"].Value + "}");
+    }
+
+    /// <summary>
+    /// Splits a name template into its || alternatives, in order. A || inside
+    /// a {...} expression (for example in a quoted conditional result) does not
+    /// split, and {{ }} literal escapes are kept as they are. Alternatives are
+    /// trimmed; a template without || is one alternative.
+    /// </summary>
+    public static IReadOnlyList<string> SplitAlternatives(string template)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+            return [Default];
+
+        var alternatives = new List<string>();
+        var start = 0;
+        var depth = 0;
+
+        for (var index = 0; index < template.Length; index++)
+        {
+            var character = template[index];
+            var next = index + 1 < template.Length ? template[index + 1] : '\0';
+
+            if (depth == 0 && (character, next) is ('{', '{') or ('}', '}'))
+            {
+                index++;
+                continue;
+            }
+
+            if (character == '{')
+                depth++;
+            else if (character == '}' && depth > 0)
+                depth--;
+            else if (depth == 0 && character == '|' && next == '|')
+            {
+                alternatives.Add(template[start..index].Trim());
+                start = index + 2;
+                index++;
+            }
+        }
+
+        alternatives.Add(template[start..].Trim());
+        return alternatives;
+    }
+
+    /// <summary>
+    /// True when a template produced by <see cref="ToValueTemplate"/> has no
+    /// value tokens left, as happens for "{axes}" once the axis values are
+    /// substituted. The renderer rejects such a template, so it is used as
+    /// the name directly, with its {{ }} escapes undone.
+    /// </summary>
+    public static bool TryGetLiteral(string valueTemplate, out string literal)
+    {
+        literal = null;
+
+        if (valueTemplate == null)
+            return false;
+
+        var unescaped = valueTemplate.Replace("{{", string.Empty).Replace("}}", string.Empty);
+        if (unescaped.Contains('{') || unescaped.Contains('}'))
+            return false;
+
+        literal = valueTemplate.Replace("{{", "{").Replace("}}", "}");
+        return true;
     }
 
     public static string Render(

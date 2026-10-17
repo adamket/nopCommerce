@@ -5,6 +5,7 @@
 <!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
 @{
 
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-combobox.js");
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
@@ -161,15 +162,11 @@
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label asp-for="AkeneoFamilyCode"></label>
-                                            <select asp-for="AkeneoFamilyCode"
-                                                    class="form-control"
-                                                    v-model="form.akeneoFamilyCode">
-                                                <option v-for="family in availableAkeneoFamilies"
-                                                        v-bind:key="family.value || 'empty'"
-                                                        v-bind:value="family.value">
-                                                    {{ family.text }}
-                                                </option>
-                                            </select>
+                                            <akeneo-search-select input-id="AkeneoFamilyCode" item-name="Akeneo family"
+                                                                  v-model="form.akeneoFamilyCode"
+                                                                  v-bind:options="comboOptions(availableAkeneoFamilies)"
+                                                                  placeholder="Search families by label or code"></akeneo-search-select>
+                                            <input type="hidden" name="AkeneoFamilyCode" v-bind:value="form.akeneoFamilyCode ?? ''" />
                                             <span asp-validation-for="AkeneoFamilyCode"></span>
                                             <div class="alert alert-danger mt-2 mb-0"
                                                  role="alert"
@@ -219,16 +216,12 @@
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label asp-for="AkeneoFamilyVariantCode">Akeneo family variant</label>
-                                            <select asp-for="AkeneoFamilyVariantCode"
-                                                    class="form-control"
-                                                    v-model="form.akeneoFamilyVariantCode"
-                                                    v-bind:disabled="!form.akeneoFamilyCode">
-                                                <option v-for="variant in availableAkeneoFamilyVariants"
-                                                        v-bind:key="variant.value || 'family-default'"
-                                                        v-bind:value="variant.value">
-                                                    {{ variant.text }}
-                                                </option>
-                                            </select>
+                                            <akeneo-search-select input-id="AkeneoFamilyVariantCode" item-name="Akeneo family variant"
+                                                                  v-model="form.akeneoFamilyVariantCode"
+                                                                  v-bind:options="comboOptions(availableAkeneoFamilyVariants)"
+                                                                  v-bind:disabled="!form.akeneoFamilyCode"
+                                                                  placeholder="Search family variants"></akeneo-search-select>
+                                            <input type="hidden" name="AkeneoFamilyVariantCode" v-bind:value="form.akeneoFamilyVariantCode ?? ''" />
                                             <span asp-validation-for="AkeneoFamilyVariantCode"></span>
                                             <div class="form-text">
                                                 Choose a specific family variant for an exact mapping, or use the default to provide fallback behavior for variants without an enabled exact mapping.
@@ -243,22 +236,10 @@
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label asp-for="VariantRelationshipModeId"></label>
-                                            <select asp-for="VariantRelationshipModeId"
-                                                    class="form-control"
-                                                    v-model.number="form.variantRelationshipModeId">
-                                                <option value="@((int)AkeneoVariantRelationshipMode.None)">
-                                                    None
-                                                </option>
-                                                <option value="@((int)AkeneoVariantRelationshipMode.ProductAttributeCombinations)">
-                                                    Product attribute combinations
-                                                </option>
-                                                <option value="@((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue)">
-                                                    Associated-to-product product attribute values
-                                                </option>
-                                                <option value="@((int)AkeneoVariantRelationshipMode.GroupedProducts)">
-                                                    Grouped products
-                                                </option>
-                                            </select>
+                                            <akeneo-search-select input-id="VariantRelationshipModeId" item-name="Variant relationship mode"
+                                                                  v-model="form.variantRelationshipModeId"
+                                                                  v-bind:options="variantRelationshipModeOptions"></akeneo-search-select>
+                                            <input type="hidden" name="VariantRelationshipModeId" v-bind:value="form.variantRelationshipModeId" />
                                             <span asp-validation-for="VariantRelationshipModeId"></span>
                                             <div class="form-text">
                                                 Controls how newly inserted products and variants for this Akeneo family are represented in nopCommerce.
@@ -294,15 +275,10 @@
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label asp-for="ProductModelHierarchyModeId">Product model hierarchy</label>
-                                            <select asp-for="ProductModelHierarchyModeId"
-                                                    class="form-control"
-                                                    v-model.number="form.productModelHierarchyModeId">
-                                                <option v-for="mode in availableProductModelHierarchyModes"
-                                                        v-bind:key="mode.value"
-                                                        v-bind:value="Number(mode.value)">
-                                                    {{ mode.text }}
-                                                </option>
-                                            </select>
+                                            <akeneo-search-select input-id="ProductModelHierarchyModeId" item-name="Product model hierarchy"
+                                                                  v-model="form.productModelHierarchyModeId"
+                                                                  v-bind:options="comboOptions(availableProductModelHierarchyModes, true)"></akeneo-search-select>
+                                            <input type="hidden" name="ProductModelHierarchyModeId" v-bind:value="form.productModelHierarchyModeId" />
                                             <span asp-validation-for="ProductModelHierarchyModeId"></span>
                                             <div class="form-text">
                                                 Choose <strong>Root product model</strong> to create only the root nopCommerce parent. Intermediate Akeneo submodels still contribute inherited values and variant-axis values, but are not imported as products.
@@ -317,15 +293,11 @@
                                         <div class="col-md-6">
                                             <div class="form-group">
                                                 <label asp-for="AssociatedProductAttributeId"></label>
-                                                <select asp-for="AssociatedProductAttributeId"
-                                                        class="form-control"
-                                                        v-model="form.associatedProductAttributeId">
-                                                    <option v-for="attribute in availableProductAttributes"
-                                                            v-bind:key="attribute.value || 'empty'"
-                                                            v-bind:value="attribute.value">
-                                                        {{ attribute.text }}
-                                                    </option>
-                                                </select>
+                                                <akeneo-search-select input-id="AssociatedProductAttributeId" item-name="nopCommerce product attribute"
+                                                                      v-model="form.associatedProductAttributeId"
+                                                                      v-bind:options="comboOptions(availableProductAttributes, true)"
+                                                                      placeholder="Search product attributes"></akeneo-search-select>
+                                                <input type="hidden" name="AssociatedProductAttributeId" v-bind:value="form.associatedProductAttributeId ?? ''" />
                                                 <span asp-validation-for="AssociatedProductAttributeId"></span>
                                                 <div class="form-text">
                                                     Required only for associated-to-product product attribute value mode.
@@ -349,7 +321,9 @@
                                                     reference-entity fields such as {root_variant.label}, built-ins {sku} and {identifier},
                                                     and conditionals such as {root_variant == potted ? " {container_size}" : ""}.
                                                     {axes}, {axis:code} and {attribute:code} still work.
-                                                    If any value is missing, the SKU is used as the name.
+                                                    Separate alternatives with ||; the first with all its values wins,
+                                                    e.g. {attribute:variant_name} || {axes} uses variant_name when it is filled in.
+                                                    If no alternative has all its values, the SKU is used as the name.
                                                 </div>
                                             </div>
                                         </div>
@@ -454,15 +428,13 @@
                                                     <div class="akeneo-col">
                                                         <div class="form-group mb-0">
                                                             <label>nopCommerce product attribute</label>
-                                                            <select class="form-control"
-                                                                    v-bind:name="axisName(index, 'NopProductAttributeId')"
-                                                                    v-model.number="row.nopProductAttributeId">
-                                                                <option v-for="attribute in availableProductAttributes"
-                                                                        v-bind:key="attribute.value || 'empty'"
-                                                                        v-bind:value="numberOrEmpty(attribute.value)">
-                                                                    {{ attribute.text }}
-                                                                </option>
-                                                            </select>
+                                                            <akeneo-search-select item-name="nopCommerce product attribute"
+                                                                                  v-model="row.nopProductAttributeId"
+                                                                                  v-bind:options="comboOptions(availableProductAttributes, true)"
+                                                                                  placeholder="Search product attributes"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="axisName(index, 'NopProductAttributeId')"
+                                                                   v-bind:value="row.nopProductAttributeId ?? ''" />
                                                         </div>
                                                     </div>
 
@@ -591,16 +563,14 @@
                                                                v-bind:name="subModelRuleName(index, 'FamilyMappingId')"
                                                                v-bind:value="row.familyMappingId" />
 
-                                                        <select class="form-control"
-                                                                v-bind:name="subModelRuleName(index, 'AkeneoAxisAttributeCode')"
-                                                                v-model="row.akeneoAxisAttributeCode"
-                                                                v-on:change="loadSubModelAttributeOptions(row, true)">
-                                                            <option v-for="attribute in availableSubModelAxisAttributes"
-                                                                    v-bind:key="attribute.value || 'empty-submodel'"
-                                                                    v-bind:value="attribute.value">
-                                                                {{ attribute.text }}
-                                                            </option>
-                                                        </select>
+                                                        <akeneo-search-select item-name="Sub-model axis"
+                                                                              v-model="row.akeneoAxisAttributeCode"
+                                                                              v-bind:options="comboOptions(availableSubModelAxisAttributes)"
+                                                                              v-on:change="loadSubModelAttributeOptions(row, true)"
+                                                                              placeholder="Search axes"></akeneo-search-select>
+                                                        <input type="hidden"
+                                                               v-bind:name="subModelRuleName(index, 'AkeneoAxisAttributeCode')"
+                                                               v-bind:value="row.akeneoAxisAttributeCode ?? ''" />
                                                     </div>
                                                 </div>
 
@@ -608,27 +578,16 @@
                                                     <div class="form-group mb-0">
                                                         <label>Sub-model value</label>
 
-                                                        <select v-if="row.subModelSupportsOptions"
-                                                                class="form-control"
-                                                                v-bind:name="subModelRuleName(index, 'TriggerValue')"
-                                                                v-model="row.triggerValue"
-                                                                v-bind:disabled="
-                                                                    !row.akeneoAxisAttributeCode ||
-                                                                    row.subModelOptionsLoading">
-                                                            <option value="">
-                                                                {{
-                                                                    row.subModelOptionsLoading
-                                                                        ? 'Loading values...'
-                                                                        : 'Select a value'
-                                                                }}
-                                                            </option>
-
-                                                            <option v-for="option in row.subModelOptions"
-                                                                    v-bind:key="option.value"
-                                                                    v-bind:value="option.value">
-                                                                {{ option.text }}
-                                                            </option>
-                                                        </select>
+                                                        <template v-if="row.subModelSupportsOptions">
+                                                            <akeneo-search-select item-name="Sub-model value"
+                                                                                  v-model="row.triggerValue"
+                                                                                  v-bind:options="valueOptions(row.subModelOptions, row.subModelOptionsLoading)"
+                                                                                  v-bind:disabled="!row.akeneoAxisAttributeCode || row.subModelOptionsLoading"
+                                                                                  placeholder="Search values"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'TriggerValue')"
+                                                                   v-bind:value="row.triggerValue ?? ''" />
+                                                        </template>
 
                                                         <input v-else
                                                                type="text"
@@ -644,18 +603,14 @@
                                                     <div class="form-group mb-0">
                                                         <label>Variant attribute</label>
 
-                                                        <select class="form-control"
-                                                                v-bind:name="subModelRuleName(index, 'VariantAxisAttributeCode')"
-                                                                v-model="row.variantAxisAttributeCode"
-                                                                v-on:change="loadVariantAttributeOptions(row, true)">
-                                                            <option value="">No variant condition</option>
-
-                                                            <option v-for="attribute in availableVariantAttributes"
-                                                                    v-bind:key="attribute.value || 'empty-variant'"
-                                                                    v-bind:value="attribute.value">
-                                                                {{ attribute.text }}
-                                                            </option>
-                                                        </select>
+                                                        <akeneo-search-select item-name="Variant attribute"
+                                                                              v-model="row.variantAxisAttributeCode"
+                                                                              v-bind:options="[{ value: '', label: 'No variant condition', hint: '' }].concat(comboOptions(availableVariantAttributes))"
+                                                                              v-on:change="loadVariantAttributeOptions(row, true)"
+                                                                              placeholder="Search attributes"></akeneo-search-select>
+                                                        <input type="hidden"
+                                                               v-bind:name="subModelRuleName(index, 'VariantAxisAttributeCode')"
+                                                               v-bind:value="row.variantAxisAttributeCode ?? ''" />
 
                                                       @*   <div class="form-text">
                                                             Select a simple-select attribute stored on the leaf variant.
@@ -667,26 +622,14 @@
                                                     <div class="form-group mb-0">
                                                         <label>Variant value</label>
 
-                                                        <select class="form-control"
-                                                                v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
-                                                                v-model="row.variantTriggerValue"
-                                                                v-bind:disabled="
-                                                            !row.variantAxisAttributeCode ||
-                                                            row.variantOptionsLoading">
-                                                            <option value="">
-                                                                {{
-                                                                row.variantOptionsLoading
-                                                                ? 'Loading values...'
-                                                                : 'Select a value'
-                                                                }}
-                                                            </option>
-
-                                                            <option v-for="option in row.variantOptions"
-                                                                    v-bind:key="option.value"
-                                                                    v-bind:value="option.value">
-                                                                {{ option.text }}
-                                                            </option>
-                                                        </select>
+                                                        <akeneo-search-select item-name="Variant value"
+                                                                              v-model="row.variantTriggerValue"
+                                                                              v-bind:options="valueOptions(row.variantOptions, row.variantOptionsLoading)"
+                                                                              v-bind:disabled="!row.variantAxisAttributeCode || row.variantOptionsLoading"
+                                                                              placeholder="Search values"></akeneo-search-select>
+                                                        <input type="hidden"
+                                                               v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
+                                                               v-bind:value="row.variantTriggerValue ?? ''" />
 
                                                        @*  <div class="form-text">
                                                             The Akeneo option code is saved, while the translated label is displayed.
@@ -709,15 +652,12 @@
                                                     <div class="col-md-5">
                                                         <div class="form-group mb-0">
                                                             <label>Relationship override</label>
-                                                            <select class="form-control"
-                                                                    v-bind:name="subModelRuleName(index, 'VariantRelationshipOverrideModeId')"
-                                                                    v-model.number="row.variantRelationshipOverrideModeId">
-                                                                <option v-for="mode in availableVariantRelationshipModes"
-                                                                        v-bind:key="mode.value"
-                                                                        v-bind:value="Number(mode.value)">
-                                                                    {{ mode.text }}
-                                                                </option>
-                                                            </select>
+                                                            <akeneo-search-select item-name="Relationship override"
+                                                                                  v-model="row.variantRelationshipOverrideModeId"
+                                                                                  v-bind:options="comboOptions(availableVariantRelationshipModes, true)"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'VariantRelationshipOverrideModeId')"
+                                                                   v-bind:value="row.variantRelationshipOverrideModeId" />
                                                             <div class="form-text">
                                                                 None imports a matching leaf as a standalone product when no existing variant structure must be preserved.
                                                             </div>
@@ -842,7 +782,7 @@
     </div>
 </div>
 
-<script>
+<script asp-location="Footer">
     (() => {
         const { createApp } = Vue;
 
@@ -922,6 +862,15 @@
 
                 usesChildProducts() {
                     return this.isAssociatedMode || this.isGroupedMode;
+                },
+
+                variantRelationshipModeOptions() {
+                    return [
+                        { value: this.modes.none, label: 'None', hint: '' },
+                        { value: this.modes.combinations, label: 'Product attribute combinations', hint: '' },
+                        { value: this.modes.associated, label: 'Associated-to-product product attribute values', hint: '' },
+                        { value: this.modes.grouped, label: 'Grouped products', hint: '' }
+                    ];
                 }
             },
 
@@ -1365,6 +1314,35 @@
                     return Number(value);
                 },
 
+                // { text, value } lists to <akeneo-search-select> options. "Label (code)"
+                // text is split into the label and a monospace code hint, as on the
+                // attribute mappings page. Numeric lists keep '' for their empty option.
+                comboOptions(options, numeric = false) {
+                    return (options || []).map(option => {
+                        const raw = option.value ?? '';
+                        const value = numeric ? this.numberOrEmpty(raw) : raw;
+                        const text = String(option.text ?? raw);
+                        const suffix = ` (${raw})`;
+                        const hasCode = raw !== '' && text.endsWith(suffix);
+
+                        return {
+                            value,
+                            label: hasCode ? text.slice(0, -suffix.length) : text,
+                            hint: hasCode ? String(raw) : ''
+                        };
+                    });
+                },
+
+                // Option values for a rule condition, behind a "Select a value" (or
+                // loading) placeholder.
+                valueOptions(options, loading) {
+                    return [{
+                        value: '',
+                        label: loading ? 'Loading values...' : 'Select a value',
+                        hint: ''
+                    }].concat(this.comboOptions(options));
+                },
+
                 axisRowNeedsAttention(row) {
                     return !row.akeneoAttributeCode || !row.nopProductAttributeId;
                 },
@@ -1397,6 +1375,12 @@
                         ? 'is-attention'
                         : 'is-mapped';
                 }
+            }
+        }).component('akeneo-search-select', {
+            extends: window.AkeneoCombobox,
+            props: {
+                multiple: { type: Boolean, default: false },
+                clearable: { type: Boolean, default: false }
             }
         }).mount('#akeneo-family-variant-config-edit-app');
     })();
