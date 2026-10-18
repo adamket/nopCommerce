@@ -58,6 +58,7 @@
                                     <template v-if="familyCodes.length">
                                         Scanning {{ familyCodes.length }} {{ familyCodes.length === 1 ? 'family' : 'families' }}.
                                         The unbound-product report needs a whole-catalog scan.
+                                        Categories are always scanned in full.
                                     </template>
                                     <template v-else>
                                         No families selected: the whole Akeneo catalog is scanned.
@@ -93,7 +94,8 @@
                                 </div>
                                 <div class="akeneo-toolbar-panel-hint">
                                     Scan reads Akeneo and nopCommerce without writing anything. Commit rescans,
-                                    writes every matched binding plus the conflicts you resolved, and never changes a nopCommerce product.
+                                    writes every matched binding plus the conflicts you resolved, and never changes a nopCommerce product or category.
+                                    Categories are matched by the name and parent the migration created them from; existing category mappings are kept.
                                 </div>
                             </div>
                         </div>
@@ -119,7 +121,7 @@
                                         <tbody>
                                             <tr><th>Matched</th><td class="is-mapped">{{ tile.counts.matched }}</td></tr>
                                             <tr><th>Already bound</th><td>{{ tile.counts.alreadyBound }}</td></tr>
-                                            <tr v-if="tile.key !== 'axisValues'"><th>Unmatched (sync will create)</th><td>{{ tile.counts.unmatched }}</td></tr>
+                                            <tr v-if="tile.key !== 'axisValues'"><th>{{ tile.key === 'categories' ? 'Unmatched (map manually)' : 'Unmatched (sync will create)' }}</th><td>{{ tile.counts.unmatched }}</td></tr>
                                             <tr v-if="tile.key !== 'axisValues'"><th>Conflict</th><td v-bind:class="{ 'is-attention': tile.counts.conflict }">{{ tile.counts.conflict }}</td></tr>
                                             <tr v-if="tile.key !== 'models'"><th>Issue</th><td v-bind:class="{ 'is-danger': tile.counts.issue }">{{ tile.counts.issue }}</td></tr>
                                         </tbody>
@@ -339,7 +341,8 @@
                     return [
                         { key: 'models', label: 'Product models → parent products', counts: this.report.models },
                         { key: 'variants', label: 'Variants → products / combinations', counts: this.report.variants },
-                        { key: 'axisValues', label: 'Axis options → attribute values', counts: this.report.axisValues }
+                        { key: 'axisValues', label: 'Axis options → attribute values', counts: this.report.axisValues },
+                        { key: 'categories', label: 'Categories → nopCommerce categories', counts: this.report.categories }
                     ];
                 },
                 chosenCount: function () {

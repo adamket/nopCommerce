@@ -3,8 +3,8 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Binding;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 /// <summary>
-/// Binds Akeneo product models, variants and variant-axis options to the
-/// nopCommerce products, combinations and attribute values that already
+/// Binds Akeneo product models, variants, variant-axis options and categories to the
+/// nopCommerce products, combinations, attribute values and categories that already
 /// represent them. Bindings are global (not per sync profile).
 /// </summary>
 public interface IAkeneoCatalogBindingService

@@ -33,6 +33,8 @@ public sealed class AkeneoCatalogBindingReport
 
     public AkeneoBindingCounts AxisValues { get; set; } = new();
 
+    public AkeneoBindingCounts Categories { get; set; } = new();
+
     public IList<AkeneoBindingConflict> Conflicts { get; set; } =
         new List<AkeneoBindingConflict>();
 
@@ -110,7 +112,7 @@ public sealed class AkeneoBindingConflictResolution
 
 public sealed class AkeneoBindingIssue
 {
-    /// <summary>ProductModel, Variant, AxisValue or Family.</summary>
+    /// <summary>ProductModel, Variant, AxisValue, Family or Category.</summary>
     public string Level { get; set; }
 
     public string AkeneoCode { get; set; }

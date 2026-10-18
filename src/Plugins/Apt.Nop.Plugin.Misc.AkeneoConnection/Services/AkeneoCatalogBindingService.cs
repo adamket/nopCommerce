@@ -16,7 +16,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// Binds an existing nopCommerce catalog to Akeneo without touching any
 /// nopCommerce entity. Variants are matched by SKU; each product model's
 /// nopCommerce parent is then inferred from where its matched variants live
-/// (combination owner, associated-product owner or grouped parent). Only the
+/// (combination owner, associated-product owner or grouped parent). Categories
+/// are matched by the name and parent the migration created them from. Only the
 /// plugin's global entity-mapping table is written.
 /// </summary>
 public class AkeneoCatalogBindingService(
@@ -31,7 +32,8 @@ public class AkeneoCatalogBindingService(
     IRepository<Product> productRepository,
     IRepository<ProductAttributeCombination> combinationRepository,
     IRepository<ProductAttributeMapping> productAttributeMappingRepository,
-    IRepository<ProductAttributeValue> productAttributeValueRepository)
+    IRepository<ProductAttributeValue> productAttributeValueRepository,
+    IRepository<Category> categoryRepository)
     : IAkeneoCatalogBindingService
 {
     private const int PageSize = 100;
@@ -128,6 +130,8 @@ public class AkeneoCatalogBindingService(
 
         public HashSet<int> ExistingBoundProductIds { get; } = new();
 
+        public List<AkeneoCategoryBindingPlan> Categories { get; } = new();
+
         public void AddIssue(string level, string code, string familyCode, string message) =>
             Issues.Add(new AkeneoBindingIssue
             {
@@ -212,7 +216,7 @@ public class AkeneoCatalogBindingService(
                 $"{report.Conflicts.Count} conflict(s) left unbound.";
 
             runRecord.FinishedOnUtc = DateTime.UtcNow;
-            runRecord.TotalRead = plan.Leaves.Count + plan.Models.Count;
+            runRecord.TotalRead = plan.Leaves.Count + plan.Models.Count + plan.Categories.Count;
             runRecord.CreatedCount = written;
             runRecord.SkippedCount = report.Conflicts.Count;
             runRecord.WarningCount = report.IssueTotal;
@@ -301,6 +305,7 @@ public class AkeneoCatalogBindingService(
         ResolveStandaloneLeaves(plan);
         ResolveModels(plan, existing.ModelParents, conflictChoices);
         await ResolveAxisValuesAsync(plan, existing.AxisValues, cancellationToken);
+        await ResolveCategoriesAsync(plan, cancellationToken);
 
         return plan;
     }
@@ -977,6 +982,42 @@ public class AkeneoCatalogBindingService(
         }
     }
 
+    /// <summary>
+    /// Matches every Akeneo category to the nopCommerce category the migration
+    /// created it from (see <see cref="AkeneoCategoryBindingPlanner"/>).
+    /// Categories are catalog-wide, so the family filter does not apply.
+    /// </summary>
+    private async Task ResolveCategoriesAsync(BindingPlan plan, CancellationToken cancellationToken)
+    {
+        var akeneoCategories = await akeneoApiClient.GetCategoriesAsync(PageSize, cancellationToken);
+
+        var nopCategories = await categoryRepository.Table
+            .Where(category => !category.Deleted)
+            .ToListAsync();
+
+        var existing = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var mapping in await entityMappingService
+                     .GetAkeneoNopEntityMappingsAsync(AkeneoEntityType.Category))
+        {
+            if (mapping.NopEntityTypeId == (int)NopEntityType.Category &&
+                !string.IsNullOrWhiteSpace(mapping.AkeneoCode))
+            {
+                existing[mapping.AkeneoCode.Trim()] = mapping.NopEntityId;
+            }
+        }
+
+        plan.Categories.AddRange(AkeneoCategoryBindingPlanner.Plan(
+            akeneoCategories,
+            nopCategories,
+            existing));
+
+        foreach (var category in plan.Categories.Where(category =>
+                     category.Status is AkeneoBindingStatus.Issue or AkeneoBindingStatus.Conflict))
+        {
+            plan.AddIssue("Category", category.AkeneoCode, null, category.Message);
+        }
+    }
+
     #endregion
 
     #region Write
@@ -1040,6 +1081,22 @@ public class AkeneoCatalogBindingService(
             }
         }
 
+        foreach (var category in plan.Categories.Where(category =>
+                     category.Status == AkeneoBindingStatus.Matched))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                    AkeneoEntityType.Category,
+                    category.AkeneoCode,
+                    null,
+                    NopEntityType.Category,
+                    category.NopCategoryId.Value))
+            {
+                written++;
+            }
+        }
+
         scope.Complete();
 
         return written;
@@ -1068,6 +1125,9 @@ public class AkeneoCatalogBindingService(
             Count(report.AxisValues, axis.Status);
 
         report.AxisValues.Issue = plan.ConflictingAxisCodes.Count;
+
+        foreach (var category in plan.Categories)
+            Count(report.Categories, category.Status);
 
         foreach (var model in plan.Models.Values
                      .Where(model => model.Status == AkeneoBindingStatus.Conflict)
