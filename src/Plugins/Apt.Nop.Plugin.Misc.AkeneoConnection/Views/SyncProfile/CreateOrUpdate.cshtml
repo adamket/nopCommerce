@@ -300,11 +300,12 @@
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-channel">Akeneo channel</label></div>
                             <div class="col-md-9">
-                                <select id="sp-channel" class="form-control"
-                                        v-bind:class="{ 'is-invalid': fieldError('AkeneoChannel') }"
-                                        v-model="form.akeneoChannel">
-                                    <option v-for="option in options.channels" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-channel" item-name="Akeneo channel"
+                                                      v-model="form.akeneoChannel"
+                                                      v-bind:options="selectOptions(options.channels)"
+                                                      v-bind:class="{ 'is-invalid': fieldError('AkeneoChannel') }"
+                                                      placeholder="Search channels by label or code"
+                                                      empty-text="No Akeneo channels are available."></akeneo-search-select>
                                 <div class="invalid-feedback d-block" v-if="fieldError('AkeneoChannel')">{{ fieldError('AkeneoChannel') }}</div>
                             </div>
                         </div>
@@ -438,11 +439,10 @@
                         <div class="form-group row" v-for="field in syncSelects" v-bind:key="field.key">
                             <div class="col-md-3 text-right"><label class="control-label" v-bind:for="'sp-' + field.key">{{ field.label }}</label></div>
                             <div class="col-md-9">
-                                <select v-bind:id="'sp-' + field.key" class="form-control"
-                                        v-bind:class="{ 'is-invalid': fieldError(field.name) }"
-                                        v-model="form[field.key]">
-                                    <option v-for="option in options[field.options]" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select v-bind:input-id="'sp-' + field.key" v-bind:item-name="field.label"
+                                                      v-model="form[field.key]"
+                                                      v-bind:options="selectOptions(options[field.options])"
+                                                      v-bind:class="{ 'is-invalid': fieldError(field.name) }"></akeneo-search-select>
                                 <div class="invalid-feedback d-block" v-if="fieldError(field.name)">{{ fieldError(field.name) }}</div>
                                 <span class="form-text text-muted" v-if="field.help">{{ field.help }}</span>
                             </div>
@@ -496,9 +496,9 @@
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-category-filter-mode">Category filter mode</label></div>
                             <div class="col-md-9">
-                                <select id="sp-category-filter-mode" class="form-control" v-model="form.categoryFilterModeId">
-                                    <option v-for="option in options.categoryFilterModes" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-category-filter-mode" item-name="Category filter mode"
+                                                      v-model="form.categoryFilterModeId"
+                                                      v-bind:options="selectOptions(options.categoryFilterModes)"></akeneo-search-select>
                             </div>
                         </div>
 
@@ -519,20 +519,19 @@
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-enabled-filter">Product enabled filter</label></div>
                             <div class="col-md-9">
-                                <select id="sp-enabled-filter" class="form-control" v-model="form.productEnabledFilterId">
-                                    <option v-for="option in options.productEnabledFilters" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-enabled-filter" item-name="Product enabled filter"
+                                                      v-model="form.productEnabledFilterId"
+                                                      v-bind:options="selectOptions(options.productEnabledFilters)"></akeneo-search-select>
                             </div>
                         </div>
 
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-completeness">Completeness rule</label></div>
                             <div class="col-md-9">
-                                <select id="sp-completeness" class="form-control"
-                                        v-bind:class="{ 'is-invalid': fieldError('CompletenessFilterId') }"
-                                        v-model="form.completenessFilterId">
-                                    <option v-for="option in options.completenessFilters" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-completeness" item-name="Completeness rule"
+                                                      v-model="form.completenessFilterId"
+                                                      v-bind:options="selectOptions(options.completenessFilters)"
+                                                      v-bind:class="{ 'is-invalid': fieldError('CompletenessFilterId') }"></akeneo-search-select>
                                 <div class="invalid-feedback d-block" v-if="fieldError('CompletenessFilterId')">{{ fieldError('CompletenessFilterId') }}</div>
                                 <span class="form-text text-muted">Controls completeness filtering for normal profile runs. Full reconciliation runs always require 100% completeness for the selected Akeneo channel.</span>
                             </div>
@@ -541,11 +540,10 @@
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-updated-mode">Updated filter mode</label></div>
                             <div class="col-md-9">
-                                <select id="sp-updated-mode" class="form-control"
-                                        v-bind:class="{ 'is-invalid': fieldError('UpdatedFilterModeId') }"
-                                        v-model="form.updatedFilterModeId">
-                                    <option v-for="option in options.updatedFilterModes" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-updated-mode" item-name="Updated filter mode"
+                                                      v-model="form.updatedFilterModeId"
+                                                      v-bind:options="selectOptions(options.updatedFilterModes)"
+                                                      v-bind:class="{ 'is-invalid': fieldError('UpdatedFilterModeId') }"></akeneo-search-select>
                                 <div class="invalid-feedback d-block" v-if="fieldError('UpdatedFilterModeId')">{{ fieldError('UpdatedFilterModeId') }}</div>
                                 <span class="form-text text-muted">Delta runs use this policy to determine the Akeneo updated cutoff. Full runs ignore it.</span>
                                 <div class="alert alert-info py-2 mt-2 mb-0" role="status">
@@ -594,9 +592,9 @@
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-parent-filter">Product parent filter mode</label></div>
                             <div class="col-md-9">
-                                <select id="sp-parent-filter" class="form-control" v-model="form.productParentFilterModeId">
-                                    <option v-for="option in options.productParentFilterModes" v-bind:key="option.value" v-bind:value="option.value">{{ option.text }}</option>
-                                </select>
+                                <akeneo-search-select input-id="sp-parent-filter" item-name="Product parent filter mode"
+                                                      v-model="form.productParentFilterModeId"
+                                                      v-bind:options="selectOptions(options.productParentFilterModes)"></akeneo-search-select>
                             </div>
                         </div>
                     </div>
@@ -679,6 +677,23 @@
 
                     return { value: option.value, label: label, hint: label === option.value ? '' : option.value };
                 });
+        }
+
+        // Single-select options keep every entry, empty ones included. Only text that
+        // ends in " (code)" gets a code hint, so numeric mode values never show one.
+        function toSelectOptions(options) {
+            return (options || []).map(function (option) {
+                var value = option.value === null || option.value === undefined ? '' : String(option.value);
+                var suffix = ' (' + value + ')';
+                var text = option.text || value;
+                var hasCode = value !== '' && text.slice(-suffix.length) === suffix;
+
+                return {
+                    value: value,
+                    label: hasCode ? text.slice(0, -suffix.length) : text,
+                    hint: hasCode ? value : ''
+                };
+            });
         }
 
         function snapshot(form) {
@@ -854,6 +869,9 @@
                 });
             },
             methods: {
+                selectOptions: function (options) {
+                    return toSelectOptions(options);
+                },
                 fieldError: function (name) {
                     var messages = this.errors[name];
                     return messages && messages.length ? messages[0] : '';
@@ -1082,6 +1100,13 @@
         });
 
         app.component('akeneo-combobox', window.AkeneoCombobox);
+        app.component('akeneo-search-select', {
+            extends: window.AkeneoCombobox,
+            props: {
+                multiple: { type: Boolean, default: false },
+                clearable: { type: Boolean, default: false }
+            }
+        });
         app.mount('#akeneo-sync-profile-app');
     })();
 </script>
