@@ -6,7 +6,10 @@ public enum AkeneoBindingStatus
     AlreadyBound = 20,
     Unmatched = 30,
     Conflict = 40,
-    Issue = 50
+    Issue = 50,
+
+    /// <summary>Created in nopCommerce by this commit and bound (categories only).</summary>
+    Created = 60
 }
 
 /// <summary>
@@ -34,6 +37,20 @@ public sealed class AkeneoCatalogBindingReport
     public AkeneoBindingCounts AxisValues { get; set; } = new();
 
     public AkeneoBindingCounts Categories { get; set; } = new();
+
+    /// <summary>
+    /// Akeneo categories with no nopCommerce category: the ones "Create missing categories"
+    /// would create (no <see cref="AkeneoBindingCategoryCreation.Reason"/>), then the ones it
+    /// can't, with the reason. After a commit that created them, the ones it created.
+    /// </summary>
+    public IList<AkeneoBindingCategoryCreation> CategoryCreations { get; set; } =
+        new List<AkeneoBindingCategoryCreation>();
+
+    /// <summary>How many categories a commit with "Create missing categories" would create.</summary>
+    public int CreatableCategoryCount { get; set; }
+
+    /// <summary>Set by a commit: nopCommerce categories it created.</summary>
+    public int CreatedCategoryCount { get; set; }
 
     public IList<AkeneoBindingConflict> Conflicts { get; set; } =
         new List<AkeneoBindingConflict>();
@@ -69,6 +86,25 @@ public sealed class AkeneoBindingCounts
     public int Conflict { get; set; }
 
     public int Issue { get; set; }
+
+    public int Created { get; set; }
+}
+
+public sealed class AkeneoBindingCategoryCreation
+{
+    public string AkeneoCode { get; set; }
+
+    /// <summary>The Akeneo label the nopCommerce category is named after.</summary>
+    public string Name { get; set; }
+
+    /// <summary>The Akeneo parent code; null for a top-level category.</summary>
+    public string ParentCode { get; set; }
+
+    /// <summary>Set by a commit: the nopCommerce category created.</summary>
+    public int? NopCategoryId { get; set; }
+
+    /// <summary>Why it can't be created; null when it can.</summary>
+    public string Reason { get; set; }
 }
 
 public sealed class AkeneoBindingConflict

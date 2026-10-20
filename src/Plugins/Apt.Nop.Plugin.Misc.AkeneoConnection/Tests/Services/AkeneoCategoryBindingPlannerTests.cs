@@ -111,6 +111,99 @@ public class AkeneoCategoryBindingPlannerTests
         Assert.That(plans.Single(p => p.AkeneoCode == "trees").Status, Is.EqualTo(AkeneoBindingStatus.Issue));
     }
 
+    // The migration keeps "socks" for Apparel >> Socks and gives Accessories >> Socks its parent's prefix.
+    [Test]
+    public void Parent_prefixed_codes_bind_to_the_second_category_with_a_shared_name()
+    {
+        var plans = Plan(
+            [
+                Akeneo("ecommerce", null), Akeneo("apparel", "ecommerce"), Akeneo("accessories", "ecommerce"),
+                Akeneo("socks", "apparel"), Akeneo("accessories_socks", "accessories")
+            ],
+            [Nop(80, "Apparel", 0), Nop(81, "Accessories", 0), Nop(90, "Socks", 80), Nop(91, "Socks", 81)]);
+
+        Assert.That(Bound(plans), Is.EquivalentTo(new Dictionary<string, int?>
+        {
+            ["apparel"] = 80, ["accessories"] = 81, ["socks"] = 90, ["accessories_socks"] = 91
+        }));
+    }
+
+    // Tree Nursery >> Customer Favorites >> Fall Colors, beside a top-level Customer Favorites.
+    [Test]
+    public void A_child_of_a_prefixed_category_binds_through_its_parents_binding()
+    {
+        var plans = Plan(
+            [
+                Akeneo("ecommerce", null), Akeneo("tree_nursery", "ecommerce"),
+                Akeneo("customer_favorites", "ecommerce"),
+                Akeneo("tree_nursery_customer_favorites", "tree_nursery"),
+                Akeneo("fall_colors", "tree_nursery_customer_favorites")
+            ],
+            [Nop(50, "Tree Nursery", 0), Nop(70, "Customer Favorites", 0), Nop(60, "Customer Favorites", 50), Nop(61, "Fall Colors", 60)]);
+
+        Assert.That(Bound(plans)["tree_nursery_customer_favorites"], Is.EqualTo(60));
+        Assert.That(Bound(plans)["fall_colors"], Is.EqualTo(61));
+        Assert.That(Bound(plans)["customer_favorites"], Is.EqualTo(70));
+    }
+
+    [Test]
+    public void A_child_binds_under_a_parent_that_was_mapped_by_hand_to_another_name()
+    {
+        var plans = AkeneoCategoryBindingPlanner.Plan(
+            [Akeneo("ecommerce", null), Akeneo("online_trees", "ecommerce"), Akeneo("shade_trees", "online_trees")],
+            [Nop(10, "Trees", 0), Nop(11, "Shade Trees", 10)],
+            new Dictionary<string, int> { ["online_trees"] = 10 });
+
+        Assert.That(Bound(plans)["shade_trees"], Is.EqualTo(11));
+    }
+
+    // Top-level duplicates get the source site's ID as a suffix, which only matches on that site.
+    [Test]
+    public void Id_suffixed_codes_bind_first_so_the_plain_code_takes_the_other_category()
+    {
+        var plans = Plan(
+            [Akeneo("ecommerce", null), Akeneo("gifts", "ecommerce"), Akeneo("gifts_2", "ecommerce")],
+            [Nop(1, "Gifts", 0), Nop(2, "Gifts!", 0)]);
+
+        Assert.That(Bound(plans), Is.EquivalentTo(new Dictionary<string, int?> { ["gifts"] = 1, ["gifts_2"] = 2 }));
+    }
+
+    [Test]
+    public void An_id_suffix_from_another_site_is_left_for_manual_mapping()
+    {
+        var plans = Plan(
+            [Akeneo("ecommerce", null), Akeneo("gifts", "ecommerce"), Akeneo("gifts_2", "ecommerce")],
+            [Nop(501, "Gifts", 0), Nop(502, "Gifts!", 0)]);
+
+        Assert.That(plans.Single(p => p.AkeneoCode == "gifts_2").Status, Is.EqualTo(AkeneoBindingStatus.Unmatched));
+        Assert.That(plans.Single(p => p.AkeneoCode == "gifts").Status, Is.EqualTo(AkeneoBindingStatus.Conflict));
+    }
+
+    [Test]
+    public void A_plain_code_is_preferred_over_a_prefixed_reading_of_the_same_code()
+    {
+        // "accessories_socks" could be the prefixed Socks or a category literally named "Accessories Socks".
+        var plans = Plan(
+            [Akeneo("ecommerce", null), Akeneo("accessories", "ecommerce"), Akeneo("accessories_socks", "accessories")],
+            [Nop(81, "Accessories", 0), Nop(91, "Socks", 81), Nop(92, "Accessories Socks", 81)]);
+
+        Assert.That(Bound(plans)["accessories_socks"], Is.EqualTo(92));
+    }
+
+    [Test]
+    public void Results_are_ordered_by_code()
+    {
+        var plans = Plan(
+            [Akeneo("ecommerce", null), Akeneo("b", "ecommerce"), Akeneo("a", "b")],
+            [Nop(1, "B", 0), Nop(2, "A", 1)]);
+
+        Assert.That(plans.Select(p => p.AkeneoCode), Is.EqualTo(new[] { "a", "b" }));
+    }
+
+    private static Dictionary<string, int?> Bound(IEnumerable<AkeneoCategoryBindingPlan> plans) =>
+        plans.Where(p => p.Status is AkeneoBindingStatus.Matched or AkeneoBindingStatus.AlreadyBound)
+            .ToDictionary(p => p.AkeneoCode, p => p.NopCategoryId);
+
     private static IReadOnlyList<AkeneoCategoryBindingPlan> Plan(
         AkeneoCategoryDefinition[] akeneo,
         Category[] nop) =>

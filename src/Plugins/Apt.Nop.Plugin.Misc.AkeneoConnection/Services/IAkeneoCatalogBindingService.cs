@@ -18,10 +18,14 @@ public interface IAkeneoCatalogBindingService
 
     /// <summary>
     /// Rescans, applies the chosen parent for each resolved conflict, and writes
-    /// every unambiguous binding. Unchosen conflicts stay unbound.
+    /// every unambiguous binding. Unchosen conflicts stay unbound. With
+    /// <paramref name="createMissingCategories"/>, Akeneo categories nothing in
+    /// nopCommerce matches are created there (unpublished) and bound, in the same
+    /// transaction as the bindings.
     /// </summary>
     Task<AkeneoCatalogBindingReport> CommitAsync(
         IList<string> familyCodes,
         IDictionary<string, int> conflictChoices,
+        bool createMissingCategories = false,
         CancellationToken cancellationToken = default);
 }

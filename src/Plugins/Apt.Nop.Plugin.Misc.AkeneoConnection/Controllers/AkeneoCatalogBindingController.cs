@@ -74,16 +74,19 @@ public class AkeneoCatalogBindingController(
 
     /// <param name="familyCodesJson">JSON array of Akeneo family codes; empty for the whole catalog.</param>
     /// <param name="conflictChoicesJson">JSON object: product model code → chosen nopCommerce parent product id.</param>
+    /// <param name="createMissingCategories">Create the nopCommerce categories nothing matched, then bind them.</param>
     [HttpPost]
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> Commit(
         string familyCodesJson,
         string conflictChoicesJson,
+        bool createMissingCategories,
         CancellationToken cancellationToken)
     {
         var report = await catalogBindingService.CommitAsync(
             ParseFamilyCodes(familyCodesJson),
             ParseConflictChoices(conflictChoicesJson),
+            createMissingCategories,
             cancellationToken);
 
         if (report.AlreadyRunning)

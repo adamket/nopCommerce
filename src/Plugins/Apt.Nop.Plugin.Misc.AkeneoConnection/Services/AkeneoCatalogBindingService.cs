@@ -9,16 +9,18 @@ using Humanizer;
 using Nop.Core.Domain.Catalog;
 using Nop.Data;
 using Nop.Services.Catalog;
+using Nop.Services.Seo;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 /// <summary>
-/// Binds an existing nopCommerce catalog to Akeneo without touching any
-/// nopCommerce entity. Variants are matched by SKU; each product model's
-/// nopCommerce parent is then inferred from where its matched variants live
-/// (combination owner, associated-product owner or grouped parent). Categories
-/// are matched by the name and parent the migration created them from. Only the
-/// plugin's global entity-mapping table is written.
+/// Binds an existing nopCommerce catalog to Akeneo. Variants are matched by SKU;
+/// each product model's nopCommerce parent is then inferred from where its matched
+/// variants live (combination owner, associated-product owner or grouped parent).
+/// Categories are matched by the name and parent the migration created them from.
+/// Only the plugin's global entity-mapping table is written, except that a commit
+/// with "Create missing categories" also creates the nopCommerce categories that
+/// nothing matched (see <see cref="AkeneoCategoryCreationPlanner"/>), unpublished.
 /// </summary>
 public class AkeneoCatalogBindingService(
     IAkeneoApiClient akeneoApiClient,
@@ -33,7 +35,11 @@ public class AkeneoCatalogBindingService(
     IRepository<ProductAttributeCombination> combinationRepository,
     IRepository<ProductAttributeMapping> productAttributeMappingRepository,
     IRepository<ProductAttributeValue> productAttributeValueRepository,
-    IRepository<Category> categoryRepository)
+    IRepository<Category> categoryRepository,
+    ICategoryService categoryService,
+    ICategoryTemplateService categoryTemplateService,
+    IUrlRecordService urlRecordService,
+    CatalogSettings catalogSettings)
     : IAkeneoCatalogBindingService
 {
     private const int PageSize = 100;
@@ -132,6 +138,11 @@ public class AkeneoCatalogBindingService(
 
         public List<AkeneoCategoryBindingPlan> Categories { get; } = new();
 
+        public List<AkeneoCategoryCreationPlan> CategoryCreations { get; } = new();
+
+        /// <summary>Set by a commit that created categories: Akeneo code to the new nopCommerce category.</summary>
+        public Dictionary<string, int> CreatedCategories { get; } = new(StringComparer.Ordinal);
+
         public void AddIssue(string level, string code, string familyCode, string message) =>
             Issues.Add(new AkeneoBindingIssue
             {
@@ -164,6 +175,7 @@ public class AkeneoCatalogBindingService(
     public async Task<AkeneoCatalogBindingReport> CommitAsync(
         IList<string> familyCodes,
         IDictionary<string, int> conflictChoices,
+        bool createMissingCategories = false,
         CancellationToken cancellationToken = default)
     {
         var lease = await syncLeaseService.TryAcquireAsync(
@@ -203,16 +215,20 @@ public class AkeneoCatalogBindingService(
 
             runRecord.SearchJsonSnapshot = BuildFamilySearchJson(plan.FamilyCodes)?.Truncate(4000);
 
-            var written = await WritePlanAsync(plan, cancellationToken);
+            var written = await WritePlanAsync(plan, createMissingCategories, cancellationToken);
 
             // Bindings just written count as bound for the unbound-product report.
             var report = await BuildReportAsync(plan, cancellationToken);
             report.Committed = true;
             report.WrittenCount = written;
+            report.CreatedCategoryCount = plan.CreatedCategories.Count;
             report.SyncRunRecordId = runRecord.Id;
             report.Resolutions = BuildResolutions(plan);
             report.Message =
                 $"Binding committed. {written} binding(s) written; " +
+                (createMissingCategories
+                    ? $"{plan.CreatedCategories.Count} nopCommerce categor{(plan.CreatedCategories.Count == 1 ? "y" : "ies")} created (unpublished); "
+                    : string.Empty) +
                 $"{report.Conflicts.Count} conflict(s) left unbound.";
 
             runRecord.FinishedOnUtc = DateTime.UtcNow;
@@ -1016,13 +1032,22 @@ public class AkeneoCatalogBindingService(
         {
             plan.AddIssue("Category", category.AkeneoCode, null, category.Message);
         }
+
+        // Always planned, so a scan can preview what "Create missing categories" would do.
+        plan.CategoryCreations.AddRange(AkeneoCategoryCreationPlanner.Plan(
+            akeneoCategories,
+            plan.Categories,
+            existing));
     }
 
     #endregion
 
     #region Write
 
-    private async Task<int> WritePlanAsync(BindingPlan plan, CancellationToken cancellationToken)
+    private async Task<int> WritePlanAsync(
+        BindingPlan plan,
+        bool createMissingCategories,
+        CancellationToken cancellationToken)
     {
         var written = 0;
 
@@ -1097,7 +1122,84 @@ public class AkeneoCatalogBindingService(
             }
         }
 
+        // Inside the same transaction: a failed create leaves no category and no binding behind.
+        if (createMissingCategories)
+            written += await CreateMissingCategoriesAsync(plan, cancellationToken);
+
         scope.Complete();
+
+        return written;
+    }
+
+    /// <summary>
+    /// Creates each planned category, parents first, the way the category admin page does with
+    /// its defaults, but unpublished so nothing appears in the storefront until it is reviewed.
+    /// Each one is bound as it is created.
+    /// </summary>
+    private async Task<int> CreateMissingCategoriesAsync(BindingPlan plan, CancellationToken cancellationToken)
+    {
+        var creations = plan.CategoryCreations.Where(creation => creation.CanCreate).ToList();
+        if (creations.Count == 0)
+            return 0;
+
+        var templateId = (await categoryTemplateService.GetAllCategoryTemplatesAsync())
+            .FirstOrDefault()?.Id ?? 0;
+        var written = 0;
+
+        foreach (var creation in creations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var now = DateTime.UtcNow;
+            var category = new Category
+            {
+                Name = creation.Name,
+                ParentCategoryId = creation.ParentNopCategoryId ?? plan.CreatedCategories[creation.ParentCode],
+                CategoryTemplateId = templateId,
+                PageSize = catalogSettings.DefaultCategoryPageSize,
+                PageSizeOptions = catalogSettings.DefaultCategoryPageSizeOptions,
+                AllowCustomersToSelectPageSize = true,
+                PriceRangeFiltering = true,
+                ManuallyPriceRange = true,
+                PriceFrom = NopCatalogDefaults.DefaultPriceRangeFrom,
+                PriceTo = NopCatalogDefaults.DefaultPriceRangeTo,
+                Published = false,
+                CreatedOnUtc = now,
+                UpdatedOnUtc = now
+            };
+
+            await categoryService.InsertCategoryAsync(category);
+
+            var seName = await urlRecordService.ValidateSeNameAsync(category, null, category.Name, true);
+            await urlRecordService.SaveSlugAsync(category, seName, 0);
+
+            if (await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
+                    AkeneoEntityType.Category,
+                    creation.AkeneoCode,
+                    null,
+                    NopEntityType.Category,
+                    category.Id))
+            {
+                written++;
+            }
+
+            plan.CreatedCategories[creation.AkeneoCode] = category.Id;
+        }
+
+        // Created categories are bound now, not unmatched; their "can't bind" entries no longer apply.
+        for (var index = 0; index < plan.Categories.Count; index++)
+        {
+            if (plan.CreatedCategories.TryGetValue(plan.Categories[index].AkeneoCode, out var id))
+                plan.Categories[index] = plan.Categories[index] with
+                {
+                    Status = AkeneoBindingStatus.Created,
+                    NopCategoryId = id,
+                    Message = null
+                };
+        }
+
+        plan.Issues.RemoveAll(issue =>
+            issue.Level == "Category" && plan.CreatedCategories.ContainsKey(issue.AkeneoCode));
 
         return written;
     }
@@ -1128,6 +1230,21 @@ public class AkeneoCatalogBindingService(
 
         foreach (var category in plan.Categories)
             Count(report.Categories, category.Status);
+
+        report.CreatableCategoryCount = plan.CategoryCreations.Count(creation => creation.CanCreate);
+        // A commit creates all of them or rolls back, so after one the list shows what it created.
+        report.CategoryCreations = plan.CategoryCreations
+            .OrderBy(creation => creation.CanCreate ? 0 : 1)
+            .Take(MaxListedItems)
+            .Select(creation => new AkeneoBindingCategoryCreation
+            {
+                AkeneoCode = creation.AkeneoCode,
+                Name = creation.Name,
+                ParentCode = creation.ParentCode,
+                NopCategoryId = plan.CreatedCategories.TryGetValue(creation.AkeneoCode, out var id) ? id : null,
+                Reason = creation.Reason
+            })
+            .ToList();
 
         foreach (var model in plan.Models.Values
                      .Where(model => model.Status == AkeneoBindingStatus.Conflict)
@@ -1180,6 +1297,7 @@ public class AkeneoCatalogBindingService(
             case AkeneoBindingStatus.Unmatched: counts.Unmatched++; break;
             case AkeneoBindingStatus.Conflict: counts.Conflict++; break;
             case AkeneoBindingStatus.Issue: counts.Issue++; break;
+            case AkeneoBindingStatus.Created: counts.Created++; break;
         }
     }
 

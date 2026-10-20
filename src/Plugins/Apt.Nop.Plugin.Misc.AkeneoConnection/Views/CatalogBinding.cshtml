@@ -13,6 +13,7 @@
         scanUrl = Url.Action("Scan", "AkeneoCatalogBinding"),
         commitUrl = Url.Action("Commit", "AkeneoCatalogBinding"),
         productEditUrl = Url.Action("Edit", "Product", new { area = "Admin", id = 0 }),
+        categoryEditUrl = Url.Action("Edit", "Category", new { area = "Admin", id = 0 }),
         families = ViewBag.Families ?? new List<object>(),
         familyLoadError = (string)ViewBag.FamilyLoadError ?? string.Empty
     };
@@ -92,10 +93,27 @@
                                         {{ busy === 'commit' ? 'Committing...' : 'Commit bindings' }}
                                     </button>
                                 </div>
+                                <div class="mt-2">
+                                    <label class="akeneo-switch">
+                                        <input type="checkbox"
+                                               v-model="createMissingCategories"
+                                               v-bind:disabled="!!busy" />
+                                        <span class="akeneo-switch-track">
+                                            <span class="akeneo-switch-thumb"></span>
+                                        </span>
+                                        <span class="akeneo-switch-text">
+                                            Create missing categories
+                                            <span class="akeneo-dim" v-if="report && !report.committed">&middot; {{ report.creatableCategoryCount }} to create</span>
+                                        </span>
+                                    </label>
+                                </div>
                                 <div class="akeneo-toolbar-panel-hint">
                                     Scan reads Akeneo and nopCommerce without writing anything. Commit rescans,
-                                    writes every matched binding plus the conflicts you resolved, and never changes a nopCommerce product or category.
+                                    writes every matched binding plus the conflicts you resolved, and never changes an existing nopCommerce product or category.
                                     Categories are matched by the name and parent the migration created them from; existing category mappings are kept.
+                                    With <strong>Create missing categories</strong>, Akeneo categories nothing in nopCommerce matches are also created
+                                    there, under their parent's category and named after their Akeneo label, then bound. They are created
+                                    unpublished, so publish them once reviewed.
                                 </div>
                             </div>
                         </div>
@@ -121,7 +139,8 @@
                                         <tbody>
                                             <tr><th>Matched</th><td class="is-mapped">{{ tile.counts.matched }}</td></tr>
                                             <tr><th>Already bound</th><td>{{ tile.counts.alreadyBound }}</td></tr>
-                                            <tr v-if="tile.key !== 'axisValues'"><th>{{ tile.key === 'categories' ? 'Unmatched (map manually)' : 'Unmatched (sync will create)' }}</th><td>{{ tile.counts.unmatched }}</td></tr>
+                                            <tr v-if="tile.key === 'categories' && tile.counts.created"><th>Created</th><td class="is-mapped">{{ tile.counts.created }}</td></tr>
+                                            <tr v-if="tile.key !== 'axisValues'"><th>{{ unmatchedLabel(tile.key) }}</th><td>{{ tile.counts.unmatched }}</td></tr>
                                             <tr v-if="tile.key !== 'axisValues'"><th>Conflict</th><td v-bind:class="{ 'is-attention': tile.counts.conflict }">{{ tile.counts.conflict }}</td></tr>
                                             <tr v-if="tile.key !== 'models'"><th>Issue</th><td v-bind:class="{ 'is-danger': tile.counts.issue }">{{ tile.counts.issue }}</td></tr>
                                         </tbody>
@@ -227,6 +246,40 @@
                                 </div>
                             </div>
 
+                            <!-- Categories to create (preview), or created (after commit) -->
+                            <div class="akeneo-toolbar-panel akeneo-binding-section" v-if="report.categoryCreations.length">
+                                <div class="akeneo-toolbar-panel-label"
+                                     v-bind:class="report.createdCategoryCount ? 'akeneo-binding-label--mapped' : 'akeneo-binding-label--muted'">
+                                    <i class="fas fa-folder-plus"></i>
+                                    <span v-if="report.createdCategoryCount">Categories created &middot; {{ report.createdCategoryCount }}</span>
+                                    <span v-else>Missing categories &middot; {{ report.creatableCategoryCount }} can be created</span>
+                                </div>
+                                <div class="akeneo-toolbar-panel-body">
+                                    <div class="akeneo-toolbar-panel-hint" v-if="!report.committed">
+                                        <template v-if="createMissingCategories">Commit creates these in nopCommerce, unpublished, and binds them.</template>
+                                        <template v-else>Tick <strong>Create missing categories</strong> to create these on commit.</template>
+                                        Categories that can't be created are listed with the reason.
+                                    </div>
+                                    <table class="table table-sm mb-0 akeneo-binding-table">
+                                        <thead>
+                                            <tr><th>Akeneo</th><th>nopCommerce name</th><th>Parent</th><th>{{ report.createdCategoryCount ? 'Created' : 'Status' }}</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="item in report.categoryCreations" v-bind:key="item.akeneoCode">
+                                                <td class="akeneo-mono">{{ item.akeneoCode }}</td>
+                                                <td>{{ item.name }}</td>
+                                                <td class="akeneo-mono akeneo-dim">{{ item.parentCode || 'top level' }}</td>
+                                                <td>
+                                                    <a v-if="item.nopCategoryId" v-bind:href="categoryUrl(item.nopCategoryId)" target="_blank">#{{ item.nopCategoryId }}</a>
+                                                    <span v-else-if="item.reason" class="akeneo-dim">{{ item.reason }}</span>
+                                                    <span v-else>{{ createMissingCategories ? 'Will be created' : 'Can be created' }}</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
                             <!-- Unbound nopCommerce products -->
                             <div class="akeneo-toolbar-panel akeneo-binding-section">
                                 <div class="akeneo-toolbar-panel-label akeneo-binding-label--muted">
@@ -279,6 +332,11 @@
                                         {{ chosenCount }} of {{ report.conflicts.length }} conflict(s) have a chosen parent; the rest stay unbound.
                                     </template>
                                 </p>
+                                <p class="mb-2" v-if="createMissingCategories && report">
+                                    <strong>{{ report.creatableCategoryCount }}</strong> missing
+                                    {{ report.creatableCategoryCount === 1 ? 'category is' : 'categories are' }} created in nopCommerce,
+                                    unpublished, and bound. The rescan may find a different number if the catalog changed since the scan.
+                                </p>
                                 <p class="mb-0 akeneo-dim">
                                     The next delta sync will apply your attribute mappings to every newly bound product.
                                 </p>
@@ -330,7 +388,8 @@
                     busy: false, // false or 'scan' / 'commit'; never '' (Vue renders disabled="" as disabled)
                     message: '',
                     messageLevel: 'info',
-                    commitConfirmVisible: false
+                    commitConfirmVisible: false,
+                    createMissingCategories: false
                 };
             },
             computed: {
@@ -361,6 +420,17 @@
             methods: {
                 productUrl: function (id) {
                     return appData.productEditUrl.replace(/0$/, String(id));
+                },
+                categoryUrl: function (id) {
+                    return appData.categoryEditUrl.replace(/0$/, String(id));
+                },
+                unmatchedLabel: function (key) {
+                    if (key !== 'categories')
+                        return 'Unmatched (sync will create)';
+
+                    return this.createMissingCategories && this.report && !this.report.committed
+                        ? 'Unmatched (commit will create)'
+                        : 'Unmatched (map or create)';
                 },
                 post: function (url, data) {
                     return $.ajax({
@@ -418,7 +488,8 @@
 
                     self.post(appData.commitUrl, {
                         familyCodesJson: JSON.stringify(self.familyCodes),
-                        conflictChoicesJson: JSON.stringify(choices)
+                        conflictChoicesJson: JSON.stringify(choices),
+                        createMissingCategories: self.createMissingCategories
                     }).done(function (report) {
                         self.report = report;
                         self.message = report.message;
