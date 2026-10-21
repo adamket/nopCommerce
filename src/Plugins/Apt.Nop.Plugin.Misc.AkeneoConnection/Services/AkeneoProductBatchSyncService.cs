@@ -43,7 +43,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoAssetMappingService assetMappingService,
     IAkeneoAssetResolver assetResolver,
     IAkeneoWritePolicyGate writePolicyGate = null,
-    IProductAttributeService productAttributeService = null)
+    IProductAttributeService productAttributeService = null,
+    AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
@@ -270,6 +271,8 @@ public class AkeneoProductBatchSyncService(
 
             result.CompletedAllPages = completedAllPhases && !result.WasTruncated;
 
+            await RetryRelatedProductsAsync(result, cancellationToken);
+
             if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
             {
                 result.ReconciledCount = await catalogReconciliationService
@@ -303,6 +306,49 @@ public class AkeneoProductBatchSyncService(
             result.AddError(ex.Message);
             return result;
         }
+    }
+
+    /// <summary>
+    /// Items are processed one by one, so a related product synced later in the run was not in
+    /// nopCommerce yet when its source was processed. Once every item is done, each such source
+    /// is re-applied in its own transaction. A failure is reported and does not fail the run.
+    /// </summary>
+    private async Task RetryRelatedProductsAsync(
+        AkeneoProductBatchImportResult result,
+        CancellationToken cancellationToken)
+    {
+        var pending = relatedProductSynchronizer?.TakePending() ?? [];
+        if (pending.Count == 0)
+            return;
+
+        int added = 0, removed = 0, stillUnresolved = 0, failed = 0;
+
+        foreach (var work in pending)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                using var transaction = CreateUnitTransaction();
+                var outcome = await relatedProductSynchronizer.RetryAsync(work, cancellationToken);
+                transaction.Complete();
+
+                added += outcome.Added;
+                removed += outcome.Removed;
+                stillUnresolved += outcome.StillUnresolved;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                failed++;
+                result.AddMessage(
+                    $"Related products for {work.SourceCode} could not be retried: {ex.Message}");
+            }
+        }
+
+        result.AddMessage(
+            $"Related products retried for {pending.Count} product(s) whose targets were not yet in nopCommerce: " +
+            $"{added} link(s) added, {removed} removed, {stillUnresolved} target(s) still missing" +
+            (failed > 0 ? $", {failed} failed." : "."));
     }
 
     private async Task<ProductSearchPhaseResult> ProcessProductSearchAsync(
@@ -2598,6 +2644,9 @@ public class AkeneoProductBatchSyncService(
             CustomPropertyMissingValueBehavior =
                 (int)request.CustomPropertyMissingValueBehavior,
             CategorySyncMode = (int)request.CategorySyncMode,
+            TagSyncMode = (int)request.TagSyncMode,
+            RelatedProductSyncMode = (int)request.RelatedProductSyncMode,
+            request.RelatedProductAssociationType,
             SpecificationAttributeSyncMode =
                 (int)request.SpecificationAttributeSyncMode,
             ProductAttributeSyncMode = (int)request.ProductAttributeSyncMode,

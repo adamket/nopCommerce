@@ -2005,16 +2005,32 @@
     transform: translate(-50%, -50%) rotate(-45deg);
   }
 
+/* Drawn chevron centered in a fixed square, so it turns about its own center
+   (a font glyph sits off-center in its line box and wobbles as it rotates). */
 .akeneo-connection .akeneo-combobox-caret {
   position: absolute;
   top: 50%;
   right: 12px;
+  display: block;
+  width: 12px;
+  height: 12px;
   margin-top: -6px;
-  font-size: .72rem;
   color: var(--ak-muted);
   cursor: pointer;
+  transform-origin: 50% 50%;
   transition: transform .18s ease, color .18s ease;
 }
+
+  .akeneo-connection .akeneo-combobox-caret svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
 .akeneo-connection .akeneo-combobox.is-open .akeneo-combobox-caret {
   transform: rotate(180deg);

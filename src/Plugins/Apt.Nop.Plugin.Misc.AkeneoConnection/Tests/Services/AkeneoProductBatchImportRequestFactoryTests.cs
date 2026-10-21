@@ -23,6 +23,7 @@ public class AkeneoProductBatchImportRequestFactoryTests
         profile.AkeneoLocales = "es_ES,en_US";
         profile.CurrencyCode = " CAD ";
         profile.CategorySyncModeId = (int)AkeneoCollectionSyncMode.ReplaceManaged;
+        profile.TagSyncModeId = (int)AkeneoCollectionSyncMode.Merge;
         profile.SpecificationAttributeSyncModeId = (int)AkeneoCollectionSyncMode.Merge;
         profile.ProductAttributeSyncModeId = (int)AkeneoCollectionSyncMode.ReplaceAll;
         profile.AssetSyncModeId = (int)AkeneoCollectionSyncMode.Disabled;
@@ -39,6 +40,7 @@ public class AkeneoProductBatchImportRequestFactoryTests
             Assert.That(request.CreateNewProducts, Is.False);
             Assert.That(request.UpdateExistingProducts, Is.True);
             Assert.That(request.CategorySyncMode, Is.EqualTo(AkeneoCollectionSyncMode.ReplaceManaged));
+            Assert.That(request.TagSyncMode, Is.EqualTo(AkeneoCollectionSyncMode.Merge));
             Assert.That(request.ProductAttributeSyncMode, Is.EqualTo(AkeneoCollectionSyncMode.ReplaceAll));
             Assert.That(request.AssetSyncMode, Is.EqualTo(AkeneoCollectionSyncMode.Disabled));
             Assert.That(request.ScopeHash, Is.Not.Empty);

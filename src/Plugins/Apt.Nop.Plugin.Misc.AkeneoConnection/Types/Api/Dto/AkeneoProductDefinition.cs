@@ -33,4 +33,24 @@ public class AkeneoProductDefinition
     // attribute mappings + productValueResolver, not modeled as named properties.
     [JsonPropertyName("values")]
     public JsonElement Values { get; set; }
+
+    /// <summary>
+    /// Association type code to its targets. Akeneo includes the associations a model or
+    /// variant inherits from its ancestors.
+    /// </summary>
+    [JsonPropertyName("associations")]
+    public Dictionary<string, AkeneoAssociationDefinition> Associations { get; set; } = new();
+}
+
+/// <summary>
+/// One association type's targets. Product models are listed by code. Products are listed by
+/// identifier on the identifier-based endpoints and by UUID on the UUID endpoints.
+/// </summary>
+public class AkeneoAssociationDefinition
+{
+    [JsonPropertyName("products")]
+    public List<string> Products { get; set; } = new();
+
+    [JsonPropertyName("product_models")]
+    public List<string> ProductModels { get; set; } = new();
 }

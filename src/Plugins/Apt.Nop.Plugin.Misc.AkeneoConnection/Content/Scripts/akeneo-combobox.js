@@ -353,9 +353,11 @@
                 v-on:click.stop="clear">
         </button>
 
-        <i class="fas fa-chevron-down akeneo-combobox-caret"
-           aria-hidden="true"
-           v-on:mousedown.prevent="toggleMenu"></i>
+        <span class="akeneo-combobox-caret"
+              aria-hidden="true"
+              v-on:mousedown.prevent="toggleMenu">
+            <svg viewBox="0 0 12 12" focusable="false"><path d="M2.5 4.25 6 7.75l3.5-3.5" /></svg>
+        </span>
     </div>
 
     <ul class="akeneo-combobox-menu"

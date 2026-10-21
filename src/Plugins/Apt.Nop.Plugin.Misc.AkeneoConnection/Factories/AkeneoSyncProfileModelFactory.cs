@@ -68,6 +68,12 @@ public class AkeneoSyncProfileModelFactory(
             CategorySyncModeId =
                 (int)AkeneoCollectionSyncMode.Disabled,
 
+            TagSyncModeId =
+                (int)AkeneoCollectionSyncMode.Disabled,
+
+            RelatedProductSyncModeId =
+                (int)AkeneoCollectionSyncMode.Disabled,
+
             SpecificationAttributeSyncModeId =
                 (int)AkeneoCollectionSyncMode.Merge,
 
@@ -145,6 +151,15 @@ public class AkeneoSyncProfileModelFactory(
 
             model.CategorySyncModeId =
                 profile.CategorySyncModeId;
+
+            model.TagSyncModeId =
+                profile.TagSyncModeId;
+
+            model.RelatedProductSyncModeId =
+                profile.RelatedProductSyncModeId;
+
+            model.RelatedProductAssociationType =
+                profile.RelatedProductAssociationType;
 
             model.SpecificationAttributeSyncModeId =
                 profile.SpecificationAttributeSyncModeId;
@@ -281,6 +296,18 @@ public class AkeneoSyncProfileModelFactory(
             BuildSelectList(
                 Enum.GetValues<AkeneoCollectionSyncMode>(),
                 model.CategorySyncModeId,
+                GetCollectionSyncModeText);
+
+        model.AvailableTagSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.TagSyncModeId,
+                GetCollectionSyncModeText);
+
+        model.AvailableRelatedProductSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.RelatedProductSyncModeId,
                 GetCollectionSyncModeText);
 
         model.AvailableSpecificationAttributeSyncModes =

@@ -345,6 +345,17 @@ public class AkeneoSyncProfileController(
         profile.CategorySyncModeId =
             model.CategorySyncModeId;
 
+        profile.TagSyncModeId =
+            model.TagSyncModeId;
+
+        profile.RelatedProductSyncModeId =
+            model.RelatedProductSyncModeId;
+
+        profile.RelatedProductAssociationType =
+            string.IsNullOrWhiteSpace(model.RelatedProductAssociationType)
+                ? null
+                : model.RelatedProductAssociationType.Trim();
+
         profile.SpecificationAttributeSyncModeId =
             model.SpecificationAttributeSyncModeId;
 
@@ -391,6 +402,14 @@ public class AkeneoSyncProfileController(
         }
 
         ValidateUpdatedFilter(model);
+
+        if (model.RelatedProductSyncModeId != (int)AkeneoCollectionSyncMode.Disabled &&
+            string.IsNullOrWhiteSpace(model.RelatedProductAssociationType))
+        {
+            ModelState.AddModelError(
+                nameof(model.RelatedProductAssociationType),
+                "Enter the Akeneo association type to sync related products from.");
+        }
     }
 
     private void ValidateUpdatedFilter(

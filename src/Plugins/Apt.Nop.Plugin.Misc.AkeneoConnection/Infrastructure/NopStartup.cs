@@ -92,6 +92,21 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
             provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
 
+        services.AddScoped<IAkeneoProductTagStore, AkeneoProductTagStore>();
+        services.AddScoped<AkeneoProductTagSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductTagSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductTagSynchronizer>());
+
+        // One instance per scope: the batch run retries the related products it could not
+        // resolve, which this section collects while the run's items are processed.
+        services.AddScoped<AkeneoProductRelatedProductSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
+
         services.AddScoped<
             IAkeneoFamilyMappingService,
             AkeneoFamilyMappingService>();

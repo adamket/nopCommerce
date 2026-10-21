@@ -84,6 +84,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.ProductField
             ],
 
+            // A text value can hold comma-separated tags.
             "pim_catalog_text" =>
             [
                 NopTargetType.Ignore,
@@ -91,7 +92,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.SpecificationAttribute,
                 NopTargetType.ProductAttribute,
                 NopTargetType.SeoField,
-                NopTargetType.CustomProperty
+                NopTargetType.CustomProperty,
+                NopTargetType.ProductTag
             ],
 
             "pim_catalog_textarea" =>
@@ -117,7 +119,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.SpecificationAttribute,
                 NopTargetType.Manufacturer,
                 NopTargetType.Category,
-                NopTargetType.CustomProperty
+                NopTargetType.CustomProperty,
+                NopTargetType.ProductTag
             ],
 
             "pim_catalog_multiselect" =>
@@ -126,7 +129,8 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
                 NopTargetType.ProductAttribute,
                 NopTargetType.SpecificationAttribute,
                 NopTargetType.Category,
-                NopTargetType.CustomProperty
+                NopTargetType.CustomProperty,
+                NopTargetType.ProductTag
             ],
 
             "pim_catalog_boolean" =>

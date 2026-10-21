@@ -166,5 +166,11 @@ public enum NopTargetType
     Category = 50,
     SeoField = 60,
     CustomProperty = 70,
-    TierPrice = 80
+    TierPrice = 80,
+
+    /// <summary>
+    /// nopCommerce product tags, named after the Akeneo option labels (or the
+    /// comma-separated words of a text value). Missing tags are created.
+    /// </summary>
+    ProductTag = 90
 }

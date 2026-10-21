@@ -935,6 +935,7 @@ public class AkeneoAttributeMappingModelFactory(
             NopTargetType.SeoField => "SEO Field",
             NopTargetType.CustomProperty => "Custom Property",
             NopTargetType.TierPrice => "Tier Price",
+            NopTargetType.ProductTag => "Product Tag",
             _ => targetType.ToString()
         };
     }

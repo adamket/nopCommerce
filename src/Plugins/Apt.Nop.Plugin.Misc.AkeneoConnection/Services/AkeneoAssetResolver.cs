@@ -637,7 +637,8 @@ public sealed class AkeneoAssetResolver(
             Parent = product.Parent,
             Enabled = product.Enabled,
             Categories = product.Categories?.ToList() ?? new List<string>(),
-            Values = JsonSerializer.SerializeToElement(merged)
+            Values = JsonSerializer.SerializeToElement(merged),
+            Associations = product.Associations
         };
     }
 

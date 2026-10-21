@@ -67,6 +67,17 @@ public class AkeneoProductBatchImportRequestFactory(
                 (AkeneoCollectionSyncMode)
                     profile.CategorySyncModeId,
 
+            TagSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.TagSyncModeId,
+
+            RelatedProductSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.RelatedProductSyncModeId,
+
+            RelatedProductAssociationType =
+                profile.RelatedProductAssociationType?.Trim(),
+
             SpecificationAttributeSyncMode =
                 (AkeneoCollectionSyncMode)
                     profile.SpecificationAttributeSyncModeId,

@@ -50,6 +50,9 @@
             seoFieldMissingValueBehaviorId = Model.SeoFieldMissingValueBehaviorId.ToString(),
             customPropertyMissingValueBehaviorId = Model.CustomPropertyMissingValueBehaviorId.ToString(),
             categorySyncModeId = Model.CategorySyncModeId.ToString(),
+            tagSyncModeId = Model.TagSyncModeId.ToString(),
+            relatedProductSyncModeId = Model.RelatedProductSyncModeId.ToString(),
+            relatedProductAssociationType = Model.RelatedProductAssociationType ?? string.Empty,
             specificationAttributeSyncModeId = Model.SpecificationAttributeSyncModeId.ToString(),
             productAttributeSyncModeId = Model.ProductAttributeSyncModeId.ToString(),
             assetSyncModeId = Model.AssetSyncModeId.ToString(),
@@ -80,6 +83,8 @@
             seoFieldMissingValueBehaviors = Options(Model.AvailableSeoFieldMissingValueBehaviors),
             customPropertyMissingValueBehaviors = Options(Model.AvailableCustomPropertyMissingValueBehaviors),
             categorySyncModes = Options(Model.AvailableCategorySyncModes),
+            tagSyncModes = Options(Model.AvailableTagSyncModes),
+            relatedProductSyncModes = Options(Model.AvailableRelatedProductSyncModes),
             specificationAttributeSyncModes = Options(Model.AvailableSpecificationAttributeSyncModes),
             productAttributeSyncModes = Options(Model.AvailableProductAttributeSyncModes),
             assetSyncModes = Options(Model.AvailableAssetSyncModes),
@@ -436,17 +441,31 @@
                         <div class="card-title"><i class="fas fa-cogs"></i> Synchronization Behavior</div>
                     </div>
                     <div class="card-body">
-                        <div class="form-group row" v-for="field in syncSelects" v-bind:key="field.key">
-                            <div class="col-md-3 text-right"><label class="control-label" v-bind:for="'sp-' + field.key">{{ field.label }}</label></div>
-                            <div class="col-md-9">
-                                <akeneo-search-select v-bind:input-id="'sp-' + field.key" v-bind:item-name="field.label"
-                                                      v-model="form[field.key]"
-                                                      v-bind:options="selectOptions(options[field.options])"
-                                                      v-bind:class="{ 'is-invalid': fieldError(field.name) }"></akeneo-search-select>
-                                <div class="invalid-feedback d-block" v-if="fieldError(field.name)">{{ fieldError(field.name) }}</div>
-                                <span class="form-text text-muted" v-if="field.help">{{ field.help }}</span>
+                        <template v-for="field in syncSelects" v-bind:key="field.key">
+                            <div class="form-group row">
+                                <div class="col-md-3 text-right"><label class="control-label" v-bind:for="'sp-' + field.key">{{ field.label }}</label></div>
+                                <div class="col-md-9">
+                                    <akeneo-search-select v-bind:input-id="'sp-' + field.key" v-bind:item-name="field.label"
+                                                          v-model="form[field.key]"
+                                                          v-bind:options="selectOptions(options[field.options])"
+                                                          v-bind:class="{ 'is-invalid': fieldError(field.name) }"></akeneo-search-select>
+                                    <div class="invalid-feedback d-block" v-if="fieldError(field.name)">{{ fieldError(field.name) }}</div>
+                                    <span class="form-text text-muted" v-if="field.help">{{ field.help }}</span>
+                                </div>
                             </div>
-                        </div>
+
+                            <div class="form-group row" v-if="field.key === 'relatedProductSyncModeId' && form.relatedProductSyncModeId !== '0'">
+                                <div class="col-md-3 text-right"><label class="control-label" for="sp-relatedProductAssociationType">Related product association type</label></div>
+                                <div class="col-md-9">
+                                    <input id="sp-relatedProductAssociationType" type="text" class="form-control"
+                                           placeholder="e.g. related_products or X_SELL"
+                                           v-model="form.relatedProductAssociationType"
+                                           v-bind:class="{ 'is-invalid': fieldError('RelatedProductAssociationType') }" />
+                                    <div class="invalid-feedback d-block" v-if="fieldError('RelatedProductAssociationType')">{{ fieldError('RelatedProductAssociationType') }}</div>
+                                    <span class="form-text text-muted">The Akeneo association type code. Its products and product models become this product's related products.</span>
+                                </div>
+                            </div>
+                        </template>
 
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label">Create missing product attribute values</label></div>
@@ -720,6 +739,9 @@
             seoFieldMissingValueBehaviorId: 'SeoFieldMissingValueBehaviorId',
             customPropertyMissingValueBehaviorId: 'CustomPropertyMissingValueBehaviorId',
             categorySyncModeId: 'CategorySyncModeId',
+            tagSyncModeId: 'TagSyncModeId',
+            relatedProductSyncModeId: 'RelatedProductSyncModeId',
+            relatedProductAssociationType: 'RelatedProductAssociationType',
             specificationAttributeSyncModeId: 'SpecificationAttributeSyncModeId',
             productAttributeSyncModeId: 'ProductAttributeSyncModeId',
             assetSyncModeId: 'AssetSyncModeId',
@@ -766,6 +788,8 @@
                         { key: 'seoFieldMissingValueBehaviorId', name: 'SeoFieldMissingValueBehaviorId', label: 'Missing SEO field values', options: 'seoFieldMissingValueBehaviors', help: 'What happens to a mapped SEO field (meta title, description, slug…) when the Akeneo value is empty.' },
                         { key: 'customPropertyMissingValueBehaviorId', name: 'CustomPropertyMissingValueBehaviorId', label: 'Missing custom property values', options: 'customPropertyMissingValueBehaviors' },
                         { key: 'categorySyncModeId', name: 'CategorySyncModeId', label: 'Category sync mode', options: 'categorySyncModes' },
+                        { key: 'tagSyncModeId', name: 'TagSyncModeId', label: 'Product tag sync mode', options: 'tagSyncModes', help: 'Tags come from attributes mapped to Product Tag, named after the Akeneo option labels. Missing tags are created.' },
+                        { key: 'relatedProductSyncModeId', name: 'RelatedProductSyncModeId', label: 'Related product sync mode', options: 'relatedProductSyncModes', help: 'Product models and standalone products get related products from an Akeneo association type. Targets must already be synced or bound; any that are not yet are retried at the end of the run.' },
                         { key: 'specificationAttributeSyncModeId', name: 'SpecificationAttributeSyncModeId', label: 'Specification sync mode', options: 'specificationAttributeSyncModes', help: 'Missing specification values are handled per attribute mapping.' },
                         { key: 'productAttributeSyncModeId', name: 'ProductAttributeSyncModeId', label: 'Product attribute sync mode', options: 'productAttributeSyncModes' },
                         { key: 'assetSyncModeId', name: 'AssetSyncModeId', label: 'Asset sync mode', options: 'assetSyncModes', help: 'Replace managed is recommended: it reconciles only pictures, videos, and asset references owned by this plugin.' },

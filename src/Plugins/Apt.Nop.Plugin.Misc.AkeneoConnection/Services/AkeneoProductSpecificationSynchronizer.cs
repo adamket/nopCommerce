@@ -34,71 +34,21 @@ public partial class AkeneoProductSpecificationSynchronizer
         _akeneoApiClient = akeneoApiClient;
     }
 
-    // The payload's attribute_type when present, else the mapping's stored attribute type.
     private static bool IsOptionSource(AkeneoResolvedMappedValue mapped) =>
-        !string.IsNullOrWhiteSpace(mapped.Value?.AttributeCode) &&
-        (string.IsNullOrWhiteSpace(mapped.Value.SourceAttributeType)
-            ? (AkeneoAttributeType)mapped.Mapping.AkeneoAttributeTypeId is
-                AkeneoAttributeType.Select or AkeneoAttributeType.MultiSelect
-            : mapped.Value.SourceAttributeType is "pim_catalog_simpleselect" or "pim_catalog_multiselect");
+        AkeneoOptionLabels.IsOptionSource(mapped);
 
-    /// <summary>
-    /// The option's Akeneo label: the request locale, then en_US, then any locale. Null when
-    /// the option has no label at all; the code is never substituted. The attribute's option
-    /// list is authoritative; without an API client the product payload's linked_data label
-    /// is used, and only when it is a real label rather than the code it falls back to.
-    /// </summary>
-    private async Task<string> ResolveOptionLabelAsync(
+    private Task<string> ResolveOptionLabelAsync(
         string attributeCode,
         AkeneoResolvedOptionItem optionItem,
         string locale,
-        CancellationToken cancellationToken)
-    {
-        var code = optionItem.AkeneoOptionCode?.Trim();
-        if (string.IsNullOrWhiteSpace(code))
-            return null;
-
-        if (_akeneoApiClient == null)
-        {
-            var payloadLabel = optionItem.DisplayName?.Trim();
-            return string.IsNullOrWhiteSpace(payloadLabel) ||
-                   string.Equals(payloadLabel, code, StringComparison.Ordinal)
-                ? null
-                : payloadLabel;
-        }
-
-        if (!_attributeOptions.TryGetValue(attributeCode, out var options))
-        {
-            options = (await _akeneoApiClient.GetAttributeOptionDefinitionsAsync(
-                    attributeCode,
-                    cancellationToken: cancellationToken))
-                .Where(option => !string.IsNullOrWhiteSpace(option.Code))
-                .GroupBy(option => option.Code.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-            _attributeOptions[attributeCode] = options;
-        }
-
-        return options.TryGetValue(code, out var option) ? GetLabelOnly(option, locale) : null;
-    }
-
-    private static string GetLabelOnly(AkeneoAttributeOptionDefinition option, string locale)
-    {
-        var labels = option.Labels;
-        if (labels == null || labels.Count == 0)
-            return null;
-
-        foreach (var key in new[] { locale?.Trim(), "en_US" })
-        {
-            if (!string.IsNullOrWhiteSpace(key) &&
-                labels.TryGetValue(key, out var label) &&
-                !string.IsNullOrWhiteSpace(label))
-            {
-                return label.Trim();
-            }
-        }
-
-        return labels.Values.FirstOrDefault(label => !string.IsNullOrWhiteSpace(label))?.Trim();
-    }
+        CancellationToken cancellationToken) =>
+        AkeneoOptionLabels.ResolveAsync(
+            _akeneoApiClient,
+            _attributeOptions,
+            attributeCode,
+            optionItem,
+            locale,
+            cancellationToken);
 
     public int Order => 400;
 

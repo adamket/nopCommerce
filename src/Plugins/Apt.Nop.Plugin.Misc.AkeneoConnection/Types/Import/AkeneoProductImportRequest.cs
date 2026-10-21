@@ -45,6 +45,15 @@ public class AkeneoProductImportRequest
     public AkeneoCollectionSyncMode CategorySyncMode { get; set; }
         = AkeneoCollectionSyncMode.Disabled;
 
+    public AkeneoCollectionSyncMode TagSyncMode { get; set; }
+        = AkeneoCollectionSyncMode.Disabled;
+
+    public AkeneoCollectionSyncMode RelatedProductSyncMode { get; set; }
+        = AkeneoCollectionSyncMode.Disabled;
+
+    /// <summary>The Akeneo association type whose targets become nopCommerce related products.</summary>
+    public string RelatedProductAssociationType { get; set; }
+
     public AkeneoCollectionSyncMode SpecificationAttributeSyncMode { get; set; }
         = AkeneoCollectionSyncMode.Merge;
 

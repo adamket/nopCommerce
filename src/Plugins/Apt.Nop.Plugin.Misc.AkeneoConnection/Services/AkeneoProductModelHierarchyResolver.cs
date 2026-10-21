@@ -173,6 +173,7 @@ public class AkeneoProductModelHierarchyResolver
             Parent = source.Parent,
             Enabled = source.Enabled,
             Categories = source.Categories?.ToList() ?? new List<string>(),
-            Values = values
+            Values = values,
+            Associations = source.Associations
         };
 }

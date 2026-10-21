@@ -932,10 +932,30 @@
                             mapping.editing = true;
                             mapping.akeneoFamilyCode = this.selectedFamilyCode || '';
                             this.mappings.push(mapping);
+                            this.scrollToMapping(mapping);
                         }
                         this.expanded[source.groupLabel || 'Ungrouped'] = true;
                         this.newSourceCode = '';
                         this.showMappingCreator = false;
+                    },
+                    // Brings a just-added mapping's edit area into view, below the admin's fixed
+                    // header. Waits for Vue to render the row, then a frame for its group to open.
+                    scrollToMapping: function (mapping) {
+                        if (!mapping || !mapping.clientKey)
+                            return;
+                        var key = mapping.clientKey;
+                        this.$nextTick(function () {
+                            window.requestAnimationFrame(function () {
+                                var shell = document.querySelector(
+                                    '.akeneo-connection [data-mapping-key="' + key + '"]');
+                                if (!shell)
+                                    return;
+                                var header = document.querySelector('.main-header');
+                                var offset = (header ? header.getBoundingClientRect().height : 0) + 16;
+                                var top = shell.getBoundingClientRect().top + window.pageYOffset - offset;
+                                window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+                            });
+                        });
                     },
                     isIgnoreType: function (t) {
                         return Number(t) === this.targetTypes.ignore;
@@ -1467,6 +1487,7 @@
 
                         this.mappings.unshift(mapping);
                         this.expanded['Computed mappings'] = true;
+                        this.scrollToMapping(mapping);
                     },
                     addReferenceMapping: function (entry) {
                         if (!this.canAddReferenceMapping(entry))
@@ -1532,6 +1553,7 @@
 
                         this.mappings.splice(insertAt, 0, newMapping);
                         this.referenceExpanded[entry.key] = true;
+                        this.scrollToMapping(newMapping);
                     },
                     canDeleteMapping: function (m) {
                         return !m.isInherited &&

@@ -36,5 +36,11 @@ public enum AkeneoManagedRelationType
     ProductAttributeCombination = 50,
     AssociatedProductAttributeValue = 60,
     GroupedProductRelationship = 70,
-    TierPrice = 80
+    TierPrice = 80,
+
+    /// <summary>A product–tag link; the relation entity is the Product_ProductTag_Mapping row.</summary>
+    ProductTag = 90,
+
+    /// <summary>A related product link; the relation entity is the RelatedProduct row.</summary>
+    RelatedProduct = 100
 }

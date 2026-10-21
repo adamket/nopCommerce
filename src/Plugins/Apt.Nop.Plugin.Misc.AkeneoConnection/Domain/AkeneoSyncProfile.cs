@@ -31,6 +31,13 @@ public class AkeneoSyncProfile : BaseEntity
     // Collection synchronization policy
     public int CategorySyncModeId { get; set; }
 
+    public int TagSyncModeId { get; set; }
+
+    public int RelatedProductSyncModeId { get; set; }
+
+    /// <summary>The Akeneo association type whose targets become nopCommerce related products.</summary>
+    public string RelatedProductAssociationType { get; set; }
+
     public int SpecificationAttributeSyncModeId { get; set; }
 
     public int ProductAttributeSyncModeId { get; set; }
