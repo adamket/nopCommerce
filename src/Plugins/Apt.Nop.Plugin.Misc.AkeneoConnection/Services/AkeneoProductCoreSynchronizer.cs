@@ -1,5 +1,6 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
+using Nop.Data;
 using Nop.Services.Catalog;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -9,11 +10,14 @@ public partial class AkeneoProductCoreSynchronizer
       IAkeneoSectionDryRunPlanProvider
 {
     private readonly IProductService _productService;
+    private readonly IRepository<Product> _productRepository;
 
     public AkeneoProductCoreSynchronizer(
-        IProductService productService)
+        IProductService productService,
+        IRepository<Product> productRepository)
     {
         _productService = productService;
+        _productRepository = productRepository;
     }
 
     public int Order => 100;
@@ -58,7 +62,9 @@ public partial class AkeneoProductCoreSynchronizer
         else if (changed)
         {
             product.UpdatedOnUtc = DateTime.UtcNow;
-            await _productService.UpdateProductAsync(product);
+            // The pipeline publishes the update event once all sections have run.
+            await _productRepository.UpdateAsync(product, publishEvent: false);
+            context.ProductUpdateEventPending = true;
 
             context.Result.AddMessage(
                 $"Updated core product fields for product ID {product.Id}.");
@@ -82,7 +88,9 @@ public partial class AkeneoProductCoreSynchronizer
             VisibleIndividually = true,
             Sku = fallbackName,
             Name = fallbackName,
-            Published = context.Source.Enabled ?? false,
+            Published = context.GetMappings(Domain.NopTargetType.ProductField, includeSkipped: true)
+                .Any(mapped => mapped.IsSkipped && string.Equals(mapped.Mapping.NopTargetKey, "Published", StringComparison.OrdinalIgnoreCase))
+                ? false : context.Source.Enabled ?? false,
             CreatedOnUtc = DateTime.UtcNow,
             UpdatedOnUtc = DateTime.UtcNow
         };

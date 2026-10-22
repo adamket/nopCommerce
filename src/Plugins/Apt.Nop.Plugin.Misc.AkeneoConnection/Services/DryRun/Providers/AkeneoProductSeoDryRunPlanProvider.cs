@@ -2,7 +2,11 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Planning;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
+using Nop.Core;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Seo;
+using Nop.Data;
+using Nop.Services.Seo;
 using static Apt.Nop.Plugin.Misc.AkeneoConnection.Services.DryRun.AkeneoDryRunPlanHelper;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -27,7 +31,7 @@ public partial class AkeneoProductSeoSynchronizer
         // before this synchronization item started. Attached actions write to
         // context.Product after the Core section has created or updated it.
         var product = context.ExistingProduct;
-        var mappings = context.GetMappings(NopTargetType.SeoField).ToList();
+        var mappings = context.GetMappings(NopTargetType.SeoField, includeSkipped: true).ToList();
         var hasSlugMapping = false;
         var metaChanged = false;
         var hasMetaWriteOperation = false;
@@ -45,6 +49,14 @@ public partial class AkeneoProductSeoSynchronizer
                     GetSourceName(mapped),
                     "The SEO mapping has no nopCommerce target key.",
                     mapped.Mapping.IsRequired);
+                continue;
+            }
+
+            if (mapped.IsSkipped)
+            {
+                hasSlugMapping |= string.Equals(key, "SeName", StringComparison.OrdinalIgnoreCase);
+                plan.AddOperation("SEO fields", key, GetSourceName(mapped), null, null,
+                    AkeneoDryRunOperationType.Skip, mapped.ConditionDetail, mapped.Mapping.IsRequired);
                 continue;
             }
 
@@ -178,7 +190,9 @@ public partial class AkeneoProductSeoSynchronizer
                     return false;
 
                 context.Product.UpdatedOnUtc = DateTime.UtcNow;
-                await _productService.UpdateProductAsync(context.Product);
+                // The pipeline publishes the update event once all sections have run.
+                await _productRepository.UpdateAsync(context.Product, publishEvent: false);
+                context.ProductUpdateEventPending = true;
                 context.Result.AddMessage(
                     $"Updated SEO meta fields for nopCommerce product ID {context.Product.Id}.");
 
@@ -227,7 +241,10 @@ public partial class AkeneoProductSeoSynchronizer
         };
 
         var requested = mapped.HasValue ? mapped.DisplayValue : string.Empty;
-        var proposed = await _urlRecordService.ValidateSeNameAsync(
+        var reclaim = mapped.HasValue
+            ? await FindSlugHeldByDeletedProductsAsync(requested, slugProduct.Id)
+            : null;
+        var proposed = reclaim?.Slug ?? await _urlRecordService.ValidateSeNameAsync(
             slugProduct,
             requested,
             proposedName,
@@ -237,12 +254,17 @@ public partial class AkeneoProductSeoSynchronizer
             ? AkeneoDryRunOperationType.Create
             : DetermineExactScalarChangeType(current, proposed, ignoreCase: true);
 
-        var adjustmentWarning = mapped.HasValue
+        var adjustmentWarning = mapped.HasValue && reclaim == null
             ? await DescribeSlugAdjustmentAsync(requested, proposed)
             : null;
 
         if (adjustmentWarning != null)
             plan.Warnings.Add(adjustmentWarning);
+
+        var note = adjustmentWarning ??
+                   (reclaim != null
+                       ? $"The slug is held by deleted nopCommerce product ID {string.Join(", ", reclaim.DeletedProductIds)} and will be moved to this product."
+                       : "The proposed value is the validated slug that nopCommerce would save.");
 
         plan.AddOperation(
             "SEO fields",
@@ -251,14 +273,84 @@ public partial class AkeneoProductSeoSynchronizer
             current,
             proposed,
             type,
-            adjustmentWarning ??
-            "The proposed value is the validated slug that nopCommerce would save.",
+            note,
             mapped.Mapping.IsRequired,
             executeAsync: type is AkeneoDryRunOperationType.Create or
                 AkeneoDryRunOperationType.Update or
                 AkeneoDryRunOperationType.Clear
-                ? async _ => await SaveSlugIfChangedAsync(context, proposed)
+                ? async _ =>
+                {
+                    if (reclaim != null && context.Product != null)
+                        await ReleaseSlugFromDeletedProductsAsync(context, reclaim);
+
+                    return await SaveSlugIfChangedAsync(context, proposed);
+                }
                 : null);
+    }
+
+    private sealed record DeletedProductSlugReclaim(
+        string Slug,
+        IReadOnlyList<UrlRecord> Records,
+        IReadOnlyList<int> DeletedProductIds);
+
+    /// <summary>
+    /// Returns the cleaned Akeneo slug when every URL record holding it belongs
+    /// to a nopCommerce product that is deleted (or no longer exists), so the
+    /// slug can be moved to this product instead of being suffixed with "-2".
+    /// Returns null when the slug is free, reserved, or held by a live entity.
+    /// </summary>
+    private async Task<DeletedProductSlugReclaim> FindSlugHeldByDeletedProductsAsync(
+        string requested,
+        int productId)
+    {
+        if (_urlRecordRepository == null || string.IsNullOrWhiteSpace(requested))
+            return null;
+
+        var slug = await _urlRecordService.GetSeNameAsync(
+            requested.Trim(),
+            _seoSettings.ConvertNonWesternChars,
+            _seoSettings.AllowUnicodeCharsInUrls);
+        slug = CommonHelper.EnsureMaximumLength(slug, NopSeoDefaults.SearchEngineNameLength);
+
+        if (string.IsNullOrWhiteSpace(slug) ||
+            _seoSettings.ReservedUrlRecordSlugs?.Contains(slug, StringComparer.InvariantCultureIgnoreCase) == true)
+        {
+            return null;
+        }
+
+        var holders = (await _urlRecordRepository.Table
+                .Where(record => record.Slug == slug)
+                .ToListAsync())
+            .Where(record => record.Slug.Equals(slug, StringComparison.InvariantCultureIgnoreCase) &&
+                             !(record.EntityId == productId &&
+                               record.EntityName.Equals(nameof(Product), StringComparison.InvariantCultureIgnoreCase)))
+            .ToList();
+
+        if (holders.Count == 0 ||
+            holders.Any(record => !record.EntityName.Equals(nameof(Product), StringComparison.InvariantCultureIgnoreCase)))
+        {
+            return null;
+        }
+
+        var deletedProductIds = holders.Select(record => record.EntityId).Distinct().ToList();
+
+        foreach (var holderId in deletedProductIds)
+        {
+            var holder = await _productService.GetProductByIdAsync(holderId);
+            if (holder is { Deleted: false })
+                return null;
+        }
+
+        return new DeletedProductSlugReclaim(slug, holders, deletedProductIds);
+    }
+
+    private async Task ReleaseSlugFromDeletedProductsAsync(
+        AkeneoProductSyncContext context,
+        DeletedProductSlugReclaim reclaim)
+    {
+        await _urlRecordService.DeleteUrlRecordsAsync(reclaim.Records.ToList());
+        context.Result.AddMessage(
+            $"Released URL slug '{reclaim.Slug}' from deleted nopCommerce product ID {string.Join(", ", reclaim.DeletedProductIds)}.");
     }
 
     /// <summary>

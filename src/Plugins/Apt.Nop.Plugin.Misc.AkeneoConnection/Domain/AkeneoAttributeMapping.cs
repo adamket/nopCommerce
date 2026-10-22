@@ -20,6 +20,8 @@ public class AkeneoAttributeMapping : BaseEntity
 
     public string ValueTemplate { get; set; }
 
+    public string ApplyWhen { get; set; }
+
     public AkeneoAttributeMappingValueMode ValueMode
     {
         get => (AkeneoAttributeMappingValueMode)ValueModeId;
@@ -153,7 +155,8 @@ public enum AkeneoAttributeType
     File = 120,
     Metric = 130,
     ReferenceEntity = 140,
-    ReferenceEntityCollection = 150
+    ReferenceEntityCollection = 150,
+    Table = 160
 }
 
 public enum NopTargetType
@@ -172,5 +175,8 @@ public enum NopTargetType
     /// nopCommerce product tags, named after the Akeneo option labels (or the
     /// comma-separated words of a text value). Missing tags are created.
     /// </summary>
-    ProductTag = 90
+    ProductTag = 90,
+
+    /// <summary>A registered mapping handler, selected by NopTargetKey.</summary>
+    CustomHandler = 100
 }

@@ -71,6 +71,22 @@ public sealed class AkeneoValueTemplateRenderer(
         var parsed = Parse(template);
         var referenceFields = GetReferenceFields(parsed);
 
+        if (parsed.Errors.Count == 0 && akeneoApiClient != null)
+        {
+            try
+            {
+                context = await ResolveInheritedContextAsync(parsed, context, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return new AkeneoValueTemplateRenderResult
+                {
+                    Errors = new[] { $"Could not resolve inherited template values: {ex.Message}" },
+                    ReferencedAttributeCodes = GetReferencedAttributeCodes(parsed)
+                };
+            }
+        }
+
         if (parsed.Errors.Count > 0 ||
             referenceFields.Count == 0 ||
             referenceEntityValueResolver == null)
@@ -228,6 +244,30 @@ public sealed class AkeneoValueTemplateRenderer(
 
             output.Append(segment.Literal);
         }
+    }
+
+    private async Task<AkeneoValueTemplateContext> ResolveInheritedContextAsync(
+        ParsedTemplate parsed, AkeneoValueTemplateContext context, CancellationToken cancellationToken)
+    {
+        var attributes = GetReferencedAttributeCodes(parsed);
+        var source = context.Source;
+        var ancestors = new List<Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto.AkeneoProductDefinition>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(source.Code)) visited.Add(source.Code);
+        var parent = source.Parent?.Trim();
+        while (!string.IsNullOrWhiteSpace(parent) && attributes.Any(attribute =>
+                   !productValueResolver.TryGetValue(source, attribute, out _, context.Locale, context.Channel, context.Currency)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!visited.Add(parent))
+                throw new InvalidOperationException($"Product-model cycle at '{parent}'.");
+            var model = await akeneoApiClient.GetProductModelByCodeAsync(parent, cancellationToken)
+                ?? throw new InvalidOperationException($"Parent product model '{parent}' was not found.");
+            ancestors.Add(model);
+            source = AkeneoProductModelHierarchyResolver.MergeWithAncestors(context.Source, ancestors);
+            parent = model.Parent?.Trim();
+        }
+        return ReferenceEquals(source, context.Source) ? context : context.WithSource(source);
     }
 
     private string ResolveToken(

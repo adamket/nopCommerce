@@ -139,7 +139,7 @@ public partial class AkeneoProductCoreSynchronizer
         // reaching this point is live and Deleted is left untouched.
 
         var hasPublishedMapping = context
-            .GetMappings(NopTargetType.ProductField)
+            .GetMappings(NopTargetType.ProductField, includeSkipped: true)
             .Any(mapped => string.Equals(
                 mapped.Mapping.NopTargetKey,
                 "Published",
@@ -209,7 +209,7 @@ public partial class AkeneoProductCoreSynchronizer
         bool isNew,
         CancellationToken cancellationToken)
     {
-        var mappings = context.GetMappings(NopTargetType.ProductField).ToList();
+        var mappings = context.GetMappings(NopTargetType.ProductField, includeSkipped: true).ToList();
         var mappedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var proposedProductName = product.Name ??
             context.Sku ??
@@ -235,6 +235,12 @@ public partial class AkeneoProductCoreSynchronizer
             mappedKeys.Add(key);
 
             var current = GetProductFieldValue(isNew ? null : product, key);
+            if (mapped.IsSkipped)
+            {
+                plan.AddOperation("Product fields", key, GetSourceName(mapped), current, current,
+                    AkeneoDryRunOperationType.Skip, mapped.ConditionDetail, mapped.Mapping.IsRequired);
+                continue;
+            }
             if (!TryResolveProductFieldValue(
                     context,
                     mapped,

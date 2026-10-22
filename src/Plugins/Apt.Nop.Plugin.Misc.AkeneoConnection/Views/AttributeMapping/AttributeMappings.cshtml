@@ -34,6 +34,7 @@
             customProperty = (int)NopTargetType.CustomProperty,
             specificationAttribute = (int)NopTargetType.SpecificationAttribute,
             productAttribute = (int)NopTargetType.ProductAttribute,
+            customHandler = (int)NopTargetType.CustomHandler,
             tierPrice = (int)NopTargetType.TierPrice
         },
         valueModes = new
@@ -146,7 +147,9 @@
             name = m.Name ?? string.Empty,
             valueModeId = m.ValueModeId,
             valueTemplate = m.ValueTemplate ?? string.Empty,
+            applyWhen = m.ApplyWhen ?? string.Empty,
             isComputed = m.IsComputed,
+            isMissingSource = m.AkeneoAttributeType == "missing_attribute",
             akeneoFamilyCode = m.AkeneoFamilyCode ?? string.Empty,
             isInherited = m.IsInherited,
             code = m.AkeneoAttributeCode,
@@ -559,7 +562,15 @@
                                     reference-entity attribute links to (<code>{root_variant}</code>
                                     alone gives the record code), and
                                     <code>{root_type == bare_root ? "this" : "that"}</code>
-                                    for conditional text. Conditions compare the raw Akeneo code
+                                    for conditional text. To set the Published product field, use
+                                    <code>{sync_status == published ? "true" : "false"}</code>
+                                    and mark the mapping required. Set <strong>Apply only when</strong> to
+                                    <code>sync_status == published OR sync_status == unpublished</code>
+                                    to preserve publication for hold or future statuses. Conditions support
+                                    <code>==</code>, <code>!=</code>, <code>AND</code>, <code>OR</code>, and parentheses.
+                                    A missing condition value blocks the item; a false condition skips the mapping. Configure a profile skip rule
+                                    for <code>sync_status = hold</code> to leave held products unchanged.
+                                    Conditions compare the raw Akeneo code
                                     by default and support <code>==</code> and <code>!=</code>.
                                     Conditional results are template fragments, so
                                     <code>{pack_quantity != 1 ? " {pack_quantity} pack" : ""}</code>
@@ -685,6 +696,8 @@
                     draft: {
                         name: m.name || '',
                         valueTemplate: m.valueTemplate || '',
+                        applyWhen: m.applyWhen || '',
+                        applyWhenEnabled: !!(m.applyWhen || '').trim(),
                         selectedTemplateToken: '',
                         nopTargetTypeId: m.nopTargetTypeId,
                         nopTargetKey: m.nopTargetKey,
@@ -712,7 +725,7 @@
             // Keep the complete source catalog for creation; only configured
             // mappings belong in the working list. Saved Ignore overrides matter too.
             var attributeSources = appData.mappings.filter(function (m) {
-                return !m.isComputed && !m.isReferenceEntityAttribute;
+                return !m.isComputed && !m.isReferenceEntityAttribute && !m.isMissingSource;
             });
             var mappings = appData.mappings.filter(function (m) {
                 return Number(m.id) > 0 || m.isInherited;
@@ -995,12 +1008,32 @@
                     isTierPriceType: function (t) {
                         return Number(t) === this.targetTypes.tierPrice;
                     },
+                    isCustomHandlerType: function (t) {
+                        return Number(t) === this.targetTypes.customHandler;
+                    },
+                    targetSelection: function (mapping) {
+                        return this.isCustomHandlerType(mapping.nopTargetTypeId)
+                            ? 'custom:' + mapping.nopTargetKey : String(mapping.nopTargetTypeId);
+                    },
+                    selectTarget: function (m, value) {
+                        if (String(value).indexOf('custom:') === 0) {
+                            m.draft.nopTargetTypeId = String(this.targetTypes.customHandler);
+                            m.draft.nopTargetKey = String(value).substring(7);
+                            m.draft.nopTargetEntityId = '';
+                            m.draft.fallbackSources = [];
+                            m.draft.transformRuleJson = '';
+                        } else {
+                            m.draft.nopTargetTypeId = String(value);
+                            this.onTypeChange(m);
+                        }
+                    },
                     isNoneType: function (t) {
-                        return !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t) && !this.isTierPriceType(t);
+                        return !this.isCustomHandlerType(t) && !this.isKeyType(t) && !this.isSpecType(t) && !this.isProductType(t) && !this.isTierPriceType(t);
                     },
                     targetTypeText: function (m) {
-                        var found = m.availableTargetTypes.find(function (o) { return o.value === m.nopTargetTypeId; });
-                        return found ? found.text : 'Ignore';
+                        var selection = this.targetSelection(m);
+                        var found = m.availableTargetTypes.find(function (o) { return o.value.toLowerCase() === selection.toLowerCase(); });
+                        return found ? found.text : (this.isCustomHandlerType(m.nopTargetTypeId) ? 'Handler unavailable: ' + m.nopTargetKey : 'Ignore');
                     },
                     referenceSourceDetail: function (m) {
                         if (!m.isReferenceEntityAttribute)
@@ -1133,6 +1166,8 @@
                     detail: function (m) {
                         var t = Number(m.nopTargetTypeId);
 
+                        if (this.isCustomHandlerType(t))
+                            return 'Custom mapping: ' + m.nopTargetKey;
                         if (this.isKeyType(t)) {
                             var k = this.keyOptions(t).find(function (o) { return o.value === m.nopTargetKey; });
                             return (m.nopTargetKey && k) ? k.text : 'No target key selected';
@@ -1165,6 +1200,8 @@
                         return option ? option.text : 'Create missing values as specification options';
                     },
                     statusFor: function (m) {
+                        if (m.isMissingSource)
+                            return { cls: 'is-attention', text: 'Missing source' };
                         if (m.clientAdded)
                             return { cls: 'is-attention', text: 'Unsaved' };
                         if (Number(m.nopTargetTypeId) === this.targetTypes.ignore) {
@@ -1247,8 +1284,11 @@
                         window.location.assign(url.pathname + url.search);
                     },
                     edit: function (m) {
+                        if (m.isMissingSource) return;
                         m.draft.name = m.name || '';
                         m.draft.valueTemplate = m.valueTemplate || '';
+                        m.draft.applyWhen = m.applyWhen || '';
+                        m.draft.applyWhenEnabled = !!(m.applyWhen || '').trim();
                         m.draft.selectedTemplateToken = '';
                         m.draft.nopTargetTypeId = m.nopTargetTypeId;
                         m.draft.nopTargetKey = m.nopTargetKey;
@@ -1453,6 +1493,7 @@
                             name: 'Computed product value',
                             valueModeId: valueModes.template,
                             valueTemplate: '{sku}',
+                            applyWhen: '',
                             isComputed: true,
                             akeneoFamilyCode: this.selectedFamilyCode || '',
                             isInherited: false,
@@ -1502,6 +1543,7 @@
                             name: '',
                             valueModeId: valueModes.singleAttribute,
                             valueTemplate: '',
+                            applyWhen: '',
                             isComputed: false,
                             akeneoFamilyCode: this.selectedFamilyCode || '',
                             isInherited: false,
@@ -1709,6 +1751,7 @@
                         m.valueModeId = Number(replacement.valueModeId) ||
                             this.valueModes.singleAttribute;
                         m.valueTemplate = replacement.valueTemplate || '';
+                        m.applyWhen = replacement.applyWhen || '';
                         m.isComputed = !!replacement.isComputed;
                         m.akeneoFamilyCode = replacement.akeneoFamilyCode || '';
                         m.isInherited = !!replacement.isInherited;
@@ -1741,6 +1784,7 @@
                         m.name = '';
                         m.valueModeId = this.valueModes.singleAttribute;
                         m.valueTemplate = '';
+                        m.applyWhen = '';
                         m.isComputed = false;
                         m.akeneoFamilyCode = '';
                         m.isInherited = false;
@@ -1764,6 +1808,8 @@
 
                         m.draft.name = m.name || '';
                         m.draft.valueTemplate = m.valueTemplate || '';
+                        m.draft.applyWhen = m.applyWhen || '';
+                        m.draft.applyWhenEnabled = !!(m.applyWhen || '').trim();
                         m.draft.selectedTemplateToken = '';
                         m.draft.nopTargetTypeId = m.nopTargetTypeId;
                         m.draft.nopTargetKey = m.nopTargetKey;
@@ -1848,6 +1894,7 @@
                     save: function (m) {
                         var self = this;
                         var d = m.draft;
+                        var applyWhen = d.applyWhenEnabled ? (d.applyWhen || '').trim() : '';
 
                         m.errors = [];
 
@@ -1872,6 +1919,7 @@
                                 Name: d.name || '',
                                 ValueModeId: m.valueModeId,
                                 ValueTemplate: d.valueTemplate || '',
+                                ApplyWhen: applyWhen,
                                 AkeneoFamilyCode: self.selectedFamilyCode || '',
                                 AkeneoAttributeCode: m.code || '',
                                 AkeneoAttributeTypeId: m.attributeTypeId,
@@ -1906,6 +1954,9 @@
                                 m.mappingKey = res.mappingKey || m.mappingKey;
                                 m.name = d.name || '';
                                 m.valueTemplate = d.valueTemplate || '';
+                                m.applyWhen = applyWhen;
+                                d.applyWhen = applyWhen;
+                                d.applyWhenEnabled = !!applyWhen;
                                 m.label = m.isComputed
                                     ? m.name
                                     : m.label;

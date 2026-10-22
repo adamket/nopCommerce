@@ -21,6 +21,8 @@ public sealed class AkeneoResolvedProductIntent
     public IReadOnlyList<AkeneoResolvedMappedValue> MappedValues { get; init; }
         = Array.Empty<AkeneoResolvedMappedValue>();
 
+    public string SkipReason { get; init; }
+
     public string SourceCode { get; init; }
 
     public string SourceUuid { get; init; }

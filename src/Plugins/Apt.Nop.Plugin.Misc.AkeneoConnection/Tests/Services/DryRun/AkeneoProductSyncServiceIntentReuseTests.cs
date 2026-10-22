@@ -60,7 +60,9 @@ public class AkeneoProductSyncServiceIntentReuseTests
             entityMappings.Object,
             new Mock<IAkeneoProductSyncStateService>().Object,
             productService.Object,
-            new Mock<IAkeneoProductSyncPipeline>().Object);
+            new Mock<IAkeneoProductSyncPipeline>().Object,
+            new AkeneoProfileRuleEvaluator(new Mock<IAkeneoApiClient>().Object),
+            Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.TestData.AkeneoAttributeCatalogTestData.Create());
 
         var source = new AkeneoProductDefinition
         {

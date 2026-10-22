@@ -49,7 +49,7 @@ public sealed class AkeneoDryRunCoveragePlanner : IAkeneoDryRunSectionPlanner
         AkeneoProductMappingPreviewModel model)
     {
         foreach (var mapped in context.MappedValues.Where(value =>
-                     value.TargetType == NopTargetType.Manufacturer))
+                     value.TargetType == NopTargetType.Manufacturer && !value.IsSkipped))
         {
             AddReviewOperation(
                 model,

@@ -31,6 +31,7 @@ public static class AkeneoSyncScopeHasher
             CompletenessFilterId = effectiveCompletenessFilterId,
             profile.ProductParentFilterModeId,
             profile.IncludeLinkedAssetUpdates,
+            SkipRules = AkeneoProfileRules.ParseSkipRules(profile.SkipRulesJson),
             AdditionalSearchJson = NormalizeJson(profile.AdditionalSearchJson)
         };
 

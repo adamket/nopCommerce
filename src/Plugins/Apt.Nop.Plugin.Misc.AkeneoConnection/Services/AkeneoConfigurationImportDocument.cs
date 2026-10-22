@@ -126,7 +126,7 @@ public sealed class AkeneoConfigurationImportDocument
                 "An attribute source or a template with a stable mapping key is required.");
             Require(slots.Add((a.AkeneoFamilyCode?.Trim() ?? "") + "::" + AkeneoMappingHelper.GetSourceMappingCode(a)),
                 "Duplicate attribute mapping slot in the same family scope.");
-            if ((NopTargetType)a.NopTargetTypeId is NopTargetType.ProductField or NopTargetType.SeoField or NopTargetType.CustomProperty)
+            if ((NopTargetType)a.NopTargetTypeId is NopTargetType.ProductField or NopTargetType.SeoField or NopTargetType.CustomProperty or NopTargetType.CustomHandler)
                 Require(!string.IsNullOrWhiteSpace(a.NopTargetKey), "A destination field/key is required.");
             foreach (var fallback in section.FallbackSources)
             {
@@ -147,9 +147,14 @@ public sealed class AkeneoConfigurationImportDocument
                 foreach (var a in AttributeMappings.Select(s => s.Configuration)
                              .Where(a => string.Equals(a.AkeneoFamilyCode?.Trim(), family, StringComparison.OrdinalIgnoreCase)))
                     effective[AkeneoMappingHelper.GetSourceMappingCode(a)] = a;
+            var tableScopes = effective.Values.Where(a => a.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+                string.Equals(a.NopTargetKey, CustomMappings.TierPriceTableMappingHandler.HandlerKey, StringComparison.OrdinalIgnoreCase))
+                .Aggregate(0, (scopes, a) => scopes | a.EntityScopeId);
+            Require(!effective.Values.Any(a => a.NopTargetTypeId == (int)NopTargetType.TierPrice &&
+                (a.EntityScopeId & tableScopes) != 0), "The tier-price table handler conflicts with scalar Tier Price mappings.");
             var targets = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var a in effective.Values.Where(a => (NopTargetType)a.NopTargetTypeId is
-                         NopTargetType.ProductField or NopTargetType.SeoField or NopTargetType.CustomProperty))
+                         NopTargetType.ProductField or NopTargetType.SeoField or NopTargetType.CustomProperty or NopTargetType.CustomHandler))
             {
                 var key = a.NopTargetTypeId + "::" + a.NopTargetKey.Trim();
                 targets.TryGetValue(key, out var scopes);

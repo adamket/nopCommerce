@@ -148,7 +148,8 @@ public class AkeneoResolvedDesiredStateHashTests
             null!, // IAkeneoProductModelDeltaFanOutService
             analyzer,
             null!, // IAkeneoAssetMappingService
-            null!  // IAkeneoAssetResolver
+            null!, // IAkeneoAssetResolver
+            new AkeneoProfileRuleEvaluator(Moq.Mock.Of<IAkeneoApiClient>())
         );
     }
 

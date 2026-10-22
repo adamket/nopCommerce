@@ -34,6 +34,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncProfileService, AkeneoSyncProfileService>();
         services.AddScoped<IAkeneoSyncItemLogService, AkeneoSyncItemLogService>();
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
+        services.AddScoped<IAkeneoProfileRuleEvaluator, AkeneoProfileRuleEvaluator>();
         services.AddScoped<IAkeneoReferenceEntityValueResolver, AkeneoReferenceEntityValueResolver>();
         services.AddScoped<IAkeneoValueTransformationService, AkeneoValueTransformationService>();
         services.AddScoped<IAkeneoValueTemplateRenderer, AkeneoValueTemplateRenderer>();
@@ -155,7 +156,14 @@ public class NopStartup : INopStartup
             provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
-        services.AddSingleton<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
+        services.AddScoped<Services.CustomMappings.IAkeneoCustomMappingHandler, Services.CustomMappings.TierPriceTableMappingHandler>();
+        services.AddScoped<Services.CustomMappings.AkeneoCustomMappingRegistry>();
+        services.AddScoped<Services.CustomMappings.AkeneoCustomMappingSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<Services.CustomMappings.AkeneoCustomMappingSynchronizer>());
+        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
+            provider.GetRequiredService<Services.CustomMappings.AkeneoCustomMappingSynchronizer>());
+        services.AddScoped<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
 
         services.AddTransient<AkeneoTransientRetryHandler>();
 

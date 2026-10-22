@@ -5,7 +5,8 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
-public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
+public sealed class AkeneoTargetTypeResolver(
+    CustomMappings.AkeneoCustomMappingRegistry customHandlers = null) : IAkeneoTargetTypeResolver
 {
     private static readonly IReadOnlyDictionary<NopTargetType, IReadOnlyList<NopTargetKeyOption>> _targetKeyOptions =
         new Dictionary<NopTargetType, IReadOnlyList<NopTargetKeyOption>>
@@ -44,6 +45,9 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
             ? options
             : [];
 
+    public IReadOnlyList<NopTargetKeyOption> GetCustomHandlerOptions(AkeneoAttributeDefinition attribute) =>
+        customHandlers?.GetCompatible(attribute).Select(h => new NopTargetKeyOption(h.Key, h.DisplayName)).ToList() ?? [];
+
     public AkeneoAttributeType ResolveAkeneoAttributeType(AkeneoAttributeDefinition attribute)
     {
         return attribute.Type.KeyPart() switch
@@ -52,6 +56,7 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
             "pim_catalog_text" => AkeneoAttributeType.Text,
             "pim_catalog_textarea" => AkeneoAttributeType.TextArea,
             "pim_catalog_number" => AkeneoAttributeType.Number,
+            "pim_catalog_table" => AkeneoAttributeType.Table,
             "pim_catalog_price_collection" => AkeneoAttributeType.Price,
             "pim_catalog_date" => AkeneoAttributeType.Date,
             "pim_catalog_boolean" => AkeneoAttributeType.Boolean,
@@ -75,6 +80,13 @@ public sealed class AkeneoTargetTypeResolver : IAkeneoTargetTypeResolver
     }
 
     public IReadOnlyList<NopTargetType> GetAllowedTargetTypes(AkeneoAttributeDefinition attribute)
+    {
+        var builtIn = GetBuiltInTargetTypes(attribute);
+        return GetCustomHandlerOptions(attribute).Count > 0
+            ? builtIn.Concat(new[] { NopTargetType.CustomHandler }).ToList() : builtIn;
+    }
+
+    private static IReadOnlyList<NopTargetType> GetBuiltInTargetTypes(AkeneoAttributeDefinition attribute)
     {
         return attribute.Type.KeyPart() switch
         {

@@ -15,6 +15,9 @@ public class AkeneoAttributeDefinition : LocalizableDefinition
     [JsonPropertyName("reference_data_name")]
     public string ReferenceDataName { get; set; }
 
+    [JsonPropertyName("table_configuration")]
+    public List<AkeneoTableColumnDefinition> TableConfiguration { get; set; } = new();
+
     [JsonPropertyName("group")]
     public string Group { get; set; }
 

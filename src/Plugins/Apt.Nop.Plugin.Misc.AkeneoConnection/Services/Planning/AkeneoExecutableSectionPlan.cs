@@ -8,7 +8,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Planning;
 /// A section builds this plan once; Dry Run renders its preview operations,
 /// while synchronization executes the attached actions in the same order.
 /// </summary>
-internal class AkeneoExecutableSectionPlan
+public class AkeneoExecutableSectionPlan
 {
     public bool ImportAllowedByProfile { get; set; } = true;
 
@@ -131,7 +131,7 @@ internal class AkeneoExecutableSectionPlan
     }
 }
 
-internal sealed class AkeneoExecutableSectionOperation
+public sealed class AkeneoExecutableSectionOperation
 {
     public AkeneoDryRunOperationPreviewModel Preview { get; init; }
 

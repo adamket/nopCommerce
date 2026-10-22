@@ -72,6 +72,12 @@ public partial class AkeneoProductTagSynchronizer
         CancellationToken cancellationToken)
     {
         var plan = new AkeneoExecutableSectionPlan();
+        if (context.MappedValues.Any(mapped => mapped.TargetType == NopTargetType.ProductTag && mapped.IsSkipped))
+        {
+            plan.AddOperation("Product tags", "Collection", null, null, null, AkeneoDryRunOperationType.Skip,
+                "A mapping was skipped. The collection is preserved because its complete desired membership is unknown.");
+            return plan;
+        }
         var mode = context.Request.TagSyncMode;
 
         if (mode == AkeneoCollectionSyncMode.Disabled)

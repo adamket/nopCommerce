@@ -21,6 +21,9 @@ public interface IAkeneoTargetTypeResolver
     /// <summary>The target-key options for a single target type (empty if the type has none).</summary>
     IReadOnlyList<NopTargetKeyOption> GetTargetKeyOptions(NopTargetType targetType);
 
+    /// <summary>Compatible registered handlers, rendered as named mapping targets.</summary>
+    IReadOnlyList<NopTargetKeyOption> GetCustomHandlerOptions(AkeneoAttributeDefinition attribute) => [];
+
     /// <summary>All target-key options, keyed by target type. Single source of truth for the client map.</summary>
     IReadOnlyDictionary<NopTargetType, IReadOnlyList<NopTargetKeyOption>> TargetKeyOptions { get; }
 }

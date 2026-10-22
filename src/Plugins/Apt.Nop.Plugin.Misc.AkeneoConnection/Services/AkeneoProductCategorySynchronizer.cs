@@ -40,6 +40,12 @@ public partial class AkeneoProductCategorySynchronizer
         CancellationToken cancellationToken)
     {
         var plan = new AkeneoExecutableSectionPlan();
+        if (context.MappedValues.Any(mapped => mapped.TargetType == NopTargetType.Category && mapped.IsSkipped))
+        {
+            plan.AddOperation("Categories", "Collection", null, null, null, AkeneoDryRunOperationType.Skip,
+                "A mapping was skipped. The collection is preserved because its complete desired membership is unknown.");
+            return plan;
+        }
 
         if (context.Request.CategorySyncMode == AkeneoCollectionSyncMode.Disabled)
         {

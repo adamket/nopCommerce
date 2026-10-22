@@ -132,6 +132,7 @@ public class AkeneoSyncProfileModelFactory(
             model.UpdatedSinceLastNDays = profile.UpdatedSinceLastNDays;
             model.ProductParentFilterModeId = profile.ProductParentFilterModeId;
             model.AdditionalSearchJson = profile.AdditionalSearchJson;
+            model.SkipRulesJson = profile.SkipRulesJson;
 
             model.SelectedAkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv();
             model.SelectedAkeneoLocaleCodes = profile.AkeneoLocales.SplitCsv();

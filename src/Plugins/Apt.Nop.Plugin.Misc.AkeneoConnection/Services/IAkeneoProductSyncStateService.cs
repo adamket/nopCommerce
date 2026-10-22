@@ -21,6 +21,9 @@ public interface IAkeneoProductSyncStateService
         AkeneoProductImportResult result,
         string desiredStateHash = null);
 
+    /// <summary>Update only encounter timestamps; preserve binding, hash, and lifecycle.</summary>
+    Task MarkSkippedSeenAsync(AkeneoProductSyncState state, int syncRunRecordId);
+
     Task<IList<AkeneoProductSyncState>> GetUnseenStatesAsync(
         int syncProfileId,
         int currentRunRecordId);

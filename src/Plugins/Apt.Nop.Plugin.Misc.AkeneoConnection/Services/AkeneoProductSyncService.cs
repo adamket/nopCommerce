@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Runtime.CompilerServices;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
@@ -20,9 +21,23 @@ public class AkeneoProductSyncService(
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoProductSyncStateService syncStateService,
     IProductService productService,
-    IAkeneoProductSyncPipeline syncPipeline)
+    IAkeneoProductSyncPipeline syncPipeline,
+    IAkeneoProfileRuleEvaluator profileRuleEvaluator,
+    IAkeneoApiClient akeneoApiClient)
     : IAkeneoProductSyncService
 {
+    // One fresh catalog per import request/run, shared by all products in it.
+    // Failed loads stay failed for that run; they never become an empty catalog.
+    private readonly ConditionalWeakTable<AkeneoProductImportRequest, Lazy<Task<HashSet<string>>>> _attributeCatalogs = new();
+
+    private async Task<HashSet<string>> LoadAttributeCatalogAsync(CancellationToken cancellationToken)
+    {
+        var attributes = await akeneoApiClient.GetAttributesAsync(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Akeneo returned no attribute catalog response.");
+        return attributes.Where(attribute => !string.IsNullOrWhiteSpace(attribute.Code))
+            .Select(attribute => attribute.Code.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,
@@ -169,6 +184,28 @@ public class AkeneoProductSyncService(
         cancellationToken.ThrowIfCancellationRequested();
 
         var resolutionResult = new AkeneoProductImportResult();
+        string skipReason = null;
+        string ruleError = null;
+        try
+        {
+            skipReason = await profileRuleEvaluator.GetSkipReasonAsync(source, request, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ruleError = ex.Message;
+        }
+        if (skipReason != null || ruleError != null)
+        {
+            var code = sourceEntityType == AkeneoEntityType.ProductModel ? source.Code : source.Identifier;
+            return new AkeneoResolvedProductIntent
+            {
+                Source = source, SourceEntityType = sourceEntityType, Request = request,
+                SourceCode = code, SourceUuid = source.Uuid, ProductKey = source.Uuid ?? code,
+                Sku = source.Identifier ?? source.Code, SkipReason = skipReason,
+                Messages = skipReason == null ? Array.Empty<string>() : new[] { skipReason },
+                Errors = ruleError == null ? Array.Empty<string>() : new[] { ruleError }
+            };
+        }
 
         if (sourceEntityType == AkeneoEntityType.Product &&
             !string.IsNullOrWhiteSpace(source.Parent) &&
@@ -258,6 +295,9 @@ public class AkeneoProductSyncService(
             resolutionResult,
             cancellationToken);
 
+        handledAssetAttributeCodes.AddRange(AkeneoProfileRules.ParseSkipRules(request.SkipRulesJson)
+            .Select(rule => rule.AttributeCode));
+
         // A configured mapping that does not apply to this destination role is
         // still considered handled. It must not be logged or imported as an
         // "unmapped" custom property on the wrong product role.
@@ -323,6 +363,8 @@ public class AkeneoProductSyncService(
 
         return new AkeneoProductSyncContext
         {
+            SkipReason = intent.SkipReason,
+            StopProcessing = intent.SkipReason != null,
             Source = intent.Source,
             SourceEntityType = intent.SourceEntityType,
             Request = intent.Request,
@@ -373,6 +415,12 @@ public class AkeneoProductSyncService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        if (context.SkipReason != null)
+        {
+            context.Result.ActionType = SyncItemActionType.Skipped;
+            return null;
+        }
 
         if (!context.Result.Success)
         {
@@ -430,7 +478,9 @@ public class AkeneoProductSyncService(
     public Task RunPrepareAsync(
         AkeneoProductSyncContext context,
         CancellationToken cancellationToken = default)
-        => syncPipeline.PrepareAsync(context, cancellationToken);
+        => context.SkipReason != null || !context.Result.Success
+            ? Task.CompletedTask
+            : syncPipeline.PrepareAsync(context, cancellationToken);
 
     private async Task<IList<AkeneoResolvedMappedValue>> ResolveMappedValuesAsync(
         AkeneoProductDefinition source,
@@ -443,6 +493,44 @@ public class AkeneoProductSyncService(
         CancellationToken cancellationToken)
     {
         var resolved = new List<AkeneoResolvedMappedValue>();
+        var dependencies = mappings.Where(mapping => (NopTargetType)mapping.NopTargetTypeId != NopTargetType.Ignore)
+            .ToDictionary(mapping => mapping, mapping => AkeneoMappingSourceCatalog.GetAttributeCodes(mapping,
+                fallbackSourcesByMappingId.GetValueOrDefault(mapping.Id), valueTemplateRenderer));
+        var unavailable = new HashSet<AkeneoAttributeMapping>();
+        if (dependencies.Values.Any(codes => codes.Count > 0))
+        {
+            HashSet<string> catalog;
+            try
+            {
+                catalog = await _attributeCatalogs.GetValue(request, _ =>
+                    new Lazy<Task<HashSet<string>>>(() => LoadAttributeCatalogAsync(cancellationToken))).Value;
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                result.AddError($"Cannot validate mapping sources against Akeneo's attribute catalog. No mappings were applied: {ex.Message}");
+                return mappings.Select(mapping => new AkeneoResolvedMappedValue
+                {
+                    Mapping = mapping, EvaluationOutcome = AkeneoMappingEvaluationOutcome.Failed
+                }).ToList();
+            }
+
+            foreach (var (mapping, codes) in dependencies)
+            {
+                var missing = codes.Where(code => !catalog.Contains(code)).ToList();
+                if (missing.Count == 0) continue;
+                unavailable.Add(mapping);
+                var detail = $"Mapping '{mapping.Name ?? mapping.MappingKey ?? mapping.AkeneoAttributeCode}' was skipped because these Akeneo attributes no longer exist: {string.Join(", ", missing)}. The destination is preserved. Update or remove the saved mapping.";
+                result.AddWarning(detail);
+                resolved.Add(new AkeneoResolvedMappedValue
+                {
+                    Mapping = mapping, EvaluationOutcome = AkeneoMappingEvaluationOutcome.SkippedMissingAttribute,
+                    ConditionDetail = detail
+                });
+            }
+        }
+        mappings = mappings.Where(mapping => !unavailable.Contains(mapping)).ToList();
 
         // Ordinary mappings are resolved first so templates can use the
         // effective SKU produced by a normal ProductField/Sku mapping.
@@ -519,6 +607,22 @@ public class AkeneoProductSyncService(
         var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
             ? mapping.Channel
             : request.Channel;
+
+        if (targetType == NopTargetType.CustomHandler)
+        {
+            // Preserve raw empty arrays and malformed values for the handler to validate.
+            // Display-value resolution would collapse an explicit empty table into "missing".
+            if (fallbackSourcesByMappingId.TryGetValue(mapping.Id, out var customFallbacks) && customFallbacks.Count > 0)
+                result.AddError("Custom mapping handlers do not support fallback sources.");
+            var rawValue = await ResolveSourceValueAsync(source, mapping, mappingFamilyVariantCode,
+                locale, channel, request.Currency, cancellationToken);
+            return new AkeneoResolvedMappedValue
+            {
+                Mapping = mapping, Value = rawValue,
+                HasValue = rawValue?.RawData is { ValueKind: not JsonValueKind.Null and not JsonValueKind.Undefined },
+                ResolvedSourceDisplayName = AkeneoMappingHelper.GetSourceDisplayName(mapping)
+            };
+        }
 
         AkeneoResolvedProductValue value = null;
         var resolvedSuccessfully = false;
@@ -627,10 +731,7 @@ public class AkeneoProductSyncService(
             ? mapping.Channel
             : request.Channel;
 
-        // RenderAsync also resolves {attribute.field} reference-entity tokens.
-        var rendered = await valueTemplateRenderer.RenderAsync(
-            mapping.ValueTemplate,
-            new AkeneoValueTemplateContext
+        var templateContext = new AkeneoValueTemplateContext
             {
                 Source = source,
                 Locale = locale,
@@ -639,8 +740,30 @@ public class AkeneoProductSyncService(
                 FamilyCode = mappingFamilyCode,
                 FamilyVariantCode = mappingFamilyVariantCode,
                 Sku = effectiveSku
-            },
-            cancellationToken);
+            };
+
+        if (!string.IsNullOrWhiteSpace(mapping.ApplyWhen))
+        {
+            var condition = await AkeneoMappingCondition.EvaluateAsync(mapping.ApplyWhen,
+                valueTemplateRenderer, templateContext, cancellationToken);
+            if (!condition.Success || !condition.Matches)
+            {
+                var detail = condition.Success
+                    ? $"Skipped by condition: '{mapping.ApplyWhen}' evaluated to false. The destination is preserved."
+                    : $"Could not evaluate condition '{mapping.ApplyWhen}' for {sourceDisplayName}: {condition.Error}";
+                if (condition.Success) result.AddMessage($"{sourceDisplayName}: {detail}");
+                else result.AddError(detail);
+                return new AkeneoResolvedMappedValue
+                {
+                    Mapping = mapping, HasValue = false, ResolvedSourceDisplayName = sourceDisplayName,
+                    EvaluationOutcome = condition.Success ? AkeneoMappingEvaluationOutcome.SkippedByCondition : AkeneoMappingEvaluationOutcome.Failed,
+                    ConditionDetail = detail
+                };
+            }
+        }
+
+        // Render only after the condition permits this mapping.
+        var rendered = await valueTemplateRenderer.RenderAsync(mapping.ValueTemplate, templateContext, cancellationToken);
 
         var resolvedSuccessfully = rendered.Success &&
             !string.IsNullOrWhiteSpace(rendered.Value);
@@ -863,7 +986,7 @@ public class AkeneoProductSyncService(
                 (int)AkeneoAttributeMappingValueMode.Template)
             .SelectMany(mapping => valueTemplateRenderer
                 .Validate(mapping.ValueTemplate)
-                .ReferencedAttributeCodes);
+                .ReferencedAttributeCodes.Concat(AkeneoMappingCondition.Validate(mapping.ApplyWhen, valueTemplateRenderer).ReferencedAttributeCodes));
 
         var handledCodes = effectiveMappings
             .Where(mapping => mapping.ValueModeId !=

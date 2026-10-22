@@ -33,10 +33,12 @@ public class AkeneoAttributeMappingModelFactory(
 
         IReadOnlyList<AkeneoAttributeDefinition> akeneoAttributes;
         IReadOnlyList<AkeneoFamilyDefinition> akeneoFamilies;
+        HashSet<string> currentAttributeCodes;
 
         try
         {
             akeneoAttributes = await akeneoApiClient.GetAttributesAsync();
+            currentAttributeCodes = akeneoAttributes.Select(attribute => attribute.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (!string.IsNullOrWhiteSpace(model.AkeneoFamilyCode))
             {
                 var selectedFamily = await akeneoApiClient
@@ -114,6 +116,14 @@ public class AkeneoAttributeMappingModelFactory(
         model.Mappings.Clear();
         model.ReferenceEntityAttributes.Clear();
         model.Warnings.Clear();
+        foreach (var mapping in existingAttributeMappings.Where(mapping =>
+                     mapping.ValueMode != AkeneoAttributeMappingValueMode.Template &&
+                     (NopTargetType)mapping.NopTargetTypeId != NopTargetType.Ignore &&
+                     !AkeneoMappingSourceCatalog.IsProductField(mapping.AkeneoAttributeCode) &&
+                     !currentAttributeCodes.Contains(mapping.AkeneoAttributeCode)))
+        {
+            model.Warnings.Add($"Saved mapping '{mapping.MappingKey ?? mapping.AkeneoAttributeCode}' references Akeneo attribute '{mapping.AkeneoAttributeCode}', which no longer exists. Sync will skip this mapping and preserve its destination.");
+        }
 
         model.AvailableSpecificationAttributes = BuildSpecificationAttributeOptions(
             specificationAttributes);
@@ -195,6 +205,30 @@ public class AkeneoAttributeMappingModelFactory(
             }
         }
 
+        // Keep orphaned configurations visible and deletable without asking
+        // Akeneo for metadata that no longer exists.
+        foreach (var mapping in existingAttributeMappings.Where(mapping =>
+                     mapping.ValueMode != AkeneoAttributeMappingValueMode.Template &&
+                     !AkeneoMappingSourceCatalog.IsProductField(mapping.AkeneoAttributeCode) &&
+                     !currentAttributeCodes.Contains(mapping.AkeneoAttributeCode)))
+        {
+            var orphan = await CreateMappingModelAsync(new AkeneoAttributeDefinition
+            {
+                Code = mapping.AkeneoAttributeCode, Type = "missing_attribute", Group = "__missing"
+            }, mapping, model.AkeneoFamilyCode, specificationAttributes, productAttributes,
+                referenceEntityAttributeCache, fallbackSourcesByMappingId, model.Warnings);
+            orphan.IsMissingSource = true;
+            if (!orphan.AvailableTargetTypes.Any(option => option.Value == mapping.NopTargetTypeId.ToString()) &&
+                (NopTargetType)mapping.NopTargetTypeId != NopTargetType.CustomHandler)
+                orphan.AvailableTargetTypes.Add(new SelectListItem(
+                    GetTargetTypeDisplayName((NopTargetType)mapping.NopTargetTypeId), mapping.NopTargetTypeId.ToString()));
+            orphan.AkeneoAttributeGroupLabel = "Missing Akeneo attributes";
+            orphan.AkeneoAttributeLabel = string.IsNullOrWhiteSpace(mapping.AkeneoReferenceEntityAttributeCode)
+                ? "Attribute no longer exists in Akeneo"
+                : $"Missing attribute / field: {mapping.AkeneoReferenceEntityAttributeCode}";
+            model.Mappings.Add(orphan);
+        }
+
         foreach (var computedMapping in existingAttributeMappings
                      .Where(mapping => mapping.ValueModeId ==
                          (int)AkeneoAttributeMappingValueMode.Template)
@@ -250,7 +284,7 @@ public class AkeneoAttributeMappingModelFactory(
         };
 
         foreach (var targetType in targetTypeResolver.GetAllowedTargetTypes(
-                     akeneoAttribute))
+                     akeneoAttribute).Where(t => t != NopTargetType.CustomHandler))
         {
             definition.AvailableTargetTypes.Add(new SelectListItem
             {
@@ -259,6 +293,12 @@ public class AkeneoAttributeMappingModelFactory(
                 Selected = targetType == defaultTargetType
             });
         }
+
+        foreach (var option in targetTypeResolver.GetCustomHandlerOptions(akeneoAttribute) ?? [])
+            definition.AvailableTargetTypes.Add(new SelectListItem
+            {
+                Value = "custom:" + option.Code, Text = option.Label
+            });
 
         await PrepareReferenceEntityAttributeOptionsAsync(
             definition,
@@ -295,6 +335,7 @@ public class AkeneoAttributeMappingModelFactory(
             ValueModeId = existingAttributeMapping?.ValueModeId ??
                 (int)AkeneoAttributeMappingValueMode.SingleAttribute,
             ValueTemplate = existingAttributeMapping?.ValueTemplate,
+            ApplyWhen = existingAttributeMapping?.ApplyWhen,
 
             // Display-only values from Akeneo.
             AkeneoAttributeCode = akeneoAttribute.Code,
@@ -377,6 +418,7 @@ public class AkeneoAttributeMappingModelFactory(
             Name = mapping.Name,
             ValueModeId = (int)AkeneoAttributeMappingValueMode.Template,
             ValueTemplate = mapping.ValueTemplate,
+            ApplyWhen = mapping.ApplyWhen,
             AkeneoFamilyCode = mapping.AkeneoFamilyCode,
             IsInherited = isInherited,
             AkeneoAttributeCode = null,
@@ -467,7 +509,7 @@ public class AkeneoAttributeMappingModelFactory(
         AkeneoAttributeMappingListModel model)
     {
         model.AvailableFallbackSources = model.Mappings
-            .Where(mapping => !mapping.IsComputed)
+            .Where(mapping => !mapping.IsComputed && !mapping.IsMissingSource)
             .Where(mapping =>
                 !mapping.IsReferenceEntityAttribute ||
                 !string.IsNullOrWhiteSpace(
@@ -553,8 +595,9 @@ public class AkeneoAttributeMappingModelFactory(
         AkeneoAttributeDefinition akeneoAttribute)
     {
         model.AvailableTargetTypes.Clear();
+        AddCustomHandlerOptions(model, akeneoAttribute);
 
-        foreach (var targetType in targetTypeResolver.GetAllowedTargetTypes(akeneoAttribute))
+        foreach (var targetType in targetTypeResolver.GetAllowedTargetTypes(akeneoAttribute).Where(t => t != NopTargetType.CustomHandler))
         {
             model.AvailableTargetTypes.Add(new SelectListItem
             {
@@ -563,6 +606,24 @@ public class AkeneoAttributeMappingModelFactory(
                 Selected = model.NopTargetTypeId == (int)targetType
             });
         }
+    }
+
+    private void AddCustomHandlerOptions(AkeneoAttributeMappingModel model, AkeneoAttributeDefinition attribute)
+    {
+        foreach (var option in targetTypeResolver.GetCustomHandlerOptions(attribute) ?? [])
+            model.AvailableTargetTypes.Add(new SelectListItem
+            {
+                Value = "custom:" + option.Code, Text = option.Label,
+                Selected = model.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+                    string.Equals(model.NopTargetKey, option.Code, StringComparison.OrdinalIgnoreCase)
+            });
+        if (model.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+            !model.AvailableTargetTypes.Any(o => string.Equals(o.Value, "custom:" + model.NopTargetKey, StringComparison.OrdinalIgnoreCase)))
+            model.AvailableTargetTypes.Add(new SelectListItem
+            {
+                Value = "custom:" + model.NopTargetKey,
+                Text = "Handler unavailable: " + model.NopTargetKey, Selected = true
+            });
     }
 
     private void PrepareNopTargetKeyOptions(AkeneoAttributeMappingModel model)

@@ -52,6 +52,7 @@ function editor(overrides = {}) {
         window: { crypto: { randomUUID: () => 'unique-computed-key' } },
         Vue: { createApp(options) {
             app = options.data();
+            app.$nextTick = () => {}; // Scrolling is not part of this editor-state harness.
             for (const [name, method] of Object.entries(options.methods)) app[name] = method.bind(app);
             for (const [name, getter] of Object.entries(options.computed)) {
                 Object.defineProperty(app, name, { get: getter.bind(app) });
@@ -177,4 +178,104 @@ test('save sends the selected source and family, then retains the saved row', ()
     assert.equal(draft.clientAdded, false);
     assert.equal(draft.editing, false);
     assert.ok(!app.availableSources.some(source => source.code === 'name'));
+});
+
+test('computed condition saves, reloads into a draft, and survives cancel', () => {
+    const { app, request } = editor({ mappings: [], referenceEntityAttributes: [] });
+    app.newMappingKind = 'computed';
+    app.addMapping();
+    const row = app.mappings.at(-1);
+    row.draft.name = 'Publication';
+    row.draft.nopTargetTypeId = '1';
+    row.draft.nopTargetKey = 'Published';
+    assert.equal(row.draft.applyWhenEnabled, false);
+    row.draft.applyWhenEnabled = true;
+    row.draft.applyWhen = 'sync_status == published OR sync_status == unpublished';
+    app.save(row);
+    assert.equal(request().data.ApplyWhen, row.draft.applyWhen);
+    request().success({ success: true, id: 42, mappingKey: 'publication' });
+    assert.equal(row.applyWhen, 'sync_status == published OR sync_status == unpublished');
+    app.edit(row);
+    assert.equal(row.draft.applyWhen, row.applyWhen);
+    assert.equal(row.draft.applyWhenEnabled, true);
+    row.draft.applyWhen = 'sync_status != hold';
+    app.cancel(row);
+    assert.equal(row.applyWhen, 'sync_status == published OR sync_status == unpublished');
+});
+
+test('saving an unchecked condition clears it and reopening stays unchecked', () => {
+    const { app, request } = editor({ mappings: [attribute('computed', {
+        id: 42, isComputed: true, valueModeId: 1, applyWhen: 'sync_status != hold', nopTargetTypeId: '1'
+    })] });
+    const row = app.mappings[0];
+    app.edit(row);
+    assert.equal(row.draft.applyWhenEnabled, true);
+    row.draft.applyWhenEnabled = false;
+    app.cancel(row);
+    app.edit(row);
+    assert.equal(row.draft.applyWhenEnabled, true);
+    row.draft.applyWhenEnabled = false;
+    app.save(row);
+    assert.equal(request().data.ApplyWhen, '');
+    request().success({ success: true, id: 42 });
+    assert.equal(row.applyWhen, '');
+    assert.equal(row.draft.applyWhen, '');
+    app.edit(row);
+    assert.equal(row.draft.applyWhenEnabled, false);
+});
+
+test('null and whitespace conditions start unchecked', () => {
+    for (const applyWhen of [null, '', '  \t  ']) {
+        const { app } = editor({ mappings: [attribute('computed', { id: 42, isComputed: true, valueModeId: 1, applyWhen })] });
+        const row = app.mappings[0];
+        assert.equal(row.draft.applyWhenEnabled, false);
+        app.edit(row);
+        assert.equal(row.draft.applyWhenEnabled, false);
+    }
+});
+
+test('inherited computed mapping retains its condition when restoring the global mapping', () => {
+    const { app, request } = editor({ selectedFamilyCode: 'trees', mappings: [
+        attribute('computed', { id: 2, mappingKey: 'publication', isComputed: true, valueModeId: 1, name: 'Publication' })
+    ] });
+    app.deletePersistedMapping(app.mappings[0]);
+    request().success({ success: true, replacementMapping: {
+        id: 1, isInherited: true, isComputed: true, valueModeId: 1, mappingKey: 'publication',
+        name: 'Publication', valueTemplate: '{sync_status == published ? true : false}',
+        applyWhen: 'sync_status != hold', nopTargetTypeId: '1', nopTargetKey: 'Published'
+    } });
+    const row = app.mappings[0];
+    app.edit(row);
+    assert.equal(row.draft.applyWhen, 'sync_status != hold');
+    assert.equal(row.draft.applyWhenEnabled, true);
+});
+
+test('deleted Akeneo attributes remain deletable but cannot be edited or offered as new sources', () => {
+    const { app, request } = editor({ mappings: [attribute('removed_attribute', {
+        id: 42, mappingKey: 'removed_attribute', isMissingSource: true, nopTargetTypeId: '1'
+    })] });
+    const row = app.mappings[0];
+    assert.equal(app.statusFor(row).text, 'Missing source');
+    assert.equal(app.canDeleteMapping(row), true);
+    app.edit(row);
+    assert.equal(row.editing, false);
+    app.deletePersistedMapping(row);
+    assert.equal(request().data.id, 42);
+    request().success({ success: true });
+    assert.equal(app.mappings.length, 0);
+    assert.equal(app.availableSources.some(source => source.code === 'removed_attribute'), false);
+});
+
+test('removing an orphaned family override retains the orphaned inherited mapping', () => {
+    const { app, request } = editor({ selectedFamilyCode: 'trees', mappings: [attribute('removed_attribute', {
+        id: 42, isMissingSource: true, nopTargetTypeId: '1'
+    })] });
+    const row = app.mappings[0];
+    app.deletePersistedMapping(row);
+    request().success({ success: true, replacementMapping: {
+        id: 10, isInherited: true, nopTargetTypeId: '1', nopTargetKey: 'Published'
+    } });
+    assert.equal(row.isMissingSource, true);
+    assert.equal(app.canDeleteMapping(row), false);
+    assert.equal(app.statusFor(row).text, 'Missing source');
 });

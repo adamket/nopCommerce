@@ -42,6 +42,7 @@ public class AkeneoProductBatchSyncService(
     IAkeneoDryRunChangeAnalyzer dryRunChangeAnalyzer,
     IAkeneoAssetMappingService assetMappingService,
     IAkeneoAssetResolver assetResolver,
+    IAkeneoProfileRuleEvaluator profileRuleEvaluator,
     IAkeneoWritePolicyGate writePolicyGate = null,
     IProductAttributeService productAttributeService = null,
     AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null)
@@ -650,6 +651,14 @@ public class AkeneoProductBatchSyncService(
                 return await SaveLogAndReturnAsync(request, result, null);
             }
 
+            var skipReason = await profileRuleEvaluator.GetSkipReasonAsync(source, request, cancellationToken);
+            if (skipReason != null)
+            {
+                result.ActionType = SyncItemActionType.Skipped;
+                result.AddMessage(skipReason);
+                return await SaveLogAndReturnAsync(request, result, snapshot);
+            }
+
             var productModelCache = new Dictionary<string, AkeneoProductDefinition>(
                 StringComparer.OrdinalIgnoreCase)
             {
@@ -721,6 +730,17 @@ public class AkeneoProductBatchSyncService(
                 source.Identifier,
                 source.Uuid)
             : null;
+
+        var skipReason = await profileRuleEvaluator.GetSkipReasonAsync(source, request, cancellationToken);
+        if (skipReason != null)
+        {
+            ApplyPreviousStateBinding(result, previousState);
+            result.ActionType = SyncItemActionType.Skipped;
+            result.AddMessage(skipReason);
+            if (previousState != null)
+                await syncStateService.MarkSkippedSeenAsync(previousState, request.SyncRunRecordId);
+            return result;
+        }
 
         // Update-only profiles: skip products that cannot match anything in
         // nopCommerce before resolving mappings or downloading assets, which
@@ -1881,6 +1901,8 @@ public class AkeneoProductBatchSyncService(
 
     private static void ValidateRequest(AkeneoProductImportRequest request)
     {
+        AkeneoProfileRules.ParseSkipRules(request.SkipRulesJson);
+
         if (request.SyncRunRecordId <= 0)
         {
             throw new ArgumentException(
@@ -2436,6 +2458,7 @@ public class AkeneoProductBatchSyncService(
                             value.Mapping.Name,
                             value.Mapping.ValueModeId,
                             value.Mapping.ValueTemplate,
+                            value.Mapping.ApplyWhen,
                             value.Mapping.AkeneoFamilyCode,
                             value.Mapping.AkeneoAttributeCode,
                             value.Mapping.AkeneoAttributeTypeId,
@@ -2451,6 +2474,8 @@ public class AkeneoProductBatchSyncService(
                             value.Mapping.IsRequired,
                             value.Mapping.EntityScopeId
                         },
+                    value.EvaluationOutcome,
+                    value.ConditionDetail,
                     value.HasValue,
                     value.ResolvedSourceDisplayName,
                     Value = value.Value == null
@@ -2632,6 +2657,7 @@ public class AkeneoProductBatchSyncService(
 
         return new
         {
+            request.SkipRulesJson,
             request.Locale,
             request.Channel,
             request.Currency,

@@ -110,6 +110,10 @@
                 {{ templateSummary(m) }}
             </div>
 
+            <div class="akeneo-summary-target-detail" v-if="m.isComputed && m.applyWhen">
+                Apply only when: {{ m.applyWhen }}
+            </div>
+
             <div class="akeneo-summary-target-detail"
                  v-if="fallbackSummary(m)">
                 {{ fallbackSummary(m) }}
@@ -137,6 +141,9 @@
         </div>
 
         <div class="akeneo-col akeneo-col-actions">
+            <small class="text-muted d-block" v-if="m.isMissingSource && m.isInherited">
+                Select Global defaults to delete this inherited mapping.
+            </small>
             <span class="akeneo-summary-required">
                 <span class="badge"
                       v-bind:class="m.isRequired
@@ -150,7 +157,7 @@
                 <button type="button"
                         class="btn btn-sm btn-primary akeneo-edit-row"
                         v-on:click="edit(m)"
-                        v-show="!m.editing">
+                        v-show="!m.editing && !m.isMissingSource">
 
                     <i class="fas fa-pencil-alt"></i>
 
@@ -237,9 +244,18 @@
                     </label>
 
                     <akeneo-search-select class="akeneo-edit-target-type" item-name="Target type"
-                            v-model="m.draft.nopTargetTypeId"
+                            v-bind:model-value="targetSelection(m.draft)"
                             v-bind:options="dropdownOptions(m.availableTargetTypes)"
-                            v-on:change="onTypeChange(m)"></akeneo-search-select>
+                            v-on:change="selectTarget(m, $event)"></akeneo-search-select>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isCustomHandlerType(m.draft.nopTargetTypeId)">
+                    <span v-if="m.draft.nopTargetKey === 'tier-price-table'">
+                        Maps min_qty and tier_price to the entire product tier-price table.
+                        Replaces existing tier prices only when different. Prices apply to all customers and stores.
+                    </span>
+                    <span v-else>The selected handler receives this attribute's value.</span>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
@@ -356,6 +372,29 @@
                 </div>
 
 
+                <div class="form-group col-md-12" v-if="m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId)">
+                    <label class="akeneo-switch"
+                           v-bind:for="'computed-condition-enabled-' + m.clientKey">
+                        <input type="checkbox"
+                               v-bind:id="'computed-condition-enabled-' + m.clientKey"
+                               v-model="m.draft.applyWhenEnabled"
+                               v-bind:aria-controls="'computed-condition-panel-' + m.clientKey"
+                               v-bind:aria-expanded="m.draft.applyWhenEnabled ? 'true' : 'false'" />
+                        <span class="akeneo-switch-track" aria-hidden="true">
+                            <span class="akeneo-switch-thumb"></span>
+                        </span>
+                        <span class="akeneo-switch-text">Apply only when</span>
+                    </label>
+                    <div class="mt-2" v-if="m.draft.applyWhenEnabled"
+                         v-bind:id="'computed-condition-panel-' + m.clientKey">
+                        <textarea class="form-control" v-bind:id="'computed-condition-' + m.clientKey"
+                                  aria-label="Apply only when condition"
+                                  v-model="m.draft.applyWhen" rows="2" maxlength="4000"
+                                  placeholder="sync_status == published OR sync_status == unpublished"></textarea>
+                        <small class="form-text text-muted">Blank applies normally. A false condition preserves the destination and skips the template, transformations, and required checks. Missing or unreadable condition values block the item. Use raw option codes with ==, !=, AND, OR, and parentheses.</small>
+                    </div>
+                </div>
+
                 <div class="form-group col-md-12 akeneo-template-editor"
                      v-if="m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId)">
                     <label class="font-weight-bold mb-1"
@@ -393,7 +432,7 @@
                 </div>
 
                 <div class="form-group col-md-12"
-                     v-if="!m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId)">
+                     v-if="!m.isComputed && !isIgnoreType(m.draft.nopTargetTypeId) && !isCustomHandlerType(m.draft.nopTargetTypeId)">
 
                     <label class="font-weight-bold mb-1">
                         Value source priority

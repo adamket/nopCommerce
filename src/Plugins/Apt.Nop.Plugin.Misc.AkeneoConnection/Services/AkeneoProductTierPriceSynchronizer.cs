@@ -70,6 +70,15 @@ public class AkeneoProductTierPriceSynchronizer(
         if (mappings.Count == 0)
             return plan;
 
+        if (context.GetMappings(NopTargetType.CustomHandler).Any(m =>
+                string.Equals(m.Mapping.NopTargetKey, CustomMappings.TierPriceTableMappingHandler.HandlerKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            plan.AddReview(Area, "Conflicting tier-price mappings", null,
+                "Scalar Tier Price mappings cannot run alongside the table handler. No scalar tier prices were changed.",
+                mappings.Any(m => m.Mapping.IsRequired));
+            return plan;
+        }
+
         var existingTierPrices = context.ExistingProduct == null
             ? new List<TierPrice>()
             : await productService.GetTierPricesByProductAsync(context.ExistingProduct.Id);

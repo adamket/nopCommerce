@@ -10,6 +10,14 @@ public sealed class AkeneoResolvedMappedValue
 
     public bool HasValue { get; init; }
 
+    public AkeneoMappingEvaluationOutcome EvaluationOutcome { get; init; }
+
+    public string ConditionDetail { get; init; }
+
+    public bool SkippedByCondition => EvaluationOutcome == AkeneoMappingEvaluationOutcome.SkippedByCondition;
+
+    public bool IsSkipped => SkippedByCondition || EvaluationOutcome == AkeneoMappingEvaluationOutcome.SkippedMissingAttribute;
+
     public AkeneoResolvedProductValue Value { get; init; }
 
     /// <summary>
@@ -21,4 +29,11 @@ public sealed class AkeneoResolvedMappedValue
         HasValue
             ? Value?.DisplayValue ?? string.Empty
             : string.Empty;
+}
+public enum AkeneoMappingEvaluationOutcome
+{
+    Applied = 0,
+    SkippedByCondition = 10,
+    Failed = 20,
+    SkippedMissingAttribute = 30
 }

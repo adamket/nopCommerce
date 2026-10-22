@@ -81,6 +81,21 @@ public sealed class AkeneoDryRunChangeAnalyzer
         ArgumentNullException.ThrowIfNull(model);
 
         model.Operations.Clear();
+        if (context.SkipReason != null)
+        {
+            model.NopProductFound = context.ExistingProduct != null;
+            model.NopProductId = context.ExistingProduct?.Id;
+            model.ImportAllowedByProfile = false;
+            model.ImportBlockReason = context.SkipReason;
+            model.Action = context.SkipReason;
+            model.Operations.Add(new AkeneoDryRunOperationPreviewModel
+            {
+                Area = "Profile rules", Target = "Entire product",
+                ChangeType = AkeneoDryRunOperationType.Skip,
+                Detail = context.SkipReason + " Existing publication, data, and variant bindings are preserved; the source counts as seen during reconciliation."
+            });
+            return;
+        }
 
         foreach (var planner in _planners)
         {
@@ -99,6 +114,17 @@ public sealed class AkeneoDryRunChangeAnalyzer
                 model.Errors.Add(
                     $"Dry-run planning failed in {planner.Name}: {ex.Message}");
             }
+        }
+
+        foreach (var mapped in context.MappedValues.Where(mapped => mapped.IsSkipped &&
+                     mapped.TargetType is not (Domain.NopTargetType.ProductField or Domain.NopTargetType.SeoField)))
+        {
+            model.Operations.Add(new AkeneoDryRunOperationPreviewModel
+            {
+                Area = "Computed mappings", Target = mapped.Mapping.NopTargetKey ?? mapped.Mapping.NopTargetEntityId?.ToString() ?? mapped.TargetType.ToString(),
+                AkeneoSource = mapped.Mapping.Name ?? mapped.Mapping.MappingKey,
+                ChangeType = AkeneoDryRunOperationType.Skip, Detail = mapped.ConditionDetail
+            });
         }
 
         model.Operations = model.Operations

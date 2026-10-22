@@ -794,7 +794,7 @@
 /* Field labels in the edit panel are blocks so every column starts at the same
    height: an inline-block label sits inside a taller line box (and the spacer
    label beside the "ignored" hint would otherwise share the hint's line). */
-.akeneo-connection .akeneo-mapping-detail .form-row > .form-group > label {
+.akeneo-connection .akeneo-mapping-detail .form-row > .form-group > label:not(.akeneo-switch) {
   display: block;
 }
 

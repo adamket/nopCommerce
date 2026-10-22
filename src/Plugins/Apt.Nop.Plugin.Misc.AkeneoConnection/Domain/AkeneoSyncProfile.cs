@@ -16,6 +16,8 @@ public class AkeneoSyncProfile : BaseEntity
 
     public string CurrencyCode { get; set; }
 
+    public string SkipRulesJson { get; set; }
+
     // Product write policy
     public int ProductWriteModeId { get; set; }
 

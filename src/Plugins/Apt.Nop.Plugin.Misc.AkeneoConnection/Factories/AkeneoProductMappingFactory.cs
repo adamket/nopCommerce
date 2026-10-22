@@ -24,7 +24,8 @@ public sealed class AkeneoProductMappingFactory(
     IAkeneoLeafRepresentationClassifier leafRepresentationClassifier,
     IAkeneoProductSyncService productSyncService,
     IAkeneoProductBatchImportRequestFactory requestFactory,
-    IAkeneoDryRunChangeAnalyzer changeAnalyzer)
+    IAkeneoDryRunChangeAnalyzer changeAnalyzer,
+    IAkeneoProfileRuleEvaluator profileRuleEvaluator)
     : IAkeneoProductMappingFactory
 {
     private const string DefaultLocale = "en_US";
@@ -120,6 +121,39 @@ public sealed class AkeneoProductMappingFactory(
             return model;
         }
 
+        var request = requestFactory.CreateFromProfile(
+            profile,
+            syncRunRecordId: 0,
+            runMode: AkeneoRunMode.SingleProduct);
+
+        request.Locale = locale;
+        request.Channel = channel;
+        request.Currency = currency;
+        request.AkeneoProductUuid = model.AkeneoProductUuid;
+        request.AkeneoProductModelCode = model.AkeneoProductModelCode;
+        request.SaveRawPayloadSnapshot = false;
+
+        // Check the requested source before hierarchy selection can replace a
+        // held submodel with its root model in the preview.
+        try
+        {
+            var skipReason = await profileRuleEvaluator.GetSkipReasonAsync(akeneoSource, request, cancellationToken);
+            if (skipReason != null)
+            {
+                model.Messages.Add(skipReason);
+                await changeAnalyzer.AnalyzeAsync(new AkeneoProductSyncContext { SkipReason = skipReason }, model, cancellationToken);
+                return model;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            model.Errors.Add(ex.Message);
+            model.ImportAllowedByProfile = false;
+            model.ImportBlockReason = "Profile rule evaluation failed; no product changes will be made.";
+            model.Action = model.ImportBlockReason;
+            return model;
+        }
+
         AkeneoProductDefinition previewSource;
         string mappingFamilyVariantCode;
 
@@ -146,17 +180,7 @@ public sealed class AkeneoProductMappingFactory(
         if (sourceEntityType == AkeneoEntityType.ProductModel)
             model.AkeneoProductModelCode = previewSource.Code;
 
-        var request = requestFactory.CreateFromProfile(
-            profile,
-            syncRunRecordId: 0,
-            runMode: AkeneoRunMode.SingleProduct);
-
-        request.Locale = locale;
-        request.Channel = channel;
-        request.Currency = currency;
-        request.AkeneoProductUuid = model.AkeneoProductUuid;
         request.AkeneoProductModelCode = model.AkeneoProductModelCode;
-        request.SaveRawPayloadSnapshot = false;
 
         var result = new AkeneoProductImportResult
         {
@@ -181,6 +205,21 @@ public sealed class AkeneoProductMappingFactory(
             mappingFamilyVariantCode,
             mappingEntityScope,
             cancellationToken);
+
+        if (!result.Success)
+        {
+            AppendDistinct(model.Errors, result.Errors);
+            model.ImportAllowedByProfile = false;
+            model.ImportBlockReason = "Profile rule evaluation failed; no product changes will be made.";
+            model.Action = model.ImportBlockReason;
+            return model;
+        }
+        if (context.SkipReason != null)
+        {
+            AppendDistinct(model.Messages, result.Messages);
+            await changeAnalyzer.AnalyzeAsync(context, model, cancellationToken);
+            return model;
+        }
 
         await PopulateHierarchyDecisionAsync(
             akeneoSource,
@@ -676,7 +715,7 @@ public sealed class AkeneoProductMappingFactory(
         AkeneoProductMappingPreviewModel model,
         AkeneoProductSyncContext context)
     {
-        var productFields = context.GetMappings(NopTargetType.ProductField).ToList();
+        var productFields = context.GetMappings(NopTargetType.ProductField, includeSkipped: true).ToList();
 
         if (!model.IsProductModel && !productFields.Any(field => string.Equals(
                 field.Mapping.NopTargetKey,

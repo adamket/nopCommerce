@@ -26,7 +26,9 @@ public sealed class AkeneoConfigurationImportService(
     IRepository<SpecificationAttribute> specificationAttributes,
     IRepository<Category> categories,
     IRepository<Manufacturer> manufacturers,
-    IAkeneoTargetTypeResolver targetTypes)
+    IAkeneoTargetTypeResolver targetTypes,
+    CustomMappings.AkeneoCustomMappingRegistry customHandlers = null,
+    IAkeneoApiClient api = null)
     : IAkeneoConfigurationImportService
 {
     private async Task ValidateDestinationsAsync(AkeneoConfigurationImportDocument document)
@@ -43,6 +45,19 @@ public sealed class AkeneoConfigurationImportService(
             var mapping = section.Configuration;
             switch ((NopTargetType)mapping.NopTargetTypeId)
             {
+                case NopTargetType.CustomHandler:
+                    var handler = customHandlers?.Find(mapping.NopTargetKey);
+                    AkeneoConfigurationImportDocument.Require(handler != null, "Custom mapping handler unavailable: " + mapping.NopTargetKey);
+                    AkeneoConfigurationImportDocument.Require(mapping.ValueMode == AkeneoAttributeMappingValueMode.SingleAttribute &&
+                        string.IsNullOrWhiteSpace(mapping.TransformRuleJson) && section.FallbackSources.Count == 0,
+                        "Custom handlers require a direct attribute without templates, transformations, or fallbacks.");
+                    var attribute = api == null ? null : await api.GetAttributeByCodeAsync(mapping.AkeneoAttributeCode);
+                    AkeneoConfigurationImportDocument.Require(attribute != null &&
+                        handler.SupportedAkeneoTypes.Contains(attribute.Type, StringComparer.OrdinalIgnoreCase),
+                        "The custom handler source attribute is missing or incompatible.");
+                    var handlerErrors = handler.Validate(mapping, attribute).ToList();
+                    AkeneoConfigurationImportDocument.Require(handlerErrors.Count == 0, string.Join(" ", handlerErrors));
+                    break;
                 case NopTargetType.ProductAttribute:
                     await RequireEntityAsync(productAttributes, mapping.NopTargetEntityId ?? 0); break;
                 case NopTargetType.SpecificationAttribute:

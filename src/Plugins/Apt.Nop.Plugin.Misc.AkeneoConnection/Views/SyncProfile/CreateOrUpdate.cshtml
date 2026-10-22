@@ -32,6 +32,10 @@
         timeZone = Model.UpdatedAfterTimeZoneDisplayName ?? string.Empty,
         form = new
         {
+            skipRules = AkeneoProfileRules.ParseSkipRules(Model.SkipRulesJson).Select(row => new
+            {
+                attributeCode = row.AttributeCode, value = row.Value
+            }),
             name = Model.Name ?? string.Empty,
             enabled = Model.Enabled,
             akeneoChannel = Model.AkeneoChannel ?? string.Empty,
@@ -619,6 +623,62 @@
                     </div>
                 </div>
 
+                <!-- Profile skip rules -->
+                <div class="card card-default">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-filter"></i> Profile Skip Rules</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group row">
+                            <div class="col-md-3 text-right"><label class="control-label">Skip rules</label></div>
+                            <div class="col-md-9">
+                                <span class="form-text text-muted">Skip the entire product when any attribute/value rule matches, using this profile's channel and first selected locale. A matching parent also skips its descendants.</span>
+                                <span class="form-text text-muted">Skipped products remain unchanged and count as seen for missing-product reconciliation. Keep them inside the profile's source filters so these rules can evaluate them.</span>
+                                <span class="form-text text-muted">Use the raw option code or value, not its display label.</span>
+                                <span class="form-text text-muted" v-if="!form.skipRules.length">No skip rules configured.</span>
+                            </div>
+                        </div>
+
+                        <div class="row" v-for="(row, index) in form.skipRules" v-bind:key="index">
+                            <div class="col-md-9 offset-md-3">
+                                <div class="form-row align-items-end">
+                                    <div class="form-group col-sm-5 col-lg-4">
+                                        <label class="d-block font-weight-bold mb-1" v-bind:for="'sp-skip-attribute-' + index">Akeneo attribute code</label>
+                                        <input type="text" class="form-control"
+                                               v-bind:id="'sp-skip-attribute-' + index"
+                                               v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
+                                               v-model="row.attributeCode" placeholder="Attribute code" />
+                                    </div>
+                                    <div class="form-group col-sm-5 col-lg-4">
+                                        <label class="d-block font-weight-bold mb-1" v-bind:for="'sp-skip-value-' + index">Equals value</label>
+                                        <input type="text" class="form-control"
+                                               v-bind:id="'sp-skip-value-' + index"
+                                               v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
+                                               v-model="row.value" placeholder="Option code or value" />
+                                    </div>
+                                    <div class="form-group col-auto">
+                                        <button type="button" class="btn btn-default"
+                                                v-on:click="form.skipRules.splice(index, 1)"
+                                                v-bind:aria-label="'Remove skip rule ' + (index + 1)"
+                                                title="Remove skip rule">
+                                            <i class="far fa-trash-alt" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group row mb-0">
+                            <div class="col-md-9 offset-md-3">
+                                <div class="invalid-feedback d-block" v-if="fieldError('SkipRulesJson')">{{ fieldError('SkipRulesJson') }}</div>
+                                <button type="button" class="btn btn-default" v-on:click="addSkipRule">
+                                    <i class="fas fa-plus-square"></i> Add skip rule
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Advanced -->
                 <div class="card card-default">
                     <div class="card-header">
@@ -910,9 +970,15 @@
                 dismissToast: function (id) {
                     this.toasts = this.toasts.filter(function (toast) { return toast.id !== id; });
                 },
+                addSkipRule: function () {
+                    this.form.skipRules.push({ attributeCode: '', value: '' });
+                },
                 buildPostData: function () {
                     var form = this.form;
-                    var data = { Id: this.id };
+                    var data = {
+                        Id: this.id,
+                        SkipRulesJson: JSON.stringify(form.skipRules)
+                    };
 
                     Object.keys(postNames).forEach(function (key) {
                         var value = form[key];

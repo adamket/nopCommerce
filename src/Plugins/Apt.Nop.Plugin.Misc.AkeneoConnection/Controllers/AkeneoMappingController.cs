@@ -30,7 +30,8 @@ public class AkeneoMappingController(
     IAkeneoNopEntityMappingService entityMappingService,
     IStoreContext storeContext,
     ISettingService settingService,
-    IAkeneoCategoryMappingModelFactory categoryMappingModelFactory)
+    IAkeneoCategoryMappingModelFactory categoryMappingModelFactory,
+    Services.CustomMappings.AkeneoCustomMappingRegistry customHandlers = null)
     : BasePluginController
 {
 
@@ -75,6 +76,7 @@ public class AkeneoMappingController(
             await ValidateMappingSlotUniquenessAsync(model, errors);
         }
 
+        await ValidateCustomHandlerAsync(model, fallbackSources.Count, errors);
         await ValidateTargetOverlapAsync(model, valueMode, errors);
 
         if (errors.Any())
@@ -195,6 +197,7 @@ public class AkeneoMappingController(
                 : Guid.NewGuid().ToString("N");
             mapping.Name = model.Name.Trim();
             mapping.ValueTemplate = model.ValueTemplate.Trim();
+            mapping.ApplyWhen = model.ApplyWhen?.Trim();
             mapping.AkeneoAttributeCode = null;
             mapping.AkeneoAttributeTypeId = (int)AkeneoAttributeType.Text;
             mapping.AkeneoReferenceEntityCode = null;
@@ -205,6 +208,7 @@ public class AkeneoMappingController(
             mapping.MappingKey = null;
             mapping.Name = null;
             mapping.ValueTemplate = null;
+            mapping.ApplyWhen = null;
             mapping.AkeneoAttributeCode = model.AkeneoAttributeCode.Trim();
             mapping.AkeneoAttributeTypeId = model.AkeneoAttributeTypeId;
 
@@ -303,8 +307,18 @@ public class AkeneoMappingController(
         if (string.IsNullOrWhiteSpace(model.ValueTemplate))
             return;
 
-        var validation = valueTemplateRenderer.Validate(
-            model.ValueTemplate);
+        var conditionValidation = AkeneoMappingCondition.Validate(model.ApplyWhen, valueTemplateRenderer);
+        foreach (var error in conditionValidation.Errors)
+            errors.Add("Apply only when: " + error);
+
+        var templateValidation = valueTemplateRenderer.Validate(model.ValueTemplate);
+        var validation = new Apt.Nop.Plugin.Misc.AkeneoConnection.Types.AkeneoValueTemplateValidationResult
+        {
+            Errors = templateValidation.Errors,
+            ReferencedAttributeCodes = templateValidation.ReferencedAttributeCodes
+                .Concat(conditionValidation.ReferencedAttributeCodes).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            ReferenceFields = templateValidation.ReferenceFields.Concat(conditionValidation.ReferenceFields).Distinct().ToList()
+        };
 
         foreach (var error in validation.Errors)
             errors.Add(error);
@@ -421,6 +435,7 @@ public class AkeneoMappingController(
                 NopTargetType.ProductField or
                 NopTargetType.SeoField or
                 NopTargetType.CustomProperty or
+                NopTargetType.CustomHandler or
                 NopTargetType.TierPrice))
         {
             return;
@@ -436,6 +451,21 @@ public class AkeneoMappingController(
 
         // A tier price's destination is its customer role (entity id) plus
         // minimum quantity (target key); other targets are just the key.
+        var tierTableKey = Services.CustomMappings.TierPriceTableMappingHandler.HandlerKey;
+        var isTable = targetType == NopTargetType.CustomHandler &&
+            string.Equals(model.NopTargetKey, tierTableKey, StringComparison.OrdinalIgnoreCase);
+        if (isTable || targetType == NopTargetType.TierPrice)
+        {
+            var tierConflict = effectiveMappings.Any(mapping =>
+                mapping.Id != model.Id && !IsSameLogicalSlot(mapping, model, valueMode) &&
+                (AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(mapping.EntityScopeId) & requestedScope) != 0 &&
+                (isTable ? mapping.NopTargetTypeId == (int)NopTargetType.TierPrice :
+                    mapping.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+                    string.Equals(mapping.NopTargetKey, tierTableKey, StringComparison.OrdinalIgnoreCase)));
+            if (tierConflict)
+                errors.Add("The tier-price table handler and scalar Tier Price mappings cannot target the same product roles.");
+        }
+
         var conflictingMapping = effectiveMappings.FirstOrDefault(mapping =>
             mapping.Id != model.Id &&
             !IsSameLogicalSlot(mapping, model, valueMode) &&
@@ -677,6 +707,39 @@ public class AkeneoMappingController(
         return string.IsNullOrWhiteSpace(field)
             ? code
             : $"{code}::{field}";
+    }
+
+    private async Task ValidateCustomHandlerAsync(AkeneoAttributeMappingModel model, int fallbackCount, IList<string> errors)
+    {
+        if (model.NopTargetTypeId != (int)NopTargetType.CustomHandler) return;
+        var handler = customHandlers?.Find(model.NopTargetKey);
+        if (handler == null)
+        {
+            errors.Add("The selected custom mapping handler is unavailable.");
+            return;
+        }
+        model.NopTargetKey = handler.Key;
+        if (model.ValueModeId != (int)AkeneoAttributeMappingValueMode.SingleAttribute ||
+            !string.IsNullOrWhiteSpace(model.TransformRuleJson) || fallbackCount > 0)
+        {
+            errors.Add("Custom handlers require a direct attribute mapping without templates, transformations, or fallback sources.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(model.AkeneoAttributeCode)) return;
+        var attribute = await akeneoApiClient.GetAttributeByCodeAsync(model.AkeneoAttributeCode);
+        if (attribute == null || !handler.SupportedAkeneoTypes.Contains(attribute.Type, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add("This Akeneo attribute is incompatible with " + handler.DisplayName + ".");
+            return;
+        }
+        var mapping = new AkeneoAttributeMapping
+        {
+            Id = model.Id, AkeneoAttributeCode = model.AkeneoAttributeCode,
+            AkeneoFamilyCode = model.AkeneoFamilyCode, NopTargetTypeId = model.NopTargetTypeId,
+            NopTargetKey = handler.Key, Locale = model.Locale, Channel = model.Channel,
+            IsRequired = model.IsRequired, EntityScopeId = model.EntityScopeId
+        };
+        foreach (var error in handler.Validate(mapping, attribute)) errors.Add(error);
     }
 
     private async Task ValidateReferenceEntityMappingAsync(
@@ -1017,6 +1080,7 @@ public class AkeneoMappingController(
                     name = replacementMapping.Name ?? string.Empty,
                     valueModeId = replacementMapping.ValueModeId,
                     valueTemplate = replacementMapping.ValueTemplate ?? string.Empty,
+                    applyWhen = replacementMapping.ApplyWhen ?? string.Empty,
                     isComputed = replacementMapping.ValueModeId ==
                         (int)AkeneoAttributeMappingValueMode.Template,
                     akeneoFamilyCode =

@@ -19,8 +19,12 @@ public class AkeneoProductBatchImportRequestFactory(
         var productWriteMode =
             (AkeneoProductWriteMode)profile.ProductWriteModeId;
 
+        // Reject invalid persisted configuration before a run can write or reconcile.
+        AkeneoProfileRules.ParseSkipRules(profile.SkipRulesJson);
+
         var request = new AkeneoProductBatchImportRequest
         {
+            SkipRulesJson = profile.SkipRulesJson,
             SyncRunRecordId = syncRunRecordId,
             SyncProfileId = profile.Id,
             RunMode = runMode,

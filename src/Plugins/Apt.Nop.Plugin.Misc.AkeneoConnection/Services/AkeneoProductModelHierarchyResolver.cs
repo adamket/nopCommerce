@@ -64,7 +64,7 @@ public class AkeneoProductModelHierarchyResolver
         };
     }
 
-    private static AkeneoProductDefinition MergeWithAncestors(
+    internal static AkeneoProductDefinition MergeWithAncestors(
         AkeneoProductDefinition item,
         IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst)
     {

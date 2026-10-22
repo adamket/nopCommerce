@@ -150,6 +150,15 @@ public class AkeneoProductSyncStateService(
         return state;
     }
 
+    public async Task MarkSkippedSeenAsync(AkeneoProductSyncState state, int syncRunRecordId)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        state.LastSeenRunRecordId = syncRunRecordId;
+        state.LastSeenOnUtc = DateTime.UtcNow;
+        state.UpdatedOnUtc = state.LastSeenOnUtc;
+        await repository.UpdateAsync(state);
+    }
+
     public async Task<IList<AkeneoProductSyncState>> GetUnseenStatesAsync(
         int syncProfileId,
         int currentRunRecordId)

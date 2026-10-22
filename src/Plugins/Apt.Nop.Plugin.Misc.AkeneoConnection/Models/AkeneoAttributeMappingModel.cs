@@ -10,10 +10,13 @@ public record AkeneoAttributeMappingModel : BaseNopEntityModel
     public string Name { get; set; }
     public int ValueModeId { get; set; }
     public string ValueTemplate { get; set; }
+
+    public string ApplyWhen { get; set; }
     public bool IsComputed =>
         ValueModeId == (int)AkeneoAttributeMappingValueMode.Template;
 
     public bool IsInherited { get; set; }
+    public bool IsMissingSource { get; set; }
     public string AkeneoFamilyCode { get; set; }
     public string AkeneoAttributeCode { get; set; }
     public string AkeneoAttributeLabel { get; set; }

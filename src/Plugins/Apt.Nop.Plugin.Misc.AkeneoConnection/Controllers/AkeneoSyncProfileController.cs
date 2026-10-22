@@ -187,6 +187,8 @@ public class AkeneoSyncProfileController(
         }
 
         ValidateAkeneoScope(model);
+        try { AkeneoProfileRules.ParseSkipRules(model.SkipRulesJson); }
+        catch (ArgumentException ex) { ModelState.AddModelError(nameof(model.SkipRulesJson), ex.Message); }
 
         if (!ModelState.IsValid)
         {
@@ -315,6 +317,7 @@ public class AkeneoSyncProfileController(
         profile.UpdatedSinceLastNDays = model.UpdatedSinceLastNDays;
         profile.ProductParentFilterModeId = model.ProductParentFilterModeId;
         profile.AdditionalSearchJson = model.AdditionalSearchJson?.Trim();
+        profile.SkipRulesJson = model.SkipRulesJson?.Trim();
 
         profile.AkeneoProductGroupCodes = model.SelectedAkeneoProductGroupCodes
             ?.Where(code => !string.IsNullOrWhiteSpace(code))

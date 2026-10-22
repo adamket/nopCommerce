@@ -9,6 +9,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Assets;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
+using Nop.Data;
 using Nop.Services.Catalog;
 using Nop.Services.Common;
 using Nop.Services.Media;
@@ -33,10 +34,11 @@ public class AkeneoDryRunSectionParityTests
             .ToArray();
         var plannerOrders = assembly.GetTypes()
             .Where(type => !type.IsAbstract &&
-                           typeof(IAkeneoDryRunSectionPlanner).IsAssignableFrom(type))
-            .Select(type => ((IAkeneoDryRunSectionPlanner)
-                System.Runtime.CompilerServices.RuntimeHelpers
-                    .GetUninitializedObject(type)).Order)
+                           (typeof(IAkeneoDryRunSectionPlanner).IsAssignableFrom(type) ||
+                            typeof(IAkeneoSectionDryRunPlanProvider).IsAssignableFrom(type)))
+            .Select(type => System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(type))
+            .Select(provider => provider is IAkeneoSectionDryRunPlanProvider owned
+                ? owned.Order : ((IAkeneoDryRunSectionPlanner)provider).Order)
             .ToHashSet();
 
         Assert.That(
@@ -123,7 +125,7 @@ public class AkeneoDryRunSectionParityTests
             mapped);
         var model = new AkeneoProductMappingPreviewModel();
 
-        var synchronizer = new AkeneoProductCoreSynchronizer(productService.Object);
+        var synchronizer = new AkeneoProductCoreSynchronizer(productService.Object, Mock.Of<IRepository<Product>>());
         await new AkeneoDryRunProductCorePlanner(synchronizer)
             .PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
@@ -154,6 +156,7 @@ public class AkeneoDryRunSectionParityTests
 
         var synchronizer = new AkeneoProductSeoSynchronizer(
             productService.Object,
+            Mock.Of<IRepository<Product>>(),
             urlRecordService.Object);
         await new AkeneoDryRunSeoPlanner(synchronizer)
             .PlanAsync(plannerContext, model);
@@ -532,7 +535,7 @@ public class AkeneoDryRunSectionParityTests
         var context = Context(
             new Product { Id = 10, Name = "Old product name", Sku = "SKU-1" },
             mapped);
-        var synchronizer = new AkeneoProductCoreSynchronizer(productService.Object);
+        var synchronizer = new AkeneoProductCoreSynchronizer(productService.Object, Mock.Of<IRepository<Product>>());
 
         var plan = await InvokeBuildPlanAsync(
             synchronizer,
@@ -565,6 +568,7 @@ public class AkeneoDryRunSectionParityTests
             mapped);
         var synchronizer = new AkeneoProductSeoSynchronizer(
             productService.Object,
+            Mock.Of<IRepository<Product>>(),
             urlRecordService.Object);
 
         var plan = await InvokeBuildPlanAsync(
@@ -632,9 +636,10 @@ public class AkeneoDryRunSectionParityTests
                 "Name",
                 "New product name"));
         var model = new AkeneoProductMappingPreviewModel();
-        var core = new AkeneoProductCoreSynchronizer(productService.Object);
+        var core = new AkeneoProductCoreSynchronizer(productService.Object, Mock.Of<IRepository<Product>>());
         var seo = new AkeneoProductSeoSynchronizer(
             productService.Object,
+            Mock.Of<IRepository<Product>>(),
             urlRecordService.Object);
 
         await new AkeneoDryRunProductCorePlanner(core)

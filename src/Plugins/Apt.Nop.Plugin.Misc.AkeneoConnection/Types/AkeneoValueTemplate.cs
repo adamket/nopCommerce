@@ -37,6 +37,13 @@ public sealed class AkeneoValueTemplateContext
     /// </summary>
     public IReadOnlyDictionary<string, AkeneoResolvedProductValue> ReferenceFieldValues { get; init; }
 
+    public AkeneoValueTemplateContext WithSource(AkeneoProductDefinition source) => new()
+    {
+        Source = source, Locale = Locale, Channel = Channel, Currency = Currency,
+        FamilyCode = FamilyCode, FamilyVariantCode = FamilyVariantCode, Sku = Sku,
+        ReferenceFieldValues = ReferenceFieldValues
+    };
+
     public AkeneoValueTemplateContext WithReferenceFieldValues(
         IReadOnlyDictionary<string, AkeneoResolvedProductValue> referenceFieldValues) => new()
         {

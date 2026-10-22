@@ -21,6 +21,8 @@ public sealed class AkeneoProductSyncContext
     { get; init; }
         = Array.Empty<AkeneoResolvedMappedValue>();
 
+    public string SkipReason { get; init; }
+
     public string SourceCode { get; init; }
 
     public string SourceUuid { get; init; }
@@ -67,16 +69,23 @@ public sealed class AkeneoProductSyncContext
     public AkeneoProductPlanningState PlanningState { get; } = new();
 
     public IEnumerable<AkeneoResolvedMappedValue> GetMappings(
-        NopTargetType targetType)
+        NopTargetType targetType, bool includeSkipped = false)
     {
         return MappedValues.Where(value =>
-            value.TargetType == targetType);
+            value.TargetType == targetType && (includeSkipped || !value.IsSkipped));
     }
 
     public void MarkChanged()
     {
         HasChanges = true;
     }
+
+    /// <summary>
+    /// Set when a section saved the product row without publishing an entity
+    /// event. The pipeline publishes a single product update event once every
+    /// section for this product has run, so caches are cleared once per product.
+    /// </summary>
+    public bool ProductUpdateEventPending { get; set; }
 
     // Settable so a single item-scoped cache can be shared across the parent
     // and every child/leaf context, letting a pre-transaction prepare pass
