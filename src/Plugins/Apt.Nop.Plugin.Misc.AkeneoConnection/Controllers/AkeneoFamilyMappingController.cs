@@ -255,6 +255,7 @@ public class AkeneoFamilyMappingController(
             AkeneoFamilyVariantCode = NormalizeVariantCode(
                 model.AkeneoFamilyVariantCode),
             Enabled = model.Enabled,
+            CombinationAvailabilityCondition = NormalizeAvailability(model),
             VariantRelationshipModeId = model.VariantRelationshipModeId,
             ProductModelHierarchyModeId = model.ProductModelHierarchyModeId,
             PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure,
@@ -322,6 +323,7 @@ public class AkeneoFamilyMappingController(
         configuration.AkeneoFamilyVariantCode = NormalizeVariantCode(
             model.AkeneoFamilyVariantCode);
         configuration.Enabled = model.Enabled;
+        configuration.CombinationAvailabilityCondition = NormalizeAvailability(model);
         configuration.VariantRelationshipModeId = model.VariantRelationshipModeId;
         configuration.ProductModelHierarchyModeId = model.ProductModelHierarchyModeId;
         configuration.PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure;
@@ -402,6 +404,8 @@ public class AkeneoFamilyMappingController(
 
 
         var mode = (AkeneoVariantRelationshipMode)model.VariantRelationshipModeId;
+        try { AkeneoCombinationAvailabilityService.ValidateConfiguration(NormalizeAvailability(model), AkeneoProductEnabledFilter.Any); }
+        catch (ArgumentException ex) { ModelState.AddModelError(nameof(model.CombinationAvailabilityCondition), ex.Message); }
 
         if (!Enum.IsDefined(
                 typeof(AkeneoProductModelHierarchyMode),
@@ -517,6 +521,11 @@ public class AkeneoFamilyMappingController(
                    "pim_catalog_multiselect",
                    StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string NormalizeAvailability(AkeneoFamilyMappingModel model) =>
+        model.VariantRelationshipModeId == (int)AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
+        !string.IsNullOrWhiteSpace(model.CombinationAvailabilityCondition)
+            ? model.CombinationAvailabilityCondition.Trim() : null;
 
     private async Task SaveAxisMappingsAsync(
         int configurationId,

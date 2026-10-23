@@ -69,5 +69,6 @@ public enum AkeneoProductLifecycleStatus
     PurchasingDisabled = 40,
     Detached = 50,
     SoftDeleted = 60,
-    Deleted = 70
+    Deleted = 70,
+    CombinationUnavailable = 80
 }

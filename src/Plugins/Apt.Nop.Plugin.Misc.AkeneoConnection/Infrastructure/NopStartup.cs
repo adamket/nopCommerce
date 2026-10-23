@@ -35,6 +35,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncItemLogService, AkeneoSyncItemLogService>();
         services.AddScoped<IAkeneoProductValueResolver, AkeneoProductValueResolver>();
         services.AddScoped<IAkeneoProfileRuleEvaluator, AkeneoProfileRuleEvaluator>();
+        services.AddScoped<IAkeneoCombinationAvailabilityService, AkeneoCombinationAvailabilityService>();
         services.AddScoped<IAkeneoReferenceEntityValueResolver, AkeneoReferenceEntityValueResolver>();
         services.AddScoped<IAkeneoValueTransformationService, AkeneoValueTransformationService>();
         services.AddScoped<IAkeneoValueTemplateRenderer, AkeneoValueTemplateRenderer>();

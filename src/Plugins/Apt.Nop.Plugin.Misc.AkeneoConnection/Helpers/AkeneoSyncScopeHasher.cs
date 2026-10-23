@@ -10,7 +10,8 @@ public static class AkeneoSyncScopeHasher
 {
     public static string Build(
         AkeneoSyncProfile profile,
-        AkeneoRunMode? runMode = null)
+        AkeneoRunMode? runMode = null,
+        string familyAvailabilityFingerprint = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -32,6 +33,7 @@ public static class AkeneoSyncScopeHasher
             profile.ProductParentFilterModeId,
             profile.IncludeLinkedAssetUpdates,
             SkipRules = AkeneoProfileRules.ParseSkipRules(profile.SkipRulesJson),
+            FamilyAvailabilityFingerprint = familyAvailabilityFingerprint,
             AdditionalSearchJson = NormalizeJson(profile.AdditionalSearchJson)
         };
 

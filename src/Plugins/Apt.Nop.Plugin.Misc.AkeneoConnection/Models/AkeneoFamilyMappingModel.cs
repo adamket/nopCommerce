@@ -11,6 +11,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public bool Enabled { get; set; } = true;
 
+    public string CombinationAvailabilityCondition { get; set; }
+
     public int VariantRelationshipModeId { get; set; }
 
     public int ProductModelHierarchyModeId { get; set; }

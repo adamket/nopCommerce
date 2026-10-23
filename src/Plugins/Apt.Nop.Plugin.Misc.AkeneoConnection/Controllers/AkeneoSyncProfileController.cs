@@ -23,7 +23,8 @@ public class AkeneoSyncProfileController(
     IAkeneoSyncRunRecordService syncRunRecordService,
     IAkeneoProductBatchSyncService productImportService,
     IDateTimeHelper dateTimeHelper,
-    IAkeneoSyncLeaseService syncLeaseService)
+    IAkeneoSyncLeaseService syncLeaseService,
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService)
     : BaseAdminController
 {
     // A live run renews its lease every 5 minutes; a heartbeat older than this
@@ -189,6 +190,9 @@ public class AkeneoSyncProfileController(
         ValidateAkeneoScope(model);
         try { AkeneoProfileRules.ParseSkipRules(model.SkipRulesJson); }
         catch (ArgumentException ex) { ModelState.AddModelError(nameof(model.SkipRulesJson), ex.Message); }
+        try { await combinationAvailabilityService.ValidateRulesAsync(model.AkeneoFamilyCodes.SplitCsv(),
+            (AkeneoProductEnabledFilter)model.ProductEnabledFilterId, model.ProductWriteModeId != (int)AkeneoProductWriteMode.CreateOnly); }
+        catch (ArgumentException ex) { ModelState.AddModelError(nameof(model.ProductEnabledFilterId), ex.Message); }
 
         if (!ModelState.IsValid)
         {

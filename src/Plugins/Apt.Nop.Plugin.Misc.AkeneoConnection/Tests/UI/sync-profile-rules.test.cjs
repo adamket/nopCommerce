@@ -60,3 +60,9 @@ test('saved rules round trip and removing the last rule posts an empty array', (
     assert.equal(app.buildPostData().SkipRulesJson, '[]');
     assert.equal(app.isDirty, true);
 });
+
+test('profile no longer posts a combination availability condition', () => {
+    const app = editor();
+    assert.equal('CombinationAvailabilityCondition' in app.buildPostData(), false);
+    assert.equal(view.includes('sp-combination-availability'), false);
+});

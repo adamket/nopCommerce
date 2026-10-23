@@ -78,7 +78,7 @@ public class AkeneoProductSyncStateService(
                 LastSeenRunRecordId = syncRunRecordId,
                 LastSeenOnUtc = now,
                 LastDesiredStateHash = desiredStateHash,
-                LifecycleStatusId = (int)AkeneoProductLifecycleStatus.Active,
+                LifecycleStatusId = (int)(result.CombinationUnavailable ? AkeneoProductLifecycleStatus.CombinationUnavailable : AkeneoProductLifecycleStatus.Active),
                 CreatedOnUtc = now,
                 UpdatedOnUtc = now
             };
@@ -136,7 +136,7 @@ public class AkeneoProductSyncStateService(
 
         changed |= AkeneoMappingHelper.SetIfChanged(
             state.LifecycleStatusId,
-            (int)AkeneoProductLifecycleStatus.Active,
+            (int)(result.CombinationUnavailable ? AkeneoProductLifecycleStatus.CombinationUnavailable : AkeneoProductLifecycleStatus.Active),
             value => state.LifecycleStatusId = value);
 
         state.LastSeenRunRecordId = syncRunRecordId;

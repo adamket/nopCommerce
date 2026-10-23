@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
@@ -59,7 +59,9 @@ public class NopVariantStructureDetector : INopVariantStructureDetector
         var combinations =
             await _productAttributeService.GetAllProductAttributeCombinationsAsync(parentProduct.Id);
 
-        if (combinations.Any())
+        // Availability can remove the last combination while leaving the parent's attribute stock structure intact.
+        if (combinations.Any() || (matches.Count == 0 && mappings.Any() &&
+            parentProduct.ManageInventoryMethod == ManageInventoryMethod.ManageStockByAttributes))
         {
             matches.Add(new NopVariantStructureDetectionResult
             {

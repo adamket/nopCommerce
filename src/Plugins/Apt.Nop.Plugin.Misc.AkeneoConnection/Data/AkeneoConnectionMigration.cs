@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+﻿using System.Data;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
 using Nop.Core;
 using Nop.Data;
@@ -9,16 +10,21 @@ using Nop.Data.Migrations;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
 [NopMigration(
-    "2026-07-23 01:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, assets, sync state, family-variant scope)",
+    "2026-10-23 01:50:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration : Migration
 {
+    // FluentMigrator queues table creation until Up has finished. Treat columns
+    // supplied by TableFor as present while building this migration's expressions.
+    private readonly HashSet<string> _createdTables = new(StringComparer.OrdinalIgnoreCase);
+
     public override void Up()
     {
         if (!DataSettingsManager.IsDatabaseInstalled())
             return;
 
+        _createdTables.Clear();
         EnsureTables();
 
         EnsureAttributeMappingColumns();
@@ -27,6 +33,8 @@ public sealed class AkeneoConnectionMigration : Migration
         EnsureAssetMappingSchema();
         EnsureManagedAssetSchema();
         EnsureSyncProfileColumns();
+        EnsureAdditionalSyncProfileColumns();
+        EnsureFamilyCombinationAvailabilitySchema();
         EnsureSyncRunRecordColumns();
 
         EnsureFamilyMappingIndexes();
@@ -69,7 +77,10 @@ public sealed class AkeneoConnectionMigration : Migration
         var table = GetTableName<T>();
 
         if (!Schema.Table(table).Exists())
+        {
             Create.TableFor<T>();
+            _createdTables.Add(table);
+        }
     }
 
     #endregion
@@ -79,6 +90,8 @@ public sealed class AkeneoConnectionMigration : Migration
     private void EnsureAttributeMappingColumns()
     {
         var table = GetTableName<AkeneoAttributeMapping>();
+
+        EnsureNullableStringColumn(table, nameof(AkeneoAttributeMapping.ApplyWhen), 4000);
 
         // Computed mappings do not have one primary Akeneo attribute, so the
         // source code must be nullable. Akeneo attribute codes are limited and
@@ -847,6 +860,121 @@ public sealed class AkeneoConnectionMigration : Migration
 
     #endregion
 
+    #region Consolidated profile settings and family availability
+
+    private void EnsureAdditionalSyncProfileColumns()
+    {
+        var table = GetTableName<AkeneoSyncProfile>();
+        EnsureNullableStringColumn(table, nameof(AkeneoSyncProfile.SkipRulesJson), int.MaxValue);
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.SyncLogRetentionEnabled)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.SyncLogRetentionEnabled))
+                .OnTable(table)
+                .AsBoolean()
+                .NotNullable()
+                .WithDefaultValue(false);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.SyncItemLogRetentionDays)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.SyncItemLogRetentionDays))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue(30);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.SyncRunRecordRetentionDays)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.SyncRunRecordRetentionDays))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue(90);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.TagSyncModeId)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.TagSyncModeId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCollectionSyncMode.Disabled);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.RelatedProductSyncModeId)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.RelatedProductSyncModeId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCollectionSyncMode.Disabled);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.RelatedProductAssociationType)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.RelatedProductAssociationType))
+                .OnTable(table)
+                .AsString(100)
+                .Nullable();
+        }
+
+
+    }
+
+    private void EnsureFamilyCombinationAvailabilitySchema()
+    {
+        var familyTable = NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping));
+        var profileTable = NameCompatibilityManager.GetTableName(typeof(AkeneoSyncProfile));
+        const string column = nameof(AkeneoFamilyMapping.CombinationAvailabilityCondition);
+        // Only transfer legacy profile values when first introducing the family column.
+        // A rerun must preserve a condition deliberately cleared in the family editor.
+        if (ColumnExists(familyTable, column)) return;
+        Create.Column(column).OnTable(familyTable).AsString(4000).Nullable();
+
+        // Keep the legacy column as an inactive backup, especially when profiles disagree.
+        if (!Schema.Table(profileTable).Column(column).Exists()) return;
+        Execute.WithConnection((connection, transaction) =>
+        {
+            string Quote(string name) => connection.GetType().Name.Contains("MySql", StringComparison.OrdinalIgnoreCase)
+                ? $"`{name}`" : connection.GetType().Name.Contains("Npgsql", StringComparison.OrdinalIgnoreCase)
+                    ? $"\"{name}\"" : $"[{name}]";
+            using var read = connection.CreateCommand();
+            read.Transaction = transaction;
+            read.CommandText = $"SELECT {Quote("AkeneoFamilyCodes")}, {Quote(column)} FROM {Quote(profileTable)}";
+            var profiles = new List<(string FamilyCodes, string Condition)>();
+            using (var reader = read.ExecuteReader())
+                while (reader.Read()) profiles.Add((reader.IsDBNull(0) ? null : reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)));
+
+            read.CommandText = $"SELECT {Quote("Id")}, {Quote("AkeneoFamilyCode")} FROM {Quote(familyTable)} WHERE {Quote("VariantRelationshipModeId")} = {(int)AkeneoVariantRelationshipMode.ProductAttributeCombinations} AND ({Quote(column)} IS NULL OR {Quote(column)} = '')";
+            var families = new List<(int Id, string Code)>();
+            using (var reader = read.ExecuteReader())
+                while (reader.Read()) families.Add((Convert.ToInt32(reader.GetValue(0)), reader.GetString(1)));
+            foreach (var family in families)
+            {
+                var condition = SelectCondition(family.Code, profiles);
+                if (condition == null) continue;
+                using var update = connection.CreateCommand();
+                update.Transaction = transaction;
+                update.CommandText = $"UPDATE {Quote(familyTable)} SET {Quote(column)} = @condition WHERE {Quote("Id")} = @id";
+                var value = update.CreateParameter(); value.ParameterName = "@condition"; value.DbType = DbType.String; value.Value = condition;
+                var id = update.CreateParameter(); id.ParameterName = "@id"; id.DbType = DbType.Int32; id.Value = family.Id;
+                update.Parameters.Add(value); update.Parameters.Add(id); update.ExecuteNonQuery();
+            }
+        });
+    }
+
+    public static string SelectCondition(string familyCode, IEnumerable<(string FamilyCodes, string Condition)> profiles)
+    {
+        var conditions = profiles.Where(p => string.IsNullOrWhiteSpace(p.FamilyCodes) ||
+                p.FamilyCodes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(familyCode, StringComparer.OrdinalIgnoreCase))
+            .Select(p => p.Condition?.Trim() ?? string.Empty).Distinct(StringComparer.Ordinal).ToList();
+        return conditions.Count == 1 && !string.IsNullOrWhiteSpace(conditions[0]) ? conditions[0] : null;
+    }
+
+
+    #endregion
+
     #region Helpers
 
     private static string GetTableName<T>()
@@ -858,7 +986,7 @@ public sealed class AkeneoConnectionMigration : Migration
         string table,
         string column)
     {
-        return Schema.Table(table)
+        return _createdTables.Contains(table) || Schema.Table(table)
             .Column(column)
             .Exists();
     }

@@ -114,6 +114,7 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public string SkipRulesJson { get; set; }
 
+
     public int ProductFieldMissingValueBehaviorId { get; set; }
 
     public int SeoFieldMissingValueBehaviorId { get; set; }

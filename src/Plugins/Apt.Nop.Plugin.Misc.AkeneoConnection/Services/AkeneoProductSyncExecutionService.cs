@@ -4,6 +4,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Humanizer;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -12,9 +13,20 @@ public class AkeneoProductSyncExecutionService(
     IAkeneoSyncRunRecordService syncRunRecordService,
     IAkeneoProductBatchImportRequestFactory requestFactory,
     IAkeneoSyncProfileService syncProfileService,
-    IAkeneoSyncLeaseService syncLeaseService)
+    IAkeneoSyncLeaseService syncLeaseService,
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null)
     : IAkeneoProductSyncExecutionService
 {
+    private async Task<string> BuildScopeHashAsync(AkeneoSyncProfile profile, AkeneoRunMode mode)
+    {
+        if (combinationAvailabilityService == null) return AkeneoSyncScopeHasher.Build(profile, mode);
+        await combinationAvailabilityService.ValidateRulesAsync(profile.AkeneoFamilyCodes.SplitCsv(),
+            (AkeneoProductEnabledFilter)profile.ProductEnabledFilterId,
+            profile.ProductWriteModeId != (int)AkeneoProductWriteMode.CreateOnly);
+        return AkeneoSyncScopeHasher.Build(profile, mode,
+            await combinationAvailabilityService.GetConfigurationFingerprintAsync(profile.AkeneoFamilyCodes.SplitCsv()));
+    }
+
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
 
     private const string FullSyncUnavailableMessage =
@@ -59,7 +71,7 @@ public class AkeneoProductSyncExecutionService(
         try
         {
             var runMode = ResolveRunMode(syncType);
-            var scopeHash = AkeneoSyncScopeHasher.Build(profile, runMode);
+            var scopeHash = await BuildScopeHashAsync(profile, runMode);
             DateTime? previousWatermarkUtc = null;
 
             if (runMode == AkeneoRunMode.Delta &&
@@ -89,6 +101,7 @@ public class AkeneoProductSyncExecutionService(
                 previousWatermarkUtc,
                 runMode);
 
+            request.ScopeHash = scopeHash;
             request.SyncLeaseId = lease.Id;
             runRecord.SearchJsonSnapshot = request.SearchJson?.Truncate(4000);
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
@@ -139,7 +152,7 @@ public class AkeneoProductSyncExecutionService(
 
         try
         {
-            var scopeHash = AkeneoSyncScopeHasher.Build(
+            var scopeHash = await BuildScopeHashAsync(
                 profile,
                 AkeneoRunMode.SingleProduct);
             var runRecord = CreateRunRecord(
@@ -157,6 +170,7 @@ public class AkeneoProductSyncExecutionService(
                 runRecord.Id,
                 runMode: AkeneoRunMode.SingleProduct);
 
+            request.ScopeHash = scopeHash;
             request.SyncLeaseId = lease.Id;
             request.AkeneoProductUuid = akeneoProductUuid.Trim();
 
@@ -269,7 +283,7 @@ public class AkeneoProductSyncExecutionService(
 
         try
         {
-            var scopeHash = AkeneoSyncScopeHasher.Build(
+            var scopeHash = await BuildScopeHashAsync(
                 profile,
                 AkeneoRunMode.SingleProduct);
             var runRecord = CreateRunRecord(
@@ -287,6 +301,7 @@ public class AkeneoProductSyncExecutionService(
                 runRecord.Id,
                 runMode: AkeneoRunMode.SingleProduct);
 
+            request.ScopeHash = scopeHash;
             request.SyncLeaseId = lease.Id;
             request.AkeneoProductModelCode = akeneoProductModelCode.Trim();
 

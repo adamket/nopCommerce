@@ -31,6 +31,7 @@ public class AkeneoProductImportRequest
 
     public string SkipRulesJson { get; set; }
 
+
     public bool CreateNewProducts { get; set; } = true;
 
     public bool UpdateExistingProducts { get; set; } = true;

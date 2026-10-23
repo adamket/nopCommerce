@@ -45,7 +45,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoProfileRuleEvaluator profileRuleEvaluator,
     IAkeneoWritePolicyGate writePolicyGate = null,
     IProductAttributeService productAttributeService = null,
-    AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null)
+    AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null,
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
@@ -63,7 +64,7 @@ public class AkeneoProductBatchSyncService(
         CancellationToken cancellationToken = default)
     {
         request ??= new AkeneoProductBatchImportRequest();
-        ValidateRequest(request);
+        await ValidateRequestAsync(request);
 
         var result = new AkeneoProductBatchImportResult
         {
@@ -542,7 +543,7 @@ public class AkeneoProductBatchSyncService(
         CancellationToken cancellationToken = default)
     {
         request ??= new AkeneoProductImportRequest();
-        ValidateRequest(request);
+        await ValidateRequestAsync(request);
 
         var result = new AkeneoProductImportResult
         {
@@ -619,7 +620,7 @@ public class AkeneoProductBatchSyncService(
         CancellationToken cancellationToken = default)
     {
         request ??= new AkeneoProductImportRequest();
-        ValidateRequest(request);
+        await ValidateRequestAsync(request);
 
         var requestedCode = request.AkeneoProductModelCode?.Trim();
         var result = new AkeneoProductImportResult
@@ -740,6 +741,38 @@ public class AkeneoProductBatchSyncService(
             if (previousState != null)
                 await syncStateService.MarkSkippedSeenAsync(previousState, request.SyncRunRecordId);
             return result;
+        }
+
+        // A tracked unavailable combination is removed before mapping resolution,
+        // parent synchronization, assets, or the delta hash shortcut can run.
+        if (combinationAvailabilityService != null)
+        {
+            var unavailable = await combinationAvailabilityService.GetUnavailableBindingAsync(source, request, cancellationToken);
+            if (unavailable != null)
+            {
+                using var unavailableTransaction = CreateUnitTransaction();
+                ApplyPreviousStateBinding(result, unavailable.State);
+                if (unavailable.Parent is { Deleted: true })
+                {
+                    result.AddMessage("Combination availability left the deleted parent and its combinations unchanged.");
+                    await syncStateService.MarkSkippedSeenAsync(unavailable.State, request.SyncRunRecordId);
+                }
+                else
+                {
+                    var removed = unavailable.Parent != null && await combinationAvailabilityService.RemoveAsync(
+                        unavailable.Parent, unavailable.Context, cancellationToken);
+                    result.CombinationUnavailable = true;
+                    result.NopProductAttributeCombinationId = null;
+                    result.ActionType = removed ? SyncItemActionType.Updated : SyncItemActionType.Skipped;
+                    result.AddMessage(removed
+                        ? "Unavailable combination removed. The parent and shared attribute values were preserved."
+                        : "Combination is unavailable and is already absent.");
+                    await syncStateService.MarkSeenAsync(request.SyncProfileId.Value, request.SyncRunRecordId,
+                        AkeneoEntityType.Product, source.Identifier, source.Uuid, source.Parent, result);
+                }
+                unavailableTransaction.Complete();
+                return result;
+            }
         }
 
         // Update-only profiles: skip products that cannot match anything in
@@ -1316,6 +1349,9 @@ public class AkeneoProductBatchSyncService(
         AkeneoVariantSyncResult variantResult,
         AkeneoProductSyncState previousState)
     {
+        result.CombinationUnavailable = variantResult.CombinationUnavailable;
+        if (variantResult.CombinationUnavailable)
+            result.AddMessage("Combination availability rule evaluated to false. No combination will be created; the parent is retained.");
         result.NopProductId = variantResult.NopProductId ?? 0;
         result.NopParentProductId = variantResult.NopParentProductId;
         result.NopProductAttributeCombinationId =
@@ -1379,7 +1415,8 @@ public class AkeneoProductBatchSyncService(
             SourceProduct = source,
             Locale = request.Locale,
             Channel = request.Channel,
-            Currency = request.Currency
+            Currency = request.Currency,
+            CombinationAvailabilityCondition = AkeneoCombinationAvailabilityService.GetCondition(familyConfiguration)
         };
 
         context.Price = TryResolveDecimalTarget(
@@ -1899,9 +1936,14 @@ public class AkeneoProductBatchSyncService(
             ActionType = SyncItemActionType.Skipped
         };
 
-    private static void ValidateRequest(AkeneoProductImportRequest request)
+    private async Task ValidateRequestAsync(AkeneoProductImportRequest request)
     {
         AkeneoProfileRules.ParseSkipRules(request.SkipRulesJson);
+        if (combinationAvailabilityService != null)
+            await combinationAvailabilityService.ValidateRulesAsync(
+                (request as AkeneoProductBatchImportRequest)?.AkeneoFamilyCodes,
+                request is AkeneoProductBatchImportRequest batch ? batch.ProductEnabledFilter : AkeneoProductEnabledFilter.Any,
+                request.UpdateExistingProducts);
 
         if (request.SyncRunRecordId <= 0)
         {
@@ -2428,9 +2470,12 @@ public class AkeneoProductBatchSyncService(
             context,
             cancellationToken);
 
+        var availabilityCondition = combinationAvailabilityService == null ? null
+            : await combinationAvailabilityService.GetConditionAsync(context.Source, cancellationToken);
         var payload = new
         {
-            Version = 3,
+            Version = 4,
+            CombinationAvailabilityCondition = availabilityCondition,
             Request = BuildWritePolicyFingerprint(request),
             Representation = representation,
             Context = new
@@ -2442,6 +2487,8 @@ public class AkeneoProductBatchSyncService(
                 MappingEntityScope = (int)context.MappingEntityScope,
                 context.Sku,
                 SourceEnabled = context.Source.Enabled,
+                CombinationAvailabilityValues = string.IsNullOrWhiteSpace(availabilityCondition)
+                    ? (JsonElement?)null : context.Source.Values,
                 SourceParent = context.Source.Parent?.Trim()
             },
             MappedValues = context.MappedValues
@@ -2689,6 +2736,7 @@ public class AkeneoProductBatchSyncService(
         ? null
         : new
         {
+            configuration.CombinationAvailabilityCondition,
             configuration.AkeneoFamilyCode,
             configuration.AkeneoFamilyVariantCode,
             configuration.Enabled,

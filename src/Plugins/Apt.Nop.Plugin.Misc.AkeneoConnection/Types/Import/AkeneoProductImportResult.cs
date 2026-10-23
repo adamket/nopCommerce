@@ -11,6 +11,8 @@ public class AkeneoProductImportResult
 
     public int? NopProductAttributeCombinationId { get; set; }
 
+    public bool CombinationUnavailable { get; set; }
+
     public int? NopProductAttributeValueId { get; set; }
 
     public AkeneoProductDestinationKind DestinationKind { get; set; } =

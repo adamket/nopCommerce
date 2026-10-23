@@ -13,7 +13,8 @@ public class AkeneoVariantRelationshipService(
     IProductAttributeService productAttributeService,
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoManagedRelationService managedRelationService,
-    IAkeneoValueTemplateRenderer valueTemplateRenderer)
+    IAkeneoValueTemplateRenderer valueTemplateRenderer,
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService)
     : IAkeneoVariantRelationshipService
 {
     public async Task<AkeneoVariantSyncResult> ApplyAsync(
@@ -43,6 +44,18 @@ public class AkeneoVariantRelationshipService(
             PreserveExistingNopVariantStructure = true
         };
         context.Options.Mode = effectiveMode;
+
+        if (effectiveMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
+            !await combinationAvailabilityService.IsAvailableAsync(context))
+        {
+            var removed = await combinationAvailabilityService.RemoveAsync(parentProduct, context);
+            return new AkeneoVariantSyncResult
+            {
+                Mode = effectiveMode, Source = resolution.Source,
+                NopProductId = parentProduct.Id, NopParentProductId = parentProduct.Id,
+                CombinationUnavailable = true, RelationshipChanged = removed
+            };
+        }
 
         var parentChanged = await EnsureParentShapeAsync(parentProduct, effectiveMode);
 

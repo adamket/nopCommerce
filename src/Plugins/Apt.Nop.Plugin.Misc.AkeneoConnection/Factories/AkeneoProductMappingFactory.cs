@@ -25,7 +25,8 @@ public sealed class AkeneoProductMappingFactory(
     IAkeneoProductSyncService productSyncService,
     IAkeneoProductBatchImportRequestFactory requestFactory,
     IAkeneoDryRunChangeAnalyzer changeAnalyzer,
-    IAkeneoProfileRuleEvaluator profileRuleEvaluator)
+    IAkeneoProfileRuleEvaluator profileRuleEvaluator,
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService)
     : IAkeneoProductMappingFactory
 {
     private const string DefaultLocale = "en_US";
@@ -133,6 +134,19 @@ public sealed class AkeneoProductMappingFactory(
         request.AkeneoProductModelCode = model.AkeneoProductModelCode;
         request.SaveRawPayloadSnapshot = false;
 
+        try
+        {
+            await combinationAvailabilityService.ValidateRulesAsync(request.AkeneoFamilyCodes,
+                request.ProductEnabledFilter, request.UpdateExistingProducts);
+        }
+        catch (ArgumentException ex)
+        {
+            model.Errors.Add(ex.Message);
+            model.ImportAllowedByProfile = false;
+            model.Action = "Family combination availability conflicts with the profile settings.";
+            return model;
+        }
+
         // Check the requested source before hierarchy selection can replace a
         // held submodel with its root model in the preview.
         try
@@ -152,6 +166,37 @@ public sealed class AkeneoProductMappingFactory(
             model.ImportBlockReason = "Profile rule evaluation failed; no product changes will be made.";
             model.Action = model.ImportBlockReason;
             return model;
+        }
+
+        if (sourceEntityType == AkeneoEntityType.Product)
+        {
+            try
+            {
+                var unavailable = await combinationAvailabilityService.GetUnavailableBindingAsync(akeneoSource, request, cancellationToken);
+                if (unavailable != null)
+                {
+                    var removes = unavailable.Parent is { Deleted: false } && unavailable.CombinationExists;
+                    model.NopProductId = unavailable.State.NopProductId;
+                    model.ParentNopProductId = unavailable.State.NopProductId;
+                    model.NopProductFound = unavailable.Parent != null;
+                    model.Action = removes ? "Remove unavailable attribute combination" : "Preserve parent; combination unavailable";
+                    model.ParentProductDecision = "The parent product and attribute values shared by remaining combinations are preserved.";
+                    model.Operations.Add(new AkeneoDryRunOperationPreviewModel
+                    {
+                        Area = "Variant relationship", Target = "Attribute combination",
+                        ChangeType = removes ? AkeneoDryRunOperationType.Remove : AkeneoDryRunOperationType.Skip,
+                        Detail = $"Availability condition '{unavailable.Context.CombinationAvailabilityCondition}' evaluated to false. {model.ParentProductDecision}"
+                    });
+                    return model;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                model.Errors.Add(ex.Message);
+                model.ImportAllowedByProfile = false;
+                model.Action = "Combination availability could not be evaluated; no changes will be made.";
+                return model;
+            }
         }
 
         AkeneoProductDefinition previewSource;
@@ -221,7 +266,7 @@ public sealed class AkeneoProductMappingFactory(
             return model;
         }
 
-        await PopulateHierarchyDecisionAsync(
+        var previewMode = await PopulateHierarchyDecisionAsync(
             akeneoSource,
             previewSource,
             sourceEntityType,
@@ -233,6 +278,38 @@ public sealed class AkeneoProductMappingFactory(
         AppendDistinct(model.Messages, result.Messages);
         AppendDistinct(model.Warnings, result.Warnings);
         AppendDistinct(model.Errors, result.Errors);
+
+        if (previewMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+        {
+            try
+            {
+                if (!await combinationAvailabilityService.IsAvailableAsync(new AkeneoVariantImportContext
+                {
+                    SourceProduct = previewSource, AkeneoIdentifier = akeneoSource.Identifier,
+                    AkeneoUuid = akeneoSource.Uuid, Sku = context.Sku,
+                    AkeneoFamilyCode = akeneoSource.Family, AkeneoFamilyVariantCode = context.MappingFamilyVariantCode,
+                    Locale = request.Locale, Channel = request.Channel, Currency = request.Currency,
+                    CombinationAvailabilityCondition = await combinationAvailabilityService.GetConditionAsync(akeneoSource, cancellationToken)
+                }, cancellationToken))
+                {
+                    model.Action = "Do not create unavailable attribute combination";
+                    model.Operations.Add(new AkeneoDryRunOperationPreviewModel
+                    {
+                        Area = "Variant relationship", Target = "Attribute combination",
+                        ChangeType = AkeneoDryRunOperationType.Skip,
+                        Detail = "The availability condition is false. No combination or axis values will be created. Parent synchronization still follows the profile."
+                    });
+                    return model;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                model.Errors.Add(ex.Message);
+                model.ImportAllowedByProfile = false;
+                model.Action = "Combination availability could not be evaluated; no changes will be made.";
+                return model;
+            }
+        }
 
         if (!context.MappedValues.Any())
         {
@@ -467,7 +544,7 @@ public sealed class AkeneoProductMappingFactory(
     }
 
 
-    private async Task PopulateHierarchyDecisionAsync(
+    private async Task<AkeneoVariantRelationshipMode?> PopulateHierarchyDecisionAsync(
         AkeneoProductDefinition originalSource,
         AkeneoProductDefinition previewSource,
         AkeneoEntityType sourceEntityType,
@@ -485,7 +562,7 @@ public sealed class AkeneoProductMappingFactory(
             model.CurrentRepresentation = context.ExistingProduct == null
                 ? "No existing nopCommerce parent product"
                 : $"Existing nopCommerce parent product #{context.ExistingProduct.Id}";
-            return;
+            return null;
         }
 
         if (string.IsNullOrWhiteSpace(originalSource.Parent))
@@ -493,7 +570,7 @@ public sealed class AkeneoProductMappingFactory(
             model.CurrentRepresentation = context.ExistingProduct == null
                 ? "No existing nopCommerce product"
                 : $"Standalone nopCommerce product #{context.ExistingProduct.Id}";
-            return;
+            return null;
         }
 
         var effectiveParentCode = model.EffectiveParentProductModelCode?.Trim();
@@ -502,7 +579,7 @@ public sealed class AkeneoProductMappingFactory(
             model.HierarchyRequiresReview = true;
             model.ParentProductDecision =
                 "The effective parent product-model code could not be resolved. Parent creation and variant representation will be decided during import.";
-            return;
+            return null;
         }
 
         var effectiveParentModel = await akeneoApiClient
@@ -513,7 +590,7 @@ public sealed class AkeneoProductMappingFactory(
             model.HierarchyRequiresReview = true;
             model.ParentProductDecision =
                 $"Akeneo product model '{effectiveParentCode}' could not be reloaded, so the parent nopCommerce product and final representation cannot be confirmed.";
-            return;
+            return null;
         }
 
         var parentResult = new AkeneoProductImportResult
@@ -560,6 +637,7 @@ public sealed class AkeneoProductMappingFactory(
             originalSource,
             immediateParentModel);
 
+        AkeneoVariantRelationshipMode? selectedMode = null;
         string representation;
         string decisionSource;
 
@@ -582,6 +660,7 @@ public sealed class AkeneoProductMappingFactory(
                 }
                 else
                 {
+                    selectedMode = existingMode;
                     representation = FormatVariantMode(existingMode.Value);
                     decisionSource =
                         $"existing {representation} prevents the standalone submodel override from changing representation";
@@ -606,6 +685,7 @@ public sealed class AkeneoProductMappingFactory(
                     parentContext.ExistingProduct,
                     originalSource.Family,
                     context.MappingFamilyVariantCode);
+                selectedMode = resolution.Mode;
                 representation = FormatVariantMode(resolution.Mode);
                 decisionSource = resolution.Source ==
                     AkeneoVariantRelationshipSource.ExistingNopParent
@@ -627,6 +707,7 @@ public sealed class AkeneoProductMappingFactory(
         }
         else if (familyMapping is { Enabled: true })
         {
+            selectedMode = familyMapping.VariantRelationshipMode;
             representation = FormatVariantMode(familyMapping.VariantRelationshipMode);
             decisionSource = "Akeneo family configuration";
             model.CurrentRepresentation = "No existing nopCommerce parent structure";
@@ -649,6 +730,7 @@ public sealed class AkeneoProductMappingFactory(
             model.ParentProductDecision +=
                 $" Parent preparation reported: {string.Join("; ", parentResult.Errors)}";
         }
+        return selectedMode;
     }
 
     private async Task<AkeneoFamilySubModelRule> ResolveSubModelOverrideAsync(
