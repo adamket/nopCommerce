@@ -1,6 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -282,8 +283,8 @@ public class AkeneoSyncProfileController(
         profile.Name = model.Name?.Trim();
         profile.Enabled = model.Enabled;
         profile.AkeneoChannel = model.AkeneoChannel?.Trim();
-
-        profile.AkeneoLocales = model.SelectedAkeneoLocaleCodes.BuildCsv();
+        profile.AkeneoLocales = model.AkeneoLocale?.Trim();
+        profile.CurrencyCode = AkeneoValueContext.ResolveCurrency(model.CurrencyCode);
 
         profile.ProductWriteModeId = model.ProductWriteModeId;
         profile.UnmappedAttributeBehaviorId = model.UnmappedAttributeBehaviorId;
@@ -291,15 +292,10 @@ public class AkeneoSyncProfileController(
         profile.PageSize = model.PageSize <= 0 ? 100 : model.PageSize;
         profile.MaxProducts = model.MaxProducts;
         profile.ContinueOnError = model.ContinueOnError;
-        profile.SaveRawPayloadSnapshot = model.SaveRawPayloadSnapshot;
         profile.SyncLogRetentionEnabled = model.SyncLogRetentionEnabled;
         profile.SyncItemLogRetentionDays = model.SyncItemLogRetentionDays ?? 30;
         profile.SyncRunRecordRetentionDays = model.SyncRunRecordRetentionDays ?? 90;
 
-        //profile.AddMappedCategories = model.AddMappedCategories;
-        
-        profile.CategorySyncModeId = model.CategorySyncModeId;
-       // profile.AddMappedManufacturers = model.AddMappedManufacturers;
         profile.CreateMissingProductAttributeValues = model.CreateMissingProductAttributeValues;
 
         profile.AkeneoFamilyCodes =
@@ -328,17 +324,6 @@ public class AkeneoSyncProfileController(
             .Select(code => code.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .BuildCsv();
-
-        profile.CategoryFilterModeId = model.CategoryFilterModeId;
-
-
-        profile.AkeneoLocales =
-            model.SelectedAkeneoLocaleCodes.BuildCsv();
-
-        profile.CurrencyCode =
-            string.IsNullOrWhiteSpace(model.CurrencyCode)
-                ? "USD"
-                : model.CurrencyCode.Trim().ToUpperInvariant();
 
         profile.ProductFieldMissingValueBehaviorId =
             model.ProductFieldMissingValueBehaviorId;
@@ -393,11 +378,8 @@ public class AkeneoSyncProfileController(
         if (string.IsNullOrWhiteSpace(model.AkeneoChannel))
             ModelState.AddModelError(nameof(model.AkeneoChannel), "Akeneo channel is required.");
 
-        if (model.SelectedAkeneoLocaleCodes == null ||
-            !model.SelectedAkeneoLocaleCodes.Any(locale => !string.IsNullOrWhiteSpace(locale)))
-        {
-            ModelState.AddModelError(nameof(model.SelectedAkeneoLocaleCodes), "At least one Akeneo locale is required.");
-        }
+        if (string.IsNullOrWhiteSpace(model.AkeneoLocale))
+            ModelState.AddModelError(nameof(model.AkeneoLocale), "Akeneo locale is required.");
 
         if (!Enum.IsDefined(
                 typeof(AkeneoCompletenessFilter),

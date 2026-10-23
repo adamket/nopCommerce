@@ -5,11 +5,12 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
 public interface IAkeneoProductMappingFactory
 {
+    /// <summary>
+    /// Previews one product in the profile's own value context (locale,
+    /// channel, currency), exactly as a one-time import would read it.
+    /// </summary>
     Task<AkeneoProductMappingPreviewModel> PreviewProductMappingAsync(
         string akeneoIdentifier,
-        string locale,
-        string channel,
-        string currency,
         AkeneoSyncProfile profile,
         CancellationToken cancellationToken = default);
 }

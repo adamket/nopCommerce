@@ -48,7 +48,7 @@ public class AkeneoProductCategorySynchronizerTests
             .Returns(Task.CompletedTask);
         _managedRelationService
             .Setup(service => service.UpsertAsync(
-                7, 20, 10, AkeneoManagedRelationType.ProductCategory, 12, null, "100"))
+                7, 20, 10, AkeneoManagedRelationType.ProductCategory, 12, null, "shade"))
             .ReturnsAsync(new AkeneoManagedRelation());
 
         await _synchronizer.SynchronizeAsync(context);
@@ -114,11 +114,20 @@ public class AkeneoProductCategorySynchronizerTests
         _categoryService
             .Setup(service => service.DeleteProductCategoryAsync(staleManual))
             .Returns(Task.CompletedTask);
+        _managedRelationService
+            .Setup(service => service.DeleteByRelationEntityAsync(
+                AkeneoManagedRelationType.ProductCategory, It.IsAny<int>()))
+            .Returns(Task.CompletedTask);
 
         await _synchronizer.SynchronizeAsync(context);
 
         _categoryService.Verify(service => service.DeleteProductCategoryAsync(staleManaged), Times.Once);
         _categoryService.Verify(service => service.DeleteProductCategoryAsync(staleManual), Times.Once);
+        // A deleted row can't stay owned: its relation rows go with it.
+        _managedRelationService.Verify(service => service.DeleteByRelationEntityAsync(
+            AkeneoManagedRelationType.ProductCategory, staleManaged.Id), Times.Once);
+        _managedRelationService.Verify(service => service.DeleteByRelationEntityAsync(
+            AkeneoManagedRelationType.ProductCategory, staleManual.Id), Times.Once);
     }
 
     [Test]
@@ -173,6 +182,10 @@ public class AkeneoProductCategorySynchronizerTests
 
     private void SetupMappedCategory(string code, int id)
     {
+        // Removal previews look up stale categories by ID for their display name.
+        _categoryService
+            .Setup(service => service.GetCategoryByIdAsync(It.Is<int>(value => value != id)))
+            .ReturnsAsync((Category)null!);
         _entityMappingService
             .Setup(service => service.GetMappedNopEntityIdByAkeneoCodeAsync(
                 AkeneoEntityType.Category,

@@ -379,57 +379,6 @@ public class AkeneoProductSyncExecutionService(
         }
     }
 
-    public async Task<AkeneoProductSyncExecutionResult> ImportProductsAsync(
-        AkeneoProductBatchImportRequest request,
-        SyncType syncType,
-        int? profileId = null,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        profileId ??= request.SyncProfileId;
-        request.SyncProfileId = profileId;
-        request.RunMode = ResolveRunMode(syncType);
-
-        var lease = await syncLeaseService.TryAcquireAsync(
-            BuildLockKey(profileId),
-            LeaseDuration);
-
-        if (lease == null)
-        {
-            var activeRun = await syncRunRecordService.GetActiveRunAsync(null);
-            return BuildAlreadyRunningResult(profileId, activeRun?.Id);
-        }
-
-        try
-        {
-            var runRecord = CreateRunRecord(
-                profileId,
-                syncType,
-                request.RunMode,
-                request.ScopeHash,
-                null);
-
-            runRecord.SearchJsonSnapshot = request.SearchJson?.Truncate(4000);
-
-            await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
-            await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
-
-            request.SyncRunRecordId = runRecord.Id;
-            request.SyncLeaseId = lease.Id;
-
-            return await SyncProductsCoreAsync(
-                request,
-                runRecord,
-                profileId,
-                cancellationToken);
-        }
-        finally
-        {
-            await syncLeaseService.ReleaseAsync(lease);
-        }
-    }
-
     private async Task<AkeneoProductSyncExecutionResult> SyncProductsCoreAsync(
         AkeneoProductBatchImportRequest request,
         AkeneoSyncRunRecord runRecord,

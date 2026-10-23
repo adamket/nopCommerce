@@ -60,12 +60,10 @@ public class AkeneoSyncProfile : BaseEntity
 
     public bool ContinueOnError { get; set; }
 
-    public bool SaveRawPayloadSnapshot { get; set; }
-
     // Sync log retention, applied by the daily retention task
     public bool SyncLogRetentionEnabled { get; set; }
 
-    /// <summary>Item logs (including raw payload snapshots) older than this are deleted.</summary>
+    /// <summary>Item logs older than this are deleted.</summary>
     public int SyncItemLogRetentionDays { get; set; } = 30;
 
     /// <summary>
@@ -120,8 +118,20 @@ public enum UnmappedAkeneoAttributeBehavior
 {
     Ignore = 0,
     Log = 10,
-    ImportAsCustomProperty = 20,
-    ImportAsSpecificationAttribute = 30
+    ImportAsCustomProperty = 20
+}
+
+public static class UnmappedAkeneoAttributeBehaviorExtensions
+{
+    /// <summary>
+    /// Reads a stored behavior. Retired values (30, the never-implemented
+    /// "import as specification attribute") fall back to logging, which is
+    /// what that option actually did.
+    /// </summary>
+    public static UnmappedAkeneoAttributeBehavior FromId(int id) =>
+        Enum.IsDefined(typeof(UnmappedAkeneoAttributeBehavior), id)
+            ? (UnmappedAkeneoAttributeBehavior)id
+            : UnmappedAkeneoAttributeBehavior.Log;
 }
 
 public enum AkeneoCategoryFilterMode

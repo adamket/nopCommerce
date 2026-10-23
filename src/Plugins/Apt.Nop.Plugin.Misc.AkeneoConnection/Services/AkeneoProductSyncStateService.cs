@@ -86,55 +86,53 @@ public class AkeneoProductSyncStateService(
             await repository.InsertAsync(state);
             return state;
         }
-
-        var changed = false;
-
-        changed |= AkeneoMappingHelper.SetIfChanged(
+
+        AkeneoMappingHelper.SetIfChanged(
             state.AkeneoCode,
             akeneoCode?.Trim(),
             value => state.AkeneoCode = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.AkeneoUuid,
             akeneoUuid?.Trim(),
             value => state.AkeneoUuid = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.AkeneoParentCode,
             akeneoParentCode?.Trim(),
             value => state.AkeneoParentCode = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.DestinationKindId,
             (int)result.DestinationKind,
             value => state.DestinationKindId = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.NopProductId,
             result.NopProductId,
             value => state.NopProductId = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.NopParentProductId,
             result.NopParentProductId,
             value => state.NopParentProductId = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.NopProductAttributeCombinationId,
             result.NopProductAttributeCombinationId,
             value => state.NopProductAttributeCombinationId = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.NopProductAttributeValueId,
             result.NopProductAttributeValueId,
             value => state.NopProductAttributeValueId = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.LastDesiredStateHash,
             desiredStateHash,
             value => state.LastDesiredStateHash = value);
 
-        changed |= AkeneoMappingHelper.SetIfChanged(
+        AkeneoMappingHelper.SetIfChanged(
             state.LifecycleStatusId,
             (int)(result.CombinationUnavailable ? AkeneoProductLifecycleStatus.CombinationUnavailable : AkeneoProductLifecycleStatus.Active),
             value => state.LifecycleStatusId = value);

@@ -75,23 +75,37 @@ public class AkeneoCustomMappingHandlerTests
     }
 
     [Test]
-    public async Task Preview_and_apply_share_the_same_full_replacement_without_preview_writes()
+    public async Task Preview_and_apply_replace_only_the_all_customer_table_rows()
     {
-        _rows.Add(new() { Id = 2, ProductId = 42, Quantity = 25, Price = 2, CustomerRoleId = 3,
-            StoreId = 4, StartDateTimeUtc = DateTime.UtcNow });
+        var roleSpecific = new TierPrice { Id = 2, ProductId = 42, Quantity = 25, Price = 2, CustomerRoleId = 3 };
+        var storeSpecific = new TierPrice { Id = 3, ProductId = 42, Quantity = 25, Price = 3, StoreId = 4 };
+        var dated = new TierPrice { Id = 4, ProductId = 42, Quantity = 25, Price = 4, StartDateTimeUtc = DateTime.UtcNow };
+        _rows.AddRange([roleSpecific, storeSpecific, dated]);
         var context = Context("""[{"min_qty":"10","tier_price":"9.50"},{"min_qty":20,"tier_price":8}]""");
         var preview = new AkeneoProductMappingPreviewModel();
         await _sync.PlanAsync(context, preview);
         AssertNoWrites();
-        Assert.That(preview.Operations.Single().ChangeType, Is.EqualTo(AkeneoDryRunOperationType.Update));
-        Assert.That(preview.Operations.Single().CurrentValue, Does.Contain("\"CustomerRoleId\":3"));
+        var operation = preview.Operations.Single();
+        Assert.That(operation.ChangeType, Is.EqualTo(AkeneoDryRunOperationType.Update));
+        Assert.That(operation.CurrentValue, Does.Not.Contain("\"CustomerRoleId\":3"));
+        Assert.That(operation.Detail, Does.Contain("3 role-, store- or date-specific tier prices are left unchanged"));
         await _sync.SynchronizeAsync(context);
-        Assert.That(_rows.Select(p => (p.Quantity, p.Price)), Is.EqualTo(new[] { (10, 9.50m), (20, 8m) }));
-        Assert.That(_rows.All(p => p.ProductId == 42 && p.CustomerRoleId == null && p.StoreId == 0 &&
-            p.StartDateTimeUtc == null && p.EndDateTimeUtc == null), Is.True);
+        var table = _rows.Where(TierPriceTableMappingHandler.IsTableRow).ToList();
+        Assert.That(table.Select(p => (p.Quantity, p.Price)), Is.EqualTo(new[] { (10, 9.50m), (20, 8m) }));
+        Assert.That(_rows, Does.Contain(roleSpecific).And.Contain(storeSpecific).And.Contain(dated));
         Assert.That(_writesInTransaction, Is.True);
         Assert.That(context.HasChanges, Is.True);
-        _products.Verify(p => p.DeleteTierPriceAsync(It.IsAny<TierPrice>()), Times.Exactly(2));
+        _products.Verify(p => p.DeleteTierPriceAsync(It.IsAny<TierPrice>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Rows_outside_the_table_slot_do_not_make_the_table_differ()
+    {
+        _rows.Add(new() { Id = 2, ProductId = 42, Quantity = 5, Price = 15, CustomerRoleId = 3 });
+        var context = Context("""[{"min_qty":5,"tier_price":20}]""");
+        await _sync.SynchronizeAsync(context);
+        AssertNoWrites();
+        Assert.That(context.HasChanges, Is.False);
     }
 
     [Test]

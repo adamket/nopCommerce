@@ -48,15 +48,20 @@ public sealed class AkeneoDryRunCoveragePlanner : IAkeneoDryRunSectionPlanner
         AkeneoProductSyncContext context,
         AkeneoProductMappingPreviewModel model)
     {
+        // Neither target is offered any more, but older saved mappings may still use them.
         foreach (var mapped in context.MappedValues.Where(value =>
-                     value.TargetType == NopTargetType.Manufacturer && !value.IsSkipped))
+                     value.TargetType is NopTargetType.Manufacturer or NopTargetType.Category &&
+                     !value.IsSkipped))
         {
+            var area = mapped.TargetType.ToString();
             AddReviewOperation(
                 model,
-                "Manufacturer",
-                mapped.Mapping.NopTargetKey ?? "Manufacturer",
+                area,
+                mapped.Mapping.NopTargetKey ?? area,
                 GetSourceName(mapped),
-                "Manufacturer synchronization is not implemented by the current product sync pipeline.",
+                mapped.TargetType == NopTargetType.Category
+                    ? "Category attribute mappings are not supported; categories come from the Akeneo product's own categories. Delete this mapping."
+                    : "Manufacturer synchronization is not implemented. Delete this mapping.",
                 mapped.Mapping.IsRequired,
                 null,
                 mapped.DisplayValue);

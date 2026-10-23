@@ -91,4 +91,16 @@ public class AkeneoManagedRelationService(
         if (relation != null)
             await repository.DeleteAsync(relation);
     }
+
+    public async Task DeleteByRelationEntityAsync(
+        AkeneoManagedRelationType relationType,
+        int nopRelationEntityId)
+    {
+        if (nopRelationEntityId <= 0)
+            return;
+
+        await repository.DeleteAsync(item =>
+            item.RelationTypeId == (int)relationType &&
+            item.NopRelationEntityId == nopRelationEntityId);
+    }
 }

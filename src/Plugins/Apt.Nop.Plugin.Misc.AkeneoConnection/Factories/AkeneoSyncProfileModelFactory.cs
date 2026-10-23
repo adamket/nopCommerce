@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models.SyncProfiles;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -34,27 +35,24 @@ public class AkeneoSyncProfileModelFactory(
         var model = new AkeneoSyncProfileModel
         {
             Enabled = true,
-            AkeneoChannel = "ecommerce",
-            AkeneoLocales = "en_US",
-            SelectedAkeneoLocaleCodes = new List<string> { "en_US" },
+            AkeneoChannel = AkeneoValueContext.DefaultChannel,
+            AkeneoLocale = AkeneoValueContext.DefaultLocale,
 
             ProductWriteModeId = (int)AkeneoProductWriteMode .CreateAndUpdate,
             UnmappedAttributeBehaviorId = (int)UnmappedAkeneoAttributeBehavior.Ignore,
 
             PageSize = 100,
             ContinueOnError = true,
-            SaveRawPayloadSnapshot = false,
             SyncLogRetentionEnabled = false,
             SyncItemLogRetentionDays = 30,
             SyncRunRecordRetentionDays = 90,
-         //   AddMappedManufacturers = false,
             CreateMissingProductAttributeValues = true,
 
             CategoryFilterModeId = (int)AkeneoCategoryFilterMode.None,
             ProductEnabledFilterId = (int)AkeneoProductEnabledFilter.Any,
             CompletenessFilterId = (int)AkeneoCompletenessFilter.None,
             ProductParentFilterModeId = (int)AkeneoProductParentFilterMode.Any,
-            CurrencyCode = "USD",
+            CurrencyCode = AkeneoValueContext.DefaultCurrency,
 
             ProductFieldMissingValueBehaviorId =
                 (int)AkeneoMissingValueBehavior.PreserveExisting,
@@ -98,26 +96,25 @@ public class AkeneoSyncProfileModelFactory(
             model.Name = profile.Name;
             model.Enabled = profile.Enabled;
             model.AkeneoChannel = profile.AkeneoChannel;
-            model.AkeneoLocales = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en-US";
+            model.AkeneoLocale = AkeneoValueContext.ResolveLocale(profile.AkeneoLocales);
             model.AkeneoFamilyCodes = profile.AkeneoFamilyCodes;
             model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
             model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
 
             model.ProductWriteModeId = profile.ProductWriteModeId;
-            model.UnmappedAttributeBehaviorId = profile.UnmappedAttributeBehaviorId;
+            model.UnmappedAttributeBehaviorId =
+                (int)UnmappedAkeneoAttributeBehaviorExtensions.FromId(profile.UnmappedAttributeBehaviorId);
 
             model.PageSize = profile.PageSize;
             model.MaxProducts = profile.MaxProducts;
             model.ContinueOnError = profile.ContinueOnError;
-            model.SaveRawPayloadSnapshot = profile.SaveRawPayloadSnapshot;
             model.SyncLogRetentionEnabled = profile.SyncLogRetentionEnabled;
             model.SyncItemLogRetentionDays = profile.SyncItemLogRetentionDays;
             model.SyncRunRecordRetentionDays = profile.SyncRunRecordRetentionDays;
 
             model.CategorySyncModeId = profile.CategorySyncModeId;
-          //  model.AddMappedManufacturers = profile.AddMappedManufacturers;
             model.CreateMissingProductAttributeValues = profile.CreateMissingProductAttributeValues;
-          
+
             model.CategoryFilterModeId = profile.CategoryFilterModeId;
             model.ProductEnabledFilterId = profile.ProductEnabledFilterId;
             model.CompletenessFilterId = profile.CompletenessFilterId;
@@ -135,7 +132,6 @@ public class AkeneoSyncProfileModelFactory(
             model.SkipRulesJson = profile.SkipRulesJson;
 
             model.SelectedAkeneoProductGroupCodes = profile.AkeneoProductGroupCodes.SplitCsv();
-            model.SelectedAkeneoLocaleCodes = profile.AkeneoLocales.SplitCsv();
             model.SelectedAkeneoFamilyCodes = profile.AkeneoFamilyCodes.SplitCsv();
             model.SelectedAkeneoCategoryCodes = profile.AkeneoCategoryCodes.SplitCsv();
 
@@ -232,7 +228,8 @@ public class AkeneoSyncProfileModelFactory(
 
         model.SelectedAkeneoFamilyCodes = selectedFamilyCodes;
 
-        var labelLocale = "en-US"; //ResolvePreferredLabelLocale(model); //TODO Use current store locale?
+        // Labels are shown in the profile's own Akeneo locale.
+        var labelLocale = model.AkeneoLocale.TrimOr(AkeneoValueContext.DefaultLocale);
         var options = new List<SelectListItem>();
 
         try
@@ -359,7 +356,7 @@ public class AkeneoSyncProfileModelFactory(
 
         model.SelectedAkeneoCategoryCodes = selectedCategoryCodes;
 
-        var labelLocale = "en-US"; //ResolvePreferredLabelLocale(model); //TODO Use current store locale?
+        var labelLocale = model.AkeneoLocale.TrimOr(AkeneoValueContext.DefaultLocale);
         var options = new List<SelectListItem>();
 
         try
@@ -485,18 +482,7 @@ public class AkeneoSyncProfileModelFactory(
     private async Task PrepareAkeneoLocaleOptionsAsync(
         AkeneoSyncProfileModel model)
     {
-        var selectedLocales = model.SelectedAkeneoLocaleCodes?.Any() == true
-            ? model.SelectedAkeneoLocaleCodes
-            : model.AkeneoLocales.SplitCsv();
-
-        selectedLocales = selectedLocales
-            .Where(locale => !string.IsNullOrWhiteSpace(locale))
-            .Select(locale => locale.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        model.SelectedAkeneoLocaleCodes = selectedLocales;
-
+        var selectedLocale = model.AkeneoLocale?.Trim();
         var options = new List<SelectListItem>();
 
         try
@@ -514,20 +500,18 @@ public class AkeneoSyncProfileModelFactory(
                 {
                     Text = code,
                     Value = code,
-                    Selected = selectedLocales.Contains(code, StringComparer.OrdinalIgnoreCase)
+                    Selected = string.Equals(code, selectedLocale, StringComparison.OrdinalIgnoreCase)
                 });
             }
         }
         catch
         {
-            // If Akeneo is unavailable, fallback to selected/saved locales below.
+            // If Akeneo is unavailable, fall back to the saved locale below.
         }
 
-        foreach (var selectedLocale in selectedLocales)
+        if (!string.IsNullOrWhiteSpace(selectedLocale) &&
+            !options.Any(option => string.Equals(option.Value, selectedLocale, StringComparison.OrdinalIgnoreCase)))
         {
-            if (options.Any(option => string.Equals(option.Value, selectedLocale, StringComparison.OrdinalIgnoreCase)))
-                continue;
-
             options.Add(new SelectListItem
             {
                 Text = selectedLocale,
@@ -584,9 +568,7 @@ public class AkeneoSyncProfileModelFactory(
                 : AkeneoProductWriteMode.CreateAndUpdate);
 
         model.UnmappedAttributeBehaviorName = GetUnmappedAttributeBehaviorText(
-            Enum.IsDefined(typeof(UnmappedAkeneoAttributeBehavior), model.UnmappedAttributeBehaviorId)
-                ? (UnmappedAkeneoAttributeBehavior)model.UnmappedAttributeBehaviorId
-                : UnmappedAkeneoAttributeBehavior.Ignore);
+            UnmappedAkeneoAttributeBehaviorExtensions.FromId(model.UnmappedAttributeBehaviorId));
 
         model.CategoryFilterModeName = GetCategoryFilterModeText(
             Enum.IsDefined(typeof(AkeneoCategoryFilterMode), model.CategoryFilterModeId)
@@ -662,7 +644,6 @@ public class AkeneoSyncProfileModelFactory(
             UnmappedAkeneoAttributeBehavior.Ignore => "Ignore",
             UnmappedAkeneoAttributeBehavior.Log => "Log only",
             UnmappedAkeneoAttributeBehavior.ImportAsCustomProperty => "Import as custom property",
-            UnmappedAkeneoAttributeBehavior.ImportAsSpecificationAttribute => "Import as specification attribute",
             _ => behavior.ToString()
         };
     }

@@ -25,4 +25,12 @@ public interface IAkeneoManagedRelationService
         int nopRelationEntityId);
 
     Task DeleteAsync(AkeneoManagedRelation relation);
+
+    /// <summary>
+    /// Deletes every profile's ownership row for a nopCommerce entity that has
+    /// just been deleted, so no relation is left pointing at a missing row.
+    /// </summary>
+    Task DeleteByRelationEntityAsync(
+        AkeneoManagedRelationType relationType,
+        int nopRelationEntityId);
 }

@@ -10,8 +10,9 @@ using Nop.Services.Catalog;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services.CustomMappings;
 
 /// <summary>
-/// Replaces the entire product tier-price set without ownership tracking.
-/// New prices apply to all customers and stores, without dates, in the primary store currency.
+/// Replaces the product's table-shaped tier prices: those for all customers and all stores,
+/// with no start or end date, which is the only shape this handler writes. Role-, store- and
+/// date-specific tier prices are never touched. New prices use the primary store currency.
 /// </summary>
 public sealed class TierPriceTableMappingHandler(IProductService products) : IAkeneoCustomMappingHandler
 {
@@ -43,7 +44,7 @@ public sealed class TierPriceTableMappingHandler(IProductService products) : IAk
         void Review(string message) => plan.AddReview("Tier prices", DisplayName, mapping.AkeneoAttributeCode, message, mapping.IsRequired);
         if (context.GetMappings(NopTargetType.TierPrice).Any())
         {
-            Review("The table handler replaces all tier prices and cannot run alongside scalar Tier Price mappings on the same product.");
+            Review("The tier-price table handler cannot run alongside scalar Tier Price mappings on the same product.");
             return;
         }
         var raw = mapped.Value?.RawData;
@@ -91,8 +92,11 @@ public sealed class TierPriceTableMappingHandler(IProductService products) : IAk
             Review("Required tier-price table is empty; existing prices were preserved.");
             return;
         }
-        var existing = context.ExistingProduct == null ? new List<TierPrice>()
+        var allExisting = context.ExistingProduct == null ? new List<TierPrice>()
             : (await products.GetTierPricesByProductAsync(context.ExistingProduct.Id)).ToList();
+        // Only the table's own slot is replaced; every other tier price is left as it is.
+        var existing = allExisting.Where(IsTableRow).ToList();
+        var untouched = allExisting.Count - existing.Count;
         var wanted = desired.Select(p => new TierPrice { Quantity = p.Key, Price = p.Value }).ToList();
         var current = Describe(existing);
         var proposed = Describe(wanted);
@@ -103,14 +107,16 @@ public sealed class TierPriceTableMappingHandler(IProductService products) : IAk
             return;
         }
         var equal = existing.Count == wanted.Count &&
-            existing.All(p => p.StoreId == 0 && p.CustomerRoleId == null && p.StartDateTimeUtc == null && p.EndDateTimeUtc == null) &&
             existing.Select(p => (p.Quantity, p.Price)).OrderBy(p => p.Quantity).ThenBy(p => p.Price)
                 .SequenceEqual(wanted.Select(p => (p.Quantity, p.Price)).OrderBy(p => p.Quantity).ThenBy(p => p.Price));
         plan.AddOperation("Tier prices", DisplayName, mapping.AkeneoAttributeCode, current, proposed,
             equal ? AkeneoDryRunOperationType.NoChange :
                 wanted.Count == 0 ? AkeneoDryRunOperationType.Remove :
                 existing.Count == 0 ? AkeneoDryRunOperationType.Add : AkeneoDryRunOperationType.Update,
-            "Replaces the entire product tier-price table. New prices apply to all customers and stores, without dates, in the primary store currency.",
+            "Replaces the product's tier prices for all customers and stores, without dates, in the primary store currency." +
+                (untouched > 0
+                    ? $" {untouched} role-, store- or date-specific tier price{(untouched == 1 ? " is" : "s are")} left unchanged."
+                    : string.Empty),
             mapping.IsRequired, equal ? null : async token =>
             {
                 if (context.Product == null) return false;
@@ -134,6 +140,10 @@ public sealed class TierPriceTableMappingHandler(IProductService products) : IAk
                 return true;
             });
     }
+    /// <summary>The slot this handler owns: all customers, all stores, no dates.</summary>
+    internal static bool IsTableRow(TierPrice price) =>
+        price.StoreId == 0 && (price.CustomerRoleId ?? 0) == 0 &&
+        price.StartDateTimeUtc == null && price.EndDateTimeUtc == null;
     private static bool TryNumber(JsonElement cell, out decimal value)
     {
         value = 0;

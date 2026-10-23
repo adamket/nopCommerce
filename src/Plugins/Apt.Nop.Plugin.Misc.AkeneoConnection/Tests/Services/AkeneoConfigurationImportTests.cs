@@ -42,7 +42,7 @@ public class AkeneoConfigurationImportTests
             _assets.Object, _entities.Object, _leases.Object, _cache.Object,
             new AkeneoValueTemplateRenderer(new AkeneoProductValueResolver()),
             Mock.Of<IRepository<ProductAttribute>>(), Mock.Of<IRepository<SpecificationAttribute>>(),
-            Mock.Of<IRepository<Category>>(), Mock.Of<IRepository<Manufacturer>>(), new AkeneoTargetTypeResolver());
+            Mock.Of<IRepository<Category>>(), new AkeneoTargetTypeResolver());
     }
 
     [TestCase("familyMappings")]

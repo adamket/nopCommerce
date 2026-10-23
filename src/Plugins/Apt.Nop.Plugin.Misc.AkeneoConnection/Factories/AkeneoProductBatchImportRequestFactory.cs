@@ -22,6 +22,8 @@ public class AkeneoProductBatchImportRequestFactory(
         // Reject invalid persisted configuration before a run can write or reconcile.
         AkeneoProfileRules.ParseSkipRules(profile.SkipRulesJson);
 
+        var valueContext = AkeneoValueContext.FromProfile(profile);
+
         var request = new AkeneoProductBatchImportRequest
         {
             SkipRulesJson = profile.SkipRulesJson,
@@ -30,15 +32,9 @@ public class AkeneoProductBatchImportRequestFactory(
             RunMode = runMode,
             ScopeHash = AkeneoSyncScopeHasher.Build(profile, runMode),
 
-            Channel = profile.AkeneoChannel,
-
-            Locale = profile.AkeneoLocales
-                .SplitCsv()
-                .FirstOrDefault() ?? "en_US",
-
-            Currency = string.IsNullOrWhiteSpace(profile.CurrencyCode)
-                ? "USD"
-                : profile.CurrencyCode.Trim(),
+            Channel = valueContext.Channel,
+            Locale = valueContext.Locale,
+            Currency = valueContext.Currency,
 
             PageSize = profile.PageSize <= 0
                 ? 100
@@ -97,9 +93,6 @@ public class AkeneoProductBatchImportRequestFactory(
             CreateMissingProductAttributeValues =
                 profile.CreateMissingProductAttributeValues,
 
-            SaveRawPayloadSnapshot =
-                profile.SaveRawPayloadSnapshot,
-
             AkeneoCategoryCodes =
                 profile.AkeneoCategoryCodes.SplitCsv(),
 
@@ -137,13 +130,12 @@ public class AkeneoProductBatchImportRequestFactory(
                 profile.AdditionalSearchJson,
 
             UnmappedAttributeBehavior =
-                (UnmappedAkeneoAttributeBehavior)
-                    profile.UnmappedAttributeBehaviorId,
+                UnmappedAkeneoAttributeBehaviorExtensions.FromId(
+                    profile.UnmappedAttributeBehaviorId),
 
             MissingProductBehavior =
                 (AkeneoMissingProductBehavior)
-                    profile.MissingProductBehaviorId,
-                
+                    profile.MissingProductBehaviorId
         };
 
         request.SearchJson = searchJsonBuilder.Build(request);

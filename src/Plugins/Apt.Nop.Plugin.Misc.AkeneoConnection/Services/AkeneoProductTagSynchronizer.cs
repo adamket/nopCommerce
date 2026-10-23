@@ -218,6 +218,9 @@ public partial class AkeneoProductTagSynchronizer
                     executeAsync: async _ =>
                     {
                         await _tagStore.RemoveLinkAsync(stale.Mapping);
+                        await _managedRelationService.DeleteByRelationEntityAsync(
+                            AkeneoManagedRelationType.ProductTag,
+                            stale.Mapping.Id);
                         return true;
                     });
             }

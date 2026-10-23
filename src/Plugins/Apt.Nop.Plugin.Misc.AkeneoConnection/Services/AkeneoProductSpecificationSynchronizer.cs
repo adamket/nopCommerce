@@ -708,6 +708,9 @@ public partial class AkeneoProductSpecificationSynchronizer
                         {
                             await _specificationAttributeService
                                 .DeleteProductSpecificationAttributeAsync(assignment);
+                            await _managedRelationService.DeleteByRelationEntityAsync(
+                                AkeneoManagedRelationType.ProductSpecificationAssignment,
+                                assignment.Id);
                             return true;
                         });
                 }

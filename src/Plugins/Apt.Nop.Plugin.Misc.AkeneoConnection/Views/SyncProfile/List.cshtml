@@ -55,7 +55,6 @@
                                             <th>Channel</th>
                                             <th>Locales</th>
                                             <th>Product Write Mode</th>
-                                         @*    <th>Unmapped Attributes</th> *@
                                             <th>Category Filter</th>
                                             <th>Enabled Filter</th>
                                             <th>Completeness</th>
@@ -94,9 +93,9 @@
                                                 </td>
 
                                                 <td>
-                                                    @if (!string.IsNullOrWhiteSpace(profile.AkeneoLocales))
+                                                    @if (!string.IsNullOrWhiteSpace(profile.AkeneoLocale))
                                                     {
-                                                        <span class="akeneo-type-chip">@profile.AkeneoLocales</span>
+                                                        <span class="akeneo-type-chip">@profile.AkeneoLocale</span>
                                                     }
                                                     else
                                                     {
@@ -105,7 +104,6 @@
                                                 </td>
 
                                                 <td>@profile.ProductWriteModeName</td>
-                                               @*  <td>@profile.UnmappedAttributeBehaviorName</td> *@
                                                 <td>@profile.CategoryFilterModeName</td>
                                                 <td>@profile.ProductEnabledFilterName</td>
                                                 <td>@profile.CompletenessFilterName</td>

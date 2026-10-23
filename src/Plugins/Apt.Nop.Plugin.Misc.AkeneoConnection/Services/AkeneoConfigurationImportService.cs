@@ -25,7 +25,6 @@ public sealed class AkeneoConfigurationImportService(
     IRepository<ProductAttribute> productAttributes,
     IRepository<SpecificationAttribute> specificationAttributes,
     IRepository<Category> categories,
-    IRepository<Manufacturer> manufacturers,
     IAkeneoTargetTypeResolver targetTypes,
     CustomMappings.AkeneoCustomMappingRegistry customHandlers = null,
     IAkeneoApiClient api = null)
@@ -65,10 +64,10 @@ public sealed class AkeneoConfigurationImportService(
                 case NopTargetType.SpecificationAttribute:
                     await RequireEntityAsync(specificationAttributes, mapping.NopTargetEntityId ?? 0); break;
                 case NopTargetType.Category:
-                    if (mapping.NopTargetEntityId is > 0) await RequireEntityAsync(categories, mapping.NopTargetEntityId.Value);
-                    break;
                 case NopTargetType.Manufacturer:
-                    if (mapping.NopTargetEntityId is > 0) await RequireEntityAsync(manufacturers, mapping.NopTargetEntityId.Value);
+                    // Categories come from the Akeneo product's own categories; manufacturers are not synced.
+                    AkeneoConfigurationImportDocument.Require(false,
+                        $"{(NopTargetType)mapping.NopTargetTypeId} attribute mappings are not supported: " + mapping.AkeneoAttributeCode);
                     break;
                 case NopTargetType.ProductField:
                 case NopTargetType.SeoField:

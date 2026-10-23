@@ -31,26 +31,5 @@ public record AkeneoConfigurationModel : BaseNopModel
     public int? DefaultSyncProfileId{ get; set; }
     public bool DefaultSyncProfileId_OverrideForStore { get; set; }
 
-
-    //[NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Channel")]
-    //public string DefaultChannelCode { get; set; }
-    //public bool DefaultChannelCode_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Locale")]
-    //public string DefaultLocaleCode { get; set; }
-    //public bool DefaultLocaleCode_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Misc.AkeneoConnection.Currency")]
-    //public string DefaultCurrencyCode { get; set; }
-    //public bool DefaultCurrencyCode_OverrideForStore { get; set; }
-
-    //[NopResourceDisplayName("Plugins.Misc.AkeneoConnection.UnmappedAkeneoAttributeBehavior")]
-    //public string UnmappedAkeneoAttributeBehaviorId { get; set; }
-    //public bool UnmappedAkeneoAttributeBehaviorId_OverrideForStore { get; set; }
-
-    public List<SelectListItem> AvailableChannelCodes { get; set; }
-    public List<SelectListItem> AvailableLocaleCodes { get; set; }
-    public List<SelectListItem> AvailableCurrencyCodes { get; set; }
     public List<SelectListItem> AvailableSyncProfiles { get; set; }
-    public List<SelectListItem> AvailableUnmappedAkeneoAttributeBehaviors { get; set; }
 }

@@ -1021,15 +1021,13 @@ public class AkeneoProductSyncService(
             return;
         }
 
-        if (batchRequest.UnmappedAttributeBehavior ==
-            UnmappedAkeneoAttributeBehavior.ImportAsSpecificationAttribute)
+        if (batchRequest.UnmappedAttributeBehavior !=
+            UnmappedAkeneoAttributeBehavior.ImportAsCustomProperty)
         {
-            result.AddWarning(
-                "Import-as-specification requires explicit destination attribute provisioning. " +
-                "The unmapped attributes were preserved but not imported: " +
-                string.Join(", ", unmappedCodes.Take(25)));
             return;
         }
+
+        // Import as custom property: each unmapped value becomes a custom property.
 
         foreach (var code in unmappedCodes)
         {

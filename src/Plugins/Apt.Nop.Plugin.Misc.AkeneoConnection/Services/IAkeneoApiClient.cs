@@ -48,21 +48,11 @@ public interface IAkeneoApiClient
         DateTime updatedAfterUtc,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<JsonElement>> GetAttributeOptionsAsync(
-        string attributeCode,
-        int limit = 100,
-        CancellationToken cancellationToken = default);
-
     Task<IReadOnlyList<AkeneoFamilyDefinition>> GetFamiliesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<JsonElement>> GetLocalesAsync(
-        int limit = 100,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<AkeneoProductDefinition>> GetChangedProductsAsync(
-        DateTime updatedSinceUtc,
         int limit = 100,
         CancellationToken cancellationToken = default);
 

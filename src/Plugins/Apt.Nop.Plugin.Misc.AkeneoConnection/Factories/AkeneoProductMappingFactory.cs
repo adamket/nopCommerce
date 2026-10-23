@@ -29,30 +29,21 @@ public sealed class AkeneoProductMappingFactory(
     IAkeneoCombinationAvailabilityService combinationAvailabilityService)
     : IAkeneoProductMappingFactory
 {
-    private const string DefaultLocale = "en_US";
-    private const string DefaultChannel = "ecommerce";
-    private const string DefaultCurrency = "USD";
-
     public async Task<AkeneoProductMappingPreviewModel> PreviewProductMappingAsync(
         string akeneoIdentifier,
-        string locale,
-        string channel,
-        string currency,
         AkeneoSyncProfile profile,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        locale = locale.TrimOr(DefaultLocale);
-        channel = channel.TrimOr(DefaultChannel);
-        currency = currency.TrimOr(DefaultCurrency);
+        var valueContext = AkeneoValueContext.FromProfile(profile);
 
         var model = new AkeneoProductMappingPreviewModel
         {
             AkeneoIdentifier = akeneoIdentifier,
-            Locale = locale,
-            Channel = channel,
-            Currency = currency,
+            Locale = valueContext.Locale,
+            Channel = valueContext.Channel,
+            Currency = valueContext.Currency,
             SyncProfileId = profile.Id,
             SyncProfileName = profile.Name,
             HasSearched = true
@@ -127,12 +118,9 @@ public sealed class AkeneoProductMappingFactory(
             syncRunRecordId: 0,
             runMode: AkeneoRunMode.SingleProduct);
 
-        request.Locale = locale;
-        request.Channel = channel;
-        request.Currency = currency;
+        // The request already carries the profile's value context.
         request.AkeneoProductUuid = model.AkeneoProductUuid;
         request.AkeneoProductModelCode = model.AkeneoProductModelCode;
-        request.SaveRawPayloadSnapshot = false;
 
         try
         {

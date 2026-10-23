@@ -333,6 +333,9 @@ public partial class AkeneoProductRelatedProductSynchronizer
                     executeAsync: async _ =>
                     {
                         await _productService.DeleteRelatedProductAsync(stale);
+                        await _managedRelationService.DeleteByRelationEntityAsync(
+                            AkeneoManagedRelationType.RelatedProduct,
+                            stale.Id);
                         return true;
                     });
             }

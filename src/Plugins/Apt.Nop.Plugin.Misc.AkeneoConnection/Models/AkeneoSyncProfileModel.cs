@@ -12,9 +12,9 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public string AkeneoChannel { get; set; }
 
-    public string AkeneoLocales { get; set; }
+    /// <summary>The single Akeneo locale this profile reads values in.</summary>
+    public string AkeneoLocale { get; set; }
 
-    public IList<string> SelectedAkeneoLocaleCodes { get; set; } = new List<string>();
     public IList<string> SelectedAkeneoFamilyCodes { get; set; } = new List<string>();
     public IList<string> SelectedAkeneoCategoryCodes { get; set; } = new List<string>();
     public IList<string> SelectedAkeneoProductGroupCodes { get; set; } = new List<string>();
@@ -22,8 +22,6 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public IList<SelectListItem> AvailableAkeneoChannels { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableAkeneoLocales { get; set; } = new List<SelectListItem>();
-
-    //public string RootCategoryCode { get; set; }
 
     public int ProductWriteModeId { get; set; }
 
@@ -39,8 +37,6 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     public int? MaxProducts { get; set; }
 
     public bool ContinueOnError { get; set; }
-
-    public bool SaveRawPayloadSnapshot { get; set; }
 
     public bool SyncLogRetentionEnabled { get; set; }
 

@@ -10,7 +10,6 @@ public class AkeneoSyncItemLog : BaseEntity
     public int NopProductId { get; set; }
     public int ActionTypeId { get; set; }
     public string Message { get; set; }
-    public string RawPayloadSnapshot { get; set; } //TODO remove?
     public DateTime CreatedOnUtc { get; set; }
 }
 

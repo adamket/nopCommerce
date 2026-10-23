@@ -1,6 +1,7 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
@@ -33,15 +34,12 @@ public class AkeneoSyncController(
         var profile = await syncProfileService.GetAkeneoSyncProfileByIdAsync(
             akeneoConnectionSettings.DefaultSyncProfileId ?? 0);
 
+        var valueContext = AkeneoValueContext.FromProfile(profile);
         var model = new AkeneoProductMappingPreviewModel
         {
-            Locale = profile?.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en_US",
-            Channel = string.IsNullOrWhiteSpace(profile?.AkeneoChannel)
-                ? "ecommerce"
-                : profile.AkeneoChannel,
-            Currency = string.IsNullOrWhiteSpace(profile?.CurrencyCode)
-                ? "USD"
-                : profile.CurrencyCode,
+            Locale = valueContext.Locale,
+            Channel = valueContext.Channel,
+            Currency = valueContext.Currency,
             SyncProfileId = profile?.Id,
             SyncProfileName = profile?.Name
         };
@@ -82,13 +80,10 @@ public class AkeneoSyncController(
         // A one-time import rebuilds its request from the saved profile. Use
         // that exact same context for the preview rather than trusting posted
         // hidden values that may be stale or manually altered.
-        input.Locale = profile.AkeneoLocales.SplitCsv().FirstOrDefault() ?? "en_US";
-        input.Channel = string.IsNullOrWhiteSpace(profile.AkeneoChannel)
-            ? "ecommerce"
-            : profile.AkeneoChannel;
-        input.Currency = string.IsNullOrWhiteSpace(profile.CurrencyCode)
-            ? "USD"
-            : profile.CurrencyCode;
+        var valueContext = AkeneoValueContext.FromProfile(profile);
+        input.Locale = valueContext.Locale;
+        input.Channel = valueContext.Channel;
+        input.Currency = valueContext.Currency;
 
         if (string.IsNullOrWhiteSpace(input.AkeneoIdentifier))
         {
@@ -100,15 +95,8 @@ public class AkeneoSyncController(
 
         var model = await productMappingFactory.PreviewProductMappingAsync(
             input.AkeneoIdentifier,
-            input.Locale,
-            input.Channel,
-            input.Currency,
             profile,
             cancellationToken);
-
-        model.Locale = input.Locale;
-        model.Channel = input.Channel;
-        model.Currency = input.Currency;
 
         return View(DryRunViewPath, model);
     }

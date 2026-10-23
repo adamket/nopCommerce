@@ -466,6 +466,9 @@ public partial class AkeneoProductAttributeSynchronizer
                         {
                             await _productAttributeService
                                 .DeleteProductAttributeValueAsync(staleValue);
+                            await _managedRelationService.DeleteByRelationEntityAsync(
+                                AkeneoManagedRelationType.ProductAttributeValue,
+                                staleValue.Id);
                             return true;
                         });
                 }
@@ -561,6 +564,9 @@ public partial class AkeneoProductAttributeSynchronizer
                     {
                         await _productAttributeService
                             .DeleteProductAttributeMappingAsync(state.Mapping);
+                        await _managedRelationService.DeleteByRelationEntityAsync(
+                            AkeneoManagedRelationType.ProductAttributeMapping,
+                            state.Mapping.Id);
                         return true;
                     });
                 continue;

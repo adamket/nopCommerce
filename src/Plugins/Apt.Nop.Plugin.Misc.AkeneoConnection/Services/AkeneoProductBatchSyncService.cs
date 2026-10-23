@@ -49,7 +49,7 @@ public class AkeneoProductBatchSyncService(
     IAkeneoCombinationAvailabilityService combinationAvailabilityService = null)
     : IAkeneoProductBatchSyncService
 {
-    private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
+    private static readonly JsonSerializerOptions HashSerializerOptions = new()
     {
         WriteIndented = false
     };
@@ -420,11 +420,7 @@ public class AkeneoProductBatchSyncService(
 
                 var itemResult = CreateInitialResult(source);
                 itemResult.InclusionReason = inclusionReason;
-
-                var snapshot = request.SaveRawPayloadSnapshot
-                    ? SerializeSnapshot(source)
-                    : null;
-
+
                 try
                 {
                     // Warm the product-model cache first so the reconcile
@@ -466,14 +462,14 @@ public class AkeneoProductBatchSyncService(
                 foreach (var related in TakeCommittedRelatedResults(itemResult))
                 {
                     ApplyItemResultToBatchResult(result, related);
-                    await SaveBatchItemLogIfNeededAsync(request, related, null);
+                    await SaveBatchItemLogIfNeededAsync(request, related);
 
                     if (ShouldKeepItemResultInMemory(related))
                         result.LoggedItemResults.Add(related);
                 }
 
                 ApplyItemResultToBatchResult(result, itemResult);
-                await SaveBatchItemLogIfNeededAsync(request, itemResult, snapshot);
+                await SaveBatchItemLogIfNeededAsync(request, itemResult);
 
                 if (ShouldKeepItemResultInMemory(itemResult))
                     result.LoggedItemResults.Add(itemResult);
@@ -549,16 +545,14 @@ public class AkeneoProductBatchSyncService(
         {
             AkeneoProductUuid = request.AkeneoProductUuid
         };
-
-        string snapshot = null;
-
+
         try
         {
             if (string.IsNullOrWhiteSpace(request.AkeneoProductUuid))
             {
                 result.AddError("Akeneo product UUID is required.");
                 result.ActionType = SyncItemActionType.Failed;
-                return await SaveLogAndReturnAsync(request, result, null);
+                return await SaveLogAndReturnAsync(request, result);
             }
 
             var source = await akeneoApiClient.GetProductByUuidAsync(
@@ -570,14 +564,10 @@ public class AkeneoProductBatchSyncService(
                 result.AddError(
                     $"Akeneo product was not found. UUID: {request.AkeneoProductUuid}");
                 result.ActionType = SyncItemActionType.Failed;
-                return await SaveLogAndReturnAsync(request, result, null);
+                return await SaveLogAndReturnAsync(request, result);
             }
 
-            result = CreateInitialResult(source);
-            snapshot = request.SaveRawPayloadSnapshot
-                ? SerializeSnapshot(source)
-                : null;
-
+            result = CreateInitialResult(source);
             var parentProductCache = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
             var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
 
@@ -612,7 +602,7 @@ public class AkeneoProductBatchSyncService(
             ClearRolledBackDestination(result);
         }
 
-        return await SaveLogAndReturnAsync(request, result, snapshot);
+        return await SaveLogAndReturnAsync(request, result);
     }
 
     public async Task<AkeneoProductImportResult> SyncProductModelByCodeAsync(
@@ -628,16 +618,14 @@ public class AkeneoProductBatchSyncService(
             AkeneoIdentifier = requestedCode,
             AkeneoProductKey = requestedCode
         };
-
-        string snapshot = null;
-
+
         try
         {
             if (string.IsNullOrWhiteSpace(requestedCode))
             {
                 result.AddError("Akeneo product model code is required.");
                 result.ActionType = SyncItemActionType.Failed;
-                return await SaveLogAndReturnAsync(request, result, null);
+                return await SaveLogAndReturnAsync(request, result);
             }
 
             var source = await akeneoApiClient.GetProductModelByCodeAsync(
@@ -649,7 +637,7 @@ public class AkeneoProductBatchSyncService(
                 result.AddError(
                     $"Akeneo product model was not found. Code: {requestedCode}");
                 result.ActionType = SyncItemActionType.Failed;
-                return await SaveLogAndReturnAsync(request, result, null);
+                return await SaveLogAndReturnAsync(request, result);
             }
 
             var skipReason = await profileRuleEvaluator.GetSkipReasonAsync(source, request, cancellationToken);
@@ -657,7 +645,7 @@ public class AkeneoProductBatchSyncService(
             {
                 result.ActionType = SyncItemActionType.Skipped;
                 result.AddMessage(skipReason);
-                return await SaveLogAndReturnAsync(request, result, snapshot);
+                return await SaveLogAndReturnAsync(request, result);
             }
 
             var productModelCache = new Dictionary<string, AkeneoProductDefinition>(
@@ -672,11 +660,7 @@ public class AkeneoProductBatchSyncService(
                 cancellationToken);
 
             result.AkeneoIdentifier = effectiveSource.Code;
-            result.AkeneoProductKey = effectiveSource.Code;
-            snapshot = request.SaveRawPayloadSnapshot
-                ? SerializeSnapshot(effectiveSource)
-                : null;
-
+            result.AkeneoProductKey = effectiveSource.Code;
             if (!string.Equals(
                     requestedCode,
                     effectiveSource.Code,
@@ -713,7 +697,7 @@ public class AkeneoProductBatchSyncService(
             ClearRolledBackDestination(result);
         }
 
-        return await SaveLogAndReturnAsync(request, result, snapshot);
+        return await SaveLogAndReturnAsync(request, result);
     }
 
     private async Task<AkeneoProductImportResult> ReconcileProductUnitAsync(
@@ -2028,8 +2012,7 @@ public class AkeneoProductBatchSyncService(
 
     private async Task SaveBatchItemLogIfNeededAsync(
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result,
-        string rawPayloadSnapshot)
+        AkeneoProductImportResult result)
     {
         // Only persist items that changed nopCommerce (created/updated), failed,
         // or carry warnings. Unchanged items, including ones a delta merely
@@ -2052,21 +2035,19 @@ public class AkeneoProductBatchSyncService(
                 AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
                 NopProductId = result.NopProductId,
                 ActionTypeId = (int)result.ActionType,
-                Message = BuildLogMessage(result),
-                RawPayloadSnapshot = rawPayloadSnapshot,
+                Message = BuildLogMessage(result),
                 CreatedOnUtc = DateTime.UtcNow
             });
     }
 
     private async Task<AkeneoProductImportResult> SaveLogAndReturnAsync(
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result,
-        string rawPayloadSnapshot)
+        AkeneoProductImportResult result)
     {
         foreach (var related in TakeCommittedRelatedResults(result))
-            await SaveBatchItemLogIfNeededAsync(request, related, null);
+            await SaveBatchItemLogIfNeededAsync(request, related);
 
-        await SaveBatchItemLogIfNeededAsync(request, result, rawPayloadSnapshot);
+        await SaveBatchItemLogIfNeededAsync(request, result);
         return result;
     }
 
@@ -2171,10 +2152,7 @@ public class AkeneoProductBatchSyncService(
         result.AkeneoIdentifier ??
         result.AkeneoProductUuid ??
         "(unknown product)";
-
-    private static string SerializeSnapshot(AkeneoProductDefinition source) =>
-        JsonSerializer.Serialize(source, SnapshotSerializerOptions).Truncate(12000);
-
+
     private async Task<ResolvedDesiredState> TryResolveDesiredStateAsync(
         AkeneoProductDefinition source,
         AkeneoProductImportRequest request,
@@ -2660,17 +2638,6 @@ public class AkeneoProductBatchSyncService(
                 categoryCodes.Add(code.Trim());
         }
 
-        foreach (var mapped in context
-                     .GetMappings(NopTargetType.Category)
-                     .Where(value => value.HasValue))
-        {
-            foreach (var code in AkeneoSyncValueHelper.GetRawItems(mapped))
-            {
-                if (!string.IsNullOrWhiteSpace(code))
-                    categoryCodes.Add(code.Trim());
-            }
-        }
-
         var result = new List<object>();
 
         foreach (var code in categoryCodes.OrderBy(
@@ -2764,7 +2731,7 @@ public class AkeneoProductBatchSyncService(
     {
         var bytes = SHA256.HashData(
             Encoding.UTF8.GetBytes(
-                JsonSerializer.Serialize(value, SnapshotSerializerOptions)));
+                JsonSerializer.Serialize(value, HashSerializerOptions)));
 
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }

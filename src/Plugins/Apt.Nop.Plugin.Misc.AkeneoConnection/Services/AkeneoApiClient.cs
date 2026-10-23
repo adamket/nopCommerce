@@ -203,15 +203,6 @@ public class AkeneoApiClient : IAkeneoApiClient
         return product;
     }
 
-    public async Task<IReadOnlyList<AkeneoProductDefinition>> GetChangedProductsAsync(
-        DateTime updatedSinceUtc,
-        int limit = 100,
-        CancellationToken cancellationToken = default)
-    {
-        var searchJson = BuildUpdatedSinceSearchJson(updatedSinceUtc);
-        return await GetProductsAsync(searchJson, limit, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<AkeneoCategoryDefinition>> GetCategoriesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default)
@@ -348,19 +339,6 @@ public class AkeneoApiClient : IAkeneoApiClient
         CancellationToken cancellationToken = default,
         AkeneoApiCredentials apiCredentials = null)
         => await GetSimpleCollectionAsync<AkeneoChannelDefinition>("api/rest/v1/channels", limit, cancellationToken, apiCredentials);
-
-    public async Task<IReadOnlyList<JsonElement>> GetAttributeOptionsAsync(
-        string attributeCode,
-        int limit = 100,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(attributeCode))
-            throw new ArgumentException("Attribute code is required.", nameof(attributeCode));
-
-        return await GetSimpleCollectionAsync(
-            $"api/rest/v1/attributes/{Uri.EscapeDataString(attributeCode)}/options",
-            limit, cancellationToken, null);
-    }
 
     public async Task ClearCachedTokenAsync(AkeneoApiCredentials apiCredentials = null)
     {
@@ -1393,19 +1371,6 @@ public class AkeneoApiClient : IAkeneoApiClient
 
         var queryString = string.Join("&", parts);
         return queryString.Length == 0 ? string.Empty : "?" + queryString;
-    }
-
-    private static string BuildUpdatedSinceSearchJson(DateTime updatedSinceUtc)
-    {
-        var formattedDate = updatedSinceUtc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
-
-        return JsonSerializer.Serialize(new
-        {
-            updated = new[]
-            {
-                new { @operator = ">", value = formattedDate }
-            }
-        });
     }
 
     private async Task<T> GetObjectOrNullAsync<T>(

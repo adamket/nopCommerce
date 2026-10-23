@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -101,25 +102,77 @@ public sealed class AkeneoExternalAssetDownloader(
         if (uri.IsLoopback || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Local asset URLs are not allowed.");
 
-        var addresses = await Dns.GetHostAddressesAsync(uri.DnsSafeHost, cancellationToken);
-        if (addresses.Length == 0 || addresses.Any(IsPrivateOrLocal))
-            throw new InvalidOperationException("Private or local asset hosts are not allowed.");
+        await ResolvePublicAddressesAsync(uri.DnsSafeHost, cancellationToken);
     }
 
-    private static bool IsPrivateOrLocal(IPAddress address)
+    /// <summary>
+    /// The external-asset HttpClient's connect callback. It resolves the host
+    /// itself and connects only to addresses it has just vetted, so a DNS
+    /// answer that changes after <see cref="ValidatePublicHostAsync"/> cannot
+    /// redirect the download to a private address.
+    /// </summary>
+    internal static async ValueTask<Stream> ConnectToPublicHostAsync(
+        SocketsHttpConnectionContext context,
+        CancellationToken cancellationToken)
     {
-        if (IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal ||
-            address.IsIPv6SiteLocal || address.IsIPv6Multicast)
-        {
-            return true;
-        }
+        var addresses = await ResolvePublicAddressesAsync(
+            context.DnsEndPoint.Host,
+            cancellationToken);
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
 
-        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-            return address.Equals(IPAddress.IPv6Any) || address.Equals(IPAddress.IPv6None);
+        try
+        {
+            await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, cancellationToken);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task<IPAddress[]> ResolvePublicAddressesAsync(
+        string host,
+        CancellationToken cancellationToken)
+    {
+        var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
+        if (addresses.Length == 0 || addresses.Any(IsPrivateOrLocal))
+            throw new InvalidOperationException("Private or local asset hosts are not allowed.");
+
+        return addresses;
+    }
+
+    internal static bool IsPrivateOrLocal(IPAddress address)
+    {
+        // An IPv4 address written in IPv6 form must pass the IPv4 rules.
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            var v6 = address.GetAddressBytes();
+
+            // NAT64 (64:ff9b::/96) embeds an IPv4 address in its last four bytes.
+            if (v6[0] == 0x00 && v6[1] == 0x64 && v6[2] == 0xff && v6[3] == 0x9b &&
+                v6.Skip(4).Take(8).All(part => part == 0))
+            {
+                return IsPrivateOrLocal(new IPAddress(v6[12..]));
+            }
+
+            return IPAddress.IsLoopback(address) ||
+                   address.IsIPv6LinkLocal ||
+                   address.IsIPv6SiteLocal ||
+                   address.IsIPv6UniqueLocal ||
+                   address.IsIPv6Multicast ||
+                   address.Equals(IPAddress.IPv6Any) ||
+                   address.Equals(IPAddress.IPv6None);
+        }
 
         var bytes = address.GetAddressBytes();
         return bytes[0] == 10 ||
                bytes[0] == 127 ||
+               (bytes[0] == 100 && bytes[1] is >= 64 and <= 127) ||
                (bytes[0] == 169 && bytes[1] == 254) ||
                (bytes[0] == 172 && bytes[1] is >= 16 and <= 31) ||
                (bytes[0] == 192 && bytes[1] == 168) ||

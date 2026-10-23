@@ -129,8 +129,6 @@ public sealed class AkeneoTargetTypeResolver(
                 NopTargetType.Ignore,
                 NopTargetType.ProductAttribute,
                 NopTargetType.SpecificationAttribute,
-                NopTargetType.Manufacturer,
-                NopTargetType.Category,
                 NopTargetType.CustomProperty,
                 NopTargetType.ProductTag
             ],
@@ -140,7 +138,6 @@ public sealed class AkeneoTargetTypeResolver(
                 NopTargetType.Ignore,
                 NopTargetType.ProductAttribute,
                 NopTargetType.SpecificationAttribute,
-                NopTargetType.Category,
                 NopTargetType.CustomProperty,
                 NopTargetType.ProductTag
             ],
@@ -180,7 +177,6 @@ public sealed class AkeneoTargetTypeResolver(
                 NopTargetType.ProductField,
                 NopTargetType.SpecificationAttribute,
                 NopTargetType.SeoField,
-                NopTargetType.Manufacturer,
                 NopTargetType.CustomProperty
             ],
 

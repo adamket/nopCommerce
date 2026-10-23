@@ -40,12 +40,6 @@ public partial class AkeneoProductCategorySynchronizer
         CancellationToken cancellationToken)
     {
         var plan = new AkeneoExecutableSectionPlan();
-        if (context.MappedValues.Any(mapped => mapped.TargetType == NopTargetType.Category && mapped.IsSkipped))
-        {
-            plan.AddOperation("Categories", "Collection", null, null, null, AkeneoDryRunOperationType.Skip,
-                "A mapping was skipped. The collection is preserved because its complete desired membership is unknown.");
-            return plan;
-        }
 
         if (context.Request.CategorySyncMode == AkeneoCollectionSyncMode.Disabled)
         {
@@ -57,21 +51,11 @@ public partial class AkeneoProductCategorySynchronizer
         var product = context.Product ?? context.ExistingProduct;
         var desiredCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Categories come only from the Akeneo product's own categories field.
         foreach (var code in context.Source.Categories ?? new List<string>())
         {
             if (!string.IsNullOrWhiteSpace(code))
                 desiredCodes.Add(code.Trim());
-        }
-
-        foreach (var mapped in context
-                     .GetMappings(NopTargetType.Category)
-                     .Where(value => value.HasValue))
-        {
-            foreach (var code in AkeneoSyncValueHelper.GetRawItems(mapped))
-            {
-                if (!string.IsNullOrWhiteSpace(code))
-                    desiredCodes.Add(code.Trim());
-            }
         }
 
         var desiredCategories = new Dictionary<int, (string Code, Category Category)>();
@@ -167,7 +151,7 @@ public partial class AkeneoProductCategorySynchronizer
                             product.Id,
                             AkeneoManagedRelationType.ProductCategory,
                             productCategory.Id,
-                            akeneoValueCode: categoryId.ToString());
+                            akeneoValueCode: desired.Code);
                     }
 
                     return true;
@@ -205,6 +189,9 @@ public partial class AkeneoProductCategorySynchronizer
                     executeAsync: async _ =>
                     {
                         await _categoryService.DeleteProductCategoryAsync(staleMapping);
+                        await _managedRelationService.DeleteByRelationEntityAsync(
+                            AkeneoManagedRelationType.ProductCategory,
+                            staleMapping.Id);
                         return true;
                     });
             }

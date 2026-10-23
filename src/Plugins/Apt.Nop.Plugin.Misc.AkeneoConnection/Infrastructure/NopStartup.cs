@@ -198,7 +198,9 @@ public class NopStartup : INopStartup
                 AllowAutoRedirect = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-                MaxConnectionsPerServer = 8
+                MaxConnectionsPerServer = 8,
+                // Vet the exact addresses connected to, not just an earlier lookup.
+                ConnectCallback = AkeneoExternalAssetDownloader.ConnectToPublicHostAsync
             })
             .SetHandlerLifetime(TimeSpan.FromMinutes(5));
     }

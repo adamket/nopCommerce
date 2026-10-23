@@ -70,9 +70,7 @@ public class AkeneoProductImportRequest
         = AkeneoMissingProductBehavior.Ignore;
 
     public bool CreateMissingProductAttributeValues { get; set; } = true;
-
-    public bool SaveRawPayloadSnapshot { get; set; }
-
+
     public bool IsAuthoritativeFullRun =>
         SyncProfileId.HasValue &&
         SyncProfileId.Value > 0 &&

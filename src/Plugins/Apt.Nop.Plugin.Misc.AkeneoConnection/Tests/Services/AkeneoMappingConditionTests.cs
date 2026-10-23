@@ -224,22 +224,6 @@ public class AkeneoMappingConditionTests
         products.VerifyNoOtherCalls(); urls.VerifyNoOtherCalls(); attributes.VerifyNoOtherCalls();
     }
 
-    [Test]
-    public async Task Skipped_category_contribution_preserves_collection_under_replace_all()
-    {
-        var categories = new Mock<ICategoryService>(MockBehavior.Strict);
-        var entities = new Mock<IAkeneoNopEntityMappingService>(MockBehavior.Strict);
-        var relations = new Mock<IAkeneoManagedRelationService>(MockBehavior.Strict);
-        var context = new AkeneoProductSyncContext
-        {
-            Source = Source("hold"), Result = new AkeneoProductImportResult(), Product = new Product { Id = 100 },
-            Request = new AkeneoProductImportRequest { CategorySyncMode = AkeneoCollectionSyncMode.ReplaceAll },
-            MappedValues = new[] { Skipped(NopTargetType.Category, "categories") }
-        };
-        await new AkeneoProductCategorySynchronizer(categories.Object, entities.Object, relations.Object).SynchronizeAsync(context);
-        categories.VerifyNoOtherCalls(); entities.VerifyNoOtherCalls(); relations.VerifyNoOtherCalls();
-    }
-
     private static AkeneoResolvedMappedValue Skipped(NopTargetType type, string key) => new()
     {
         Mapping = new AkeneoAttributeMapping { NopTargetTypeId = (int)type, NopTargetKey = key, IsRequired = true },
