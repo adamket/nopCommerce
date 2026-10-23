@@ -41,6 +41,33 @@ public class AkeneoProductSyncStateService(
             state.AkeneoCode == akeneoCode);
     }
 
+    /// <summary>
+    /// Whether an already-loaded state row is the one <see cref="GetBySourceAsync"/>
+    /// would return for this source, so callers can reuse it instead of re-reading.
+    /// </summary>
+    public static bool IsStateFor(
+        AkeneoProductSyncState state,
+        int syncProfileId,
+        AkeneoEntityType akeneoEntityType,
+        string akeneoCode,
+        string akeneoUuid)
+    {
+        if (state == null ||
+            state.SyncProfileId != syncProfileId ||
+            state.AkeneoEntityTypeId != (int)akeneoEntityType)
+        {
+            return false;
+        }
+
+        akeneoUuid = akeneoUuid?.Trim();
+        if (!string.IsNullOrWhiteSpace(akeneoUuid))
+            return string.Equals(state.AkeneoUuid, akeneoUuid, StringComparison.OrdinalIgnoreCase);
+
+        akeneoCode = akeneoCode?.Trim();
+        return !string.IsNullOrWhiteSpace(akeneoCode) &&
+               string.Equals(state.AkeneoCode, akeneoCode, StringComparison.OrdinalIgnoreCase);
+    }
+
     public async Task<AkeneoProductSyncState> MarkSeenAsync(
         int syncProfileId,
         int syncRunRecordId,
@@ -49,15 +76,18 @@ public class AkeneoProductSyncStateService(
         string akeneoUuid,
         string akeneoParentCode,
         AkeneoProductImportResult result,
-        string desiredStateHash = null)
+        string desiredStateHash = null,
+        AkeneoProductSyncState knownState = null)
     {
         ArgumentNullException.ThrowIfNull(result);
 
-        var state = await GetBySourceAsync(
-            syncProfileId,
-            akeneoEntityType,
-            akeneoCode,
-            akeneoUuid);
+        var state = IsStateFor(knownState, syncProfileId, akeneoEntityType, akeneoCode, akeneoUuid)
+            ? knownState
+            : await GetBySourceAsync(
+                syncProfileId,
+                akeneoEntityType,
+                akeneoCode,
+                akeneoUuid);
 
         var now = DateTime.UtcNow;
 
@@ -86,7 +116,7 @@ public class AkeneoProductSyncStateService(
             await repository.InsertAsync(state);
             return state;
         }
-
+
         AkeneoMappingHelper.SetIfChanged(
             state.AkeneoCode,
             akeneoCode?.Trim(),

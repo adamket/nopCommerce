@@ -288,7 +288,8 @@ public class AkeneoProductBatchSyncService(
                 $"Reconciled: {result.ReconciledCount}. Delta inclusion: " +
                 $"direct {result.DirectProductChangeCount}, " +
                 $"ancestor {result.AncestorProductModelChangeCount}, " +
-                $"linked asset {result.LinkedAssetChangeCount}; " +
+                $"linked asset {result.LinkedAssetChangeCount}, " +
+                $"linked reference entity {result.LinkedReferenceEntityChangeCount}; " +
                 $"deduplicated {result.DuplicateCandidateCount} candidate(s).");
 
             return result;
@@ -420,7 +421,7 @@ public class AkeneoProductBatchSyncService(
 
                 var itemResult = CreateInitialResult(source);
                 itemResult.InclusionReason = inclusionReason;
-
+
                 try
                 {
                     // Warm the product-model cache first so the reconcile
@@ -463,16 +464,12 @@ public class AkeneoProductBatchSyncService(
                 {
                     ApplyItemResultToBatchResult(result, related);
                     await SaveBatchItemLogIfNeededAsync(request, related);
-
-                    if (ShouldKeepItemResultInMemory(related))
-                        result.LoggedItemResults.Add(related);
+                    result.AddItemWarnings(related.Warnings);
                 }
 
                 ApplyItemResultToBatchResult(result, itemResult);
                 await SaveBatchItemLogIfNeededAsync(request, itemResult);
-
-                if (ShouldKeepItemResultInMemory(itemResult))
-                    result.LoggedItemResults.Add(itemResult);
+                result.AddItemWarnings(itemResult.Warnings);
 
                 if (!itemResult.Success && !request.ContinueOnError)
                 {
@@ -527,6 +524,9 @@ public class AkeneoProductBatchSyncService(
 
         if (reason.HasFlag(AkeneoSyncInclusionReason.LinkedAssetChange))
             result.LinkedAssetChangeCount++;
+
+        if (reason.HasFlag(AkeneoSyncInclusionReason.LinkedReferenceEntityRecordChange))
+            result.LinkedReferenceEntityChangeCount++;
     }
 
     private sealed record ProductSearchPhaseResult(
@@ -545,7 +545,7 @@ public class AkeneoProductBatchSyncService(
         {
             AkeneoProductUuid = request.AkeneoProductUuid
         };
-
+
         try
         {
             if (string.IsNullOrWhiteSpace(request.AkeneoProductUuid))
@@ -567,7 +567,7 @@ public class AkeneoProductBatchSyncService(
                 return await SaveLogAndReturnAsync(request, result);
             }
 
-            result = CreateInitialResult(source);
+            result = CreateInitialResult(source);
             var parentProductCache = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
             var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
 
@@ -618,7 +618,7 @@ public class AkeneoProductBatchSyncService(
             AkeneoIdentifier = requestedCode,
             AkeneoProductKey = requestedCode
         };
-
+
         try
         {
             if (string.IsNullOrWhiteSpace(requestedCode))
@@ -660,7 +660,7 @@ public class AkeneoProductBatchSyncService(
                 cancellationToken);
 
             result.AkeneoIdentifier = effectiveSource.Code;
-            result.AkeneoProductKey = effectiveSource.Code;
+            result.AkeneoProductKey = effectiveSource.Code;
             if (!string.Equals(
                     requestedCode,
                     effectiveSource.Code,
@@ -752,7 +752,8 @@ public class AkeneoProductBatchSyncService(
                         ? "Unavailable combination removed. The parent and shared attribute values were preserved."
                         : "Combination is unavailable and is already absent.");
                     await syncStateService.MarkSeenAsync(request.SyncProfileId.Value, request.SyncRunRecordId,
-                        AkeneoEntityType.Product, source.Identifier, source.Uuid, source.Parent, result);
+                        AkeneoEntityType.Product, source.Identifier, source.Uuid, source.Parent, result,
+                        knownState: unavailable.State);
                 }
                 unavailableTransaction.Complete();
                 return result;
@@ -890,7 +891,8 @@ public class AkeneoProductBatchSyncService(
                 source.Uuid,
                 source.Parent,
                 result,
-                desiredStateHash);
+                desiredStateHash,
+                knownState: previousState);
         }
 
         transaction.Complete();
@@ -1012,7 +1014,8 @@ public class AkeneoProductBatchSyncService(
                 ? await productSyncService.PrepareFromIntentAsync(
                     resolvedDesiredState.EffectiveLeafIntent,
                     result,
-                    cancellationToken)
+                    cancellationToken,
+                    knownState: previousState)
                 : await productSyncService.PrepareAsync(
                     source,
                     AkeneoEntityType.Product,
@@ -1080,7 +1083,8 @@ public class AkeneoProductBatchSyncService(
             ? await productSyncService.PrepareFromIntentAsync(
                 resolvedDesiredState.RawLeafIntent,
                 result,
-                cancellationToken)
+                cancellationToken,
+                knownState: previousState)
             : await productSyncService.PrepareAsync(
                 source,
                 AkeneoEntityType.Product,
@@ -1129,7 +1133,8 @@ public class AkeneoProductBatchSyncService(
                         ? await productSyncService.PrepareFromIntentAsync(
                             resolvedDesiredState.StandaloneIntent,
                             result,
-                            cancellationToken)
+                            cancellationToken,
+                            knownState: previousState)
                         : await productSyncService.PrepareAsync(
                             standaloneSource,
                             AkeneoEntityType.Product,
@@ -1188,7 +1193,8 @@ public class AkeneoProductBatchSyncService(
                 ? await productSyncService.PrepareFromIntentAsync(
                     resolvedDesiredState.EffectiveLeafIntent,
                     result,
-                    cancellationToken)
+                    cancellationToken,
+                    knownState: previousState)
                 : await productSyncService.PrepareAsync(
                     effectiveSource,
                     AkeneoEntityType.Product,
@@ -2035,7 +2041,7 @@ public class AkeneoProductBatchSyncService(
                 AkeneoIdentifier = result.AkeneoIdentifier ?? result.Sku,
                 NopProductId = result.NopProductId,
                 ActionTypeId = (int)result.ActionType,
-                Message = BuildLogMessage(result),
+                Message = BuildLogMessage(result),
                 CreatedOnUtc = DateTime.UtcNow
             });
     }
@@ -2099,16 +2105,6 @@ public class AkeneoProductBatchSyncService(
         return string.Join(Environment.NewLine, parts).Truncate(4000);
     }
 
-    private static bool ShouldKeepItemResultInMemory(
-        AkeneoProductImportResult result) =>
-        result.ActionType != SyncItemActionType.Skipped ||
-        result.Errors.Any() ||
-        result.Warnings.Any() ||
-        HasDeltaInclusionReason(result.InclusionReason);
-
-    private static bool HasDeltaInclusionReason(
-        AkeneoSyncInclusionReason reason) =>
-        reason != AkeneoSyncInclusionReason.None;
 
     private static string FormatInclusionReason(
         AkeneoSyncInclusionReason reason)
@@ -2152,7 +2148,7 @@ public class AkeneoProductBatchSyncService(
         result.AkeneoIdentifier ??
         result.AkeneoProductUuid ??
         "(unknown product)";
-
+
     private async Task<ResolvedDesiredState> TryResolveDesiredStateAsync(
         AkeneoProductDefinition source,
         AkeneoProductImportRequest request,
@@ -2175,7 +2171,8 @@ public class AkeneoProductBatchSyncService(
                 var context = await productSyncService.PrepareFromIntentAsync(
                     intent,
                     hashResult,
-                    cancellationToken);
+                    cancellationToken,
+                    knownState: previousState);
 
                 var hash = await BuildResolvedContextHashAsync(
                     context,
@@ -2243,7 +2240,8 @@ public class AkeneoProductBatchSyncService(
             var rawLeafContext = await productSyncService.PrepareFromIntentAsync(
                 rawLeafIntent,
                 hashResult,
-                cancellationToken);
+                cancellationToken,
+                knownState: previousState);
 
             if (!hashResult.Success)
                 return null;
@@ -2279,7 +2277,8 @@ public class AkeneoProductBatchSyncService(
                         var context = await productSyncService.PrepareFromIntentAsync(
                             standaloneIntent,
                             hashResult,
-                            cancellationToken);
+                            cancellationToken,
+                            knownState: previousState);
 
                         var hash = await BuildResolvedContextHashAsync(
                             context,
@@ -2326,7 +2325,8 @@ public class AkeneoProductBatchSyncService(
                 : await productSyncService.PrepareFromIntentAsync(
                     leafIntent,
                     hashResult,
-                    cancellationToken);
+                    cancellationToken,
+                    knownState: previousState);
 
             if (!hashResult.Success)
                 return null;

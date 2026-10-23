@@ -51,13 +51,19 @@ public interface IAkeneoProductSyncService
 
     /// <summary>
     /// Creates a fresh destination-bound synchronization context from a
-    /// previously resolved source intent. Destination state is deliberately
+    /// previously resolved source intent. Destination products are deliberately
     /// re-read so intent reuse cannot make the write path stale.
     /// </summary>
+    /// <param name="knownState">
+    /// The sync-state row the caller already loaded for this item. It replaces
+    /// the state lookup when it matches the intent's source; state rows are only
+    /// written at the end of an item, so reusing it within the item is safe.
+    /// </param>
     Task<AkeneoProductSyncContext> PrepareFromIntentAsync(
         AkeneoResolvedProductIntent intent,
         AkeneoProductImportResult result,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        AkeneoProductSyncState knownState = null);
     Task<AkeneoProductSyncContext> PrepareAsync(
         AkeneoProductDefinition source,
         AkeneoEntityType sourceEntityType,

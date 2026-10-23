@@ -45,9 +45,21 @@ public class AkeneoManagedRelationService(
             return relation;
         }
 
+        akeneoAttributeCode = akeneoAttributeCode?.Trim();
+        akeneoValueCode = akeneoValueCode?.Trim();
+
+        // Nothing reads a relation's last-seen run, so an unchanged relation is
+        // not rewritten on every run: it records the run that last changed it.
+        if (relation.NopProductId == nopProductId &&
+            string.Equals(relation.AkeneoAttributeCode, akeneoAttributeCode, StringComparison.Ordinal) &&
+            string.Equals(relation.AkeneoValueCode, akeneoValueCode, StringComparison.Ordinal))
+        {
+            return relation;
+        }
+
         relation.NopProductId = nopProductId;
-        relation.AkeneoAttributeCode = akeneoAttributeCode?.Trim();
-        relation.AkeneoValueCode = akeneoValueCode?.Trim();
+        relation.AkeneoAttributeCode = akeneoAttributeCode;
+        relation.AkeneoValueCode = akeneoValueCode;
         relation.LastSeenRunRecordId = syncRunRecordId;
         relation.UpdatedOnUtc = now;
 

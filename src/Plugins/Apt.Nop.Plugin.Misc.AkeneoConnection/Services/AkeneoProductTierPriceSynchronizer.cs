@@ -85,6 +85,16 @@ public class AkeneoProductTierPriceSynchronizer(
 
         var syncProfileId = context.Request.SyncProfileId;
 
+        // The tier prices this profile owns on the product, loaded once.
+        var ownedRelations = syncProfileId.HasValue && context.ExistingProduct != null
+            ? (await managedRelationService.GetByProductAsync(
+                    syncProfileId.Value,
+                    context.ExistingProduct.Id,
+                    AkeneoManagedRelationType.TierPrice))
+                .GroupBy(relation => relation.NopRelationEntityId)
+                .ToDictionary(group => group.Key, group => group.First())
+            : new Dictionary<int, AkeneoManagedRelation>();
+
         foreach (var mapped in mappings)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -120,7 +130,7 @@ public class AkeneoProductTierPriceSynchronizer(
 
             if (!mapped.HasValue)
             {
-                await PlanMissingValueAsync(plan, context, mapped, target, existing, current, syncProfileId);
+                PlanMissingValue(plan, context, mapped, target, existing, current, ownedRelations);
                 continue;
             }
 
@@ -156,12 +166,15 @@ public class AkeneoProductTierPriceSynchronizer(
                     isRequired: mapped.Mapping.IsRequired);
 
                 // The mapping now owns this slot, even if the row was created
-                // elsewhere, so a later empty value can remove it.
-                plan.AddInternalOperation(async _ =>
+                // elsewhere, so a later empty value can remove it. Claim it once.
+                if (!ownedRelations.ContainsKey(existing.Id))
                 {
-                    await ClaimAsync(context, syncProfileId, existing.Id, mapped.Mapping.AkeneoAttributeCode);
-                    return false;
-                });
+                    plan.AddInternalOperation(async _ =>
+                    {
+                        await ClaimAsync(context, syncProfileId, existing.Id, mapped.Mapping.AkeneoAttributeCode);
+                        return false;
+                    });
+                }
 
                 continue;
             }
@@ -226,14 +239,14 @@ public class AkeneoProductTierPriceSynchronizer(
         return plan;
     }
 
-    private async Task PlanMissingValueAsync(
+    private void PlanMissingValue(
         AkeneoExecutableSectionPlan plan,
         AkeneoProductSyncContext context,
         AkeneoResolvedMappedValue mapped,
         string target,
         TierPrice existing,
         string current,
-        int? syncProfileId)
+        IReadOnlyDictionary<int, AkeneoManagedRelation> ownedRelations)
     {
         if (existing == null)
         {
@@ -264,13 +277,7 @@ public class AkeneoProductTierPriceSynchronizer(
             return;
         }
 
-        var owned = syncProfileId.HasValue &&
-                    await managedRelationService.GetByRelationEntityAsync(
-                        syncProfileId.Value,
-                        AkeneoManagedRelationType.TierPrice,
-                        existing.Id) != null;
-
-        if (!owned)
+        if (!ownedRelations.TryGetValue(existing.Id, out var relation))
         {
             plan.AddOperation(
                 Area,
@@ -295,15 +302,8 @@ public class AkeneoProductTierPriceSynchronizer(
             mapped.Mapping.IsRequired,
             async _ =>
             {
-                var relation = await managedRelationService.GetByRelationEntityAsync(
-                    syncProfileId.Value,
-                    AkeneoManagedRelationType.TierPrice,
-                    existing.Id);
-
                 await productService.DeleteTierPriceAsync(existing);
-
-                if (relation != null)
-                    await managedRelationService.DeleteAsync(relation);
+                await managedRelationService.DeleteAsync(relation);
 
                 context.Result.AddMessage($"Removed the {target} tier price.");
                 return true;

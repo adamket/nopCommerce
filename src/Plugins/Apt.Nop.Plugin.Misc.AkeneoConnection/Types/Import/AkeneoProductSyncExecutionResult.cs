@@ -44,6 +44,8 @@ public class AkeneoProductSyncExecutionResult
 
     public int LinkedAssetChangeCount { get; set; }
 
+    public int LinkedReferenceEntityChangeCount { get; set; }
+
     public int DuplicateCandidateCount { get; set; }
 
     public int ChangedProductModelCount { get; set; }

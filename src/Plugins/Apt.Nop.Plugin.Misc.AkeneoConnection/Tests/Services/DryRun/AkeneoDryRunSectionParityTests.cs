@@ -126,7 +126,7 @@ public class AkeneoDryRunSectionParityTests
         var model = new AkeneoProductMappingPreviewModel();
 
         var synchronizer = new AkeneoProductCoreSynchronizer(productService.Object, Mock.Of<IRepository<Product>>());
-        await new AkeneoDryRunProductCorePlanner(synchronizer)
+        await synchronizer
             .PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
 
@@ -158,7 +158,7 @@ public class AkeneoDryRunSectionParityTests
             productService.Object,
             Mock.Of<IRepository<Product>>(),
             urlRecordService.Object);
-        await new AkeneoDryRunSeoPlanner(synchronizer)
+        await synchronizer
             .PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
 
@@ -211,7 +211,7 @@ public class AkeneoDryRunSectionParityTests
             categoryService.Object,
             entityMappingService.Object,
             managedRelationService.Object);
-        var planner = new AkeneoDryRunCategoryPlanner(synchronizer);
+        var planner = synchronizer;
 
         await planner.PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
@@ -277,7 +277,7 @@ public class AkeneoDryRunSectionParityTests
             specificationService.Object,
             entityMappingService.Object,
             managedRelationService.Object);
-        var planner = new AkeneoDryRunSpecificationPlanner(synchronizer);
+        var planner = synchronizer;
 
         await planner.PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
@@ -423,7 +423,7 @@ public class AkeneoDryRunSectionParityTests
             entityMappingService.Object,
             managedRelationService.Object,
             familyMappingService.Object);
-        var planner = new AkeneoDryRunProductAttributePlanner(synchronizer);
+        var planner = synchronizer;
 
         await planner.PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
@@ -513,7 +513,7 @@ public class AkeneoDryRunSectionParityTests
 
         var synchronizer =
             new AkeneoProductCustomPropertySynchronizer(genericAttributeService.Object);
-        await new AkeneoDryRunCustomPropertyPlanner(synchronizer)
+        await synchronizer
             .PlanAsync(plannerContext, model);
         await synchronizer.SynchronizeAsync(writeContext);
 
@@ -642,7 +642,7 @@ public class AkeneoDryRunSectionParityTests
             Mock.Of<IRepository<Product>>(),
             urlRecordService.Object);
 
-        await new AkeneoDryRunProductCorePlanner(core)
+        await core
             .PlanAsync(context, model);
 
         foreach (var operation in model.Operations)
@@ -651,7 +651,7 @@ public class AkeneoDryRunSectionParityTests
             operation.Target = "Renamed core target";
         }
 
-        await new AkeneoDryRunSeoPlanner(seo)
+        await seo
             .PlanAsync(context, model);
 
         Assert.Multiple(() =>
@@ -743,7 +743,7 @@ public class AkeneoDryRunSectionParityTests
             videoService.Object,
             productService.Object,
             genericAttributeService.Object);
-        var planner = new AkeneoDryRunAssetPlanner(synchronizer);
+        var planner = synchronizer;
         var plannerContext = Context(new Product { Id = 10, Name = "Product" });
         plannerContext.Request.AssetSyncMode = AkeneoCollectionSyncMode.Merge;
         var writeContext = Context(new Product { Id = 10, Name = "Product" });
@@ -836,7 +836,7 @@ public class AkeneoDryRunSectionParityTests
             videoService.Object,
             productService.Object,
             genericAttributeService.Object);
-        var planner = new AkeneoDryRunAssetPlanner(synchronizer);
+        var planner = synchronizer;
         var plannerContext = Context(new Product { Id = 10, Name = "Product" });
         plannerContext.Request.AssetSyncMode = AkeneoCollectionSyncMode.ReplaceAll;
         var writeContext = Context(new Product { Id = 10, Name = "Product" });

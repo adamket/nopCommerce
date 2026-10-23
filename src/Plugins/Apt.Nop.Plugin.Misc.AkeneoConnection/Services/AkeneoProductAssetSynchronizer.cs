@@ -31,8 +31,7 @@ public sealed class AkeneoProductAssetSynchronizer(
     IProductService productService,
     IGenericAttributeService genericAttributeService)
     : IAkeneoProductSectionSynchronizer,
-      IAkeneoSectionDryRunPlanProvider,
-      IAkeneoAssetDryRunPlanProvider
+      IAkeneoSectionDryRunPlanProvider
 {
     public int Order => 550;
 

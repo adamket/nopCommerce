@@ -174,7 +174,7 @@ public class AkeneoProductCategorySynchronizerTests
 
         await _synchronizer.SynchronizeAsync(context);
 
-        Assert.That(context.Result.Warnings.Any(warning => warning.Contains("requires a sync profile", StringComparison.OrdinalIgnoreCase)), Is.True);
+        Assert.That(context.Result.Warnings.Any(warning => warning.Contains("requires a saved sync profile", StringComparison.OrdinalIgnoreCase)), Is.True);
         _categoryService.Verify(
             service => service.DeleteProductCategoryAsync(It.IsAny<ProductCategory>()),
             Times.Never);

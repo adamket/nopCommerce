@@ -337,7 +337,8 @@ public class AkeneoProductSyncService(
     public async Task<AkeneoProductSyncContext> PrepareFromIntentAsync(
         AkeneoResolvedProductIntent intent,
         AkeneoProductImportResult result,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AkeneoProductSyncState knownState = null)
     {
         ArgumentNullException.ThrowIfNull(intent);
         ArgumentNullException.ThrowIfNull(result);
@@ -358,7 +359,8 @@ public class AkeneoProductSyncService(
                 intent.Sku,
                 !string.IsNullOrWhiteSpace(intent.Source.Parent),
                 intent.Request,
-                result);
+                result,
+                knownState);
         }
 
         return new AkeneoProductSyncContext
@@ -1094,18 +1096,26 @@ public class AkeneoProductSyncService(
         string sku,
         bool isVariantLeaf,
         AkeneoProductImportRequest request,
-        AkeneoProductImportResult result)
+        AkeneoProductImportResult result,
+        AkeneoProductSyncState knownState = null)
     {
         AkeneoProductSyncState state = null;
 
         if (sourceEntityType == AkeneoEntityType.Product &&
             request.SyncProfileId.HasValue)
         {
-            state = await syncStateService.GetBySourceAsync(
-                request.SyncProfileId.Value,
-                sourceEntityType,
-                sourceCode,
-                sourceUuid);
+            state = AkeneoProductSyncStateService.IsStateFor(
+                    knownState,
+                    request.SyncProfileId.Value,
+                    sourceEntityType,
+                    sourceCode,
+                    sourceUuid)
+                ? knownState
+                : await syncStateService.GetBySourceAsync(
+                    request.SyncProfileId.Value,
+                    sourceEntityType,
+                    sourceCode,
+                    sourceUuid);
 
             if (state != null)
             {

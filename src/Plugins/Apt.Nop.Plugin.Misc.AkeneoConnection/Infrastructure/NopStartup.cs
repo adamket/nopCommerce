@@ -84,30 +84,22 @@ public class NopStartup : INopStartup
 
         services.AddScoped<AkeneoProductCoreSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductCoreSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductCoreSynchronizer>());
+            provider.GetRequiredService<AkeneoProductCoreSynchronizer>());
 
         services.AddScoped<AkeneoProductCategorySynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
+            provider.GetRequiredService<AkeneoProductCategorySynchronizer>());
 
         services.AddScoped<IAkeneoProductTagStore, AkeneoProductTagStore>();
         services.AddScoped<AkeneoProductTagSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductTagSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductTagSynchronizer>());
+            provider.GetRequiredService<AkeneoProductTagSynchronizer>());
 
         // One instance per scope: the batch run retries the related products it could not
         // resolve, which this section collects while the run's items are processed.
         services.AddScoped<AkeneoProductRelatedProductSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
+            provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
 
         services.AddScoped<
             IAkeneoFamilyMappingService,
@@ -120,50 +112,34 @@ public class NopStartup : INopStartup
 
         services.AddScoped<AkeneoProductSeoSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
+            provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
 
         services.AddScoped<AkeneoProductSpecificationSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());
+            provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());
 
         services.AddScoped<AkeneoProductAttributeSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
+            provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
 
         services.AddScoped<AkeneoProductAssetSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
-        services.AddScoped<IAkeneoAssetDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
+            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
 
         services.AddScoped<AkeneoProductCustomPropertySynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
+            provider.GetRequiredService<AkeneoProductCustomPropertySynchronizer>());
 
         services.AddScoped<AkeneoProductTierPriceSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
+            provider.GetRequiredService<AkeneoProductTierPriceSynchronizer>());
 
         services.AddScoped<AkeneoProductSearchJsonBuilder>();
         services.AddScoped<Services.CustomMappings.IAkeneoCustomMappingHandler, Services.CustomMappings.TierPriceTableMappingHandler>();
         services.AddScoped<Services.CustomMappings.AkeneoCustomMappingRegistry>();
         services.AddScoped<Services.CustomMappings.AkeneoCustomMappingSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<Services.CustomMappings.AkeneoCustomMappingSynchronizer>());
-        services.AddScoped<IAkeneoSectionDryRunPlanProvider>(provider =>
-            provider.GetRequiredService<Services.CustomMappings.AkeneoCustomMappingSynchronizer>());
+            provider.GetRequiredService<Services.CustomMappings.AkeneoCustomMappingSynchronizer>());
         services.AddScoped<IAkeneoTargetTypeResolver, AkeneoTargetTypeResolver>();
 
         services.AddTransient<AkeneoTransientRetryHandler>();

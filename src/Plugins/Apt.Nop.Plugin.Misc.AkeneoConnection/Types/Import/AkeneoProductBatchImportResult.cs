@@ -26,6 +26,8 @@ public class AkeneoProductBatchImportResult
 
     public int LinkedAssetChangeCount { get; set; }
 
+    public int LinkedReferenceEntityChangeCount { get; set; }
+
     public int DuplicateCandidateCount { get; set; }
 
     public int ChangedProductModelCount { get; set; }
@@ -48,7 +50,29 @@ public class AkeneoProductBatchImportResult
 
     public IList<string> SkippedSkuSample { get; } = new List<string>();
 
-    public IList<AkeneoProductImportResult> LoggedItemResults { get; } = new List<AkeneoProductImportResult>();
+    public const int MaxItemWarnings = 100;
+
+    private readonly HashSet<string> _seenItemWarnings = new(StringComparer.Ordinal);
+    private readonly List<string> _itemWarnings = new();
+
+    /// <summary>
+    /// Distinct item warnings in first-seen order, capped at
+    /// <see cref="MaxItemWarnings"/> so a long run does not keep every item
+    /// result in memory just to report its warnings.
+    /// </summary>
+    public IReadOnlyList<string> ItemWarnings => _itemWarnings;
+
+    public void AddItemWarnings(IEnumerable<string> warnings)
+    {
+        foreach (var warning in warnings ?? Enumerable.Empty<string>())
+        {
+            if (_itemWarnings.Count >= MaxItemWarnings)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(warning) && _seenItemWarnings.Add(warning))
+                _itemWarnings.Add(warning);
+        }
+    }
 
     public bool Success => !Canceled && !Errors.Any() && FailedCount == 0;
 

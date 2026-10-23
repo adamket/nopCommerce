@@ -235,8 +235,8 @@ public class AkeneoCombinationAvailabilityTests
         skip.Setup(x => x.GetSkipReasonAsync(source, It.IsAny<AkeneoProductImportRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(held ? "Held by profile" : null!);
         AkeneoProductImportResult? marked = null;
-        fixture.States.Setup(x => x.MarkSeenAsync(7, 23, AkeneoEntityType.Product, "SKU", "uuid", "model", It.IsAny<AkeneoProductImportResult>(), null))
-            .Callback<int, int, AkeneoEntityType, string, string, string, AkeneoProductImportResult, string>((_, _, _, _, _, _, result, _) => marked = result)
+        fixture.States.Setup(x => x.MarkSeenAsync(7, 23, AkeneoEntityType.Product, "SKU", "uuid", "model", It.IsAny<AkeneoProductImportResult>(), null, It.IsAny<AkeneoProductSyncState>()))
+            .Callback<int, int, AkeneoEntityType, string, string, string, AkeneoProductImportResult, string, AkeneoProductSyncState>((_, _, _, _, _, _, result, _, _) => marked = result)
             .ReturnsAsync(State());
         var batch = new AkeneoProductBatchSyncService(api.Object, Mock.Of<IAkeneoProductValueResolver>(MockBehavior.Strict),
             Mock.Of<IAkeneoNopEntityMappingService>(MockBehavior.Strict), Mock.Of<IAkeneoSyncItemLogService>(), fixture.Products.Object,

@@ -554,16 +554,13 @@ public class AkeneoProductSyncExecutionService(
             DirectProductChangeCount = result.DirectProductChangeCount,
             AncestorProductModelChangeCount = result.AncestorProductModelChangeCount,
             LinkedAssetChangeCount = result.LinkedAssetChangeCount,
+            LinkedReferenceEntityChangeCount = result.LinkedReferenceEntityChangeCount,
             DuplicateCandidateCount = result.DuplicateCandidateCount,
             ChangedProductModelCount = result.ChangedProductModelCount,
             DescendantProductModelCount = result.DescendantProductModelCount,
             ProductModelsReadCount = result.ProductModelsReadCount,
             Errors = result.Errors.ToList(),
-            Warnings = result.LoggedItemResults
-                .SelectMany(item => item.Warnings)
-                .Distinct(StringComparer.Ordinal)
-                .Take(100)
-                .ToList(),
+            Warnings = result.ItemWarnings.ToList(),
             Messages = result.Messages.ToList()
         };
     }

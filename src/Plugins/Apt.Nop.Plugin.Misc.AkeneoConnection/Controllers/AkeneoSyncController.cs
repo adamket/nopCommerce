@@ -239,6 +239,7 @@ public class AkeneoSyncController(
                 directProductChanges = result.DirectProductChangeCount,
                 ancestorProductModelChanges = result.AncestorProductModelChangeCount,
                 linkedAssetChanges = result.LinkedAssetChangeCount,
+                linkedReferenceEntityChanges = result.LinkedReferenceEntityChangeCount,
                 deduplicatedCandidates = result.DuplicateCandidateCount,
                 changedProductModels = result.ChangedProductModelCount,
                 descendantProductModels = result.DescendantProductModelCount,
