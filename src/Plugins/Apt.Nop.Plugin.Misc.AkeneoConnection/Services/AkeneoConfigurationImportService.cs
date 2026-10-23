@@ -58,6 +58,8 @@ public sealed class AkeneoConfigurationImportService(
                         "The custom handler source attribute is missing or incompatible.");
                     var handlerErrors = handler.Validate(mapping, attribute).ToList();
                     AkeneoConfigurationImportDocument.Require(handlerErrors.Count == 0, string.Join(" ", handlerErrors));
+                    if (handler.TargetsSpecificationAttribute)
+                        await RequireEntityAsync(specificationAttributes, mapping.NopTargetEntityId ?? 0);
                     break;
                 case NopTargetType.ProductAttribute:
                     await RequireEntityAsync(productAttributes, mapping.NopTargetEntityId ?? 0); break;

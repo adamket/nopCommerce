@@ -77,6 +77,7 @@ public class AkeneoMappingController(
         }
 
         await ValidateCustomHandlerAsync(model, fallbackSources.Count, errors);
+        await ValidateSpecificationHandlerOverlapAsync(model, errors);
         await ValidateTargetOverlapAsync(model, valueMode, errors);
 
         if (errors.Any())
@@ -237,14 +238,16 @@ public class AkeneoMappingController(
 
         // Only persist the entity id for target types that use one, so
         // switching targets cannot leave a stale destination id behind.
-        // (A tier price stores its customer role here.)
+        // (A tier price stores its customer role here; a handler that writes
+        // a specification attribute stores that attribute.)
         mapping.NopTargetEntityId =
             model.NopTargetTypeId ==
                 (int)NopTargetType.SpecificationAttribute ||
             model.NopTargetTypeId ==
                 (int)NopTargetType.ProductAttribute ||
             model.NopTargetTypeId ==
-                (int)NopTargetType.TierPrice
+                (int)NopTargetType.TierPrice ||
+            IsSpecificationHandler(model)
                 ? model.NopTargetEntityId
                 : null;
 
@@ -737,9 +740,52 @@ public class AkeneoMappingController(
             Id = model.Id, AkeneoAttributeCode = model.AkeneoAttributeCode,
             AkeneoFamilyCode = model.AkeneoFamilyCode, NopTargetTypeId = model.NopTargetTypeId,
             NopTargetKey = handler.Key, Locale = model.Locale, Channel = model.Channel,
-            IsRequired = model.IsRequired, EntityScopeId = model.EntityScopeId
+            IsRequired = model.IsRequired, EntityScopeId = model.EntityScopeId,
+            NopTargetEntityId = handler.TargetsSpecificationAttribute ? model.NopTargetEntityId : null,
+            AkeneoReferenceEntityCode = model.AkeneoReferenceEntityCode,
+            AkeneoReferenceEntityAttributeCode = model.AkeneoReferenceEntityAttributeCode
         };
         foreach (var error in handler.Validate(mapping, attribute)) errors.Add(error);
+    }
+
+    private bool IsSpecificationHandler(AkeneoAttributeMappingModel model) =>
+        model.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+        customHandlers?.Find(model.NopTargetKey)?.TargetsSpecificationAttribute == true;
+
+    /// <summary>
+    /// A specification attribute is written either by plain specification
+    /// mappings or by one specification handler, never both, in any scope the
+    /// two share: they would add and remove each other's options.
+    /// </summary>
+    private async Task ValidateSpecificationHandlerOverlapAsync(
+        AkeneoAttributeMappingModel model,
+        IList<string> errors)
+    {
+        var isHandler = IsSpecificationHandler(model);
+        if (!isHandler && model.NopTargetTypeId != (int)NopTargetType.SpecificationAttribute)
+            return;
+        if (model.NopTargetEntityId is not > 0)
+            return;
+
+        var requestedScope = AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(model.EntityScopeId);
+        var effectiveMappings = await attributeMappingService
+            .GetEffectiveMappingsAsync(model.AkeneoFamilyCode.TrimAndNormalizeText());
+
+        var conflict = effectiveMappings.Any(mapping =>
+            mapping.Id != model.Id &&
+            mapping.NopTargetEntityId == model.NopTargetEntityId &&
+            (AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScopeId(mapping.EntityScopeId) & requestedScope) != 0 &&
+            (isHandler
+                ? mapping.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute
+                : mapping.NopTargetTypeId == (int)NopTargetType.CustomHandler &&
+                  customHandlers?.Find(mapping.NopTargetKey)?.TargetsSpecificationAttribute == true));
+
+        if (conflict)
+        {
+            errors.Add(isHandler
+                ? "A specification mapping already writes this specification attribute. Remove it or pick another attribute for this handler."
+                : "A custom handler already writes this specification attribute. Remove that mapping or pick another attribute.");
+        }
     }
 
     private async Task ValidateReferenceEntityMappingAsync(

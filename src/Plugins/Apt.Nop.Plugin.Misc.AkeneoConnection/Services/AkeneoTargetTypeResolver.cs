@@ -48,6 +48,9 @@ public sealed class AkeneoTargetTypeResolver(
     public IReadOnlyList<NopTargetKeyOption> GetCustomHandlerOptions(AkeneoAttributeDefinition attribute) =>
         customHandlers?.GetCompatible(attribute).Select(h => new NopTargetKeyOption(h.Key, h.DisplayName)).ToList() ?? [];
 
+    public IReadOnlyList<string> GetSpecificationHandlerKeys() =>
+        customHandlers?.All.Where(h => h.TargetsSpecificationAttribute).Select(h => h.Key).ToList() ?? [];
+
     public AkeneoAttributeType ResolveAkeneoAttributeType(AkeneoAttributeDefinition attribute)
     {
         return attribute.Type.KeyPart() switch

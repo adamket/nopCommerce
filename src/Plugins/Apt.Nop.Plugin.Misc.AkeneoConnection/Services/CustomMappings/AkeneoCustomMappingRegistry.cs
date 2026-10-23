@@ -13,6 +13,7 @@ public sealed class AkeneoCustomMappingRegistry
     }
     public IAkeneoCustomMappingHandler Find(string key) =>
         key != null && _handlers.TryGetValue(key.Trim(), out var handler) ? handler : null;
+    public IEnumerable<IAkeneoCustomMappingHandler> All => _handlers.Values;
     public IEnumerable<IAkeneoCustomMappingHandler> GetCompatible(AkeneoAttributeDefinition attribute) =>
         _handlers.Values.Where(h => h.SupportedAkeneoTypes.Contains(attribute?.Type, StringComparer.OrdinalIgnoreCase))
             .OrderBy(h => h.DisplayName);

@@ -20,6 +20,9 @@ public class AkeneoAttributeMappingListModel
     public IList<SelectListItem> AvailableSpecificationAttributes { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> AvailableProductAttributes { get; set; } = new List<SelectListItem>();
 
+    /// <summary>Custom handlers whose mapping picks a specification attribute.</summary>
+    public IReadOnlyList<string> SpecificationHandlerKeys { get; set; } = [];
+
     /// <summary>nopCommerce customer roles, for Tier Price mappings.</summary>
     public IList<SelectListItem> AvailableCustomerRoles { get; set; } = new List<SelectListItem>();
     /// <summary>

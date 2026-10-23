@@ -31,6 +31,8 @@ public class AkeneoAttributeMappingModelFactory(
     {
         ArgumentNullException.ThrowIfNull(model);
 
+        model.SpecificationHandlerKeys = targetTypeResolver.GetSpecificationHandlerKeys();
+
         IReadOnlyList<AkeneoAttributeDefinition> akeneoAttributes;
         IReadOnlyList<AkeneoFamilyDefinition> akeneoFamilies;
         HashSet<string> currentAttributeCodes;

@@ -26,6 +26,7 @@
                 value = f.Value,
                 text = f.Text
             }).ToList(),
+        specificationHandlerKeys = Model.SpecificationHandlerKeys,
         targetTypes = new
         {
             ignore = (int)NopTargetType.Ignore,
@@ -748,6 +749,7 @@
                         selectedFamilyCode: appData.selectedFamilyCode || '',
                         availableFamilies: appData.availableFamilies || [],
                         targetTypes: appData.targetTypes,
+                        specificationHandlerKeys: appData.specificationHandlerKeys || [],
                         valueModes: valueModes,
                         targetKeyMap: targetKeyMap,
                         computedTargetTypes: appData.computedTargetTypes || [],
@@ -1011,6 +1013,12 @@
                     isCustomHandlerType: function (t) {
                         return Number(t) === this.targetTypes.customHandler;
                     },
+                    // A custom handler that writes a specification attribute picked on the row.
+                    isSpecHandler: function (mapping) {
+                        var key = String(mapping.nopTargetKey || '').toLowerCase();
+                        return this.isCustomHandlerType(mapping.nopTargetTypeId) &&
+                            this.specificationHandlerKeys.some(function (k) { return String(k).toLowerCase() === key; });
+                    },
                     targetSelection: function (mapping) {
                         return this.isCustomHandlerType(mapping.nopTargetTypeId)
                             ? 'custom:' + mapping.nopTargetKey : String(mapping.nopTargetTypeId);
@@ -1166,6 +1174,11 @@
                     detail: function (m) {
                         var t = Number(m.nopTargetTypeId);
 
+                        if (this.isSpecHandler(m)) {
+                            var sh = m.availableSpecificationAttributes.find(function (o) { return o.value === m.nopTargetEntityId; });
+                            return 'Custom mapping: ' + m.nopTargetKey + ' → ' +
+                                ((m.nopTargetEntityId && sh) ? sh.text : 'no specification attribute selected');
+                        }
                         if (this.isCustomHandlerType(t))
                             return 'Custom mapping: ' + m.nopTargetKey;
                         if (this.isKeyType(t)) {

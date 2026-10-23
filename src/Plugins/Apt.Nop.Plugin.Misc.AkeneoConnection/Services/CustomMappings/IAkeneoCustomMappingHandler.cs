@@ -14,6 +14,14 @@ public interface IAkeneoCustomMappingHandler
     string DisplayName { get; }
     IReadOnlyCollection<string> SupportedAkeneoTypes { get; }
     IEnumerable<string> Validate(AkeneoAttributeMapping mapping, AkeneoAttributeDefinition attribute);
+
+    /// <summary>
+    /// The mapping's NopTargetEntityId names the specification attribute this
+    /// handler writes: the mapping page shows a picker for it, and no plain
+    /// specification mapping may target the same attribute.
+    /// </summary>
+    bool TargetsSpecificationAttribute => false;
+
     Task PlanAsync(AkeneoCustomMappingContext context, AkeneoExecutableSectionPlan plan,
         CancellationToken cancellationToken = default);
 }

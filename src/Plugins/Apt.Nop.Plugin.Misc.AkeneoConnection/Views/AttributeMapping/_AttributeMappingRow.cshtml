@@ -255,7 +255,25 @@
                         Maps min_qty and tier_price to the entire product tier-price table.
                         Replaces existing tier prices only when different. Prices apply to all customers and stores.
                     </span>
+                    <span v-else-if="m.draft.nopTargetKey === 'hardiness-zone-range'">
+                        Reads hardiness_zone_low and hardiness_zone_high from the linked record and assigns every
+                        whole zone in between as an existing option of the specification attribute below
+                        (an option named "Hardiness Zone 3" is zone 3). Options are never created; a missing zone is skipped with a warning.
+                        Use "Record code" as the reference entity field.
+                    </span>
                     <span v-else>The selected handler receives this attribute's value.</span>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isSpecHandler(m.draft)">
+
+                    <label class="font-weight-bold mb-1">
+                        Specification Attribute
+                    </label>
+
+                    <akeneo-search-select class="akeneo-edit-specification-attribute" item-name="Specification attribute"
+                            v-model="m.draft.nopTargetEntityId"
+                            v-bind:options="dropdownOptions(m.availableSpecificationAttributes)"></akeneo-search-select>
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
