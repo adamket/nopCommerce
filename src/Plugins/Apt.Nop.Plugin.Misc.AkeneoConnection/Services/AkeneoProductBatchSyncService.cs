@@ -1351,7 +1351,7 @@ public class AkeneoProductBatchSyncService(
     {
         result.CombinationUnavailable = variantResult.CombinationUnavailable;
         if (variantResult.CombinationUnavailable)
-            result.AddMessage("Combination availability rule evaluated to false. No combination will be created; the parent is retained.");
+            result.AddMessage("Akeneo SKU is disabled. No combination will be created; the parent is retained.");
         result.NopProductId = variantResult.NopProductId ?? 0;
         result.NopParentProductId = variantResult.NopParentProductId;
         result.NopProductAttributeCombinationId =
@@ -1416,7 +1416,7 @@ public class AkeneoProductBatchSyncService(
             Locale = request.Locale,
             Channel = request.Channel,
             Currency = request.Currency,
-            CombinationAvailabilityCondition = AkeneoCombinationAvailabilityService.GetCondition(familyConfiguration)
+            ManageVariantsByEnabledStatus = AkeneoCombinationAvailabilityService.ManagesEnabledStatus(familyConfiguration)
         };
 
         context.Price = TryResolveDecimalTarget(
@@ -2470,12 +2470,12 @@ public class AkeneoProductBatchSyncService(
             context,
             cancellationToken);
 
-        var availabilityCondition = combinationAvailabilityService == null ? null
-            : await combinationAvailabilityService.GetConditionAsync(context.Source, cancellationToken);
+        var manageEnabledStatus = combinationAvailabilityService == null ? false
+            : await combinationAvailabilityService.ManagesEnabledStatusAsync(context.Source, cancellationToken);
         var payload = new
         {
             Version = 4,
-            CombinationAvailabilityCondition = availabilityCondition,
+            ManageVariantsByEnabledStatus = manageEnabledStatus,
             Request = BuildWritePolicyFingerprint(request),
             Representation = representation,
             Context = new
@@ -2487,8 +2487,6 @@ public class AkeneoProductBatchSyncService(
                 MappingEntityScope = (int)context.MappingEntityScope,
                 context.Sku,
                 SourceEnabled = context.Source.Enabled,
-                CombinationAvailabilityValues = string.IsNullOrWhiteSpace(availabilityCondition)
-                    ? (JsonElement?)null : context.Source.Values,
                 SourceParent = context.Source.Parent?.Trim()
             },
             MappedValues = context.MappedValues
@@ -2736,7 +2734,7 @@ public class AkeneoProductBatchSyncService(
         ? null
         : new
         {
-            configuration.CombinationAvailabilityCondition,
+            configuration.ManageVariantsByEnabledStatus,
             configuration.AkeneoFamilyCode,
             configuration.AkeneoFamilyVariantCode,
             configuration.Enabled,

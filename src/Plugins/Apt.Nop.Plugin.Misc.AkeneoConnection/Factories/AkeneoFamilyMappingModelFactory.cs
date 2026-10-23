@@ -67,7 +67,7 @@ public class AkeneoFamilyMappingModelFactory
             model.AkeneoFamilyCode = configuration.AkeneoFamilyCode;
             model.AkeneoFamilyVariantCode = configuration.AkeneoFamilyVariantCode;
             model.Enabled = configuration.Enabled;
-            model.CombinationAvailabilityCondition = configuration.CombinationAvailabilityCondition;
+            model.ManageVariantsByEnabledStatus = configuration.ManageVariantsByEnabledStatus;
             model.VariantRelationshipModeId = configuration.VariantRelationshipModeId;
             model.ProductModelHierarchyModeId = configuration.ProductModelHierarchyModeId;
             model.PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure;

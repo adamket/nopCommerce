@@ -54,6 +54,7 @@
                 uid: 'akeneo-combobox-' + instanceCounter,
                 search: '',
                 open: false,
+                menuStyle: { visibility: 'hidden' },
                 activeIndex: 0
             };
         },
@@ -121,18 +122,101 @@
                     : null;
             }
         },
+        watch: {
+            open: function (value) {
+                if (value) {
+                    this.menuStyle = { visibility: 'hidden' };
+                    window.addEventListener('resize', this.scheduleMenuPosition);
+                    document.addEventListener('scroll', this.onViewportScroll, true);
+                    if (window.visualViewport) {
+                        window.visualViewport.addEventListener('resize', this.scheduleMenuPosition);
+                        window.visualViewport.addEventListener('scroll', this.scheduleMenuPosition);
+                    }
+                    this.$nextTick(function () {
+                        if (!this.open) return;
+                        this.updateMenuPosition();
+                        if (window.ResizeObserver) {
+                            this.menuResizeObserver = new window.ResizeObserver(this.scheduleMenuPosition);
+                            this.menuResizeObserver.observe(this.$refs.control);
+                            this.menuResizeObserver.observe(this.$refs.menu);
+                        }
+                    }.bind(this));
+                } else {
+                    this.stopMenuPositioning();
+                }
+            },
+            filtered: function () { this.$nextTick(this.scheduleMenuPosition); },
+            selected: function () { this.$nextTick(this.scheduleMenuPosition); },
+            disabled: function (value) { if (value) this.close(); }
+        },
         mounted: function () {
             this.onDocumentMouseDown = function (event) {
-                if (this.open && !this.$el.contains(event.target))
+                if (this.open && !this.$el.contains(event.target) &&
+                    !(this.$refs.menu && this.$refs.menu.contains(event.target)))
                     this.close();
             }.bind(this);
 
             document.addEventListener('mousedown', this.onDocumentMouseDown);
+            document.addEventListener('focusin', this.onDocumentMouseDown);
         },
         beforeUnmount: function () {
             document.removeEventListener('mousedown', this.onDocumentMouseDown);
+            document.removeEventListener('focusin', this.onDocumentMouseDown);
+            this.stopMenuPositioning();
         },
         methods: {
+            onViewportScroll: function (event) {
+                // Scrolling the options must not move the menu or reset its scroll position.
+                if (this.$refs.menu && this.$refs.menu.contains(event.target)) return;
+                this.scheduleMenuPosition();
+            },
+            scheduleMenuPosition: function () {
+                if (!this.open || this.menuPositionFrame) return;
+                this.menuPositionFrame = window.requestAnimationFrame(function () {
+                    this.menuPositionFrame = null;
+                    this.updateMenuPosition();
+                }.bind(this));
+            },
+            stopMenuPositioning: function () {
+                window.removeEventListener('resize', this.scheduleMenuPosition);
+                document.removeEventListener('scroll', this.onViewportScroll, true);
+                if (window.visualViewport) {
+                    window.visualViewport.removeEventListener('resize', this.scheduleMenuPosition);
+                    window.visualViewport.removeEventListener('scroll', this.scheduleMenuPosition);
+                }
+                if (this.menuResizeObserver) this.menuResizeObserver.disconnect();
+                this.menuResizeObserver = null;
+                if (this.menuPositionFrame) window.cancelAnimationFrame(this.menuPositionFrame);
+                this.menuPositionFrame = null;
+            },
+            updateMenuPosition: function () {
+                if (!this.open || !this.$refs.control || !this.$refs.menu) return;
+                var rect = this.$refs.control.getBoundingClientRect();
+                var viewport = window.visualViewport;
+                var x = viewport ? viewport.offsetLeft : 0;
+                var y = viewport ? viewport.offsetTop : 0;
+                var width = viewport ? viewport.width : window.innerWidth;
+                var height = viewport ? viewport.height : window.innerHeight;
+                var margin = 8, gap = 6;
+                if (!rect.width || !rect.height || rect.bottom <= y || rect.top >= y + height ||
+                    rect.right <= x || rect.left >= x + width) {
+                    this.close();
+                    return;
+                }
+                var menuWidth = Math.min(rect.width, Math.max(0, width - margin * 2));
+                var left = Math.max(x + margin, Math.min(rect.left, x + width - margin - menuWidth));
+                var below = Math.max(0, y + height - margin - rect.bottom - gap);
+                var above = Math.max(0, rect.top - gap - y - margin);
+                var desiredHeight = Math.min(300, this.$refs.menu.scrollHeight + 2);
+                var opensAbove = below < desiredHeight && above > below;
+                var maxHeight = Math.min(300, opensAbove ? above : below);
+                var menuHeight = Math.min(desiredHeight, maxHeight);
+                this.menuStyle = {
+                    visibility: 'visible', width: menuWidth + 'px', left: left + 'px',
+                    top: (opensAbove ? rect.top - gap - menuHeight : rect.bottom + gap) + 'px',
+                    maxHeight: maxHeight + 'px'
+                };
+            },
             optionId: function (index) {
                 return this.uid + '-option-' + index;
             },
@@ -309,7 +393,7 @@
         template: `
 <div class="akeneo-combobox"
      v-bind:class="{ 'is-open': open, 'is-disabled': disabled, 'is-single': !multiple }">
-    <div class="akeneo-combobox-control"
+    <div ref="control" class="akeneo-combobox-control"
          v-on:mousedown.self.prevent="focusInput">
         <span class="akeneo-combobox-chip"
               v-show="multiple"
@@ -360,7 +444,11 @@
         </span>
     </div>
 
-    <ul class="akeneo-combobox-menu"
+    <teleport to="body">
+    <div v-if="open" class="akeneo-connection akeneo-combobox-overlay">
+    <div class="akeneo-combobox" v-bind:class="{ 'is-single': !multiple }">
+    <ul ref="menu" class="akeneo-combobox-menu akeneo-combobox-floating-menu"
+        v-bind:style="menuStyle"
         role="listbox"
         v-bind:id="uid + '-listbox'"
         v-bind:aria-multiselectable="multiple ? 'true' : 'false'"
@@ -390,6 +478,9 @@
             <template v-else>{{ emptyText }}</template>
         </li>
     </ul>
+    </div>
+    </div>
+    </teleport>
 </div>`
     };
 })();

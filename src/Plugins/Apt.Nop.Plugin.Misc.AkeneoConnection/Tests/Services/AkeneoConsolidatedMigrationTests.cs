@@ -59,7 +59,7 @@ public class AkeneoConsolidatedMigrationTests
     [Test]
     public void Older_schema_gets_every_consolidated_column_with_original_defaults()
     {
-        var columns = new[] { "ApplyWhen", "SkipRulesJson", "CombinationAvailabilityCondition", "TagSyncModeId", "RelatedProductSyncModeId",
+        var columns = new[] { "ApplyWhen", "SkipRulesJson", "ManageVariantsByEnabledStatus", "TagSyncModeId", "RelatedProductSyncModeId",
             "RelatedProductAssociationType", "SyncLogRetentionEnabled", "SyncItemLogRetentionDays", "SyncRunRecordRetentionDays" };
         var created = Plan(true, columns).OfType<CreateColumnExpression>().ToList();
         Assert.That(created.Select(x => x.Column.Name), Is.EquivalentTo(columns));
@@ -74,6 +74,18 @@ public class AkeneoConsolidatedMigrationTests
         var expressions = Plan(false);
         Assert.That(expressions.OfType<CreateTableExpression>().Count(), Is.GreaterThan(0));
         Assert.That(expressions.OfType<CreateColumnExpression>(), Is.Empty);
-        Assert.That(expressions.OfType<CreateTableExpression>().SelectMany(x => x.Columns).Any(x => x.Name == "CombinationAvailabilityCondition"), Is.True);
+        Assert.That(expressions.OfType<CreateTableExpression>().SelectMany(x => x.Columns).Any(x => x.Name == "ManageVariantsByEnabledStatus"), Is.True);
+    }
+
+    [TestCase("enabled == true", true)]
+    [TestCase("{enabled != false}", true)]
+    [TestCase("(Enabled == \"true\")", true)]
+    [TestCase("enabled == false", false)]
+    [TestCase("sync_status == published", false)]
+    [TestCase(null, false)]
+    [TestCase("", false)]
+    public void Legacy_migration_only_enables_the_toggle_for_equivalent_enabled_status_rules(string? condition, bool expected)
+    {
+        Assert.That(AkeneoConnectionMigration.IsLegacyEnabledStatusCondition(condition!), Is.EqualTo(expected));
     }
 }

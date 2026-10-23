@@ -26,7 +26,7 @@ public class AkeneoCombinationAvailabilityTests
             Values = JsonSerializer.SerializeToElement(new { })
         },
         SyncProfileId = 7, SyncRunRecordId = 23, ExistingProductAttributeCombinationId = combinationId,
-        CombinationAvailabilityCondition = "enabled == true"
+        ManageVariantsByEnabledStatus = true
     };
 
     private static AkeneoProductSyncState State() => new()
@@ -47,7 +47,7 @@ public class AkeneoCombinationAvailabilityTests
         public readonly List<ProductAttributeCombination> Combinations = new();
         public readonly List<ProductAttributeValue> Values = new();
         public readonly List<AkeneoFamilyMapping> Families = new() { new() { AkeneoFamilyCode = "family", Enabled = true,
-            VariantRelationshipMode = AkeneoVariantRelationshipMode.ProductAttributeCombinations, CombinationAvailabilityCondition = "enabled == true" } };
+            VariantRelationshipMode = AkeneoVariantRelationshipMode.ProductAttributeCombinations, ManageVariantsByEnabledStatus = true } };
         public readonly Mock<IAkeneoApiClient> Api = new();
         public readonly AkeneoCombinationAvailabilityService Service;
         public Fixture()
@@ -69,7 +69,7 @@ public class AkeneoCombinationAvailabilityTests
             var families = new Mock<IAkeneoFamilyMappingService>();
             families.Setup(x => x.GetAllAsync()).ReturnsAsync(Families);
             Api.Setup(x => x.GetProductModelByCodeAsync("model", It.IsAny<CancellationToken>())).ReturnsAsync(new AkeneoProductDefinition { Code = "model", FamilyVariant = "sizes" });
-            Service = new(new AkeneoValueTemplateRenderer(new AkeneoProductValueResolver()), States.Object, Products.Object,
+            Service = new(States.Object, Products.Object,
                 Attributes.Object, Relations.Object, new AkeneoManagedVariantCleanupService(Attributes.Object, Relations.Object), families.Object, Api.Object);
         }
     }
@@ -83,16 +83,6 @@ public class AkeneoCombinationAvailabilityTests
     }
 
     [Test]
-    public async Task Availability_uses_source_identifier_before_and_after_destination_mapping()
-    {
-        var fixture = new Fixture();
-        var context = Context(true);
-        context.Sku = "mapped-destination-sku";
-        context.CombinationAvailabilityCondition = "sku == SKU";
-        Assert.That(await fixture.Service.IsAvailableAsync(context), Is.True);
-    }
-
-    [Test]
     public void Missing_enabled_value_blocks_instead_of_deleting()
     {
         var fixture = new Fixture();
@@ -100,12 +90,12 @@ public class AkeneoCombinationAvailabilityTests
         fixture.Attributes.VerifyNoOtherCalls();
     }
 
+    [TestCase(true)]
+    [TestCase(false)]
     [TestCase(null)]
-    [TestCase("")]
-    [TestCase("   ")]
-    public async Task Blank_rule_preserves_previous_behavior(string? condition)
+    public async Task Disabled_setting_ignores_akeneo_status(bool? enabled)
     {
-        var fixture = new Fixture(); var context = Context(false); context.CombinationAvailabilityCondition = condition!;
+        var fixture = new Fixture(); var context = Context(enabled); context.ManageVariantsByEnabledStatus = false;
         Assert.That(await fixture.Service.IsAvailableAsync(context), Is.True);
     }
 
@@ -113,19 +103,13 @@ public class AkeneoCombinationAvailabilityTests
     [TestCase(AkeneoProductEnabledFilter.DisabledOnly)]
     public void Availability_rejects_filters_that_hide_one_side_of_the_transition(AkeneoProductEnabledFilter filter)
     {
-        Assert.Throws<ArgumentException>(() => AkeneoCombinationAvailabilityService.ValidateConfiguration("enabled == true", filter));
-    }
-
-    [Test]
-    public void Invalid_rule_is_rejected_before_saving_or_running()
-    {
-        Assert.Throws<ArgumentException>(() => AkeneoCombinationAvailabilityService.ValidateConfiguration("enabled = true", AkeneoProductEnabledFilter.Any));
+        Assert.Throws<ArgumentException>(() => AkeneoCombinationAvailabilityService.ValidateConfiguration(true, filter));
     }
 
     [Test]
     public void Availability_cannot_bypass_create_only_write_policy()
     {
-        Assert.Throws<ArgumentException>(() => AkeneoCombinationAvailabilityService.ValidateConfiguration("enabled == true", AkeneoProductEnabledFilter.Any, false));
+        Assert.Throws<ArgumentException>(() => AkeneoCombinationAvailabilityService.ValidateConfiguration(true, AkeneoProductEnabledFilter.Any, false));
     }
 
     [Test]
@@ -317,12 +301,12 @@ public class AkeneoCombinationAvailabilityTests
     public async Task Family_variant_rule_overrides_default_including_a_blank_rule()
     {
         var fixture = new Fixture();
-        Assert.That(await fixture.Service.GetConditionAsync(Context(false).SourceProduct), Is.EqualTo("enabled == true"));
+        Assert.That(await fixture.Service.ManagesEnabledStatusAsync(Context(false).SourceProduct), Is.True);
         fixture.Families.Add(new AkeneoFamilyMapping { AkeneoFamilyCode = "family", AkeneoFamilyVariantCode = "sizes", Enabled = true,
             VariantRelationshipMode = AkeneoVariantRelationshipMode.ProductAttributeCombinations });
-        Assert.That(await fixture.Service.GetConditionAsync(Context(false).SourceProduct), Is.Null);
-        fixture.Families[1].CombinationAvailabilityCondition = "enabled != false";
-        Assert.That(await fixture.Service.GetConditionAsync(Context(false).SourceProduct), Is.EqualTo("enabled != false"));
+        Assert.That(await fixture.Service.ManagesEnabledStatusAsync(Context(false).SourceProduct), Is.False);
+        fixture.Families[1].ManageVariantsByEnabledStatus = true;
+        Assert.That(await fixture.Service.ManagesEnabledStatusAsync(Context(false).SourceProduct), Is.True);
         fixture.Api.Verify(x => x.GetProductModelByCodeAsync("model", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -332,7 +316,7 @@ public class AkeneoCombinationAvailabilityTests
         var fixture = new Fixture();
         fixture.Api.Setup(x => x.GetProductModelByCodeAsync("model", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AkeneoProductDefinition { Code = "model" });
-        Assert.ThrowsAsync<NopException>(() => fixture.Service.GetConditionAsync(Context(false).SourceProduct));
+        Assert.ThrowsAsync<NopException>(() => fixture.Service.ManagesEnabledStatusAsync(Context(false).SourceProduct));
     }
 
     [Test]
@@ -340,10 +324,10 @@ public class AkeneoCombinationAvailabilityTests
     {
         var fixture = new Fixture(); var source = Context(false).SourceProduct;
         source.Parent = null!;
-        Assert.That(await fixture.Service.GetConditionAsync(source), Is.Null);
+        Assert.That(await fixture.Service.ManagesEnabledStatusAsync(source), Is.False);
         source.Parent = "model";
         fixture.Families[0].VariantRelationshipMode = AkeneoVariantRelationshipMode.GroupedProducts;
-        Assert.That(await fixture.Service.GetConditionAsync(source), Is.Null);
+        Assert.That(await fixture.Service.ManagesEnabledStatusAsync(source), Is.False);
         fixture.Api.VerifyNoOtherCalls();
     }
 
@@ -361,7 +345,7 @@ public class AkeneoCombinationAvailabilityTests
     {
         var fixture = new Fixture();
         var before = await fixture.Service.GetConfigurationFingerprintAsync(new[] { "family" });
-        fixture.Families[0].CombinationAvailabilityCondition = null!;
+        fixture.Families[0].ManageVariantsByEnabledStatus = false;
         Assert.That(await fixture.Service.GetConfigurationFingerprintAsync(new[] { "family" }), Is.Not.EqualTo(before));
     }
 

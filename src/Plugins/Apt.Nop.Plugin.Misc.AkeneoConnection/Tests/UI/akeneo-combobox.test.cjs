@@ -4,7 +4,10 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const componentPath = process.env.AKENEO_COMBOBOX_SCRIPT || path.join(__dirname, '../../Content/Scripts/akeneo-combobox.js');
-const context = { window: {} };
+const listeners = new Map();
+const context = { window: { innerWidth: 1000, innerHeight: 700,
+    addEventListener() {}, removeEventListener() {}, cancelAnimationFrame() {} },
+    document: { addEventListener(name, callback) { listeners.set(name, callback); }, removeEventListener(name) { listeners.delete(name); } } };
 vm.runInNewContext(readFileSync(componentPath, 'utf8'), context);
 const definition = context.window.AkeneoCombobox;
 
@@ -90,4 +93,49 @@ test('disabled controls cannot change selection', () => {
     app.remove('trees');
     app.onKeydown({ key: 'Enter', preventDefault() {} });
     assert.equal(events.length, 0);
+});
+
+function positioned(rect, menuHeight = 300) {
+    const { app } = combobox();
+    app.open = true;
+    app.$refs.control = { getBoundingClientRect: () => rect };
+    app.$refs.menu = { scrollHeight: menuHeight - 2, contains: target => target === 'option' };
+    app.updateMenuPosition();
+    return app;
+}
+
+test('menu is placed outside clipping containers and flips above a low control', () => {
+    const app = positioned({ left: 100, right: 400, top: 600, bottom: 640, width: 300, height: 40 });
+    assert.equal(app.menuStyle.top, '294px');
+    assert.equal(app.menuStyle.left, '100px');
+    assert.equal(app.menuStyle.width, '300px');
+    assert.match(definition.template, /<teleport to="body">/);
+});
+
+test('menu opens below when it fits and stays within the viewport horizontally', () => {
+    const app = positioned({ left: 900, right: 1200, top: 30, bottom: 70, width: 300, height: 40 });
+    assert.equal(app.menuStyle.top, '76px');
+    assert.equal(app.menuStyle.left, '692px');
+});
+
+test('limited space constrains menu height and offscreen anchors close the menu', () => {
+    context.window.innerHeight = 400;
+    const app = positioned({ left: 100, right: 400, top: 180, bottom: 220, width: 300, height: 40 });
+    assert.equal(app.menuStyle.maxHeight, '166px');
+    context.window.innerHeight = 700;
+    app.$refs.control.getBoundingClientRect = () => ({ left: 100, right: 400, top: -90, bottom: -50, width: 300, height: 40 });
+    app.updateMenuPosition();
+    assert.equal(app.open, false);
+});
+
+test('clicking teleported options keeps the menu open and outside clicks close it', () => {
+    const app = positioned({ left: 100, right: 400, top: 30, bottom: 70, width: 300, height: 40 });
+    app.$el = { contains: target => target === 'input' };
+    definition.mounted.call(app);
+    listeners.get('mousedown')({ target: 'option' });
+    assert.equal(app.open, true);
+    listeners.get('mousedown')({ target: 'outside' });
+    assert.equal(app.open, false);
+    definition.beforeUnmount.call(app);
+    assert.equal(listeners.size, 0);
 });

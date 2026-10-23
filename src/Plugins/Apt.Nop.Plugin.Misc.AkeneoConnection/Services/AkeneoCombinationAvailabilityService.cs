@@ -9,7 +9,6 @@ using Nop.Services.Catalog;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public sealed class AkeneoCombinationAvailabilityService(
-    IAkeneoValueTemplateRenderer renderer,
     IAkeneoProductSyncStateService syncStateService,
     IProductService productService,
     IProductAttributeService productAttributeService,
@@ -22,15 +21,15 @@ public sealed class AkeneoCombinationAvailabilityService(
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<AkeneoProductDefinition>> _parents = new(StringComparer.OrdinalIgnoreCase);
     private Task<IList<AkeneoFamilyMapping>> GetMappingsAsync() => _mappings ??= familyMappingService.GetAllAsync();
 
-    public static string GetCondition(AkeneoFamilyMapping mapping) => mapping is { Enabled: true,
+    public static bool ManagesEnabledStatus(AkeneoFamilyMapping mapping) => mapping is { Enabled: true,
         VariantRelationshipMode: AkeneoVariantRelationshipMode.ProductAttributeCombinations }
-        ? mapping.CombinationAvailabilityCondition?.Trim() : null;
+        && mapping.ManageVariantsByEnabledStatus;
 
-    public async Task<string> GetConditionAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default)
+    public async Task<bool> ManagesEnabledStatusAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(source.Parent)) return null;
+        if (string.IsNullOrWhiteSpace(source.Parent)) return false;
         var mappings = (await GetMappingsAsync()).Where(m => string.Equals(m.AkeneoFamilyCode, source.Family, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (!mappings.Any(m => !string.IsNullOrWhiteSpace(GetCondition(m)))) return null;
+        if (!mappings.Any(ManagesEnabledStatus)) return false;
         // Akeneo leaves do not carry family_variant; resolve the immediate model, never guess a family default.
         var parent = await _parents.GetOrAdd(source.Parent, code => apiClient.GetProductModelByCodeAsync(code, cancellationToken));
         var resolution = Helpers.AkeneoLeafFamilyVariantResolver.Resolve(source, parent == null
@@ -38,7 +37,7 @@ public sealed class AkeneoCombinationAvailabilityService(
         if (!resolution.Success) throw new NopException(resolution.Error);
         var mapping = mappings.FirstOrDefault(m => m.Enabled && string.Equals(m.AkeneoFamilyVariantCode?.Trim(), resolution.FamilyVariantCode, StringComparison.OrdinalIgnoreCase))
             ?? mappings.FirstOrDefault(m => m.Enabled && string.IsNullOrWhiteSpace(m.AkeneoFamilyVariantCode));
-        return GetCondition(mapping);
+        return ManagesEnabledStatus(mapping);
     }
 
     private async Task<IList<AkeneoFamilyMapping>> GetApplicableMappingsAsync(IEnumerable<string> familyCodes)
@@ -51,7 +50,7 @@ public sealed class AkeneoCombinationAvailabilityService(
     {
         foreach (var mapping in await GetApplicableMappingsAsync(familyCodes))
         {
-            try { ValidateConfiguration(GetCondition(mapping), enabledFilter, allowUpdates); }
+            try { ValidateConfiguration(ManagesEnabledStatus(mapping), enabledFilter, allowUpdates); }
             catch (ArgumentException ex) { throw new ArgumentException($"Family mapping '{mapping.AkeneoFamilyCode}/{mapping.AkeneoFamilyVariantCode}': {ex.Message}", ex); }
         }
     }
@@ -59,43 +58,32 @@ public sealed class AkeneoCombinationAvailabilityService(
     public async Task<string> GetConfigurationFingerprintAsync(IEnumerable<string> familyCodes) =>
         System.Text.Json.JsonSerializer.Serialize((await GetApplicableMappingsAsync(familyCodes))
             .OrderBy(m => m.AkeneoFamilyCode, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.AkeneoFamilyVariantCode, StringComparer.OrdinalIgnoreCase)
-            .Select(m => new { m.AkeneoFamilyCode, m.AkeneoFamilyVariantCode, m.Enabled, m.VariantRelationshipModeId, Condition = GetCondition(m) }));
+            .Select(m => new { m.AkeneoFamilyCode, m.AkeneoFamilyVariantCode, m.Enabled, m.VariantRelationshipModeId, ManageVariantsByEnabledStatus = ManagesEnabledStatus(m) }));
 
-    public static void ValidateConfiguration(string condition, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates = true)
+    public static void ValidateConfiguration(bool manageEnabledStatus, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates = true)
     {
-        if (string.IsNullOrWhiteSpace(condition)) return;
-        var validation = AkeneoMappingCondition.Validate(condition,
-            new AkeneoValueTemplateRenderer(new AkeneoProductValueResolver()));
-        if (!validation.Success)
-            throw new ArgumentException("Invalid combination availability condition: " + string.Join(" ", validation.Errors));
+        if (!manageEnabledStatus) return;
         if (enabledFilter != AkeneoProductEnabledFilter.Any)
             throw new ArgumentException("Combination availability requires the product enabled filter to be Any, so both disabled and re-enabled SKUs are processed.");
         if (!allowUpdates)
             throw new ArgumentException("Combination availability requires a write mode that allows updates, because removing an existing combination is an update.");
     }
 
-    public async Task<bool> IsAvailableAsync(AkeneoVariantImportContext context, CancellationToken cancellationToken = default)
+    public Task<bool> IsAvailableAsync(AkeneoVariantImportContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(context.CombinationAvailabilityCondition)) return true;
-        var evaluated = await AkeneoMappingCondition.EvaluateAsync(context.CombinationAvailabilityCondition, renderer,
-            new AkeneoValueTemplateContext
-            {
-                Source = context.SourceProduct, Locale = context.Locale, Channel = context.Channel,
-                // Use source metadata consistently, including before destination mappings are prepared.
-                Currency = context.Currency, Sku = context.SourceProduct?.Identifier,
-                FamilyCode = context.SourceProduct?.Family, FamilyVariantCode = context.SourceProduct?.FamilyVariant
-            }, cancellationToken);
-        if (!evaluated.Success)
-            throw new NopException($"Combination availability could not be evaluated for '{context.AkeneoIdentifier ?? context.AkeneoUuid}': {evaluated.Error}. No combination changes were made.");
-        return evaluated.Matches;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!context.ManageVariantsByEnabledStatus) return Task.FromResult(true);
+        if (context.SourceProduct?.Enabled is not bool enabled)
+            throw new NopException($"Akeneo enabled status is missing for '{context.AkeneoIdentifier ?? context.AkeneoUuid}'. No combination changes were made.");
+        return Task.FromResult(enabled);
     }
 
     public async Task<AkeneoUnavailableCombinationPlan> GetUnavailableBindingAsync(
         AkeneoProductDefinition source, AkeneoProductImportRequest request, CancellationToken cancellationToken = default)
     {
         if (!request.SyncProfileId.HasValue || string.IsNullOrWhiteSpace(source.Parent)) return null;
-        var condition = await GetConditionAsync(source, cancellationToken);
-        if (string.IsNullOrWhiteSpace(condition)) return null;
+        var manageEnabledStatus = await ManagesEnabledStatusAsync(source, cancellationToken);
+        if (!manageEnabledStatus) return null;
         var state = await syncStateService.GetBySourceAsync(request.SyncProfileId.Value,
             AkeneoEntityType.Product, source.Identifier, source.Uuid);
         if (state == null || state.DestinationKindId != (int)AkeneoProductDestinationKind.ProductAttributeCombination)
@@ -107,7 +95,7 @@ public sealed class AkeneoCombinationAvailabilityService(
             Sku = source.Identifier, Locale = request.Locale, Channel = request.Channel, Currency = request.Currency,
             SyncProfileId = request.SyncProfileId, SyncRunRecordId = request.SyncRunRecordId,
             ExistingProductAttributeCombinationId = state.NopProductAttributeCombinationId,
-            CombinationAvailabilityCondition = condition
+            ManageVariantsByEnabledStatus = manageEnabledStatus
         };
         if (await IsAvailableAsync(context, cancellationToken)) return null;
         var parent = await productService.GetProductByIdAsync(state.NopProductId);

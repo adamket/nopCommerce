@@ -14,7 +14,7 @@ function editor(overrides = {}) {
     let app;
     vm.runInNewContext(script, {
         initialData: { axisMappings: [], subModelRules: [], variantRelationshipModeId: 10,
-            combinationAvailabilityEnabled: true, combinationAvailabilityCondition: ' enabled == true ', ...overrides },
+            manageVariantsByEnabledStatus: true, ...overrides },
         window: { AkeneoCombobox: {} },
         Vue: { createApp(options) {
             app = options.data();
@@ -26,22 +26,28 @@ function editor(overrides = {}) {
     return app;
 }
 
-test('family form posts its trimmed condition and clearing the toggle clears the saved value', () => {
+test('family form posts the enabled-status toggle as true or false', () => {
     const app = editor();
-    assert.equal(app.combinationAvailabilityValue, 'enabled == true');
-    app.form.combinationAvailabilityEnabled = false;
-    assert.equal(app.combinationAvailabilityValue, '');
-    assert.match(view, /name="CombinationAvailabilityCondition" v-bind:value="combinationAvailabilityValue"/);
+    assert.equal(app.manageVariantsByEnabledStatusValue, 'true');
+    app.form.manageVariantsByEnabledStatus = false;
+    assert.equal(app.manageVariantsByEnabledStatusValue, 'false');
+    assert.match(view, /name="ManageVariantsByEnabledStatus" v-bind:value="manageVariantsByEnabledStatusValue"/);
 });
 
 test('switching to a different representation clears combination availability', () => {
     const app = editor();
     app.form.variantRelationshipModeId = 30;
     assert.equal(app.isCombinationMode, false);
-    assert.equal(app.combinationAvailabilityValue, '');
+    assert.equal(app.manageVariantsByEnabledStatusValue, 'false');
 });
 
-test('blank or absent saved condition remains disabled', () => {
-    const app = editor({ combinationAvailabilityEnabled: false, combinationAvailabilityCondition: '' });
-    assert.equal(app.combinationAvailabilityValue, '');
+test('disabled setting stays off', () => {
+    const app = editor({ manageVariantsByEnabledStatus: false });
+    assert.equal(app.manageVariantsByEnabledStatusValue, 'false');
+});
+
+test('family editor offers one toggle without a condition template', () => {
+ assert.equal(view.includes('fm-combination-availability'), false);
+ assert.equal(view.includes('Available when'), false);
+ assert.match(view, /Manage variants by Akeneo enabled status/);
 });

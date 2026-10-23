@@ -185,7 +185,7 @@ public sealed class AkeneoProductMappingFactory(
                     {
                         Area = "Variant relationship", Target = "Attribute combination",
                         ChangeType = removes ? AkeneoDryRunOperationType.Remove : AkeneoDryRunOperationType.Skip,
-                        Detail = $"Availability condition '{unavailable.Context.CombinationAvailabilityCondition}' evaluated to false. {model.ParentProductDecision}"
+                        Detail = $"Akeneo SKU is disabled. {model.ParentProductDecision}"
                     });
                     return model;
                 }
@@ -194,7 +194,7 @@ public sealed class AkeneoProductMappingFactory(
             {
                 model.Errors.Add(ex.Message);
                 model.ImportAllowedByProfile = false;
-                model.Action = "Combination availability could not be evaluated; no changes will be made.";
+                model.Action = "Akeneo enabled status could not be evaluated; no changes will be made.";
                 return model;
             }
         }
@@ -289,7 +289,7 @@ public sealed class AkeneoProductMappingFactory(
                     AkeneoUuid = akeneoSource.Uuid, Sku = context.Sku,
                     AkeneoFamilyCode = akeneoSource.Family, AkeneoFamilyVariantCode = context.MappingFamilyVariantCode,
                     Locale = request.Locale, Channel = request.Channel, Currency = request.Currency,
-                    CombinationAvailabilityCondition = await combinationAvailabilityService.GetConditionAsync(akeneoSource, cancellationToken)
+                    ManageVariantsByEnabledStatus = await combinationAvailabilityService.ManagesEnabledStatusAsync(akeneoSource, cancellationToken)
                 }, cancellationToken))
                 {
                     model.Action = "Do not create unavailable attribute combination";
@@ -297,7 +297,7 @@ public sealed class AkeneoProductMappingFactory(
                     {
                         Area = "Variant relationship", Target = "Attribute combination",
                         ChangeType = AkeneoDryRunOperationType.Skip,
-                        Detail = "The availability condition is false. No combination or axis values will be created. Parent synchronization still follows the profile."
+                        Detail = "Akeneo SKU is disabled. No combination or axis values will be created. Parent synchronization still follows the profile."
                     });
                     return model;
                 }

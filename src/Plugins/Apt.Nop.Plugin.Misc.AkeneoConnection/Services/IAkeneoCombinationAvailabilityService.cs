@@ -8,7 +8,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public interface IAkeneoCombinationAvailabilityService
 {
-    Task<string> GetConditionAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default);
+    Task<bool> ManagesEnabledStatusAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default);
 
     Task ValidateRulesAsync(IEnumerable<string> familyCodes, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates);
 

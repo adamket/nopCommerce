@@ -2551,3 +2551,30 @@
     border-color: var(--ak-danger);
     color: #fff;
   }
+
+/* Shared dropdowns render at body level so cards, alerts, and animated rows
+   cannot clip or cover the list. Only the menu receives pointer events. */
+.akeneo-combobox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  pointer-events: none;
+}
+
+.akeneo-connection .akeneo-combobox-floating-menu {
+  position: fixed;
+  right: auto;
+  box-sizing: border-box;
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
+
+.akeneo-connection .akeneo-combobox-floating-menu .akeneo-combobox-option-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.akeneo-connection .akeneo-combobox-floating-menu .akeneo-combobox-option-code {
+  max-width: 40%;
+  overflow-wrap: anywhere;
+}

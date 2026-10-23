@@ -10,7 +10,7 @@ using Nop.Data.Migrations;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
 [NopMigration(
-    "2026-10-23 01:50:00",
+    "2026-10-23 02:15:00",
     "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration : Migration
@@ -924,16 +924,17 @@ public sealed class AkeneoConnectionMigration : Migration
 
     private void EnsureFamilyCombinationAvailabilitySchema()
     {
-        var familyTable = NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping));
-        var profileTable = NameCompatibilityManager.GetTableName(typeof(AkeneoSyncProfile));
-        const string column = nameof(AkeneoFamilyMapping.CombinationAvailabilityCondition);
-        // Only transfer legacy profile values when first introducing the family column.
-        // A rerun must preserve a condition deliberately cleared in the family editor.
+        var familyTable = GetTableName<AkeneoFamilyMapping>();
+        var profileTable = GetTableName<AkeneoSyncProfile>();
+        const string column = nameof(AkeneoFamilyMapping.ManageVariantsByEnabledStatus);
+        const string legacyColumn = "CombinationAvailabilityCondition";
+        // Transfer once, when adding the toggle. Never restore a setting later switched off.
         if (ColumnExists(familyTable, column)) return;
-        Create.Column(column).OnTable(familyTable).AsString(4000).Nullable();
+        Create.Column(column).OnTable(familyTable).AsBoolean().NotNullable().WithDefaultValue(false);
 
-        // Keep the legacy column as an inactive backup, especially when profiles disagree.
-        if (!Schema.Table(profileTable).Column(column).Exists()) return;
+        var hasFamilyCondition = Schema.Table(familyTable).Column(legacyColumn).Exists();
+        var hasProfileCondition = Schema.Table(profileTable).Column(legacyColumn).Exists();
+        if (!hasFamilyCondition && !hasProfileCondition) return;
         Execute.WithConnection((connection, transaction) =>
         {
             string Quote(string name) => connection.GetType().Name.Contains("MySql", StringComparison.OrdinalIgnoreCase)
@@ -941,27 +942,38 @@ public sealed class AkeneoConnectionMigration : Migration
                     ? $"\"{name}\"" : $"[{name}]";
             using var read = connection.CreateCommand();
             read.Transaction = transaction;
-            read.CommandText = $"SELECT {Quote("AkeneoFamilyCodes")}, {Quote(column)} FROM {Quote(profileTable)}";
             var profiles = new List<(string FamilyCodes, string Condition)>();
-            using (var reader = read.ExecuteReader())
+            if (!hasFamilyCondition && hasProfileCondition)
+            {
+                read.CommandText = $"SELECT {Quote("AkeneoFamilyCodes")}, {Quote(legacyColumn)} FROM {Quote(profileTable)}";
+                using var reader = read.ExecuteReader();
                 while (reader.Read()) profiles.Add((reader.IsDBNull(0) ? null : reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)));
-
-            read.CommandText = $"SELECT {Quote("Id")}, {Quote("AkeneoFamilyCode")} FROM {Quote(familyTable)} WHERE {Quote("VariantRelationshipModeId")} = {(int)AkeneoVariantRelationshipMode.ProductAttributeCombinations} AND ({Quote(column)} IS NULL OR {Quote(column)} = '')";
-            var families = new List<(int Id, string Code)>();
+            }
+            var legacyValue = hasFamilyCondition ? Quote(legacyColumn) : "NULL";
+            read.CommandText = $"SELECT {Quote("Id")}, {Quote("AkeneoFamilyCode")}, {legacyValue} FROM {Quote(familyTable)} WHERE {Quote("VariantRelationshipModeId")} = {(int)AkeneoVariantRelationshipMode.ProductAttributeCombinations}";
+            var families = new List<(int Id, string Code, string Condition)>();
             using (var reader = read.ExecuteReader())
-                while (reader.Read()) families.Add((Convert.ToInt32(reader.GetValue(0)), reader.GetString(1)));
+                while (reader.Read()) families.Add((Convert.ToInt32(reader.GetValue(0)), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2)));
             foreach (var family in families)
             {
-                var condition = SelectCondition(family.Code, profiles);
-                if (condition == null) continue;
+                var condition = hasFamilyCondition ? family.Condition : SelectCondition(family.Code, profiles);
+                if (!IsLegacyEnabledStatusCondition(condition)) continue;
                 using var update = connection.CreateCommand();
                 update.Transaction = transaction;
-                update.CommandText = $"UPDATE {Quote(familyTable)} SET {Quote(column)} = @condition WHERE {Quote("Id")} = @id";
-                var value = update.CreateParameter(); value.ParameterName = "@condition"; value.DbType = DbType.String; value.Value = condition;
+                update.CommandText = $"UPDATE {Quote(familyTable)} SET {Quote(column)} = @enabled WHERE {Quote("Id")} = @id";
+                var enabled = update.CreateParameter(); enabled.ParameterName = "@enabled"; enabled.DbType = DbType.Boolean; enabled.Value = true;
                 var id = update.CreateParameter(); id.ParameterName = "@id"; id.DbType = DbType.Int32; id.Value = family.Id;
-                update.Parameters.Add(value); update.Parameters.Add(id); update.ExecuteNonQuery();
+                update.Parameters.Add(enabled); update.Parameters.Add(id); update.ExecuteNonQuery();
             }
         });
+    }
+
+    public static bool IsLegacyEnabledStatusCondition(string condition)
+    {
+        var normalized = new string((condition ?? string.Empty).Where(c => !char.IsWhiteSpace(c)).ToArray())
+            .Trim('{', '}', '(', ')').Replace("\"", string.Empty).Replace("'", string.Empty);
+        return normalized.Equals("enabled==true", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("enabled!=false", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string SelectCondition(string familyCode, IEnumerable<(string FamilyCodes, string Condition)> profiles)

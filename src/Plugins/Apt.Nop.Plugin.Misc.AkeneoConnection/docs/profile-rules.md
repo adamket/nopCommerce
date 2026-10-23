@@ -93,43 +93,24 @@ cannot be edited or selected as new mapping sources. Removing a family override
 reveals its global mapping if one exists. No mappings are deleted automatically.
 ## Combination availability
 
-In **Family Mappings**, edit the family (or family-variant override), select
-**Product attribute combinations**, and enable **Control combination availability**.
-Enter `enabled == true` in **Available when**. The rule applies to every profile
-using that mapping. A blank rule preserves existing behavior. An enabled exact
-family-variant mapping replaces the family default, including when its rule is blank.
-Use the same boolean condition syntax as computed mapping Apply Only When.
-Profiles using a rule must select **Any** for the product enabled filter and a
-write mode that allows updates. Keep both enabled and disabled SKUs
-inside the other source filters, including completeness and advanced search.
+In **Family Mappings**, select **Product attribute combinations** and enable
+**Manage variants by Akeneo enabled status**. This is a single on/off setting;
+no template is required. It defaults to off. An enabled family-variant mapping
+replaces the family default, including when its toggle is off.
 
-For leaves represented as product attribute combinations, a false condition removes
-the combination owned or tracked by this profile. The parent remains, as do attribute
-values used by any other combination and manually created values. Unused values owned
-by this profile may be cleaned up. When the condition becomes true, the next sync
-recreates the combination using the normal SKU, axis, price, and inventory mappings.
-The new combination has a new database ID. An empty parent retains its combination
-structure so reactivation works even after its last combination was removed.
+When on, disabled Akeneo SKUs have their managed combinations removed and
+re-enabled SKUs have them recreated through the normal SKU, axis, price, and
+stock mappings. Parents, shared attribute values, and manual values are preserved.
+Unused values owned by the profile may be cleaned up. Profile skip rules run
+first, so a held SKU keeps its existing combination. Missing Akeneo enabled status
+blocks changes. Standalone, grouped, and associated-product variants are unaffected.
 
-Standalone products, grouped products, and associated-product variants are unaffected.
-Profile skip rules run first: a held SKU keeps its current combination. Invalid or
-missing condition values block the item instead of causing a removal. The condition
-is evaluated in the profile channel and locale against the effective Akeneo source;
-the `sku` token means the source identifier, before destination SKU mapping.
-Availability changes are tracked as seen, so they do not trigger missing-product
-reconciliation. Changing a family rule invalidates the affected profiles' scope fingerprints.
+Profiles using this setting must allow updates, select **Any** for the enabled
+filter, and keep both states inside their other source filters. Changing the
+toggle invalidates the affected profiles' scope fingerprints.
 
-Plugin version 4.90.25 moves the nullable CombinationAvailabilityCondition column
-to family mappings. Rebuild and restart nopCommerce before using the editor. The
-migration transfers a saved profile rule only where all profiles covering that
-family agree on the same nonblank condition. Conflicting rules, including a mix of
-blank and nonblank rules, need review in Family Mappings; no rule is chosen for
-them. The old profile column remains as an inactive backup and no longer affects
-syncs. Profile skip rules remain on profiles and are unchanged.
-
-All schema upgrades are now consolidated in `Data/AkeneoConnectionMigration.cs`
-(version 4.90.26, migration timestamp 2026-10-23 01:50:00). Existing schema and
-settings are preserved when rerun. Legacy profile availability rules transfer only
-when the family availability column is first introduced, so a later rerun cannot
-restore a deliberately cleared family condition. Restart nopCommerce after building
-the updated plugin to apply the consolidated migration.
+Version 4.90.27 updates the single consolidated migration. Restart nopCommerce
+to add the boolean setting. Existing enabled-status conditions (enabled == true
+or enabled != false) are converted to an enabled toggle. Other custom conditions
+are kept in the legacy column as an inactive backup and leave the toggle off.
+Rerunning the migration does not reset a saved toggle.

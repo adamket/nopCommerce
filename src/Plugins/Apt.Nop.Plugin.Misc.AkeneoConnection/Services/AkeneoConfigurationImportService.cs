@@ -36,7 +36,7 @@ public sealed class AkeneoConfigurationImportService(
         foreach (var section in document.FamilyMappings)
         {
             AkeneoCombinationAvailabilityService.ValidateConfiguration(
-                AkeneoCombinationAvailabilityService.GetCondition(section.Configuration), AkeneoProductEnabledFilter.Any);
+                AkeneoCombinationAvailabilityService.ManagesEnabledStatus(section.Configuration), AkeneoProductEnabledFilter.Any);
             if (section.Configuration.AssociatedProductAttributeId is > 0)
                 await RequireEntityAsync(productAttributes, section.Configuration.AssociatedProductAttributeId.Value);
             foreach (var axis in section.AxisMappings)

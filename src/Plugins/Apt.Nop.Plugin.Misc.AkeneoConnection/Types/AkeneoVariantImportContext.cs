@@ -35,7 +35,7 @@ public class AkeneoVariantImportContext
 
     public string Currency { get; set; }
 
-    public string CombinationAvailabilityCondition { get; set; }
+    public bool ManageVariantsByEnabledStatus { get; set; }
 
     // Null means the resolver decides from existing structure and family defaults.
     public AkeneoVariantRelationshipMode? VariantRelationshipModeOverride { get; set; }
