@@ -11,6 +11,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 /// </summary>
 public class AkeneoProductFullSyncScheduleTask(
     IAkeneoProductSyncExecutionService productSyncExecutionService,
+    IAkeneoSyncAlertService syncAlertService,
     AkeneoConnectionSettings akeneoConnectionSettings)
     : IScheduleTask
 {
@@ -19,9 +20,11 @@ public class AkeneoProductFullSyncScheduleTask(
         if (!akeneoConnectionSettings.DefaultSyncProfileId.HasValue)
             return;
 
-        await productSyncExecutionService.ImportProductsByProfileAsync(
+        await AkeneoScheduledSyncRunner.RunAsync(
+            () => productSyncExecutionService.ImportProductsByProfileAsync(
             akeneoConnectionSettings.DefaultSyncProfileId.Value,
             SyncType.ScheduledFullSync,
-            CancellationToken.None);
+                CancellationToken.None),
+            syncAlertService);
     }
 }

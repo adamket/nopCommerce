@@ -54,6 +54,31 @@ public class AkeneoSyncRunRecordService(
             .FirstOrDefaultAsync();
     }
 
+    public async Task<AkeneoSyncRunRecord> GetLastFinishedRunAsync(
+        int syncProfileId,
+        IReadOnlyCollection<SyncType> syncTypes,
+        bool onlyCompleted)
+    {
+        var syncTypeIds = syncTypes.Select(syncType => (int)syncType).ToArray();
+        var query = syncRunRecordRepository.Table.Where(record =>
+            record.SyncProfileId == syncProfileId &&
+            syncTypeIds.Contains(record.SyncTypeId) &&
+            record.FinishedOnUtc != null);
+
+        // CompletedWithErrors still finished the run; its failed products are
+        // reported on their own.
+        if (onlyCompleted)
+            query = query.Where(record =>
+                record.SyncStatusId == (int)SyncStatus.Completed ||
+                record.SyncStatusId == (int)SyncStatus.CompletedWithWarnings ||
+                record.SyncStatusId == (int)SyncStatus.CompletedWithErrors);
+
+        return await query
+            .OrderByDescending(record => record.FinishedOnUtc)
+            .ThenByDescending(record => record.Id)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IPagedList<AkeneoSyncRunRecord>> SearchAkeneoSyncRunRecordsAsync(
         DateTime? createdFromUtc = null,
         DateTime? createdToUtc = null,

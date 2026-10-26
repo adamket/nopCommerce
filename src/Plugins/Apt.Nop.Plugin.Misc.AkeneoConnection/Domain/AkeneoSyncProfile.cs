@@ -41,6 +41,11 @@ public class AkeneoSyncProfile : BaseEntity
     /// <summary>The Akeneo association type whose targets become nopCommerce related products.</summary>
     public string RelatedProductAssociationType { get; set; }
 
+    public int CrossSellSyncModeId { get; set; }
+
+    /// <summary>The Akeneo association type whose targets become nopCommerce cross-sell products.</summary>
+    public string CrossSellAssociationType { get; set; }
+
     public int SpecificationAttributeSyncModeId { get; set; }
 
     public int ProductAttributeSyncModeId { get; set; }

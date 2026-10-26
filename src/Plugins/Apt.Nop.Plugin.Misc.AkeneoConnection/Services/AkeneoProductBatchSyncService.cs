@@ -46,7 +46,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoWritePolicyGate writePolicyGate = null,
     IProductAttributeService productAttributeService = null,
     AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null,
-    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null)
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null,
+    AkeneoProductCrossSellSynchronizer crossSellSynchronizer = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -312,15 +313,25 @@ public class AkeneoProductBatchSyncService(
     }
 
     /// <summary>
-    /// Items are processed one by one, so a related product synced later in the run was not in
-    /// nopCommerce yet when its source was processed. Once every item is done, each such source
-    /// is re-applied in its own transaction. A failure is reported and does not fail the run.
+    /// Items are processed one by one, so a related or cross-sell product synced later in the run
+    /// was not in nopCommerce yet when its source was processed. Once every item is done, each
+    /// such source is re-applied in its own transaction. A failure is reported and does not fail
+    /// the run.
     /// </summary>
     private async Task RetryRelatedProductsAsync(
         AkeneoProductBatchImportResult result,
         CancellationToken cancellationToken)
     {
-        var pending = relatedProductSynchronizer?.TakePending() ?? [];
+        await RetryAssociationsAsync(relatedProductSynchronizer, result, cancellationToken);
+        await RetryAssociationsAsync(crossSellSynchronizer, result, cancellationToken);
+    }
+
+    private async Task RetryAssociationsAsync(
+        AkeneoProductAssociationSynchronizer synchronizer,
+        AkeneoProductBatchImportResult result,
+        CancellationToken cancellationToken)
+    {
+        var pending = synchronizer?.TakePending() ?? [];
         if (pending.Count == 0)
             return;
 
@@ -333,7 +344,7 @@ public class AkeneoProductBatchSyncService(
             try
             {
                 using var transaction = CreateUnitTransaction();
-                var outcome = await relatedProductSynchronizer.RetryAsync(work, cancellationToken);
+                var outcome = await synchronizer.RetryAsync(work, cancellationToken);
                 transaction.Complete();
 
                 added += outcome.Added;
@@ -344,12 +355,12 @@ public class AkeneoProductBatchSyncService(
             {
                 failed++;
                 result.AddMessage(
-                    $"Related products for {work.SourceCode} could not be retried: {ex.Message}");
+                    $"{synchronizer.Area} for {work.SourceCode} could not be retried: {ex.Message}");
             }
         }
 
         result.AddMessage(
-            $"Related products retried for {pending.Count} product(s) whose targets were not yet in nopCommerce: " +
+            $"{synchronizer.Area} retried for {pending.Count} product(s) whose targets were not yet in nopCommerce: " +
             $"{added} link(s) added, {removed} removed, {stillUnresolved} target(s) still missing" +
             (failed > 0 ? $", {failed} failed." : "."));
     }
@@ -2685,6 +2696,8 @@ public class AkeneoProductBatchSyncService(
             TagSyncMode = (int)request.TagSyncMode,
             RelatedProductSyncMode = (int)request.RelatedProductSyncMode,
             request.RelatedProductAssociationType,
+            CrossSellSyncMode = (int)request.CrossSellSyncMode,
+            request.CrossSellAssociationType,
             SpecificationAttributeSyncMode =
                 (int)request.SpecificationAttributeSyncMode,
             ProductAttributeSyncMode = (int)request.ProductAttributeSyncMode,

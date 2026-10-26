@@ -21,6 +21,12 @@ public class AkeneoExecutableSectionPlan
 
     public IList<string> Warnings { get; } = new List<string>();
 
+    /// <summary>
+    /// Problems that fail the product. Execution records them on the result
+    /// and runs no operations, so the product's unit rolls back.
+    /// </summary>
+    public IList<string> Errors { get; } = new List<string>();
+
     public IList<string> CoverageNotes { get; } = new List<string>();
 
     public void AddOperation(
@@ -100,6 +106,9 @@ public class AkeneoExecutableSectionPlan
         foreach (var warning in Warnings.Where(value => !string.IsNullOrWhiteSpace(value)))
             model.Warnings.Add(warning);
 
+        foreach (var error in Errors.Where(value => !string.IsNullOrWhiteSpace(value)))
+            model.Errors.Add(error);
+
         foreach (var note in CoverageNotes.Where(value => !string.IsNullOrWhiteSpace(value)))
             model.CoverageNotes.Add(note);
     }
@@ -113,6 +122,15 @@ public class AkeneoExecutableSectionPlan
 
         foreach (var warning in Warnings.Where(value => !string.IsNullOrWhiteSpace(value)))
             context.Result.AddWarning(warning);
+
+        var errors = Errors.Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        if (errors.Count > 0)
+        {
+            foreach (var error in errors)
+                context.Result.AddError(error);
+
+            return false;
+        }
 
         var changed = false;
 

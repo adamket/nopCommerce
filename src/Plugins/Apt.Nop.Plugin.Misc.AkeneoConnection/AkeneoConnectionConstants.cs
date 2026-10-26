@@ -15,6 +15,9 @@ public static class AkeneoConnectionConstants
     /// </summary>
     public const string CatalogWriterLockKey = "akeneo-catalog-writer";
 
+    public const string SyncRunAlertMessageTemplateName = "Akeneo.SyncRun.Alert";
+    public const string StaleSyncAlertMessageTemplateName = "Akeneo.StaleSync.Alert";
+
     private const string EntityName = "Apt.akeneoattributemapping";
 
     public static CacheKey AttributeMappingsAllCacheKey => new($"{EntityName}.all");

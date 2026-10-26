@@ -42,5 +42,8 @@ public enum AkeneoManagedRelationType
     ProductTag = 90,
 
     /// <summary>A related product link; the relation entity is the RelatedProduct row.</summary>
-    RelatedProduct = 100
+    RelatedProduct = 100,
+
+    /// <summary>A cross-sell product link; the relation entity is the CrossSellProduct row.</summary>
+    CrossSellProduct = 110
 }

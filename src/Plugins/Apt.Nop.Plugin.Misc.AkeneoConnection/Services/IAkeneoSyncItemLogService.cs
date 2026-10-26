@@ -13,6 +13,7 @@ public interface IAkeneoSyncItemLogService
         string akeneoProductUuid = null,
         string akeneoIdentifier = null,
         int? nopProductId = null,
+        int? actionTypeId = null,
         int pageIndex = 0,
         int pageSize = int.MaxValue);
 }

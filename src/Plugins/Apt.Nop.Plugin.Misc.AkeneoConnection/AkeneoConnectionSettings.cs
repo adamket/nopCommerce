@@ -15,4 +15,32 @@ public class AkeneoConnectionSettings : ISettings
     public string AkeneoConnectionUsername { get; set; }
     public string AkeneoConnectionPassword { get; set; }
     public int? DefaultSyncProfileId { get; set; }
+
+    /// <summary>
+    /// Emails alerts about scheduled syncs. Manual runs never send alerts.
+    /// </summary>
+    public bool SyncAlertsEnabled { get; set; }
+
+    /// <summary>
+    /// Alert recipients, separated by commas or semicolons.
+    /// </summary>
+    public string SyncAlertEmails { get; set; }
+
+    /// <summary>
+    /// Failed products a scheduled run needs before it alerts. Runs that
+    /// fail or are cancelled always alert.
+    /// </summary>
+    public int SyncAlertMinimumFailedProducts { get; set; } = 1;
+
+    /// <summary>
+    /// Hours without a finished scheduled sync before the stale-sync check
+    /// alerts; 0 turns the check off.
+    /// </summary>
+    public int SyncAlertStaleAfterHours { get; set; } = 26;
+
+    /// <summary>
+    /// When the stale-sync check last sent an alert, so it repeats once per
+    /// <see cref="SyncAlertStaleAfterHours"/> instead of every hour.
+    /// </summary>
+    public DateTime? SyncAlertLastStaleNotificationUtc { get; set; }
 }

@@ -17,6 +17,15 @@ public interface IAkeneoSyncRunRecordService
         int syncProfileId,
         string scopeHash = null);
 
+    /// <summary>
+    /// The most recently finished run of one of the given sync types, or null.
+    /// With <paramref name="onlyCompleted"/>, failed and cancelled runs are skipped.
+    /// </summary>
+    Task<AkeneoSyncRunRecord> GetLastFinishedRunAsync(
+        int syncProfileId,
+        IReadOnlyCollection<SyncType> syncTypes,
+        bool onlyCompleted);
+
     Task<IPagedList<AkeneoSyncRunRecord>> SearchAkeneoSyncRunRecordsAsync(
         DateTime? createdFromUtc = null,
         DateTime? createdToUtc = null,

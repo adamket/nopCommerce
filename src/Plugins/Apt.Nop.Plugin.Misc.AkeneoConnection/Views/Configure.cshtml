@@ -143,6 +143,62 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="card card-default">
+                        <div class="card-header">
+                            <div class="card-title float-left">
+                                <i class="fas fa-bell"></i> Sync alerts
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <p class="text-muted">
+                                Emails are sent for scheduled syncs only, and apply to all stores. A scheduled run alerts when it fails,
+                                is cancelled, or has failed products (including products whose URL is already taken). Warnings stay in the
+                                sync log. Edit the email text under Content management &gt; Message templates
+                                (@AkeneoConnectionConstants.SyncRunAlertMessageTemplateName, @AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName).
+                            </p>
+
+                            <div class="form-group row">
+                                <div class="col-md-3">
+                                    <nop-label asp-for="SyncAlertsEnabled" />
+                                </div>
+                                <div class="col-md-9">
+                                    <nop-editor asp-for="SyncAlertsEnabled" />
+                                </div>
+                            </div>
+
+                            <div class="form-group row">
+                                <div class="col-md-3">
+                                    <nop-label asp-for="SyncAlertEmails" />
+                                </div>
+                                <div class="col-md-9">
+                                    <nop-editor asp-for="SyncAlertEmails" />
+                                    <span asp-validation-for="SyncAlertEmails"></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group row">
+                                <div class="col-md-3">
+                                    <nop-label asp-for="SyncAlertMinimumFailedProducts" />
+                                </div>
+                                <div class="col-md-9">
+                                    <nop-editor asp-for="SyncAlertMinimumFailedProducts" />
+                                    <span asp-validation-for="SyncAlertMinimumFailedProducts"></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group row">
+                                <div class="col-md-3">
+                                    <nop-label asp-for="SyncAlertStaleAfterHours" />
+                                </div>
+                                <div class="col-md-9">
+                                    <nop-editor asp-for="SyncAlertStaleAfterHours" />
+                                    <span asp-validation-for="SyncAlertStaleAfterHours"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 }
             </div>
         </form>

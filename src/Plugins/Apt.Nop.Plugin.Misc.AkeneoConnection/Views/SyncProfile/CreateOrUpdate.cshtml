@@ -56,6 +56,8 @@
             tagSyncModeId = Model.TagSyncModeId.ToString(),
             relatedProductSyncModeId = Model.RelatedProductSyncModeId.ToString(),
             relatedProductAssociationType = Model.RelatedProductAssociationType ?? string.Empty,
+            crossSellSyncModeId = Model.CrossSellSyncModeId.ToString(),
+            crossSellAssociationType = Model.CrossSellAssociationType ?? string.Empty,
             specificationAttributeSyncModeId = Model.SpecificationAttributeSyncModeId.ToString(),
             productAttributeSyncModeId = Model.ProductAttributeSyncModeId.ToString(),
             assetSyncModeId = Model.AssetSyncModeId.ToString(),
@@ -88,6 +90,7 @@
             categorySyncModes = Options(Model.AvailableCategorySyncModes),
             tagSyncModes = Options(Model.AvailableTagSyncModes),
             relatedProductSyncModes = Options(Model.AvailableRelatedProductSyncModes),
+            crossSellSyncModes = Options(Model.AvailableCrossSellSyncModes),
             specificationAttributeSyncModes = Options(Model.AvailableSpecificationAttributeSyncModes),
             productAttributeSyncModes = Options(Model.AvailableProductAttributeSyncModes),
             assetSyncModes = Options(Model.AvailableAssetSyncModes),
@@ -456,6 +459,18 @@
                                     <span class="form-text text-muted">The Akeneo association type code. Its products and product models become this product's related products.</span>
                                 </div>
                             </div>
+
+                            <div class="form-group row" v-if="field.key === 'crossSellSyncModeId' && form.crossSellSyncModeId !== '0'">
+                                <div class="col-md-3 text-right"><label class="control-label" for="sp-crossSellAssociationType">Cross-sell association type</label></div>
+                                <div class="col-md-9">
+                                    <input id="sp-crossSellAssociationType" type="text" class="form-control"
+                                           placeholder="e.g. cross_sell"
+                                           v-model="form.crossSellAssociationType"
+                                           v-bind:class="{ 'is-invalid': fieldError('CrossSellAssociationType') }" />
+                                    <div class="invalid-feedback d-block" v-if="fieldError('CrossSellAssociationType')">{{ fieldError('CrossSellAssociationType') }}</div>
+                                    <span class="form-text text-muted">The Akeneo association type code. Its products and product models become this product's cross-sell products.</span>
+                                </div>
+                            </div>
                         </template>
 
                         <div class="form-group row">
@@ -788,6 +803,8 @@
             tagSyncModeId: 'TagSyncModeId',
             relatedProductSyncModeId: 'RelatedProductSyncModeId',
             relatedProductAssociationType: 'RelatedProductAssociationType',
+            crossSellSyncModeId: 'CrossSellSyncModeId',
+            crossSellAssociationType: 'CrossSellAssociationType',
             specificationAttributeSyncModeId: 'SpecificationAttributeSyncModeId',
             productAttributeSyncModeId: 'ProductAttributeSyncModeId',
             assetSyncModeId: 'AssetSyncModeId',
@@ -836,6 +853,7 @@
                         { key: 'categorySyncModeId', name: 'CategorySyncModeId', label: 'Category sync mode', options: 'categorySyncModes' },
                         { key: 'tagSyncModeId', name: 'TagSyncModeId', label: 'Product tag sync mode', options: 'tagSyncModes', help: 'Tags come from attributes mapped to Product Tag, named after the Akeneo option labels. Missing tags are created.' },
                         { key: 'relatedProductSyncModeId', name: 'RelatedProductSyncModeId', label: 'Related product sync mode', options: 'relatedProductSyncModes', help: 'Product models and standalone products get related products from an Akeneo association type. Targets must already be synced or bound; any that are not yet are retried at the end of the run.' },
+                        { key: 'crossSellSyncModeId', name: 'CrossSellSyncModeId', label: 'Cross-sell sync mode', options: 'crossSellSyncModes', help: 'Product models and standalone products get cross-sell products from an Akeneo association type, exactly like related products. Targets must already be synced or bound; any that are not yet are retried at the end of the run.' },
                         { key: 'specificationAttributeSyncModeId', name: 'SpecificationAttributeSyncModeId', label: 'Specification sync mode', options: 'specificationAttributeSyncModes', help: 'Missing specification values are handled per attribute mapping.' },
                         { key: 'productAttributeSyncModeId', name: 'ProductAttributeSyncModeId', label: 'Product attribute sync mode', options: 'productAttributeSyncModes' },
                         { key: 'assetSyncModeId', name: 'AssetSyncModeId', label: 'Asset sync mode', options: 'assetSyncModes', help: 'Replace managed is recommended: it reconciles only pictures, videos, and asset references owned by this plugin.' },

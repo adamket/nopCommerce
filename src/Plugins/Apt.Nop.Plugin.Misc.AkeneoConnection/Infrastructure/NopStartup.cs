@@ -55,6 +55,7 @@ public class NopStartup : INopStartup
             AkeneoProductModelDeltaFanOutService>();
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
         services.AddScoped<IAkeneoSyncLogRetentionService, AkeneoSyncLogRetentionService>();
+        services.AddScoped<IAkeneoSyncAlertService, AkeneoSyncAlertService>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
         services.AddScoped<IAkeneoProductSyncExecutionService, AkeneoProductSyncExecutionService>();
@@ -95,11 +96,14 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductTagSynchronizer>());
 
-        // One instance per scope: the batch run retries the related products it could not
+        // One instance per scope: the batch run retries the related and cross-sell products it could not
         // resolve, which this section collects while the run's items are processed.
         services.AddScoped<AkeneoProductRelatedProductSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductRelatedProductSynchronizer>());
+        services.AddScoped<AkeneoProductCrossSellSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductCrossSellSynchronizer>());
 
         services.AddScoped<
             IAkeneoFamilyMappingService,

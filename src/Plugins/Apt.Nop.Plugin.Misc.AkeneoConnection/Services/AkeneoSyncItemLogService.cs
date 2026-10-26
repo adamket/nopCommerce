@@ -28,6 +28,7 @@ public class AkeneoSyncItemLogService(
         string akeneoProductUuid = null,
         string akeneoIdentifier = null,
         int? nopProductId = null,
+        int? actionTypeId = null,
         int pageIndex = 0,
         int pageSize = int.MaxValue)
     {
@@ -44,6 +45,9 @@ public class AkeneoSyncItemLogService(
 
         if (nopProductId.HasValue)
             query = query.Where(log => log.NopProductId == nopProductId.Value);
+
+        if (actionTypeId.HasValue)
+            query = query.Where(log => log.ActionTypeId == actionTypeId.Value);
 
         return await query
             .OrderByDescending(log => log.CreatedOnUtc)

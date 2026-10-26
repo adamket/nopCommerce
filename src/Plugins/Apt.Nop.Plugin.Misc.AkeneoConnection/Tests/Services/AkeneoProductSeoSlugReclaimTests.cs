@@ -62,9 +62,12 @@ public class AkeneoProductSeoSlugReclaimTests
     }
 
     [Test]
-    public async Task Slug_held_by_live_product_keeps_the_numbered_fallback()
+    public async Task Slug_held_by_live_product_fails_the_product()
     {
-        HeldBy(5, deleted: false);
+        var held = HeldBy(5, deleted: false);
+        _urlRecordService
+            .Setup(service => service.GetBySlugAsync("red-maple"))
+            .ReturnsAsync(held);
 
         var context = Context(new Product { Id = 10, Name = "Red Maple" });
         await Synchronizer().SynchronizeAsync(context);
@@ -72,14 +75,24 @@ public class AkeneoProductSeoSlugReclaimTests
         _urlRecordService.Verify(service => service.DeleteUrlRecordsAsync(
             It.IsAny<IList<UrlRecord>>()), Times.Never);
         _urlRecordService.Verify(service => service.SaveSlugAsync(
-            context.Product, "red-maple-2", 0), Times.Once);
-        Assert.That(context.Result.Warnings, Has.Some.Contains("already in use"));
+            It.IsAny<Product>(), It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Result.Success, Is.False);
+            Assert.That(context.Result.Errors.Single(), Does.Contain("'red-maple'")
+                .And.Contain("product 'Live 5' (ID 5)")
+                .And.Contain("'red-maple-2'"));
+        });
     }
 
     [Test]
     public async Task Slug_held_by_another_entity_type_is_not_reclaimed()
     {
-        _urlRecords.Add(new UrlRecord { Id = 1, EntityId = 5, EntityName = nameof(Category), Slug = "red-maple", IsActive = true });
+        var held = new UrlRecord { Id = 1, EntityId = 5, EntityName = nameof(Category), Slug = "red-maple", IsActive = true };
+        _urlRecords.Add(held);
+        _urlRecordService
+            .Setup(service => service.GetBySlugAsync("red-maple"))
+            .ReturnsAsync(held);
 
         var context = Context(new Product { Id = 10, Name = "Red Maple" });
         await Synchronizer().SynchronizeAsync(context);
@@ -87,7 +100,53 @@ public class AkeneoProductSeoSlugReclaimTests
         _urlRecordService.Verify(service => service.DeleteUrlRecordsAsync(
             It.IsAny<IList<UrlRecord>>()), Times.Never);
         _urlRecordService.Verify(service => service.SaveSlugAsync(
-            context.Product, "red-maple-2", 0), Times.Once);
+            It.IsAny<Product>(), It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+        Assert.That(context.Result.Errors.Single(), Does.Contain("Category ID 5"));
+    }
+
+    [Test]
+    public async Task Slug_generated_from_name_fails_a_new_product_when_taken()
+    {
+        _urlRecordService
+            .Setup(service => service.GetSeNameAsync("Red Maple", It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync("red-maple");
+        _urlRecordService
+            .Setup(service => service.ValidateSeNameAsync(
+                It.IsAny<Product>(), string.Empty, "Red Maple", true))
+            .ReturnsAsync("red-maple-2");
+
+        var context = Context(null, withSlugMapping: false);
+        context.PlanningState.ProposedProductName = "Red Maple";
+        context.Product = new Product { Name = "Red Maple" };
+        var model = new AkeneoProductMappingPreviewModel();
+        await Synchronizer().PlanAsync(context, model);
+
+        Assert.That(model.Errors.Single(), Does.Contain("generated from the product name")
+            .And.Contain("reserved by nopCommerce"));
+    }
+
+    [Test]
+    public async Task Slug_with_only_disallowed_characters_is_saved_with_a_warning()
+    {
+        _urlRecordService
+            .Setup(service => service.GetSeNameAsync("Red Maple!", It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync("red-maple");
+        _urlRecordService
+            .Setup(service => service.ValidateSeNameAsync(
+                It.IsAny<Product>(), "Red Maple!", It.IsAny<string>(), true))
+            .ReturnsAsync("red-maple");
+
+        var context = Context(new Product { Id = 10, Name = "Red Maple" });
+        context.MappedValues[0].Value.DisplayValue = "Red Maple!";
+        await Synchronizer().SynchronizeAsync(context);
+
+        _urlRecordService.Verify(service => service.SaveSlugAsync(
+            context.Product, "red-maple", 0), Times.Once);
+        Assert.Multiple(() =>
+        {
+            Assert.That(context.Result.Success, Is.True);
+            Assert.That(context.Result.Warnings, Has.Some.Contains("characters nopCommerce does not allow"));
+        });
     }
 
     [Test]
@@ -119,7 +178,7 @@ public class AkeneoProductSeoSlugReclaimTests
         _urlRecords.Add(record);
         _productService
             .Setup(service => service.GetProductByIdAsync(productId))
-            .ReturnsAsync(new Product { Id = productId, Deleted = deleted });
+            .ReturnsAsync(new Product { Id = productId, Name = $"Live {productId}", Deleted = deleted });
 
         return record;
     }
@@ -133,7 +192,7 @@ public class AkeneoProductSeoSlugReclaimTests
             urlRecordRepository: _urlRecordRepository.Object);
     }
 
-    private static AkeneoProductSyncContext Context(Product product)
+    private static AkeneoProductSyncContext Context(Product product, bool withSlugMapping = true)
     {
         var source = new AkeneoProductDefinition
         {
@@ -155,7 +214,7 @@ public class AkeneoProductSeoSlugReclaimTests
                 SeoFieldMissingValueBehavior = AkeneoMissingValueBehavior.ClearExisting
             },
             Result = new AkeneoProductImportResult(),
-            MappedValues =
+            MappedValues = !withSlugMapping ? [] :
             [
                 new AkeneoResolvedMappedValue
                 {

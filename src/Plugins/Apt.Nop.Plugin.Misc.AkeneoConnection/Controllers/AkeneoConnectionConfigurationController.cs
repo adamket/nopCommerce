@@ -134,6 +134,12 @@ public class AkeneoConnectionConfigurationController(
             DefaultSyncProfileId = akeneoConnectionSettings.DefaultSyncProfileId
         };
 
+        var alertSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>();
+        model.SyncAlertsEnabled = alertSettings.SyncAlertsEnabled;
+        model.SyncAlertEmails = alertSettings.SyncAlertEmails;
+        model.SyncAlertMinimumFailedProducts = alertSettings.SyncAlertMinimumFailedProducts;
+        model.SyncAlertStaleAfterHours = alertSettings.SyncAlertStaleAfterHours;
+
         if (storeScope > 0)
         {
             model.AkeneoConnectionBaseUrl_OverrideForStore = await settingService.SettingExistsAsync(akeneoConnectionSettings, x => x.AkeneoConnectionBaseUrl, storeScope);
@@ -153,8 +159,25 @@ public class AkeneoConnectionConfigurationController(
     [HttpPost("admin/akeneo-connection/configure")]
     public async Task<IActionResult> Configure(AkeneoConfigurationModel model)
     {
+        var alertEmails = AkeneoSyncAlertService.ParseRecipients(model.SyncAlertEmails);
+
+        if (model.SyncAlertsEnabled && alertEmails.Count == 0)
+            ModelState.AddModelError(nameof(model.SyncAlertEmails), "Enter at least one valid email address to send sync alerts.");
+
+        if (model.SyncAlertMinimumFailedProducts < 1)
+            ModelState.AddModelError(nameof(model.SyncAlertMinimumFailedProducts), "Minimum failed products must be 1 or more.");
+
+        if (model.SyncAlertStaleAfterHours < 0)
+            ModelState.AddModelError(nameof(model.SyncAlertStaleAfterHours), "Stale sync hours must be 0 or more.");
+
         if (!ModelState.IsValid)
+        {
+            // Configure() reloads the saved values, so say what was rejected.
+            notificationService.ErrorNotification(string.Join(" ", ModelState.Values
+                .SelectMany(value => value.Errors)
+                .Select(error => error.ErrorMessage)));
             return await Configure();
+        }
 
         //load settings for a chosen store scope
         var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
@@ -177,6 +200,16 @@ public class AkeneoConnectionConfigurationController(
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionUsername, model.AkeneoConnectionUsername_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.AkeneoConnectionPassword, model.AkeneoConnectionPassword_OverrideForStore, storeScope, false);
         await settingService.SaveSettingOverridablePerStoreAsync(akeneoConnectionSettings, x => x.DefaultSyncProfileId, model.DefaultSyncProfileId_OverrideForStore, storeScope, false);
+
+        var alertSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>();
+        alertSettings.SyncAlertsEnabled = model.SyncAlertsEnabled;
+        alertSettings.SyncAlertEmails = string.Join(", ", alertEmails);
+        alertSettings.SyncAlertMinimumFailedProducts = model.SyncAlertMinimumFailedProducts;
+        alertSettings.SyncAlertStaleAfterHours = model.SyncAlertStaleAfterHours;
+        await settingService.SaveSettingAsync(alertSettings, x => x.SyncAlertsEnabled, 0, false);
+        await settingService.SaveSettingAsync(alertSettings, x => x.SyncAlertEmails, 0, false);
+        await settingService.SaveSettingAsync(alertSettings, x => x.SyncAlertMinimumFailedProducts, 0, false);
+        await settingService.SaveSettingAsync(alertSettings, x => x.SyncAlertStaleAfterHours, 0, false);
         //now clear settings cache
         await settingService.ClearCacheAsync();
 

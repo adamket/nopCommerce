@@ -57,6 +57,12 @@ public class AkeneoProductImportRequest
     /// <summary>The Akeneo association type whose targets become nopCommerce related products.</summary>
     public string RelatedProductAssociationType { get; set; }
 
+    public AkeneoCollectionSyncMode CrossSellSyncMode { get; set; }
+        = AkeneoCollectionSyncMode.Disabled;
+
+    /// <summary>The Akeneo association type whose targets become nopCommerce cross-sell products.</summary>
+    public string CrossSellAssociationType { get; set; }
+
     public AkeneoCollectionSyncMode SpecificationAttributeSyncMode { get; set; }
         = AkeneoCollectionSyncMode.Merge;
 

@@ -78,6 +78,13 @@ public class AkeneoProductBatchImportRequestFactory(
             RelatedProductAssociationType =
                 profile.RelatedProductAssociationType?.Trim(),
 
+            CrossSellSyncMode =
+                (AkeneoCollectionSyncMode)
+                    profile.CrossSellSyncModeId,
+
+            CrossSellAssociationType =
+                profile.CrossSellAssociationType?.Trim(),
+
             SpecificationAttributeSyncMode =
                 (AkeneoCollectionSyncMode)
                     profile.SpecificationAttributeSyncModeId,

@@ -168,6 +168,13 @@ public partial class AkeneoProductSeoSynchronizer
                 string.Empty,
                 proposedName,
                 ensureNotEmpty: true);
+            var conflict = await DescribeSlugConflictAsync(
+                proposedName,
+                proposedSlug,
+                fromMapping: false);
+
+            if (conflict != null)
+                plan.Errors.Add(conflict);
 
             plan.AddOperation(
                 "SEO fields",
@@ -176,6 +183,7 @@ public partial class AkeneoProductSeoSynchronizer
                 null,
                 proposedSlug,
                 AkeneoDryRunOperationType.Create,
+                conflict ??
                 "New products receive a validated URL slug even when no explicit SeName mapping exists.",
                 executeAsync: async _ => await SaveSlugIfChangedAsync(
                     context,
@@ -254,14 +262,25 @@ public partial class AkeneoProductSeoSynchronizer
             ? AkeneoDryRunOperationType.Create
             : DetermineExactScalarChangeType(current, proposed, ignoreCase: true);
 
-        var adjustmentWarning = mapped.HasValue && reclaim == null
+        // Without a mapped value nopCommerce builds the slug from the name.
+        var conflict = reclaim == null
+            ? await DescribeSlugConflictAsync(
+                mapped.HasValue ? requested : proposedName,
+                proposed,
+                fromMapping: mapped.HasValue)
+            : null;
+
+        if (conflict != null)
+            plan.Errors.Add(conflict);
+
+        var adjustmentWarning = conflict == null && mapped.HasValue && reclaim == null
             ? await DescribeSlugAdjustmentAsync(requested, proposed)
             : null;
 
         if (adjustmentWarning != null)
             plan.Warnings.Add(adjustmentWarning);
 
-        var note = adjustmentWarning ??
+        var note = conflict ?? adjustmentWarning ??
                    (reclaim != null
                        ? $"The slug is held by deleted nopCommerce product ID {string.Join(", ", reclaim.DeletedProductIds)} and will be moved to this product."
                        : "The proposed value is the validated slug that nopCommerce would save.");
@@ -354,10 +373,9 @@ public partial class AkeneoProductSeoSynchronizer
     }
 
     /// <summary>
-    /// Explains why the slug nopCommerce will save differs from the Akeneo
-    /// value, or returns null when they match. "Already in use" means
-    /// nopCommerce had to add a number to keep the slug unique; otherwise it
-    /// only cleaned up characters, spacing or case.
+    /// Explains a slug nopCommerce only cleaned up (characters, spacing or
+    /// case), or returns null. Numbered slugs are conflicts, reported by
+    /// <see cref="DescribeSlugConflictAsync"/>.
     /// </summary>
     private async Task<string> DescribeSlugAdjustmentAsync(
         string requested,
@@ -371,22 +389,72 @@ public partial class AkeneoProductSeoSynchronizer
             return null;
         }
 
-        // The Akeneo value as nopCommerce would clean it, before uniqueness.
-        var cleaned = await _urlRecordService.GetSeNameAsync(
-            requested,
+        var cleaned = await CleanSlugAsync(requested);
+
+        return !string.IsNullOrWhiteSpace(cleaned) &&
+               string.Equals(cleaned, proposed, StringComparison.OrdinalIgnoreCase)
+            ? $"The Akeneo URL slug '{requested}' was adjusted to '{proposed}' because it contained characters nopCommerce does not allow in URLs."
+            : null;
+    }
+
+    /// <summary>
+    /// Returns an error when nopCommerce would save a numbered slug
+    /// (red-maple-2) because the wanted one is taken or reserved, or null.
+    /// The product fails instead of going live on a different URL.
+    /// </summary>
+    private async Task<string> DescribeSlugConflictAsync(
+        string source,
+        string proposed,
+        bool fromMapping)
+    {
+        var wanted = await CleanSlugAsync(source);
+
+        if (string.IsNullOrWhiteSpace(wanted) ||
+            string.Equals(wanted, proposed, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var origin = fromMapping
+            ? "Akeneo URL slug"
+            : "URL slug generated from the product name";
+
+        return $"The {origin} '{wanted}' is {await DescribeSlugHolderAsync(wanted)}, " +
+               $"so nopCommerce would save '{proposed}' instead. The product was not synchronized; " +
+               "free the slug or change it in Akeneo, then sync again.";
+    }
+
+    private async Task<string> DescribeSlugHolderAsync(string slug)
+        {
+        var record = await _urlRecordService.GetBySlugAsync(slug);
+
+        if (record == null)
+            return "reserved by nopCommerce";
+
+        if (!record.EntityName.Equals(nameof(Product), StringComparison.InvariantCultureIgnoreCase))
+            return $"already used by {record.EntityName} ID {record.EntityId}";
+
+        var holder = await _productService.GetProductByIdAsync(record.EntityId);
+
+        return holder == null
+            ? $"already used by product ID {record.EntityId}"
+            : $"already used by product '{holder.Name}' (ID {holder.Id})";
+        }
+
+    /// <summary>
+    /// The slug as nopCommerce would clean it, before making it unique.
+    /// </summary>
+    private async Task<string> CleanSlugAsync(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var slug = await _urlRecordService.GetSeNameAsync(
+            value.Trim(),
             _seoSettings.ConvertNonWesternChars,
             _seoSettings.AllowUnicodeCharsInUrls);
 
-        if (!string.IsNullOrWhiteSpace(cleaned) &&
-            string.Equals(cleaned, proposed, StringComparison.OrdinalIgnoreCase))
-        {
-            return $"The Akeneo URL slug '{requested}' was adjusted to '{proposed}' because it contained characters nopCommerce does not allow in URLs.";
-        }
-
-        var clashing = string.IsNullOrWhiteSpace(cleaned) ? requested : cleaned;
-
-        return $"The Akeneo URL slug '{requested}' is already in use by another nopCommerce page, so the product uses '{proposed}' instead. " +
-               $"It will switch to '{clashing}' automatically once that slug is free.";
+        return CommonHelper.EnsureMaximumLength(slug, NopSeoDefaults.SearchEngineNameLength);
     }
 
     private static string ResolveProductNameForSeo(

@@ -1,8 +1,11 @@
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 using Nop.Core;
+using Nop.Core.Domain.Messages;
 using Nop.Core.Domain.ScheduleTasks;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
+using Nop.Services.Localization;
+using Nop.Services.Messages;
 using Nop.Services.Plugins;
 using Nop.Services.ScheduleTasks;
 
@@ -11,7 +14,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection;
 public class AkeneoConnectionPlugin(
     ISettingService settingService,
     IWebHelper webHelper,
-    IScheduleTaskService scheduleTaskService)
+    IScheduleTaskService scheduleTaskService,
+    ILocalizationService localizationService,
+    IMessageTemplateService messageTemplateService,
+    EmailAccountSettings emailAccountSettings)
     : BasePlugin, IMiscPlugin
 {
     public override string GetConfigurationPageUrl() =>
@@ -21,6 +27,7 @@ public class AkeneoConnectionPlugin(
     {
         await settingService.SaveSettingAsync(new AkeneoConnectionSettings());
         await EnsureScheduleTasksAsync();
+        await EnsureAlertResourcesAsync();
         await base.InstallAsync();
     }
 
@@ -28,15 +35,32 @@ public class AkeneoConnectionPlugin(
         string currentVersion,
         string targetVersion)
     {
-        // Update migrations handle schema changes. Schedule tasks are plugin
-        // resources, so ensure newly introduced tasks exist during an upgrade.
+        // Update migrations handle schema changes. Schedule tasks, message
+        // templates and labels are plugin resources, so ensure newly
+        // introduced ones exist during an upgrade.
         await EnsureScheduleTasksAsync();
+        await EnsureAlertResourcesAsync();
         await base.UpdateAsync(currentVersion, targetVersion);
     }
 
     public override async Task UninstallAsync()
     {
         await settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
+
+        await DeleteScheduleTaskAsync(
+            typeof(AkeneoStaleSyncCheckScheduleTask).FullName);
+
+        foreach (var templateName in new[]
+                 {
+                     AkeneoConnectionConstants.SyncRunAlertMessageTemplateName,
+                     AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName
+                 })
+        {
+            foreach (var template in await messageTemplateService.GetMessageTemplatesByNameAsync(templateName))
+                await messageTemplateService.DeleteMessageTemplateAsync(template);
+        }
+
+        await localizationService.DeleteLocaleResourcesAsync("Plugins.Misc.AkeneoConnection.SyncAlert");
 
         await DeleteScheduleTaskAsync(
             typeof(AkeneoProductSyncScheduleTask).FullName);
@@ -70,6 +94,67 @@ public class AkeneoConnectionPlugin(
             "Akeneo Connection - Sync Log Retention",
             seconds: 60 * 60 * 24,
             enabled: true);
+
+        // Enabled, but it sends nothing until alerts are turned on.
+        await EnsureScheduleTaskAsync(
+            typeof(AkeneoStaleSyncCheckScheduleTask).FullName,
+            "Akeneo Connection - Stale Sync Alert",
+            seconds: 60 * 60,
+            enabled: true);
+    }
+
+    /// <summary>
+    /// Adds the alert message templates (editable under Content management >
+    /// Message templates) and the alert setting labels, keeping any edits.
+    /// </summary>
+    private async Task EnsureAlertResourcesAsync()
+    {
+        await EnsureMessageTemplateAsync(
+            AkeneoConnectionConstants.SyncRunAlertMessageTemplateName,
+            "%Store.Name%: Akeneo sync %Akeneo.Run.Status%",
+            "<p>The scheduled Akeneo sync for profile <strong>%Akeneo.Run.Profile%</strong> %Akeneo.Run.Status%.</p>" +
+            "<p>Run: %Akeneo.Run.Id%<br />Started: %Akeneo.Run.StartedOn%<br />Finished: %Akeneo.Run.FinishedOn%<br />%Akeneo.Run.Counts%</p>" +
+            "<p><strong>Run errors</strong><br />%Akeneo.Run.Errors%</p>" +
+            "<p><strong>Failed products</strong></p>%Akeneo.Run.FailedProducts%" +
+            "<p>Failed products were left unchanged in nopCommerce. Warnings are listed in the sync log only.</p>" +
+            "<p><a href=\"%Akeneo.SyncLogsUrl%\">Open the Akeneo sync logs</a></p>");
+
+        await EnsureMessageTemplateAsync(
+            AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName,
+            "%Store.Name%: Akeneo sync has not completed for %Akeneo.Stale.Hours% hours",
+            "<p>No scheduled Akeneo sync for profile <strong>%Akeneo.Stale.Profile%</strong> has completed for %Akeneo.Stale.Hours% hours.</p>" +
+            "<p>Last completed sync: %Akeneo.Stale.LastCompletedOn%<br />Latest scheduled run: %Akeneo.Stale.LastRun%<br />" +
+            "Sync task last started: %Akeneo.Stale.TaskLastStartedOn%</p>" +
+            "<p><strong>Latest run errors</strong><br />%Akeneo.Stale.LastRunErrors%</p>" +
+            "<p>Check System > Schedule tasks and the sync logs. This alert repeats while no sync completes.</p>" +
+            "<p><a href=\"%Akeneo.SyncLogsUrl%\">Open the Akeneo sync logs</a></p>");
+
+        await localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
+        {
+            ["Plugins.Misc.AkeneoConnection.SyncAlertsEnabled"] = "Send sync alerts",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertsEnabled.Hint"] = "Email the recipients when a scheduled sync fails or has failed products, or when no scheduled sync has completed for a while. Manual runs never send alerts.",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertEmails"] = "Alert recipients",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertEmails.Hint"] = "Email addresses, separated by commas.",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertMinimumFailedProducts"] = "Minimum failed products",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertMinimumFailedProducts.Hint"] = "A scheduled run alerts once this many products fail. Runs that fail or are cancelled always alert.",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertStaleAfterHours"] = "Stale sync alert after (hours)",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertStaleAfterHours.Hint"] = "Alert when no scheduled sync has completed for this many hours. 0 turns the check off."
+        });
+    }
+
+    private async Task EnsureMessageTemplateAsync(string name, string subject, string body)
+    {
+        if ((await messageTemplateService.GetMessageTemplatesByNameAsync(name)).Any())
+            return;
+
+        await messageTemplateService.InsertMessageTemplateAsync(new MessageTemplate
+        {
+            Name = name,
+            Subject = subject,
+            Body = body,
+            IsActive = true,
+            EmailAccountId = emailAccountSettings.DefaultEmailAccountId
+        });
     }
 
     private async Task EnsureScheduleTaskAsync(

@@ -72,6 +72,9 @@ public class AkeneoSyncProfileModelFactory(
             RelatedProductSyncModeId =
                 (int)AkeneoCollectionSyncMode.Disabled,
 
+            CrossSellSyncModeId =
+                (int)AkeneoCollectionSyncMode.Disabled,
+
             SpecificationAttributeSyncModeId =
                 (int)AkeneoCollectionSyncMode.Merge,
 
@@ -157,6 +160,12 @@ public class AkeneoSyncProfileModelFactory(
 
             model.RelatedProductAssociationType =
                 profile.RelatedProductAssociationType;
+
+            model.CrossSellSyncModeId =
+                profile.CrossSellSyncModeId;
+
+            model.CrossSellAssociationType =
+                profile.CrossSellAssociationType;
 
             model.SpecificationAttributeSyncModeId =
                 profile.SpecificationAttributeSyncModeId;
@@ -306,6 +315,12 @@ public class AkeneoSyncProfileModelFactory(
             BuildSelectList(
                 Enum.GetValues<AkeneoCollectionSyncMode>(),
                 model.RelatedProductSyncModeId,
+                GetCollectionSyncModeText);
+
+        model.AvailableCrossSellSyncModes =
+            BuildSelectList(
+                Enum.GetValues<AkeneoCollectionSyncMode>(),
+                model.CrossSellSyncModeId,
                 GetCollectionSyncModeText);
 
         model.AvailableSpecificationAttributeSyncModes =

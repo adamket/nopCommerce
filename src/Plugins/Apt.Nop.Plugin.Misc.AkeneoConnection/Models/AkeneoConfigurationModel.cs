@@ -31,5 +31,19 @@ public record AkeneoConfigurationModel : BaseNopModel
     public int? DefaultSyncProfileId{ get; set; }
     public bool DefaultSyncProfileId_OverrideForStore { get; set; }
 
+    // Alert settings are global: alerts come from schedule tasks, which run
+    // outside any store scope.
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.SyncAlertsEnabled")]
+    public bool SyncAlertsEnabled { get; set; }
+
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.SyncAlertEmails")]
+    public string SyncAlertEmails { get; set; }
+
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.SyncAlertMinimumFailedProducts")]
+    public int SyncAlertMinimumFailedProducts { get; set; }
+
+    [NopResourceDisplayName("Plugins.Misc.AkeneoConnection.SyncAlertStaleAfterHours")]
+    public int SyncAlertStaleAfterHours { get; set; }
+
     public List<SelectListItem> AvailableSyncProfiles { get; set; }
 }

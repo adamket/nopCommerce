@@ -348,6 +348,14 @@ public class AkeneoSyncProfileController(
                 ? null
                 : model.RelatedProductAssociationType.Trim();
 
+        profile.CrossSellSyncModeId =
+            model.CrossSellSyncModeId;
+
+        profile.CrossSellAssociationType =
+            string.IsNullOrWhiteSpace(model.CrossSellAssociationType)
+                ? null
+                : model.CrossSellAssociationType.Trim();
+
         profile.SpecificationAttributeSyncModeId =
             model.SpecificationAttributeSyncModeId;
 
@@ -398,6 +406,14 @@ public class AkeneoSyncProfileController(
             ModelState.AddModelError(
                 nameof(model.RelatedProductAssociationType),
                 "Enter the Akeneo association type to sync related products from.");
+        }
+
+        if (model.CrossSellSyncModeId != (int)AkeneoCollectionSyncMode.Disabled &&
+            string.IsNullOrWhiteSpace(model.CrossSellAssociationType))
+        {
+            ModelState.AddModelError(
+                nameof(model.CrossSellAssociationType),
+                "Enter the Akeneo association type to sync cross-sell products from.");
         }
     }
 
