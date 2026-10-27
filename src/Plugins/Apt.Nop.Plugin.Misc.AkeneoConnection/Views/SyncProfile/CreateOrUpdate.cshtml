@@ -117,8 +117,15 @@
             edit = isEdit ? Url.Action("Edit", "AkeneoSyncProfile", new { id = Model.Id }) : null,
             delete = isEdit ? Url.Action("Delete", "AkeneoSyncProfile", new { id = Model.Id }) : null,
             run = isEdit ? Url.Action("ImportProductsByProfile", "AkeneoSync", new { id = Model.Id }) : null,
-            fullRun = isEdit ? Url.Action("ImportProductsByProfile", "AkeneoSync", new { id = Model.Id, fullSync = true }) : null
-        }
+            resync = isEdit ? Url.Action("ResyncProfile", "AkeneoSync", new { id = Model.Id }) : null
+        },
+        resyncStatus = new
+        {
+            recommended = Model.ResyncRecommended,
+            changedOn = Model.ConfigurationChangedOn,
+            lastResyncOn = Model.LastResyncOn
+        },
+        updateOnlyWriteModeId = ((int)AkeneoProductWriteMode.UpdateOnly).ToString()
     };
 }
 
@@ -158,7 +165,7 @@
                             class="btn btn-success"
                             v-bind:disabled="!canRun"
                             v-bind:title="runDisabledReason || 'Runs the saved version of this profile.'"
-                            v-on:click="confirmRun(false)">
+                            v-on:click="confirmRun()">
                         <span v-if="busy === 'run'" class="akeneo-button-spinner" aria-hidden="true"></span>
                         <i v-else class="fas fa-play"></i>
                         {{ busy === 'run' ? 'Running...' : 'Run Profile' }}
@@ -167,11 +174,11 @@
                     <button type="button"
                             class="btn btn-warning"
                             v-bind:disabled="!canRun"
-                            v-bind:title="runDisabledReason || 'Runs a complete authoritative profile pass using only 100% complete Akeneo products.'"
-                            v-on:click="confirmRun(true)">
-                        <span v-if="busy === 'fullRun'" class="akeneo-button-spinner" aria-hidden="true"></span>
+                            v-bind:title="runDisabledReason || 'Re-reads every product in this profile’s scope. Never disables or deletes products.'"
+                            v-on:click="openResync">
+                        <span v-if="busy === 'resync'" class="akeneo-button-spinner" aria-hidden="true"></span>
                         <i v-else class="fas fa-sync-alt"></i>
-                        {{ busy === 'fullRun' ? 'Running...' : 'Run Full Reconciliation' }}
+                        {{ busy === 'resync' ? 'Resyncing...' : 'Resync' }}
                     </button>
 
                     <button type="button"
@@ -237,6 +244,22 @@
                                 Release lock
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-3 akeneo-resync-alert" role="status" v-if="resyncStatus.recommended && isEdit">
+                    <div class="akeneo-resync-alert-body">
+                        <div>
+                            <strong><i class="fas fa-info-circle"></i> Mappings or this profile changed since the last resync.</strong>
+                            <div class="mt-1">
+                                Changed {{ resyncStatus.changedOn }} · last resync
+                                {{ resyncStatus.lastResyncOn || 'never' }}.
+                                A delta run only revisits products changed in Akeneo, so other products keep their old output until a resync.
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-warning" v-bind:disabled="!canRun" v-on:click="openResync">
+                            <i class="fas fa-sync-alt"></i> Resync
+                        </button>
                     </div>
                 </div>
 
@@ -730,6 +753,73 @@
         </div>
         <div v-if="confirm.visible" class="modal-backdrop fade show" v-on:click="confirm.visible = false"></div>
 
+        <!-- Resync dialog -->
+        <div v-if="resync.visible" class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-resync-title">
+            <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 id="akeneo-resync-title" class="modal-title">Resync Akeneo Sync Profile</h5>
+                        <button type="button" class="close" aria-label="Close" v-on:click="resync.visible = false">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            Reads every product in this profile's scope, ignoring the updated-date filter, and applies the current mappings.
+                            A resync never disables or deletes products and does not move the delta watermark.
+                        </p>
+
+                        <div class="form-group">
+                            <label class="control-label">Families</label>
+                            <akeneo-combobox v-model="resync.familyCodes"
+                                             v-bind:options="resyncFamilyOptions"
+                                             placeholder="Whole profile · type to narrow to families"
+                                             add-placeholder="Add a family…"
+                                             item-name="family"
+                                             empty-text="No Akeneo families are available."></akeneo-combobox>
+                            <span class="form-text text-muted">
+                                Optional. Narrow the run to the families whose mappings you changed.
+                                Only a whole-profile resync clears the “mappings changed” notice.
+                            </span>
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label class="akeneo-switch">
+                                <input type="checkbox" v-model="resync.repairDestination" />
+                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                <span class="akeneo-switch-text">Repair destination</span>
+                            </label>
+                            <span class="form-text text-muted">
+                                Writes every product again, putting back fields edited in nopCommerce. Much slower.
+                                Off, products whose output is unchanged are skipped, which is enough after a mapping change.
+                            </span>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label class="akeneo-switch">
+                                <input type="checkbox" v-model="resync.updateExistingOnly" v-bind:disabled="profileIsUpdateOnly" />
+                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                <span class="akeneo-switch-text">Update existing products only</span>
+                            </label>
+                            <span class="form-text text-muted">
+                                {{ profileIsUpdateOnly
+                                    ? 'This profile already only updates existing products.'
+                                    : 'Nothing new is created. Keep this on until existing products are bound to their Akeneo models, so a resync cannot create duplicates.' }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" v-on:click="resync.visible = false">Cancel</button>
+                        <button type="button" class="btn btn-warning" v-on:click="runResync">
+                            <i class="fas fa-sync-alt"></i>
+                            {{ resync.familyCodes.length ? 'Resync ' + resync.familyCodes.length + ' famil' + (resync.familyCodes.length === 1 ? 'y' : 'ies') : 'Resync whole profile' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-if="resync.visible" class="modal-backdrop fade show" v-on:click="resync.visible = false"></div>
+
         <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
             <transition-group name="akeneo-toast">
                 <div v-for="toast in toasts" v-bind:key="toast.id" class="akeneo-toast" v-on:click="dismissToast(toast.id)">
@@ -835,7 +925,9 @@
                     options: appData.options,
                     modes: appData.updatedFilterModeIds,
                     urls: appData.urls,
-                    busy: false, // false or 'save' / 'run' / 'fullRun' / 'delete'
+                    busy: false, // false or 'save' / 'run' / 'resync' / 'delete'
+                    resyncStatus: appData.resyncStatus,
+                    resync: { visible: false, familyCodes: [], repairDestination: false, updateExistingOnly: true },
                     errors: {},
                     saveError: '',
                     runResult: null,
@@ -873,6 +965,19 @@
                 },
                 comboCategories: function () {
                     return toComboOptions(this.options.categories);
+                },
+                // A resync can only narrow the profile's families, never widen them.
+                resyncFamilyOptions: function () {
+                    var selected = this.form.selectedAkeneoFamilyCodes || [];
+                    if (!selected.length)
+                        return this.comboFamilies;
+
+                    return this.comboFamilies.filter(function (option) {
+                        return selected.some(function (code) { return code.toLowerCase() === option.value.toLowerCase(); });
+                    });
+                },
+                profileIsUpdateOnly: function () {
+                    return this.form.productWriteModeId === appData.updateOnlyWriteModeId;
                 },
                 runDisabledReason: function () {
                     if (!this.savedEnabled)
@@ -1049,39 +1154,59 @@
                     if (typeof action === 'function')
                         action();
                 },
-                confirmRun: function (full) {
+                confirmRun: function () {
                     var self = this;
 
-                    this.openConfirm(full
-                        ? {
-                            title: 'Run Full Akeneo Reconciliation',
-                            message: 'Run a complete authoritative sync now? Updated-date filters are ignored and only 100% complete products are included. If every page succeeds, configured missing-product lifecycle rules will be applied.',
-                            buttonText: 'Run Full Reconciliation',
-                            buttonClass: 'btn-warning',
-                            icon: 'fas fa-sync-alt',
-                            action: function () { self.run(true); }
-                        }
-                        : {
-                            title: 'Run Akeneo Sync Profile',
-                            message: 'Run this Akeneo sync profile now? This will import products using the saved profile settings.',
-                            buttonText: 'Run Profile',
-                            buttonClass: 'btn-success',
-                            icon: 'fas fa-play',
-                            action: function () { self.run(false); }
-                        });
+                    this.openConfirm({
+                        title: 'Run Akeneo Sync Profile',
+                        message: 'Run this Akeneo sync profile now? This will import products using the saved profile settings.',
+                        buttonText: 'Run Profile',
+                        buttonClass: 'btn-success',
+                        icon: 'fas fa-play',
+                        action: function () { self.run(); }
+                    });
                 },
-                run: function (full) {
+                openResync: function () {
+                    this.resync = {
+                        visible: true,
+                        familyCodes: [],
+                        repairDestination: false,
+                        updateExistingOnly: true
+                    };
+                },
+                runResync: function () {
+                    var resync = this.resync;
                     var self = this;
 
-                    this.busy = full ? 'fullRun' : 'run';
+                    this.resync.visible = false;
+                    this.post('resync', this.urls.resync, {
+                        repairDestination: resync.repairDestination ? 'true' : 'false',
+                        updateExistingOnly: resync.updateExistingOnly || this.profileIsUpdateOnly ? 'true' : 'false',
+                        familyCodes: resync.familyCodes
+                    }, function (response) {
+                        // Only a whole-profile resync clears the notice.
+                        if (response && !resync.familyCodes.length && !response.canceled && response.syncStatus !== 'Failed')
+                            self.resyncStatus = Object.assign({}, self.resyncStatus, { recommended: false });
+                    });
+                },
+                run: function () {
+                    this.post('run', this.urls.run, {});
+                },
+                post: function (busy, url, data, onDone) {
+                    var self = this;
+
+                    this.busy = busy;
                     this.runResult = null;
 
                     $.ajax({
                         type: 'POST',
-                        url: full ? this.urls.fullRun : this.urls.run,
+                        url: url,
                         dataType: 'json',
-                        data: addAntiForgeryToken({})
+                        traditional: true,
+                        data: addAntiForgeryToken(data)
                     }).done(function (response) {
+                        if (onDone)
+                            onDone(response);
                         self.runResult = {
                             cls: response.success
                                 ? 'alert-success'

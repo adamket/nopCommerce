@@ -16,6 +16,9 @@ public class AkeneoProductSyncExecutionResult
 
     public bool FullSyncUnavailable { get; set; }
 
+    /// <summary>The request was refused before a run started, for example a resync family outside the profile.</summary>
+    public bool InvalidRequest { get; set; }
+
     public int? ProfileId { get; set; }
 
     public int? SyncRunRecordId { get; set; }

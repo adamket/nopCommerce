@@ -12,12 +12,24 @@ public class AkeneoProductBatchImportRequestFactory(
      AkeneoSyncProfile profile,
      int syncRunRecordId,
      DateTime? previousSuccessfulWatermarkUtc = null,
-     AkeneoRunMode runMode = AkeneoRunMode.Delta)
+     AkeneoRunMode runMode = AkeneoRunMode.Delta,
+     AkeneoResyncOptions resyncOptions = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         var productWriteMode =
             (AkeneoProductWriteMode)profile.ProductWriteModeId;
+
+        var resync = runMode == AkeneoRunMode.Resync
+            ? resyncOptions ?? new AkeneoResyncOptions()
+            : null;
+
+        if (resync?.UpdateExistingOnly == true)
+            productWriteMode = AkeneoProductWriteMode.UpdateOnly;
+
+        var familyCodes = resync?.FamilyCodes?.Any(code => !string.IsNullOrWhiteSpace(code)) == true
+            ? resync.FamilyCodes
+            : profile.AkeneoFamilyCodes.SplitCsv();
 
         // Reject invalid persisted configuration before a run can write or reconcile.
         AkeneoProfileRules.ParseSkipRules(profile.SkipRulesJson);
@@ -108,7 +120,7 @@ public class AkeneoProductBatchImportRequestFactory(
                     profile.CategoryFilterModeId,
 
             AkeneoFamilyCodes =
-                profile.AkeneoFamilyCodes.SplitCsv(),
+                familyCodes,
 
             AkeneoProductGroupCodes =
                 profile.AkeneoProductGroupCodes.SplitCsv(),
@@ -121,13 +133,17 @@ public class AkeneoProductBatchImportRequestFactory(
                 ? AkeneoCompletenessFilter.RequiredComplete
                 : (AkeneoCompletenessFilter)profile.CompletenessFilterId,
 
-            UpdatedAfterUtc = runMode == AkeneoRunMode.Full
+            // Full and resync runs read every product in scope, so they need no
+            // updated-date filter or linked-asset change search.
+            UpdatedAfterUtc = runMode is AkeneoRunMode.Full or AkeneoRunMode.Resync
                 ? null
                 : ResolveUpdatedAfterUtc(profile, previousSuccessfulWatermarkUtc),
 
             IncludeLinkedAssetUpdates =
-                runMode != AkeneoRunMode.Full &&
+                runMode is not (AkeneoRunMode.Full or AkeneoRunMode.Resync) &&
                 profile.IncludeLinkedAssetUpdates,
+
+            RepairDestination = resync?.RepairDestination == true,
 
             ProductParentFilterMode =
                 (AkeneoProductParentFilterMode)

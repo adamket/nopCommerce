@@ -189,13 +189,15 @@ public sealed class AkeneoProductMappingFactory(
 
         AkeneoProductDefinition previewSource;
         string mappingFamilyVariantCode;
+        AkeneoAttributeMappingEntityScope? modelMappingScope = null;
 
         if (sourceEntityType == AkeneoEntityType.ProductModel)
         {
-            previewSource = await BuildEffectiveProductModelPreviewSourceAsync(
+            (previewSource, var scope) = await BuildEffectiveProductModelPreviewSourceAsync(
                 akeneoSource,
                 model,
                 cancellationToken);
+            modelMappingScope = scope;
             mappingFamilyVariantCode = previewSource.FamilyVariant?.Trim()
                 ?? akeneoSource.FamilyVariant?.Trim();
         }
@@ -224,7 +226,7 @@ public sealed class AkeneoProductMappingFactory(
         };
 
         var mappingFamilyCode = previewSource.Family ?? akeneoSource.Family;
-        var mappingEntityScope =
+        var mappingEntityScope = modelMappingScope ??
             AkeneoAttributeMappingScopeHelper.ResolveDefaultCurrentScope(
                 previewSource,
                 sourceEntityType);
@@ -427,26 +429,37 @@ public sealed class AkeneoProductMappingFactory(
             ancestors,
             hierarchyMode);
 
+        var subModelRule = await ResolveSubModelOverrideAsync(
+            familyMapping,
+            product,
+            hierarchy.ImmediateParentModel);
+
+        if (subModelRule.UsesSubModelParent())
+            hierarchy = productModelHierarchyResolver.ResolveSubModelParent(product, ancestors);
+
         model.ImmediateParentProductModelCode =
             hierarchy.ImmediateParentModel?.Code ?? product.Parent?.Trim();
         model.EffectiveParentProductModelCode =
             hierarchy.EffectiveParentProductModel?.Code ?? product.Parent?.Trim();
-        model.HierarchyDecision =
-            $"Akeneo leaf '{product.Identifier ?? product.Uuid}' uses {FormatHierarchyMode(hierarchy.Mode)}: " +
-            $"immediate parent '{model.ImmediateParentProductModelCode}', effective nopCommerce parent '{model.EffectiveParentProductModelCode}'.";
+        model.HierarchyDecision = hierarchy.IsSubModelParent
+            ? $"Akeneo leaf '{product.Identifier ?? product.Uuid}' matches a sub-model parent rule: " +
+              $"sub-model '{model.EffectiveParentProductModelCode}' is the nopCommerce parent."
+            : $"Akeneo leaf '{product.Identifier ?? product.Uuid}' uses {FormatHierarchyMode(hierarchy.Mode)}: " +
+              $"immediate parent '{model.ImmediateParentProductModelCode}', effective nopCommerce parent '{model.EffectiveParentProductModelCode}'.";
 
         return (hierarchy.EffectiveLeaf, familyVariantCode);
     }
 
-    private async Task<AkeneoProductDefinition>
+    private async Task<(AkeneoProductDefinition Model, AkeneoAttributeMappingEntityScope Scope)>
         BuildEffectiveProductModelPreviewSourceAsync(
             AkeneoProductDefinition productModel,
             AkeneoProductMappingPreviewModel model,
             CancellationToken cancellationToken)
     {
         var selectedCode = productModel.Code?.Trim();
+        AkeneoAttributeMappingEntityScope parentMappingScope;
         if (string.IsNullOrWhiteSpace(selectedCode))
-            return productModel;
+            return (productModel, AkeneoAttributeMappingEntityScope.ProductModel);
 
         var ancestors = new List<AkeneoProductDefinition>();
         var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -507,17 +520,20 @@ public sealed class AkeneoProductMappingFactory(
         var modelChain = new List<AkeneoProductDefinition> { productModel };
         modelChain.AddRange(ancestors);
 
-        var hierarchy = productModelHierarchyResolver.Resolve(
-            syntheticLeaf,
-            modelChain,
-            hierarchyMode);
+        // Must match AkeneoProductBatchSyncService.ResolveEffectiveProductModelAsync.
+        var subModelRule = await ResolveSubModelOverrideAsync(familyMapping, syntheticLeaf, productModel);
+        var hierarchy = subModelRule.UsesSubModelParent()
+            ? productModelHierarchyResolver.ResolveSubModelParent(syntheticLeaf, modelChain)
+            : productModelHierarchyResolver.Resolve(syntheticLeaf, modelChain, hierarchyMode);
 
         var effectiveModel = hierarchy.EffectiveParentProductModel;
+        parentMappingScope = hierarchy.ParentMappingScope;
 
         model.ImmediateParentProductModelCode = productModel.Code?.Trim();
         model.EffectiveParentProductModelCode = effectiveModel.Code?.Trim();
-        model.HierarchyDecision =
-            $"Akeneo product model '{selectedCode}' uses {FormatHierarchyMode(hierarchy.Mode)} and resolves to nopCommerce parent product model '{model.EffectiveParentProductModelCode}'.";
+        model.HierarchyDecision = hierarchy.IsSubModelParent
+            ? $"Akeneo product model '{selectedCode}' matches a sub-model parent rule and is its own nopCommerce parent, built with Sub-model parent mappings."
+            : $"Akeneo product model '{selectedCode}' uses {FormatHierarchyMode(hierarchy.Mode)} and resolves to nopCommerce parent product model '{model.EffectiveParentProductModelCode}'.";
 
         if (!string.Equals(
                 selectedCode,
@@ -528,7 +544,7 @@ public sealed class AkeneoProductMappingFactory(
                 $"The family hierarchy configuration resolves product model '{selectedCode}' to nopCommerce parent product model '{effectiveModel.Code}'. The preview and one-time import target the resolved parent model.");
         }
 
-        return effectiveModel;
+        return (effectiveModel, parentMappingScope);
     }
 
 
@@ -587,21 +603,6 @@ public sealed class AkeneoProductMappingFactory(
             AkeneoProductKey = effectiveParentCode
         };
 
-        var parentContext = await productSyncService.PrepareAsync(
-            effectiveParentModel,
-            AkeneoEntityType.ProductModel,
-            request,
-            parentResult,
-            originalSource.Family,
-            context.MappingFamilyVariantCode,
-            AkeneoAttributeMappingEntityScope.ProductModel,
-            cancellationToken);
-
-        model.ParentNopProductId = parentContext.ExistingProduct?.Id;
-        model.ParentProductDecision = parentContext.ExistingProduct == null
-            ? $"Parent product model '{effectiveParentCode}' would be created and synchronized before the leaf representation is applied."
-            : $"Existing nopCommerce parent product #{parentContext.ExistingProduct.Id} for model '{effectiveParentCode}' would be synchronized before the leaf representation is applied.";
-
         var familyMapping = await familyMappingService
             .GetEffectiveMappingAsync(
                 originalSource.Family,
@@ -625,11 +626,37 @@ public sealed class AkeneoProductMappingFactory(
             originalSource,
             immediateParentModel);
 
+        var parentContext = await productSyncService.PrepareAsync(
+            effectiveParentModel,
+            AkeneoEntityType.ProductModel,
+            request,
+            parentResult,
+            originalSource.Family,
+            context.MappingFamilyVariantCode,
+            overrideRule.UsesSubModelParent()
+                ? AkeneoAttributeMappingEntityScope.SubModelParent
+                : AkeneoAttributeMappingEntityScope.ProductModel,
+            cancellationToken);
+
+        model.ParentNopProductId = parentContext.ExistingProduct?.Id;
+        model.ParentProductDecision = parentContext.ExistingProduct == null
+            ? $"Parent product model '{effectiveParentCode}' would be created and synchronized before the leaf representation is applied."
+            : $"Existing nopCommerce parent product #{parentContext.ExistingProduct.Id} for model '{effectiveParentCode}' would be synchronized before the leaf representation is applied.";
+
         AkeneoVariantRelationshipMode? selectedMode = null;
         string representation;
         string decisionSource;
 
-        if (overrideRule != null)
+        if (overrideRule.UsesSubModelParent())
+        {
+            selectedMode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue;
+            representation = FormatVariantMode(selectedMode.Value);
+            decisionSource = "matching sub-model parent rule";
+            model.CurrentRepresentation = context.ExistingProduct == null
+                ? "No existing leaf product representation"
+                : $"Existing nopCommerce product #{context.ExistingProduct.Id} becomes an associated child of the sub-model parent";
+        }
+        else if (overrideRule != null)
         {
             if (overrideRule.VariantRelationshipOverrideMode ==
                 AkeneoVariantRelationshipMode.None)

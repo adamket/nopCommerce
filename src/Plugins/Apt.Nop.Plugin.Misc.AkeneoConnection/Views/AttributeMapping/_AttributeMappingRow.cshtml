@@ -582,6 +582,19 @@
                                 Standalone products
                             </span>
                         </label>
+
+                        <label class="akeneo-switch mr-4 mb-2"
+                               title="Parents a family sub-model rule creates from a matched sub-model.">
+                            <input type="checkbox"
+                                   v-bind:id="'scope-sub-model-parent-' + m.clientKey"
+                                   v-model="m.draft.applyToSubModelParents" />
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+                            <span class="akeneo-switch-text">
+                                Sub-model parents
+                            </span>
+                        </label>
                     </div>
 
                     <small class="form-text text-muted">

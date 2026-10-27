@@ -24,4 +24,14 @@ public sealed class AkeneoProductModelHierarchyResolution
         Array.Empty<AkeneoProductDefinition>();
 
     public bool IsFlattened { get; init; }
+
+    /// <summary>
+    /// Set when a sub-model parent rule made the matched sub-model the parent;
+    /// the parent is then built with Sub-model parent mappings.
+    /// </summary>
+    public bool IsSubModelParent { get; init; }
+
+    public AkeneoAttributeMappingEntityScope ParentMappingScope => IsSubModelParent
+        ? AkeneoAttributeMappingEntityScope.SubModelParent
+        : AkeneoAttributeMappingEntityScope.ProductModel;
 }

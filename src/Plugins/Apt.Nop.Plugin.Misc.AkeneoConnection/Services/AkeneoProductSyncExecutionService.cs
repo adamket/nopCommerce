@@ -57,7 +57,79 @@ public class AkeneoProductSyncExecutionService(
         if (validation.Result != null)
             return validation.Result;
 
+        return await RunProfileAsync(
+            validation.Profile,
+            syncType,
+            ResolveRunMode(syncType),
+            null,
+            cancellationToken);
+    }
+
+    public async Task<AkeneoProductSyncExecutionResult> ResyncProfileAsync(
+        int profileId,
+        AkeneoResyncOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = await ValidateProfileAsync(profileId);
+        if (validation.Result != null)
+            return validation.Result;
+
         var profile = validation.Profile;
+        options ??= new AkeneoResyncOptions();
+
+        var profileFamilies = profile.AkeneoFamilyCodes.SplitCsv();
+        var families = (options.FamilyCodes ?? new List<string>())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Narrowing may only shrink the profile's scope, never widen it.
+        var outside = profileFamilies.Count == 0
+            ? new List<string>()
+            : families.Where(code => !profileFamilies.Contains(code, StringComparer.OrdinalIgnoreCase)).ToList();
+
+        if (outside.Count > 0)
+        {
+            var message = $"Families {string.Join(", ", outside)} are not in this profile's families, so a resync cannot include them.";
+            return new AkeneoProductSyncExecutionResult
+            {
+                Success = false,
+                InvalidRequest = true,
+                ProfileId = profile.Id,
+                SyncStatus = SyncStatus.Failed,
+                Message = message,
+                Errors = new List<string> { message }
+            };
+        }
+
+        options = new AkeneoResyncOptions
+        {
+            RepairDestination = options.RepairDestination,
+            UpdateExistingOnly = options.UpdateExistingOnly,
+            FamilyCodes = families
+        };
+
+        var result = await RunProfileAsync(
+            profile,
+            families.Count > 0 ? SyncType.ManualFamilyResync : SyncType.ManualResync,
+            AkeneoRunMode.Resync,
+            options,
+            cancellationToken);
+
+        if (result.SyncRunRecordId.HasValue && !result.AlreadyRunning)
+            result.Messages.Insert(0, DescribeResync(options));
+
+        return result;
+    }
+
+    private async Task<AkeneoProductSyncExecutionResult> RunProfileAsync(
+        AkeneoSyncProfile profile,
+        SyncType syncType,
+        AkeneoRunMode runMode,
+        AkeneoResyncOptions resyncOptions,
+        CancellationToken cancellationToken)
+    {
         var lease = await syncLeaseService.TryAcquireAsync(
             BuildLockKey(profile.Id),
             LeaseDuration);
@@ -70,7 +142,6 @@ public class AkeneoProductSyncExecutionService(
 
         try
         {
-            var runMode = ResolveRunMode(syncType);
             var scopeHash = await BuildScopeHashAsync(profile, runMode);
             DateTime? previousWatermarkUtc = null;
 
@@ -99,7 +170,8 @@ public class AkeneoProductSyncExecutionService(
                 profile,
                 runRecord.Id,
                 previousWatermarkUtc,
-                runMode);
+                runMode,
+                resyncOptions);
 
             request.ScopeHash = scopeHash;
             request.SyncLeaseId = lease.Id;
@@ -585,6 +657,19 @@ public class AkeneoProductSyncExecutionService(
         return message;
     }
 
+    private static string DescribeResync(AkeneoResyncOptions options)
+    {
+        var scope = options.FamilyCodes.Count > 0
+            ? $"families {string.Join(", ", options.FamilyCodes)}"
+            : "the whole profile";
+        var writes = options.RepairDestination
+            ? "Repair on, so every product is written again"
+            : "products whose output is unchanged are skipped";
+        var creation = options.UpdateExistingOnly ? " Existing products only; nothing is created." : string.Empty;
+
+        return $"Resync of {scope}: {writes}.{creation} A resync never disables or deletes products and does not move the delta watermark.";
+    }
+
     private static AkeneoRunMode ResolveRunMode(SyncType syncType) => syncType switch
     {
         SyncType.InitialImport => AkeneoRunMode.Full,
@@ -593,6 +678,7 @@ public class AkeneoProductSyncExecutionService(
         SyncType.ManualProfileSync => AkeneoRunMode.Delta,
         SyncType.ManualFullProfileSync => AkeneoRunMode.Full,
         SyncType.ScheduledFullSync => AkeneoRunMode.Full,
+        SyncType.ManualResync or SyncType.ManualFamilyResync => AkeneoRunMode.Resync,
         _ => AkeneoRunMode.Delta
     };
 

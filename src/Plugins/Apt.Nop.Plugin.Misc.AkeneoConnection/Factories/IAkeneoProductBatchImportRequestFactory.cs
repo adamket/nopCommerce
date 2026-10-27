@@ -9,5 +9,6 @@ public interface IAkeneoProductBatchImportRequestFactory
         AkeneoSyncProfile profile,
         int syncRunRecordId,
         DateTime? previousSuccessfulWatermarkUtc = null,
-        AkeneoRunMode runMode = AkeneoRunMode.Delta);
+        AkeneoRunMode runMode = AkeneoRunMode.Delta,
+        AkeneoResyncOptions resyncOptions = null);
 }

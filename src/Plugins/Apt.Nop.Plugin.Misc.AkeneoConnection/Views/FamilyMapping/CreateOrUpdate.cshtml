@@ -56,7 +56,11 @@
                 variantTriggerValue = x.VariantTriggerValue,
                 variantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
                 mergeAncestorValues = x.MergeAncestorValues,
-                displayOrder = x.DisplayOrder
+                displayOrder = x.DisplayOrder,
+                parentLevelId = x.ParentLevelId,
+                associatedProductAttributeId = x.AssociatedProductAttributeId,
+                associatedValueNameTemplate = x.AssociatedValueNameTemplate,
+                hideChildProducts = x.HideChildProducts
             }),
             availableProductAttributes = Model.AvailableProductAttributes.Select(x => new
             {
@@ -663,8 +667,78 @@
                                             </div>
 
                                             <div class="akeneo-mapping-detail">
-                                                <div class="row">
+                                                <div class="row mb-3">
                                                     <div class="col-md-5">
+                                                        <div class="form-group mb-0">
+                                                            <label>nopCommerce parent</label>
+                                                            <akeneo-search-select item-name="nopCommerce parent"
+                                                                                  v-model="row.parentLevelId"
+                                                                                  v-bind:options="parentLevelOptions"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'ParentLevelId')"
+                                                                   v-bind:value="row.parentLevelId" />
+                                                            <div class="form-text">
+                                                                The matching sub-model can be the parent, with each variant an associated-to-product value.
+                                                                Its parent product uses mappings with the Sub-model parents role.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row mb-3" v-if="isSubModelParentRule(row)">
+                                                    <div class="col-md-4">
+                                                        <div class="form-group mb-0">
+                                                            <label>Associated product attribute</label>
+                                                            <akeneo-search-select item-name="nopCommerce product attribute"
+                                                                                  v-model="row.associatedProductAttributeId"
+                                                                                  v-bind:options="comboOptions(availableProductAttributes, true)"
+                                                                                  placeholder="Family attribute"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'AssociatedProductAttributeId')"
+                                                                   v-bind:value="row.associatedProductAttributeId ?? ''" />
+                                                            <div class="form-text">Holds one value per variant. Blank uses the family's attribute.</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-5">
+                                                        <div class="form-group mb-0">
+                                                            <label>Associated value name</label>
+                                                            <input type="text"
+                                                                   class="form-control"
+                                                                   v-bind:name="subModelRuleName(index, 'AssociatedValueNameTemplate')"
+                                                                   v-model="row.associatedValueNameTemplate"
+                                                                   placeholder="Family template" />
+                                                            <div class="form-text">Same template language as the family's associated value name. Blank uses the family's.</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <div class="form-group mb-0">
+                                                            <label>Child products</label>
+                                                            <div>
+                                                                <label class="akeneo-switch">
+                                                                    <input type="checkbox"
+                                                                           v-bind:name="subModelRuleName(index, 'HideChildProducts')"
+                                                                           value="true"
+                                                                           v-model="row.hideChildProducts" />
+                                                                    <span class="akeneo-switch-track">
+                                                                        <span class="akeneo-switch-thumb"></span>
+                                                                    </span>
+                                                                    <span class="akeneo-switch-text">
+                                                                        {{ row.hideChildProducts ? 'Hidden' : 'Visible individually' }}
+                                                                    </span>
+                                                                </label>
+                                                                @* Must follow the checkbox: a bool binds from the first posted value. *@
+                                                                <input type="hidden"
+                                                                       v-bind:name="subModelRuleName(index, 'HideChildProducts')"
+                                                                       value="false" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row">
+                                                    <div class="col-md-5" v-if="!isSubModelParentRule(row)">
                                                         <div class="form-group mb-0">
                                                             <label>Relationship override</label>
                                                             <akeneo-search-select item-name="Relationship override"
@@ -679,7 +753,7 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="col-md-4">
+                                                    <div class="col-md-4" v-if="!isSubModelParentRule(row)">
                                                         <div class="form-group mb-0">
                                                             <label>Ancestor values</label>
                                                             <div>
@@ -731,6 +805,9 @@
                                                             </li>
                                                             <li v-if="Boolean(row.variantAxisAttributeCode) !== Boolean(row.variantTriggerValue)">
                                                                 The variant axis and trigger value must be supplied together.
+                                                            </li>
+                                                            <li v-if="isSubModelParentRule(row) && !subModelParentRuleIsValid(row)">
+                                                                A sub-model parent needs a sub-model condition and no variant condition.
                                                             </li>
                                                         </ul>
                                                     </div>
@@ -815,6 +892,10 @@
                         associated: @((int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue),
                         grouped: @((int)AkeneoVariantRelationshipMode.GroupedProducts)
                     },
+                    parentLevels: {
+                        familySetting: @((int)AkeneoSubModelParentLevel.FamilySetting),
+                        matchingSubModel: @((int)AkeneoSubModelParentLevel.MatchingSubModel)
+                    },
                     availableProductAttributes: initialModel.availableProductAttributes,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
                     familyError: initialModel.akeneoFamilyError || '',
@@ -850,6 +931,10 @@
                                     @((int)AkeneoVariantRelationshipMode.None)),
                             mergeAncestorValues: row.mergeAncestorValues !== false,
                             displayOrder: row.displayOrder || index + 1,
+                            parentLevelId: Number(row.parentLevelId || 0),
+                            associatedProductAttributeId: row.associatedProductAttributeId ?? '',
+                            associatedValueNameTemplate: row.associatedValueNameTemplate || '',
+                            hideChildProducts: row.hideChildProducts !== false,
 
                             // UI-only properties
                             subModelOptions: [],
@@ -880,6 +965,13 @@
 
                 usesChildProducts() {
                     return this.isAssociatedMode || this.isGroupedMode;
+                },
+
+                parentLevelOptions() {
+                    return [
+                        { value: this.parentLevels.familySetting, label: 'Family setting', hint: '' },
+                        { value: this.parentLevels.matchingSubModel, label: 'Matching sub-model is the parent', hint: '' }
+                    ];
                 },
 
                 variantRelationshipModeOptions() {
@@ -1297,6 +1389,10 @@
                         variantRelationshipOverrideModeId: this.modes.none,
                         mergeAncestorValues: true,
                         displayOrder: this.form.subModelRules.length + 1,
+                        parentLevelId: this.parentLevels.familySetting,
+                        associatedProductAttributeId: '',
+                        associatedValueNameTemplate: '',
+                        hideChildProducts: true,
 
                         subModelOptions: [],
                         subModelOptionsLoading: false,
@@ -1378,8 +1474,20 @@
                     return hasSubModelCondition || hasVariantCondition;
                 },
 
+                isSubModelParentRule(row) {
+                    return Number(row.parentLevelId) === this.parentLevels.matchingSubModel;
+                },
+
+                subModelParentRuleIsValid(row) {
+                    return Boolean(row.akeneoAxisAttributeCode) && Boolean(row.triggerValue) &&
+                        !row.variantAxisAttributeCode && !row.variantTriggerValue;
+                },
+
                 subModelRuleNeedsAttention(row) {
                     if (!this.hasAnySubModelRuleCondition(row))
+                        return true;
+
+                    if (this.isSubModelParentRule(row) && !this.subModelParentRuleIsValid(row))
                         return true;
 
                     if (Boolean(row.akeneoAxisAttributeCode) !== Boolean(row.triggerValue))

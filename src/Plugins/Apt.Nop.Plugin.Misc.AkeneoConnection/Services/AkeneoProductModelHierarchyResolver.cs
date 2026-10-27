@@ -64,6 +64,30 @@ public class AkeneoProductModelHierarchyResolver
         };
     }
 
+    public AkeneoProductModelHierarchyResolution ResolveSubModelParent(
+        AkeneoProductDefinition leaf,
+        IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst)
+    {
+        var resolution = Resolve(
+            leaf,
+            ancestorsNearestFirst,
+            AkeneoProductModelHierarchyMode.ImmediateParentProductModel);
+
+        // The child keeps the inherited values it had as a standalone or
+        // flattened leaf, so its own mappings resolve the same values.
+        return new AkeneoProductModelHierarchyResolution
+        {
+            Mode = resolution.Mode,
+            ImmediateParentModel = resolution.ImmediateParentModel,
+            ParentProductModel = resolution.ParentProductModel,
+            EffectiveParentProductModel = resolution.EffectiveParentProductModel,
+            LeafWithInheritedValues = resolution.LeafWithInheritedValues,
+            EffectiveLeaf = resolution.LeafWithInheritedValues,
+            AncestorsNearestFirst = resolution.AncestorsNearestFirst,
+            IsSubModelParent = true
+        };
+    }
+
     internal static AkeneoProductDefinition MergeWithAncestors(
         AkeneoProductDefinition item,
         IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst)

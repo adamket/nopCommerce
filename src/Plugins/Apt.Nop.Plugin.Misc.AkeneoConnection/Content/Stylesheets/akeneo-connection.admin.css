@@ -2471,6 +2471,22 @@
     white-space: nowrap;
   }
 
+/* Resync recommended notice on the sync profile page */
+.akeneo-connection .akeneo-resync-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+  .akeneo-connection .akeneo-resync-alert-body .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+  }
+
 /* ===========================================================
    Palette harmony
    The toolbar panels use soft tints with deep ink text (indigo for scope,

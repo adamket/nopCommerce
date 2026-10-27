@@ -113,6 +113,7 @@ public sealed class AkeneoConfigurationImportDocument
             {
                 Require(rule != null, "A submodel rule cannot be null.");
                 EnumValue<AkeneoVariantRelationshipMode>(rule.VariantRelationshipOverrideModeId);
+                EnumValue<AkeneoSubModelParentLevel>(rule.ParentLevelId);
             }
         }
         var slots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -200,7 +201,7 @@ public sealed class AkeneoConfigurationImportDocument
         }
     }
 
-    private static void Scope(int value) => Require(value > 0 && (value & ~7) == 0, "Invalid product role scope.");
+    private static void Scope(int value) => Require(value > 0 && (value & ~(int)AkeneoAttributeMappingEntityScope.All) == 0, "Invalid product role scope.");
     private static void EnumValue<T>(int value) where T : struct, Enum =>
         Require(Enum.IsDefined(typeof(T), value), "Invalid " + typeof(T).Name + " value.");
     internal static void Require(bool condition, string message)

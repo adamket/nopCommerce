@@ -184,6 +184,37 @@ public class AkeneoSyncController(
                 : SyncType.ManualProfileSync,
             cancellationToken);
 
+        return ProfileRunResponse(result);
+    }
+
+    /// <summary>
+    /// Re-reads the profile's scope without the updated-date filter. Never
+    /// disables or deletes products and never moves the delta watermark.
+    /// </summary>
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> ResyncProfile(
+        int id,
+        bool repairDestination,
+        bool updateExistingOnly,
+        string[] familyCodes,
+        CancellationToken cancellationToken)
+    {
+        var result = await productSyncExecutionService.ResyncProfileAsync(
+            id,
+            new AkeneoResyncOptions
+            {
+                RepairDestination = repairDestination,
+                UpdateExistingOnly = updateExistingOnly,
+                FamilyCodes = familyCodes?.ToList() ?? new List<string>()
+            },
+            cancellationToken);
+
+        return ProfileRunResponse(result);
+    }
+
+    private IActionResult ProfileRunResponse(AkeneoProductSyncExecutionResult result)
+    {
         if (result.ProfileNotFound)
         {
             return NotFound(new
@@ -193,7 +224,7 @@ public class AkeneoSyncController(
             });
         }
 
-        if (result.ProfileDisabled || result.FullSyncUnavailable)
+        if (result.ProfileDisabled || result.FullSyncUnavailable || result.InvalidRequest)
         {
             return BadRequest(new
             {

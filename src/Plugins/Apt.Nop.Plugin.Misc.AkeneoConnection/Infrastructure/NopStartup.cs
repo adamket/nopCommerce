@@ -58,6 +58,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncRunRecordService, AkeneoSyncRunRecordService>();
         services.AddScoped<IAkeneoSyncLogRetentionService, AkeneoSyncLogRetentionService>();
         services.AddScoped<IAkeneoSyncAlertService, AkeneoSyncAlertService>();
+        services.AddScoped<IAkeneoMappingChangeTracker, AkeneoMappingChangeTracker>();
         services.AddScoped<IAkeneoSyncProfileModelFactory, AkeneoSyncProfileModelFactory>();
         services.AddScoped<IAkeneoProductBatchImportRequestFactory, AkeneoProductBatchImportRequestFactory>();
         services.AddScoped<IAkeneoProductSyncExecutionService, AkeneoProductSyncExecutionService>();
@@ -130,7 +131,7 @@ public class NopStartup : INopStartup
 
         services.AddScoped<AkeneoProductAssetSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
-            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
+            provider.GetRequiredService<AkeneoProductAssetSynchronizer>());
 
         services.AddScoped<AkeneoProductCustomPropertySynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>

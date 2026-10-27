@@ -464,10 +464,10 @@ public class AkeneoFamilyMappingController(
                 "Product attribute combination mode requires at least one axis mapping.");
         }
 
-        ValidateSubModelRules(model.SubModelRules);
+        ValidateSubModelRules(model.SubModelRules, model.AssociatedProductAttributeId);
     }
 
-    private void ValidateSubModelRules(IList<AkeneoFamilySubModelRuleModel> rules)
+    private void ValidateSubModelRules(IList<AkeneoFamilySubModelRuleModel> rules, int? familyAssociatedProductAttributeId)
     {
         for (var index = 0; index < rules.Count; index++)
         {
@@ -504,6 +504,31 @@ public class AkeneoFamilyMappingController(
                 ModelState.AddModelError(
                     $"SubModelRules[{index}].VariantRelationshipOverrideModeId",
                     $"Sub-model rule {index + 1} has an invalid relationship override mode.");
+            }
+
+            if (!Enum.IsDefined(typeof(AkeneoSubModelParentLevel), rule.ParentLevelId))
+            {
+                ModelState.AddModelError(
+                    $"SubModelRules[{index}].ParentLevelId",
+                    $"Sub-model rule {index + 1} has an invalid parent level.");
+            }
+            else if (rule.ParentLevelId == (int)AkeneoSubModelParentLevel.MatchingSubModel)
+            {
+                // The parent is chosen per sub-model, so every leaf of a matched
+                // sub-model must match too: a variant condition would split them.
+                if (!hasSubModelCode || hasVariantCode || hasVariantValue)
+                {
+                    ModelState.AddModelError(
+                        $"SubModelRules[{index}].ParentLevelId",
+                        $"Sub-model rule {index + 1} makes the sub-model the parent, so it needs a sub-model condition and no variant condition.");
+                }
+
+                if (rule.AssociatedProductAttributeId is not > 0 && familyAssociatedProductAttributeId is not > 0)
+                {
+                    ModelState.AddModelError(
+                        $"SubModelRules[{index}].AssociatedProductAttributeId",
+                        $"Sub-model rule {index + 1} needs a product attribute for the associated values, on the rule or the family.");
+                }
             }
         }
     }
@@ -578,8 +603,15 @@ public class AkeneoFamilyMappingController(
                 TriggerValue = model.TriggerValue?.Trim(),
                 VariantAxisAttributeCode = model.VariantAxisAttributeCode?.Trim(),
                 VariantTriggerValue = model.VariantTriggerValue?.Trim(),
-                VariantRelationshipOverrideModeId = model.VariantRelationshipOverrideModeId,
+                // A sub-model parent always uses associated-to-product values.
+                VariantRelationshipOverrideModeId = model.ParentLevelId == (int)AkeneoSubModelParentLevel.MatchingSubModel
+                    ? (int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue
+                    : model.VariantRelationshipOverrideModeId,
                 MergeAncestorValues = model.MergeAncestorValues,
+                ParentLevelId = model.ParentLevelId,
+                AssociatedProductAttributeId = model.AssociatedProductAttributeId is > 0 ? model.AssociatedProductAttributeId : null,
+                AssociatedValueNameTemplate = string.IsNullOrWhiteSpace(model.AssociatedValueNameTemplate) ? null : model.AssociatedValueNameTemplate.Trim(),
+                HideChildProducts = model.HideChildProducts,
                 DisplayOrder = model.DisplayOrder > 0
                     ? model.DisplayOrder
                     : item.Index + 1

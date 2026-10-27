@@ -250,7 +250,7 @@ public partial class AkeneoProductSeoSynchronizer
 
         var requested = mapped.HasValue ? mapped.DisplayValue : string.Empty;
         var reclaim = mapped.HasValue
-            ? await FindSlugHeldByDeletedProductsAsync(requested, slugProduct.Id)
+            ? await FindReleasableSlugAsync(context, requested, slugProduct.Id)
             : null;
         var proposed = reclaim?.Slug ?? await _urlRecordService.ValidateSeNameAsync(
             slugProduct,
@@ -282,7 +282,7 @@ public partial class AkeneoProductSeoSynchronizer
 
         var note = conflict ?? adjustmentWarning ??
                    (reclaim != null
-                       ? $"The slug is held by deleted nopCommerce product ID {string.Join(", ", reclaim.DeletedProductIds)} and will be moved to this product."
+                       ? $"The slug is held by {reclaim.DescribeHolders()} and will be moved to this product."
                        : "The proposed value is the validated slug that nopCommerce would save.");
 
         plan.AddOperation(
@@ -300,25 +300,47 @@ public partial class AkeneoProductSeoSynchronizer
                 ? async _ =>
                 {
                     if (reclaim != null && context.Product != null)
-                        await ReleaseSlugFromDeletedProductsAsync(context, reclaim);
+                        await ReleaseSlugAsync(context, reclaim);
 
-                    return await SaveSlugIfChangedAsync(context, proposed);
+                    var saved = await SaveSlugIfChangedAsync(context, proposed);
+
+                    if (reclaim != null && context.Product != null)
+                        await GiveReleasedVariantsSlugsAsync(context, reclaim);
+
+                    return saved;
                 }
                 : null);
     }
 
-    private sealed record DeletedProductSlugReclaim(
+    private sealed record SlugReclaim(
         string Slug,
         IReadOnlyList<UrlRecord> Records,
-        IReadOnlyList<int> DeletedProductIds);
+        IReadOnlyList<int> DeletedProductIds,
+        IReadOnlyList<int> VariantProductIds)
+    {
+        public string DescribeHolders()
+        {
+            var parts = new List<string>();
+            if (DeletedProductIds.Count > 0)
+                parts.Add($"deleted nopCommerce product ID {string.Join(", ", DeletedProductIds)}");
+            if (VariantProductIds.Count > 0)
+                parts.Add($"nopCommerce product ID {string.Join(", ", VariantProductIds)}, a variant of this product model");
+
+            return string.Join(" and ", parts);
+        }
+    }
 
     /// <summary>
-    /// Returns the cleaned Akeneo slug when every URL record holding it belongs
-    /// to a nopCommerce product that is deleted (or no longer exists), so the
-    /// slug can be moved to this product instead of being suffixed with "-2".
-    /// Returns null when the slug is free, reserved, or held by a live entity.
+    /// Returns the cleaned Akeneo slug when every URL record holding it can be
+    /// moved to this product instead of the slug being suffixed with "-2":
+    /// records of products that are deleted (or no longer exist), and, for a
+    /// product-model parent, records of the live products this profile synced
+    /// from its own variants. The second case hands a standalone variant's slug
+    /// to the parent a sub-model parent rule creates above it. Returns null
+    /// when the slug is free, reserved, or held by any other live entity.
     /// </summary>
-    private async Task<DeletedProductSlugReclaim> FindSlugHeldByDeletedProductsAsync(
+    private async Task<SlugReclaim> FindReleasableSlugAsync(
+        AkeneoProductSyncContext context,
         string requested,
         int productId)
     {
@@ -351,25 +373,88 @@ public partial class AkeneoProductSeoSynchronizer
             return null;
         }
 
-        var deletedProductIds = holders.Select(record => record.EntityId).Distinct().ToList();
+        var deletedProductIds = new List<int>();
+        var variantProductIds = new List<int>();
 
-        foreach (var holderId in deletedProductIds)
+        foreach (var holderId in holders.Select(record => record.EntityId).Distinct())
         {
             var holder = await _productService.GetProductByIdAsync(holderId);
-            if (holder is { Deleted: false })
+            if (holder is not { Deleted: false })
+                deletedProductIds.Add(holderId);
+            else if (await IsSyncedVariantOfThisModelAsync(context, holderId))
+                variantProductIds.Add(holderId);
+            else
                 return null;
         }
 
-        return new DeletedProductSlugReclaim(slug, holders, deletedProductIds);
+        return new SlugReclaim(slug, holders, deletedProductIds, variantProductIds);
     }
 
-    private async Task ReleaseSlugFromDeletedProductsAsync(
+    /// <summary>
+    /// True when this profile synced the product from a variant whose Akeneo
+    /// parent is the product model being written. Attribute combinations are
+    /// excluded: their state points at the parent product itself.
+    /// </summary>
+    private async Task<bool> IsSyncedVariantOfThisModelAsync(
         AkeneoProductSyncContext context,
-        DeletedProductSlugReclaim reclaim)
+        int productId)
+    {
+        var modelCode = context.SourceCode?.Trim();
+        var profileId = context.Request?.SyncProfileId;
+
+        if (_syncStateRepository == null ||
+            context.SourceEntityType != AkeneoEntityType.ProductModel ||
+            string.IsNullOrWhiteSpace(modelCode) ||
+            !profileId.HasValue)
+        {
+            return false;
+        }
+
+        var states = await _syncStateRepository.Table
+            .Where(state =>
+                state.SyncProfileId == profileId.Value &&
+                state.NopProductId == productId &&
+                state.AkeneoEntityTypeId == (int)AkeneoEntityType.Product &&
+                state.DestinationKindId != (int)AkeneoProductDestinationKind.ProductAttributeCombination)
+            .ToListAsync();
+
+        return states.Any(state => string.Equals(
+            state.AkeneoParentCode?.Trim(),
+            modelCode,
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task ReleaseSlugAsync(
+        AkeneoProductSyncContext context,
+        SlugReclaim reclaim)
     {
         await _urlRecordService.DeleteUrlRecordsAsync(reclaim.Records.ToList());
         context.Result.AddMessage(
-            $"Released URL slug '{reclaim.Slug}' from deleted nopCommerce product ID {string.Join(", ", reclaim.DeletedProductIds)}.");
+            $"Released URL slug '{reclaim.Slug}' from {reclaim.DescribeHolders()}.");
+    }
+
+    /// <summary>
+    /// A variant that handed its slug to this parent gets a new one from its
+    /// name, numbered by nopCommerce if the name gives the same slug.
+    /// </summary>
+    private async Task GiveReleasedVariantsSlugsAsync(
+        AkeneoProductSyncContext context,
+        SlugReclaim reclaim)
+    {
+        foreach (var productId in reclaim.VariantProductIds)
+        {
+            var variant = await _productService.GetProductByIdAsync(productId);
+            if (variant is not { Deleted: false } ||
+                !string.IsNullOrWhiteSpace(await _urlRecordService.GetActiveSlugAsync(productId, nameof(Product), 0)))
+            {
+                continue;
+            }
+
+            var slug = await _urlRecordService.ValidateSeNameAsync(variant, null, variant.Name, true);
+            await _urlRecordService.SaveSlugAsync(variant, slug, 0);
+            context.Result.AddMessage(
+                $"Gave nopCommerce product ID {productId} the URL slug '{slug}' after its old slug moved to this product.");
+        }
     }
 
     /// <summary>

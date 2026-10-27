@@ -55,7 +55,8 @@ public static class AkeneoAttributeMappingScopeHelper
         return currentScope is
             AkeneoAttributeMappingEntityScope.ProductModel or
             AkeneoAttributeMappingEntityScope.VariantProduct or
-            AkeneoAttributeMappingEntityScope.StandaloneProduct
+            AkeneoAttributeMappingEntityScope.StandaloneProduct or
+            AkeneoAttributeMappingEntityScope.SubModelParent
                 ? currentScope
                 : ResolveDefaultCurrentScope(source, sourceEntityType);
     }

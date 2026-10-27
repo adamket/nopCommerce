@@ -665,7 +665,7 @@ public class AkeneoProductBatchSyncService(
                 [requestedCode] = source
             };
 
-            var effectiveSource = await ResolveEffectiveProductModelAsync(
+            var (effectiveSource, parentMappingScope) = await ResolveEffectiveProductModelAsync(
                 source,
                 productModelCache,
                 cancellationToken);
@@ -681,8 +681,8 @@ public class AkeneoProductBatchSyncService(
                     $"Product model '{requestedCode}' resolves to configured nopCommerce parent model '{effectiveSource.Code}'.");
             }
 
-            var context = await productSyncService.PrepareAsync(
-                effectiveSource, AkeneoEntityType.ProductModel, request, result, source.Family, cancellationToken);
+            var context = await PrepareParentAsync(
+                effectiveSource, request, result, source.Family, parentMappingScope, cancellationToken);
             AppendParentNameResolutionDiagnostic(context, result, effectiveSource.Code, request);
 
             await productSyncService.RunPrepareAsync(context, cancellationToken);
@@ -792,9 +792,9 @@ public class AkeneoProductBatchSyncService(
 
         // Build a read-only fingerprint of the resolved nopCommerce desired
         // state before downloading asset binaries or opening a transaction.
-        // Full runs intentionally never use this as a skip gate: they remain
-        // authoritative destination reconciliations and can repair nopCommerce
-        // drift even when Akeneo itself has not changed.
+        // Full runs and resyncs with Repair never use this as a skip gate:
+        // they rewrite the destination, repairing nopCommerce drift even when
+        // Akeneo itself has not changed.
         var resolvedDesiredState = request.SyncProfileId.HasValue
             ? await TryResolveDesiredStateAsync(
                 source,
@@ -808,7 +808,7 @@ public class AkeneoProductBatchSyncService(
         // The hash says the Akeneo side is unchanged; it says nothing about
         // nopCommerce. Only skip when the previously written destination still
         // exists, so products deleted in nopCommerce are written again.
-        var skipLeafWrite = request.RunMode == AkeneoRunMode.Delta &&
+        var skipLeafWrite = SkipsUnchangedWrites(request) &&
                             previousState != null &&
                             previousState.LifecycleStatusId ==
                                 (int)AkeneoProductLifecycleStatus.Active &&
@@ -1015,7 +1015,7 @@ public class AkeneoProductBatchSyncService(
                     ApplyPreviousStateBinding(result, previousState);
                     result.ActionType = SyncItemActionType.Skipped;
                     result.AddMessage(
-                        "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A full run will still verify destination state.");
+                        "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A resync with Repair rewrites it.");
                 }
 
                 return result;
@@ -1121,7 +1121,16 @@ public class AkeneoProductBatchSyncService(
             source,
             hierarchy.ImmediateParentModel);
 
-        if (overrideRule != null)
+        if (overrideRule.UsesSubModelParent())
+        {
+            // The matched sub-model is the parent, whatever the family's
+            // hierarchy mode, and each leaf an associated-to-product value.
+            hierarchy = productModelHierarchyResolver.ResolveSubModelParent(
+                source,
+                hierarchy.AncestorsNearestFirst);
+            forcedMode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue;
+        }
+        else if (overrideRule != null)
         {
             if (overrideRule.VariantRelationshipOverrideMode ==
                 AkeneoVariantRelationshipMode.None)
@@ -1171,7 +1180,7 @@ public class AkeneoProductBatchSyncService(
                             result.Sku = effectiveContext.Sku;
                             result.ActionType = SyncItemActionType.Skipped;
                             result.AddMessage(
-                                "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A full run will still verify destination state.");
+                                "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A resync with Repair rewrites it.");
                         }
 
                         return result;
@@ -1242,7 +1251,8 @@ public class AkeneoProductBatchSyncService(
                 request,
                 parentProductCache,
                 assetBinaryCache,
-                cancellationToken);
+                cancellationToken,
+                hierarchy.ParentMappingScope);
             return result;
         }
 
@@ -1253,7 +1263,8 @@ public class AkeneoProductBatchSyncService(
             result,
             parentProductCache,
             assetBinaryCache,
-            cancellationToken);
+            cancellationToken,
+            hierarchy.ParentMappingScope);
 
         var parentProduct = parentSync?.Product;
 
@@ -1280,7 +1291,7 @@ public class AkeneoProductBatchSyncService(
             result.Sku = leafContext.Sku;
             result.ActionType = SyncItemActionType.Skipped;
             result.AddMessage(
-                "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this delta item.");
+                "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this item.");
             return result;
         }
 
@@ -1294,6 +1305,8 @@ public class AkeneoProductBatchSyncService(
             cancellationToken);
 
         variantContext.VariantRelationshipModeOverride = forcedMode;
+        if (hierarchy.IsSubModelParent)
+            variantContext.SubModelParentRule = overrideRule;
 
         AkeneoVariantSyncResult variantResult;
 
@@ -1545,7 +1558,8 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportResult result,
         IDictionary<string, Product> parentProductCache,
         IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AkeneoAttributeMappingEntityScope parentMappingScope = AkeneoAttributeMappingEntityScope.ProductModel)
     {
         var parentCode = effectiveProductModel?.Code?.Trim();
         if (string.IsNullOrWhiteSpace(parentCode))
@@ -1580,12 +1594,12 @@ public class AkeneoProductBatchSyncService(
 
         // PrepareAsync resolves an existing nopCommerce parent by its product-
         // model entity mapping, while still reapplying current attribute maps.
-        var parentContext = await productSyncService.PrepareAsync(
+        var parentContext = await PrepareParentAsync(
             effectiveProductModel,
-            AkeneoEntityType.ProductModel,
             request,
             parentResult,
             mappingFamilyCode,
+            parentMappingScope,
             cancellationToken);
         parentContext.PreloadedAssetBinaries = assetBinaryCache;
 
@@ -1716,7 +1730,8 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportRequest request,
         IDictionary<string, Product> parentProductCache,
         IDictionary<string, AkeneoBinaryFile> assetBinaryCache,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AkeneoAttributeMappingEntityScope parentMappingScope = AkeneoAttributeMappingEntityScope.ProductModel)
     {
         var parentCode = effectiveProductModel?.Code?.Trim();
         if (string.IsNullOrWhiteSpace(parentCode))
@@ -1733,17 +1748,45 @@ public class AkeneoProductBatchSyncService(
             AkeneoProductKey = parentCode
         };
 
-        var parentContext = await productSyncService.PrepareAsync(
+        var parentContext = await PrepareParentAsync(
             effectiveProductModel,
-            AkeneoEntityType.ProductModel,
             request,
             parentResult,
             mappingFamilyCode,
+            parentMappingScope,
             cancellationToken);
         parentContext.PreloadedAssetBinaries = assetBinaryCache;
 
         await productSyncService.RunPrepareAsync(parentContext, cancellationToken);
     }
+
+    /// <summary>
+    /// Prepares a parent product. Product-model parents keep the original
+    /// overload; sub-model parents select Sub-model parent mappings.
+    /// </summary>
+    private Task<AkeneoProductSyncContext> PrepareParentAsync(
+        AkeneoProductDefinition effectiveProductModel,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult parentResult,
+        string mappingFamilyCode,
+        AkeneoAttributeMappingEntityScope parentMappingScope,
+        CancellationToken cancellationToken) =>
+        parentMappingScope == AkeneoAttributeMappingEntityScope.ProductModel
+            ? productSyncService.PrepareAsync(
+                effectiveProductModel,
+                AkeneoEntityType.ProductModel,
+                request,
+                parentResult,
+                mappingFamilyCode,
+                cancellationToken)
+            : productSyncService.PrepareAsync(
+                effectiveProductModel,
+                AkeneoEntityType.ProductModel,
+                request,
+                parentResult,
+                mappingFamilyCode,
+                parentMappingScope,
+                cancellationToken);
 
     private static void AppendParentNameResolutionDiagnostic(
         AkeneoProductSyncContext context,
@@ -1804,14 +1847,14 @@ public class AkeneoProductBatchSyncService(
             cancellationToken);
     }
 
-    private async Task<AkeneoProductDefinition> ResolveEffectiveProductModelAsync(
+    private async Task<(AkeneoProductDefinition Model, AkeneoAttributeMappingEntityScope Scope)> ResolveEffectiveProductModelAsync(
         AkeneoProductDefinition productModel,
         IDictionary<string, AkeneoProductDefinition> productModelCache,
         CancellationToken cancellationToken = default)
     {
         var selectedCode = productModel?.Code?.Trim();
         if (string.IsNullOrWhiteSpace(selectedCode))
-            return productModel;
+            return (productModel, AkeneoAttributeMappingEntityScope.ProductModel);
 
         var ancestors = new List<AkeneoProductDefinition>();
         var visitedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1857,11 +1900,14 @@ public class AkeneoProductBatchSyncService(
         var modelChain = new List<AkeneoProductDefinition> { productModel };
         modelChain.AddRange(ancestors);
 
-        return productModelHierarchyResolver.Resolve(
-                syntheticLeaf,
-                modelChain,
-                hierarchyMode)
-            .EffectiveParentProductModel;
+        // A sub-model parent rule matching this model keeps it as the parent.
+        // Rules with a variant condition never match the synthetic leaf.
+        var rule = await ResolveSubModelOverrideAsync(familyConfiguration, syntheticLeaf, productModel);
+        var hierarchy = rule.UsesSubModelParent()
+            ? productModelHierarchyResolver.ResolveSubModelParent(syntheticLeaf, modelChain)
+            : productModelHierarchyResolver.Resolve(syntheticLeaf, modelChain, hierarchyMode);
+
+        return (hierarchy.EffectiveParentProductModel, hierarchy.ParentMappingScope);
     }
 
     private async Task<IReadOnlyList<AkeneoProductDefinition>>
@@ -1936,6 +1982,14 @@ public class AkeneoProductBatchSyncService(
             AkeneoProductKey = source.Uuid ?? source.Identifier,
             ActionType = SyncItemActionType.Skipped
         };
+
+    /// <summary>
+    /// Delta runs, and resyncs without Repair, skip products whose desired-state
+    /// hash is unchanged. Full runs, single-item imports and Repair write them.
+    /// </summary>
+    internal static bool SkipsUnchangedWrites(AkeneoProductImportRequest request) =>
+        request.RunMode == AkeneoRunMode.Delta ||
+        (request.RunMode == AkeneoRunMode.Resync && !request.RepairDestination);
 
     private async Task ValidateRequestAsync(AkeneoProductImportRequest request)
     {
@@ -2263,7 +2317,15 @@ public class AkeneoProductBatchSyncService(
                 source,
                 hierarchy.ImmediateParentModel);
 
-            if (overrideRule != null)
+            // Must match the write path in ReconcileProductUnitAsync.
+            if (overrideRule.UsesSubModelParent())
+            {
+                hierarchy = productModelHierarchyResolver.ResolveSubModelParent(
+                    source,
+                    hierarchy.AncestorsNearestFirst);
+                forcedMode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue;
+            }
+            else if (overrideRule != null)
             {
                 if (overrideRule.VariantRelationshipOverrideMode ==
                     AkeneoVariantRelationshipMode.None)
@@ -2366,6 +2428,8 @@ public class AkeneoProductBatchSyncService(
                     ImmediateParentCode = hierarchy.ImmediateParentModel?.Code?.Trim(),
                     EffectiveParentCode = hierarchy.EffectiveParentProductModel?.Code?.Trim(),
                     HierarchyMode = (int)hierarchy.Mode,
+                    // A sub-model parent changes EffectiveParentCode and the
+                    // rule fingerprint; it adds no field so other hashes keep.
                     IsFlattened = hierarchy.IsFlattened,
                     ForcedMode = forcedMode.HasValue ? (int?)forcedMode.Value : null,
                     Family = BuildFamilyMappingFingerprint(familyConfiguration),
@@ -2726,19 +2790,36 @@ public class AkeneoProductBatchSyncService(
             configuration.HideChildProductsWhenRepresentedByParent
         };
 
+    // Sub-model parent settings are added only for such rules, so existing
+    // rules keep their fingerprint and their products are not all rewritten.
     private static object BuildSubModelRuleFingerprint(
         AkeneoFamilySubModelRule rule) => rule == null
         ? null
-        : new
-        {
-            rule.AkeneoAxisAttributeCode,
-            rule.TriggerValue,
-            rule.VariantAxisAttributeCode,
-            rule.VariantTriggerValue,
-            rule.VariantRelationshipOverrideModeId,
-            rule.MergeAncestorValues,
-            rule.DisplayOrder
-        };
+        : rule.UsesSubModelParent()
+            ? new
+            {
+                rule.AkeneoAxisAttributeCode,
+                rule.TriggerValue,
+                rule.VariantAxisAttributeCode,
+                rule.VariantTriggerValue,
+                rule.VariantRelationshipOverrideModeId,
+                rule.MergeAncestorValues,
+                rule.DisplayOrder,
+                rule.ParentLevelId,
+                rule.AssociatedProductAttributeId,
+                rule.AssociatedValueNameTemplate,
+                rule.HideChildProducts
+            }
+            : new
+            {
+                rule.AkeneoAxisAttributeCode,
+                rule.TriggerValue,
+                rule.VariantAxisAttributeCode,
+                rule.VariantTriggerValue,
+                rule.VariantRelationshipOverrideModeId,
+                rule.MergeAncestorValues,
+                rule.DisplayOrder
+            };
 
     private static string ComputeHash(object value)
     {

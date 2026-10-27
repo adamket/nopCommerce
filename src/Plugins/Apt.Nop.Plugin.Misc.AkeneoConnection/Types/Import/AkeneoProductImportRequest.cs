@@ -76,7 +76,13 @@ public class AkeneoProductImportRequest
         = AkeneoMissingProductBehavior.Ignore;
 
     public bool CreateMissingProductAttributeValues { get; set; } = true;
-
+
+    /// <summary>
+    /// Resync only: write products whose desired-state hash is unchanged too,
+    /// putting back destination edits made in nopCommerce.
+    /// </summary>
+    public bool RepairDestination { get; set; }
+
     public bool IsAuthoritativeFullRun =>
         SyncProfileId.HasValue &&
         SyncProfileId.Value > 0 &&

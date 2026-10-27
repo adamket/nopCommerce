@@ -25,7 +25,8 @@ public class AkeneoSyncProfileController(
     IAkeneoProductBatchSyncService productImportService,
     IDateTimeHelper dateTimeHelper,
     IAkeneoSyncLeaseService syncLeaseService,
-    IAkeneoCombinationAvailabilityService combinationAvailabilityService)
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService,
+    IAkeneoMappingChangeTracker mappingChangeTracker)
     : BaseAdminController
 {
     // A live run renews its lease every 5 minutes; a heartbeat older than this
@@ -157,9 +158,51 @@ public class AkeneoSyncProfileController(
             return RedirectToAction(nameof(List));
 
         var model = await syncProfileModelFactory.PrepareModelAsync(profile);
+        await PrepareResyncStatusAsync(model, profile);
 
         return View("~/Plugins/Apt.Misc.AkeneoConnection/Views/SyncProfile/CreateOrUpdate.cshtml", model);
     }
+
+    private static readonly SyncType[] ProductRunTypes =
+    [
+        SyncType.DeltaSync, SyncType.ManualProfileSync, SyncType.ManualResync,
+        SyncType.ManualFamilyResync, SyncType.ManualFullProfileSync, SyncType.ScheduledFullSync
+    ];
+
+    /// <summary>
+    /// A delta run only revisits products changed in Akeneo, so after a
+    /// mapping or profile change the rest keep their old output until a resync.
+    /// </summary>
+    private async Task PrepareResyncStatusAsync(AkeneoSyncProfileModel model, AkeneoSyncProfile profile)
+    {
+        var mappingsChangedOnUtc = await mappingChangeTracker.GetChangedOnUtcAsync();
+        var lastResync = await syncRunRecordService.GetLastFinishedRunAsync(
+            profile.Id, [SyncType.ManualResync], onlyCompleted: true);
+
+        DateTime? changedOnUtc;
+        if (lastResync != null)
+        {
+            changedOnUtc = new[] { mappingsChangedOnUtc, profile.UpdatedOnUtc }.Max();
+            model.ResyncRecommended = changedOnUtc > lastResync.StartedOnUtc;
+            model.LastResyncOn = await ToStoreTimeAsync(lastResync.StartedOnUtc);
+        }
+        else
+        {
+            // Before the first resync, only a tracked mapping change counts: a
+            // new profile has nothing stale until it has synced products.
+            changedOnUtc = mappingsChangedOnUtc;
+            model.ResyncRecommended = changedOnUtc.HasValue &&
+                await syncRunRecordService.GetLastFinishedRunAsync(profile.Id, ProductRunTypes, onlyCompleted: true) != null;
+        }
+
+        if (changedOnUtc.HasValue)
+            model.ConfigurationChangedOn = await ToStoreTimeAsync(changedOnUtc.Value);
+    }
+
+    private async Task<string> ToStoreTimeAsync(DateTime utc) =>
+        (await dateTimeHelper.ConvertToUserTimeAsync(
+            DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+            DateTimeKind.Utc)).ToString("yyyy-MM-dd HH:mm");
 
     /// <summary>
     /// AJAX save for the create/edit page. Creates the profile when Id is 0.

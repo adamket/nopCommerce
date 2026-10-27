@@ -43,4 +43,11 @@ public class AkeneoConnectionSettings : ISettings
     /// <see cref="SyncAlertStaleAfterHours"/> instead of every hour.
     /// </summary>
     public DateTime? SyncAlertLastStaleNotificationUtc { get; set; }
+
+    /// <summary>
+    /// Last save of a mapping that shapes product output (attribute, asset,
+    /// family and category mappings). A delta run only revisits products
+    /// changed in Akeneo, so the profile page compares this with its last resync.
+    /// </summary>
+    public DateTime? MappingsChangedOnUtc { get; set; }
 }

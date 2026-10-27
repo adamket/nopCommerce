@@ -1,4 +1,4 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -10,4 +10,13 @@ public interface IAkeneoProductModelHierarchyResolver
         AkeneoProductDefinition leaf,
         IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst,
         AkeneoProductModelHierarchyMode mode);
+
+    /// <summary>
+    /// Makes the leaf's immediate parent model (a sub-model matched by a
+    /// sub-model parent rule) the nopCommerce parent, merged with its own
+    /// ancestors, whatever the family's hierarchy mode.
+    /// </summary>
+    AkeneoProductModelHierarchyResolution ResolveSubModelParent(
+        AkeneoProductDefinition leaf,
+        IReadOnlyList<AkeneoProductDefinition> ancestorsNearestFirst);
 }

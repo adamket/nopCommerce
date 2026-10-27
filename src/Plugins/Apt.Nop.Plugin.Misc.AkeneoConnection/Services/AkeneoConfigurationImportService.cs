@@ -30,7 +30,8 @@ public sealed class AkeneoConfigurationImportService(
     CustomMappings.AkeneoCustomMappingRegistry customHandlers = null,
     IAkeneoApiClient api = null,
     IRepository<AkeneoCategoryContentMapping> categoryContent = null,
-    IRepository<Language> languages = null)
+    IRepository<Language> languages = null,
+    IAkeneoMappingChangeTracker mappingChanges = null)
     : IAkeneoConfigurationImportService
 {
     private async Task ValidateDestinationsAsync(AkeneoConfigurationImportDocument document)
@@ -43,6 +44,8 @@ public sealed class AkeneoConfigurationImportService(
                 await RequireEntityAsync(productAttributes, section.Configuration.AssociatedProductAttributeId.Value);
             foreach (var axis in section.AxisMappings)
                 await RequireEntityAsync(productAttributes, axis.NopProductAttributeId);
+            foreach (var rule in section.SubModelRules.Where(rule => rule.AssociatedProductAttributeId is > 0))
+                await RequireEntityAsync(productAttributes, rule.AssociatedProductAttributeId!.Value);
         }
         foreach (var section in document.AttributeMappings)
         {
@@ -178,6 +181,10 @@ public sealed class AkeneoConfigurationImportService(
                 cancellationToken.ThrowIfCancellationRequested();
                 transaction.Complete();
             }
+
+            // The bulk deletes and inserts above publish no entity events.
+            if (mappingChanges != null)
+                await mappingChanges.MarkChangedAsync();
         }
         finally
         {

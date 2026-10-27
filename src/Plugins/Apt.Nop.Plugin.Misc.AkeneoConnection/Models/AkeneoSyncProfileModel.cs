@@ -142,6 +142,15 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public bool IncludeLinkedAssetUpdates { get; set; }
 
+    /// <summary>Set on edit when mappings or this profile changed after its last whole-profile resync.</summary>
+    public bool ResyncRecommended { get; set; }
+
+    /// <summary>When the mappings or profile last changed, in store time.</summary>
+    public string ConfigurationChangedOn { get; set; }
+
+    /// <summary>When the last whole-profile resync started, in store time; null if none has run.</summary>
+    public string LastResyncOn { get; set; }
+
     public IList<SelectListItem>
         AvailableProductFieldMissingValueBehaviors
     { get; set; }

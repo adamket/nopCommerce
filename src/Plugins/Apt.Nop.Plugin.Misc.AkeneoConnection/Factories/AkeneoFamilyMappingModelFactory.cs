@@ -104,6 +104,10 @@ public class AkeneoFamilyMappingModelFactory
                     VariantTriggerValue = x.VariantTriggerValue,
                     VariantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
                     MergeAncestorValues = x.MergeAncestorValues,
+                    ParentLevelId = x.ParentLevelId,
+                    AssociatedProductAttributeId = x.AssociatedProductAttributeId,
+                    AssociatedValueNameTemplate = x.AssociatedValueNameTemplate,
+                    HideChildProducts = x.HideChildProducts,
                     DisplayOrder = x.DisplayOrder
                 })
                 .ToList();

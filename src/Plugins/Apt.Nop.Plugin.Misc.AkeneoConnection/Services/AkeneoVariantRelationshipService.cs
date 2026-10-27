@@ -44,6 +44,7 @@ public class AkeneoVariantRelationshipService(
             PreserveExistingNopVariantStructure = true
         };
         context.Options.Mode = effectiveMode;
+        ApplySubModelParentRule(context, resolution.Source);
 
         if (effectiveMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
             !await combinationAvailabilityService.IsAvailableAsync(context))
@@ -94,6 +95,31 @@ public class AkeneoVariantRelationshipService(
         result.ParentChanged = parentChanged;
         result.NopParentProductId ??= parentProduct.Id;
         return result;
+    }
+
+    /// <summary>
+    /// A sub-model parent rule's settings replace the family's. An existing
+    /// parent keeps the associated attribute it already uses.
+    /// </summary>
+    internal static void ApplySubModelParentRule(
+        AkeneoVariantImportContext context,
+        AkeneoVariantRelationshipSource source)
+    {
+        var rule = context.SubModelParentRule;
+        if (!rule.UsesSubModelParent())
+            return;
+
+        context.Options.HideChildProductsWhenRepresentedByParent = rule.HideChildProducts;
+
+        if (!string.IsNullOrWhiteSpace(rule.AssociatedValueNameTemplate))
+            context.Options.AssociatedValueNameTemplate = rule.AssociatedValueNameTemplate;
+
+        if (rule.AssociatedProductAttributeId is > 0 &&
+            (source != AkeneoVariantRelationshipSource.ExistingNopParent ||
+             !context.Options.AssociatedProductAttributeId.HasValue))
+        {
+            context.Options.AssociatedProductAttributeId = rule.AssociatedProductAttributeId;
+        }
     }
 
     private async Task<bool> EnsureParentShapeAsync(

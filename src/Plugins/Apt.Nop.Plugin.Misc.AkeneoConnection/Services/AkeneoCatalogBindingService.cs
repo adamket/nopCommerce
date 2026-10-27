@@ -427,8 +427,15 @@ public class AkeneoCatalogBindingService(
                     source,
                     hierarchy.ImmediateParentModel);
 
+                // A rule that makes the matched sub-model the parent.
+                if (rule.UsesSubModelParent())
+                {
+                    var subModelHierarchy = hierarchyResolver.ResolveSubModelParent(source, ancestors);
+                    leaf.BindingModelCode = subModelHierarchy.ParentProductModel.Code?.Trim();
+                    leaf.EffectiveLeaf = subModelHierarchy.EffectiveLeaf;
+                }
                 // A rule that imports this leaf as a standalone product.
-                if (rule?.VariantRelationshipOverrideMode == AkeneoVariantRelationshipMode.None)
+                else if (rule?.VariantRelationshipOverrideMode == AkeneoVariantRelationshipMode.None)
                 {
                     leaf.BindingModelCode = null;
                     leaf.EffectiveLeaf = rule.MergeAncestorValues

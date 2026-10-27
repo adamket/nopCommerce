@@ -48,6 +48,7 @@
             productModel = (int)AkeneoAttributeMappingEntityScope.ProductModel,
             variantProduct = (int)AkeneoAttributeMappingEntityScope.VariantProduct,
             standaloneProduct = (int)AkeneoAttributeMappingEntityScope.StandaloneProduct,
+            subModelParent = (int)AkeneoAttributeMappingEntityScope.SubModelParent,
             all = (int)AkeneoAttributeMappingEntityScope.All
         },
         computedTargetTypes = new[]
@@ -716,6 +717,9 @@
                         applyToStandaloneProducts: hasEntityScope(
                             entityScopeId,
                             entityScopes.standaloneProduct),
+                        applyToSubModelParents: hasEntityScope(
+                            entityScopeId,
+                            entityScopes.subModelParent),
                         fallbackSources: cloneFallbackSources(m.fallbackSources),
                         transformRuleJson: m.transformRuleJson,
                         showTransform: !!(m.transformRuleJson && m.transformRuleJson.trim())
@@ -1263,6 +1267,9 @@
                         if (draft.applyToStandaloneProducts)
                             value |= entityScopes.standaloneProduct;
 
+                        if (draft.applyToSubModelParents)
+                            value |= entityScopes.subModelParent;
+
                         return value;
                     },
                     appliesToText: function (m) {
@@ -1281,6 +1288,9 @@
 
                         if ((scope & entityScopes.standaloneProduct) !== 0)
                             labels.push('Standalone');
+
+                        if ((scope & entityScopes.subModelParent) !== 0)
+                            labels.push('Sub-model parent');
 
                         return labels.length
                             ? labels.join(' + ')
@@ -1324,6 +1334,9 @@
                         m.draft.applyToStandaloneProducts = hasEntityScope(
                             entityScopeId,
                             entityScopes.standaloneProduct);
+                        m.draft.applyToSubModelParents = hasEntityScope(
+                            entityScopeId,
+                            entityScopes.subModelParent);
                         m.draft.fallbackSources =
                             cloneFallbackSources(m.fallbackSources);
 
@@ -1841,6 +1854,9 @@
                         m.draft.applyToStandaloneProducts = hasEntityScope(
                             entityScopeId,
                             entityScopes.standaloneProduct);
+                        m.draft.applyToSubModelParents = hasEntityScope(
+                            entityScopeId,
+                            entityScopes.subModelParent);
                         m.draft.fallbackSources = cloneFallbackSources(
                             m.fallbackSources);
                         m.draft.transformRuleJson =

@@ -12,4 +12,9 @@ public class AkeneoFamilySubModelRuleModel
     public int VariantRelationshipOverrideModeId { get; set; }
     public bool MergeAncestorValues { get; set; } = true;
     public int DisplayOrder { get; set; }
+
+    public int ParentLevelId { get; set; }
+    public int? AssociatedProductAttributeId { get; set; }
+    public string AssociatedValueNameTemplate { get; set; }
+    public bool HideChildProducts { get; set; } = true;
 }

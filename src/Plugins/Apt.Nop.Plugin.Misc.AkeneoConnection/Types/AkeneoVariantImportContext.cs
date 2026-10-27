@@ -40,6 +40,10 @@ public class AkeneoVariantImportContext
     // Null means the resolver decides from existing structure and family defaults.
     public AkeneoVariantRelationshipMode? VariantRelationshipModeOverride { get; set; }
 
+    // A sub-model parent rule: its associated attribute, value name template and
+    // child visibility replace the family's.
+    public AkeneoFamilySubModelRule SubModelParentRule { get; set; }
+
     public IDictionary<string, AkeneoVariantAxisValue> AxisValuesByAkeneoCode { get; set; } =
         new Dictionary<string, AkeneoVariantAxisValue>(StringComparer.OrdinalIgnoreCase);
 

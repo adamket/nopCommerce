@@ -58,7 +58,13 @@ public enum SyncType
     ManualFullProfileSync = 50,
     ScheduledFullSync = 60,
     CatalogBinding = 70,
-    CategoryContent = 80
+    CategoryContent = 80,
+
+    /// <summary>Re-reads the whole profile scope; never removes products.</summary>
+    ManualResync = 90,
+
+    /// <summary>A resync narrowed to some of the profile's families.</summary>
+    ManualFamilyResync = 91
 }
 
 public enum AkeneoRunMode
@@ -66,7 +72,13 @@ public enum AkeneoRunMode
     Full = 10,
     Delta = 20,
     SingleProduct = 30,
-    Binding = 40
+    Binding = 40,
+
+    /// <summary>
+    /// Reads every product in scope without the updated-date filter, but never
+    /// applies missing-product rules and never moves the delta watermark.
+    /// </summary>
+    Resync = 50
 }
 
 public enum SyncStatus

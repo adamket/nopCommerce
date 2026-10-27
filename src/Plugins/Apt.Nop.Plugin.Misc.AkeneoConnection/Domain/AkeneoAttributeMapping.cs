@@ -135,7 +135,14 @@ public enum AkeneoAttributeMappingEntityScope
     /// </summary>
     StandaloneProduct = 4,
 
-    All = ProductModel | VariantProduct | StandaloneProduct
+    /// <summary>
+    /// nopCommerce parent products built from a matched Akeneo sub-model by a
+    /// family sub-model rule. Opt-in: mappings saved before this role existed
+    /// do not include it.
+    /// </summary>
+    SubModelParent = 8,
+
+    All = ProductModel | VariantProduct | StandaloneProduct | SubModelParent
 }
 
 public enum AkeneoAttributeType

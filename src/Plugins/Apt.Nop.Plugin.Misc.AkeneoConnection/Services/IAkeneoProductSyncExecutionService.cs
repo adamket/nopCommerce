@@ -10,6 +10,17 @@ public interface IAkeneoProductSyncExecutionService
         SyncType syncType,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads every product in the profile's scope (optionally narrowed to some
+    /// of its families) and writes the ones whose output changed, or all of
+    /// them with Repair. Never disables or deletes products and never moves
+    /// the delta watermark.
+    /// </summary>
+    Task<AkeneoProductSyncExecutionResult> ResyncProfileAsync(
+        int profileId,
+        AkeneoResyncOptions options,
+        CancellationToken cancellationToken = default);
+
     Task<AkeneoProductSyncExecutionResult> SyncProductByUuidAsync(
         int profileId,
         string akeneoProductUuid,
