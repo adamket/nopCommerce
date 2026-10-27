@@ -182,10 +182,18 @@ public class AkeneoConfigurationImportTests
         var assets = new Mock<IAkeneoAssetMappingService>(); assets.Setup(s => s.GetAllAsync()).ReturnsAsync(new List<AkeneoAssetMapping>());
         var entities = new Mock<IAkeneoNopEntityMappingService>();
         entities.Setup(s => s.GetAkeneoNopEntityMappingsAsync(AkeneoEntityType.Category)).ReturnsAsync(new List<AkeneoNopEntityMapping>());
-        var exporter = new AkeneoConfigurationExportService(settings.Object, profiles.Object, families.Object, attributes.Object, assets.Object, entities.Object);
+        var content = new Mock<IAkeneoCategoryContentMappingService>();
+        content.Setup(s => s.GetAllMappingsAsync()).ReturnsAsync(new List<AkeneoCategoryContentMapping>
+        {
+            new() { Id = 4, Target = AkeneoCategoryContentTarget.Description, SourceType = AkeneoCategoryContentSourceType.TemplateAttribute,
+                    AkeneoAttributeCode = "description", Locale = "en_US", EmptyValueHandling = AkeneoCategoryContentEmptyValueHandling.Keep }
+        });
+        var exporter = new AkeneoConfigurationExportService(settings.Object, profiles.Object, families.Object, attributes.Object, assets.Object, entities.Object, content.Object);
         var bytes = await exporter.ExportAsync(0);
         var parsed = AkeneoConfigurationImportDocument.Parse(System.Text.Encoding.UTF8.GetString(bytes));
         Assert.That(parsed.AttributeMappings.Single().Configuration.EntityScopeId, Is.EqualTo(6));
+        Assert.That(parsed.CategoryContentMappings.Single(), Has.Property(nameof(AkeneoCategoryContentMapping.TargetId)).EqualTo((int)AkeneoCategoryContentTarget.Description)
+            .And.Property(nameof(AkeneoCategoryContentMapping.AkeneoAttributeCode)).EqualTo("description"));
         await _service.ImportAsync(System.Text.Encoding.UTF8.GetString(bytes));
         _attributes.Verify(r => r.InsertAsync(It.Is<AkeneoAttributeMapping>(m => m.AkeneoAttributeCode == "sku" && m.Id == 0), false), Times.Once);
     }}

@@ -15,6 +15,12 @@ public sealed class AkeneoConfigurationImportDocument
     [JsonRequired] public List<AkeneoAssetMapping> AssetMappings { get; set; }
     [JsonRequired] public List<AkeneoNopEntityMapping> CategoryMappings { get; set; }
 
+    /// <summary>
+    /// Optional, so exports made before category content sync still import;
+    /// when absent, existing content mappings are left alone.
+    /// </summary>
+    public List<AkeneoCategoryContentMapping> CategoryContentMappings { get; set; }
+
     public sealed class ImportMetadata
     {
         public string Format { get; set; }
@@ -182,6 +188,15 @@ public sealed class AkeneoConfigurationImportDocument
                     c.NopEntityTypeId == (int)NopEntityType.Category && c.NopEntityId > 0 &&
                     !string.IsNullOrWhiteSpace(c.AkeneoCode), "Only category-to-category mappings are allowed in categoryMappings.");
             Require(categories.Add(c.AkeneoCode.Trim()), "Duplicate category mapping.");
+        }
+        if (CategoryContentMappings != null)
+        {
+            foreach (var c in CategoryContentMappings)
+            {
+                Require(c != null, "A category content mapping cannot be null.");
+                var errors = AkeneoCategoryContentPlanner.Validate(c, CategoryContentMappings.Where(other => !ReferenceEquals(other, c)));
+                Require(errors.Count == 0, "Category content mapping: " + string.Join(" ", errors));
+            }
         }
     }
 

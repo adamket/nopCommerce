@@ -2,15 +2,19 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Categories;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Services.Catalog;
+using Nop.Services.Localization;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
 public class AkeneoCategoryMappingModelFactory(
     IAkeneoApiClient akeneoApiClient,
     IAkeneoNopEntityMappingService akeneoNopEntityMappingService,
-    ICategoryService categoryService)
+    ICategoryService categoryService,
+    IAkeneoCategoryContentMappingService categoryContentMappingService,
+    ILanguageService languageService)
     : IAkeneoCategoryMappingModelFactory
 {
     public async Task<AkeneoCategoryMappingListModel> PrepareCategoryMappingListModelAsync()
@@ -51,7 +55,17 @@ public class AkeneoCategoryMappingModelFactory(
                 group => group.First(),
                 StringComparer.OrdinalIgnoreCase);
 
-        var akeneoCategories = await akeneoApiClient.GetCategoriesAsync(limit: 100);
+        IReadOnlyList<AkeneoCategoryDefinition> akeneoCategories;
+        try
+        {
+            akeneoCategories = await akeneoApiClient.GetCategoriesWithValuesAsync(limit: 100);
+        }
+        catch (Exception ex)
+        {
+            // Category mapping still works without template values; only content mapping needs them.
+            model.ContentReadError = $"Akeneo category template values could not be read: {ex.Message}";
+            akeneoCategories = await akeneoApiClient.GetCategoriesAsync(limit: 100);
+        }
 
         var categoryRows = akeneoCategories
             .Select(ParseAkeneoCategory)
@@ -59,6 +73,10 @@ public class AkeneoCategoryMappingModelFactory(
             .ToList();
 
         var orderedRows = OrderByHierarchy(categoryRows);
+
+        var contentStates = (await categoryContentMappingService.GetAllStatesAsync())
+            .GroupBy(state => state.AkeneoCategoryCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var row in orderedRows)
         {
@@ -70,10 +88,83 @@ public class AkeneoCategoryMappingModelFactory(
                     row.NopCategoryName = nopCategoryName;
             }
 
+            if (contentStates.TryGetValue(row.AkeneoCode, out var state))
+            {
+                row.ContentStatusId = state.LastStatusId;
+                row.ContentMessage = state.LastMessage;
+                row.ContentSyncedOnUtc = state.LastSyncedOnUtc;
+            }
+
             model.Rows.Add(row);
         }
 
+        model.TemplateAttributes = DescribeTemplateAttributes(akeneoCategories);
+        model.LabelLocales = akeneoCategories
+            .SelectMany(category => category.Labels?.Keys ?? Enumerable.Empty<string>())
+            .Where(locale => !string.IsNullOrWhiteSpace(locale))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(locale => locale, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        model.ContentMappings = (await categoryContentMappingService.GetAllMappingsAsync())
+            .Select(mapping => new AkeneoCategoryContentMappingModel
+            {
+                Id = mapping.Id,
+                TargetId = mapping.TargetId,
+                LanguageId = mapping.LanguageId,
+                SourceTypeId = mapping.SourceTypeId,
+                AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+                Locale = mapping.Locale,
+                Channel = mapping.Channel,
+                EmptyValueHandlingId = mapping.EmptyValueHandlingId
+            })
+            .ToList();
+
+        model.AvailableLanguages = (await languageService.GetAllLanguagesAsync(showHidden: true))
+            .Select(language => new SelectListItem
+            {
+                Value = language.Id.ToString(),
+                Text = language.Published ? language.Name : $"{language.Name} (unpublished)"
+            })
+            .ToList();
+
         return model;
+    }
+
+    /// <summary>
+    /// Every template attribute used on at least one category, with the
+    /// locale/channel combinations its values are stored under.
+    /// </summary>
+    public static IList<AkeneoCategoryTemplateAttributeModel> DescribeTemplateAttributes(
+        IEnumerable<AkeneoCategoryDefinition> categories)
+    {
+        var values = categories
+            .SelectMany(category => AkeneoCategoryValueReader.Read(category.Values)
+                .Select(value => (Category: category.Code, Value: value)));
+
+        return values
+            .GroupBy(item => item.Value.AttributeCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new AkeneoCategoryTemplateAttributeModel
+            {
+                Code = group.First().Value.AttributeCode,
+                Type = group
+                    .Select(item => item.Value.Type)
+                    .FirstOrDefault(type => !string.IsNullOrWhiteSpace(type)),
+                IsImage = group.Any(item => item.Value.IsImage),
+                CategoryCount = group
+                    .Select(item => item.Category)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count(),
+                Scopes = group
+                    .Select(item => (item.Value.Locale, item.Value.Channel))
+                    .Distinct()
+                    .OrderBy(scope => scope.Channel ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(scope => scope.Locale ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .Select(scope => new AkeneoCategoryValueScopeModel { Locale = scope.Locale, Channel = scope.Channel })
+                    .ToList()
+            })
+            .OrderBy(attribute => attribute.Code, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static AkeneoCategoryMappingModel ParseAkeneoCategory(

@@ -2578,3 +2578,48 @@
   max-width: 40%;
   overflow-wrap: anywhere;
 }
+
+/* Category content mapping (Category Mapping page) */
+.akeneo-connection .akeneo-content-card {
+    margin-bottom: 1.5rem;
+}
+
+.akeneo-connection .akeneo-content-table td,
+.akeneo-connection .akeneo-content-table th {
+    vertical-align: middle;
+}
+
+.akeneo-connection .akeneo-content-unmapped td {
+    color: #6c757d;
+}
+
+.akeneo-connection .akeneo-content-editor td {
+    background: rgba(0, 0, 0, .02);
+    padding: 1rem;
+}
+
+.akeneo-connection .akeneo-content-state {
+    margin-top: .35rem;
+    font-size: .8rem;
+}
+
+.akeneo-connection .akeneo-content-result {
+    border-top: 1px solid rgba(0, 0, 0, .08);
+    padding: .6rem 0;
+}
+
+.akeneo-connection .akeneo-content-changes {
+    margin: .35rem 0 0;
+    padding-left: 1.25rem;
+    font-size: .875rem;
+}
+
+.akeneo-connection .akeneo-content-from {
+    color: #6c757d;
+    text-decoration: line-through;
+    overflow-wrap: anywhere;
+}
+
+.akeneo-connection .akeneo-content-to {
+    overflow-wrap: anywhere;
+}

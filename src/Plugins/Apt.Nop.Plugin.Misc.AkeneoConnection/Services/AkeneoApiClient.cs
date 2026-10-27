@@ -211,6 +211,31 @@ public class AkeneoApiClient : IAkeneoApiClient
             limit,
             cancellationToken);
 
+    public async Task<IReadOnlyList<AkeneoCategoryDefinition>> GetCategoriesWithValuesAsync(
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+        => await GetPagedCollectionAsync<AkeneoCategoryDefinition>(
+            "api/rest/v1/categories",
+            new Dictionary<string, string?>
+            {
+                ["limit"] = limit.ToString(),
+                ["with_enriched_attributes"] = "true"
+            },
+            cancellationToken,
+            GetApiCredentialsFromSettings());
+
+    public Task<AkeneoBinaryFile> DownloadCategoryMediaFileAsync(
+        string filePath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Category media file path is required.", nameof(filePath));
+
+        return DownloadBinaryAsync(
+            $"api/rest/v1/category-media-files/{EscapePathPreservingSeparators(filePath)}/download",
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AkeneoAttributeDefinition>> GetAttributesAsync(
         int limit = 100, CancellationToken cancellationToken = default)
         => await GetSimpleCollectionAsync<AkeneoAttributeDefinition>("api/rest/v1/attributes", limit, cancellationToken);

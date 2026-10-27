@@ -17,4 +17,11 @@ public record AkeneoCategoryMappingModel : BaseNopModel
     public string NopCategoryName { get; set; }
 
     public bool IsMapped => NopCategoryId > 0;
+
+    /// <summary>The last category content sync's outcome for this category, or null if it never ran.</summary>
+    public int? ContentStatusId { get; set; }
+
+    public string ContentMessage { get; set; }
+
+    public DateTime? ContentSyncedOnUtc { get; set; }
 }

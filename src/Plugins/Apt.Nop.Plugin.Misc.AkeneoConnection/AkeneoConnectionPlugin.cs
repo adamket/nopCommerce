@@ -71,6 +71,9 @@ public class AkeneoConnectionPlugin(
         await DeleteScheduleTaskAsync(
             typeof(AkeneoSyncLogRetentionScheduleTask).FullName);
 
+        await DeleteScheduleTaskAsync(
+            typeof(AkeneoCategoryContentSyncScheduleTask).FullName);
+
         await base.UninstallAsync();
     }
 
@@ -95,6 +98,13 @@ public class AkeneoConnectionPlugin(
             seconds: 60 * 60 * 24,
             enabled: true);
 
+        // Enabled, but it changes nothing until category content mappings exist.
+        await EnsureScheduleTaskAsync(
+            typeof(AkeneoCategoryContentSyncScheduleTask).FullName,
+            "Akeneo Connection - Category Content Sync",
+            seconds: 60 * 60 * 24,
+            enabled: true);
+
         // Enabled, but it sends nothing until alerts are turned on.
         await EnsureScheduleTaskAsync(
             typeof(AkeneoStaleSyncCheckScheduleTask).FullName,
@@ -111,13 +121,9 @@ public class AkeneoConnectionPlugin(
     {
         await EnsureMessageTemplateAsync(
             AkeneoConnectionConstants.SyncRunAlertMessageTemplateName,
-            "%Store.Name%: Akeneo sync %Akeneo.Run.Status%",
-            "<p>The scheduled Akeneo sync for profile <strong>%Akeneo.Run.Profile%</strong> %Akeneo.Run.Status%.</p>" +
-            "<p>Run: %Akeneo.Run.Id%<br />Started: %Akeneo.Run.StartedOn%<br />Finished: %Akeneo.Run.FinishedOn%<br />%Akeneo.Run.Counts%</p>" +
-            "<p><strong>Run errors</strong><br />%Akeneo.Run.Errors%</p>" +
-            "<p><strong>Failed products</strong></p>%Akeneo.Run.FailedProducts%" +
-            "<p>Failed products were left unchanged in nopCommerce. Warnings are listed in the sync log only.</p>" +
-            "<p><a href=\"%Akeneo.SyncLogsUrl%\">Open the Akeneo sync logs</a></p>");
+            SyncRunAlertSubject,
+            SyncRunAlertBody);
+        await UpgradeUneditedSyncRunTemplateAsync();
 
         await EnsureMessageTemplateAsync(
             AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName,
@@ -132,7 +138,7 @@ public class AkeneoConnectionPlugin(
         await localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
         {
             ["Plugins.Misc.AkeneoConnection.SyncAlertsEnabled"] = "Send sync alerts",
-            ["Plugins.Misc.AkeneoConnection.SyncAlertsEnabled.Hint"] = "Email the recipients when a scheduled sync fails or has failed products, or when no scheduled sync has completed for a while. Manual runs never send alerts.",
+            ["Plugins.Misc.AkeneoConnection.SyncAlertsEnabled.Hint"] = "Email the recipients when a scheduled product or category content sync fails or has failed items, or when no scheduled product sync has completed for a while. Manual runs never send alerts.",
             ["Plugins.Misc.AkeneoConnection.SyncAlertEmails"] = "Alert recipients",
             ["Plugins.Misc.AkeneoConnection.SyncAlertEmails.Hint"] = "Email addresses, separated by commas.",
             ["Plugins.Misc.AkeneoConnection.SyncAlertMinimumFailedProducts"] = "Minimum failed products",
@@ -140,6 +146,46 @@ public class AkeneoConnectionPlugin(
             ["Plugins.Misc.AkeneoConnection.SyncAlertStaleAfterHours"] = "Stale sync alert after (hours)",
             ["Plugins.Misc.AkeneoConnection.SyncAlertStaleAfterHours.Hint"] = "Alert when no scheduled sync has completed for this many hours. 0 turns the check off."
         });
+    }
+
+    // One template serves product and category content runs: %Akeneo.Run.Type% names the sync.
+    private const string SyncRunAlertSubject = "%Store.Name%: Akeneo %Akeneo.Run.Type% %Akeneo.Run.Status%";
+
+    private const string SyncRunAlertBody =
+        "<p>The scheduled Akeneo %Akeneo.Run.Type% %Akeneo.Run.Status%.</p>" +
+        "<p>Run: %Akeneo.Run.Id%<br />Started: %Akeneo.Run.StartedOn%<br />Finished: %Akeneo.Run.FinishedOn%<br />%Akeneo.Run.Counts%</p>" +
+        "<p><strong>Run errors</strong><br />%Akeneo.Run.Errors%</p>" +
+        "<p><strong>Failed items</strong></p>%Akeneo.Run.FailedItems%" +
+        "<p>Failed items were left unchanged in nopCommerce. Warnings are listed in the sync log only.</p>" +
+        "<p><a href=\"%Akeneo.SyncLogsUrl%\">Open the Akeneo sync logs</a></p>";
+
+    // The product-only text created before 4.90.30.
+    private const string LegacySyncRunAlertSubject = "%Store.Name%: Akeneo sync %Akeneo.Run.Status%";
+
+    private const string LegacySyncRunAlertBody =
+        "<p>The scheduled Akeneo sync for profile <strong>%Akeneo.Run.Profile%</strong> %Akeneo.Run.Status%.</p>" +
+        "<p>Run: %Akeneo.Run.Id%<br />Started: %Akeneo.Run.StartedOn%<br />Finished: %Akeneo.Run.FinishedOn%<br />%Akeneo.Run.Counts%</p>" +
+        "<p><strong>Run errors</strong><br />%Akeneo.Run.Errors%</p>" +
+        "<p><strong>Failed products</strong></p>%Akeneo.Run.FailedProducts%" +
+        "<p>Failed products were left unchanged in nopCommerce. Warnings are listed in the sync log only.</p>" +
+        "<p><a href=\"%Akeneo.SyncLogsUrl%\">Open the Akeneo sync logs</a></p>";
+
+    /// <summary>
+    /// Moves the sync run template to the wording that also fits category content runs,
+    /// but only while it still holds the original product-only text; edits are kept.
+    /// </summary>
+    private async Task UpgradeUneditedSyncRunTemplateAsync()
+    {
+        foreach (var template in await messageTemplateService.GetMessageTemplatesByNameAsync(
+                     AkeneoConnectionConstants.SyncRunAlertMessageTemplateName))
+        {
+            if (template.Subject != LegacySyncRunAlertSubject || template.Body != LegacySyncRunAlertBody)
+                continue;
+
+            template.Subject = SyncRunAlertSubject;
+            template.Body = SyncRunAlertBody;
+            await messageTemplateService.UpdateMessageTemplateAsync(template);
+        }
     }
 
     private async Task EnsureMessageTemplateAsync(string name, string subject, string body)

@@ -1,6 +1,7 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Categories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Nop.Core;
 using Nop.Core.Domain.Localization;
@@ -155,6 +156,88 @@ public class AkeneoSyncAlertServiceTests
         await Service().NotifyScheduledRunAsync(new AkeneoProductSyncExecutionResult { Success = false });
 
         Assert.That(_sentTo, Is.Empty);
+    }
+
+    [Test]
+    public async Task Category_run_with_a_failed_category_lists_its_slug_error()
+    {
+        Run(new AkeneoSyncRunRecord { Id = 12, SyncStatusId = (int)SyncStatus.CompletedWithErrors });
+        var result = new AkeneoCategoryContentRunResult { Success = false, SyncRunRecordId = 12 };
+        result.Categories.Add(new AkeneoCategoryContentItemResult { AkeneoCode = "oaks", Status = AkeneoCategoryContentStatus.Updated });
+        var failed = new AkeneoCategoryContentItemResult
+        {
+            AkeneoCode = "shade_trees",
+            NopCategoryId = 41,
+            NopCategoryName = "Shade Trees",
+            Status = AkeneoCategoryContentStatus.Failed
+        };
+        failed.Errors.Add("The Akeneo URL slug 'shade-trees' is already used by category 'Trees' (ID 7), so nopCommerce would save 'shade-trees-2' instead.");
+        result.Categories.Add(failed);
+
+        await Service().NotifyScheduledCategoryContentRunAsync(result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(_sentTo, Is.EqualTo(new[] { "ops@example.com", "merch@example.com" }));
+            Assert.That(Token("Akeneo.Run.Type"), Is.EqualTo("category content sync"));
+            Assert.That(Token("Akeneo.Run.Status"), Is.EqualTo("completed with failed categories"));
+            Assert.That(Token("Akeneo.Run.Counts"), Is.EqualTo("Categories: updated 1, unchanged 0, skipped 0, failed 1."));
+            Assert.That(Token("Akeneo.Run.Errors"), Is.EqualTo("-"));
+            Assert.That(Token("Akeneo.Run.FailedItems"), Does.Contain("shade_trees")
+                .And.Contain("Shade Trees (ID 41)")
+                .And.Contain("&#39;shade-trees-2&#39;")
+                .And.Contain("Akeneo category")
+                .And.Not.Contain("oaks"));
+        });
+        _workflow.Verify(service => service.SendNotificationAsync(
+            It.Is<MessageTemplate>(template => template.Name == AkeneoConnectionConstants.SyncRunAlertMessageTemplateName),
+            It.IsAny<EmailAccount>(), It.IsAny<int>(), It.IsAny<IList<Token>>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Exactly(2));
+    }
+
+    [Test]
+    public async Task Category_run_that_could_not_start_alerts_with_its_message()
+    {
+        await Service().NotifyScheduledCategoryContentRunAsync(new AkeneoCategoryContentRunResult
+        {
+            Success = false,
+            Message = "Category content sync failed: Akeneo returned 401"
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Token("Akeneo.Run.Status"), Is.EqualTo("could not start"));
+            Assert.That(Token("Akeneo.Run.Errors"), Is.EqualTo("Category content sync failed: Akeneo returned 401"));
+        });
+    }
+
+    [Test]
+    public async Task Category_run_that_succeeded_was_skipped_or_has_nothing_to_sync_sends_nothing()
+    {
+        var clean = new AkeneoCategoryContentRunResult { SyncRunRecordId = 12 };
+        clean.Categories.Add(new AkeneoCategoryContentItemResult { AkeneoCode = "oaks", Status = AkeneoCategoryContentStatus.Unchanged });
+
+        await Service().NotifyScheduledCategoryContentRunAsync(clean);
+        await Service().NotifyScheduledCategoryContentRunAsync(new AkeneoCategoryContentRunResult { Message = "No category content mappings are set up yet." });
+        await Service().NotifyScheduledCategoryContentRunAsync(new AkeneoCategoryContentRunResult { Success = false, AlreadyRunning = true });
+
+        Assert.That(_sentTo, Is.Empty);
+    }
+
+    [Test]
+    public async Task Scheduled_category_task_alerts_and_rethrows_when_the_sync_throws()
+    {
+        var sync = new Mock<IAkeneoCategoryContentSyncService>();
+        sync.Setup(service => service.SyncAsync(null, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+        var alerts = new Mock<IAkeneoSyncAlertService>();
+        var task = new AkeneoCategoryContentSyncScheduleTask(sync.Object, alerts.Object, Mock.Of<ILogger>());
+
+        Assert.ThrowsAsync<InvalidOperationException>(task.ExecuteAsync);
+
+        alerts.Verify(service => service.NotifyScheduledCategoryContentRunAsync(
+            It.Is<AkeneoCategoryContentRunResult>(result => !result.Success && result.Message.Contains("boom"))), Times.Once);
     }
 
     [Test]

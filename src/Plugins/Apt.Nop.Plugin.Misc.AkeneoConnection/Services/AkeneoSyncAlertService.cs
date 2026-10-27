@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Categories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Nop.Core;
 using Nop.Core.Domain.Messages;
@@ -71,11 +72,15 @@ public class AkeneoSyncAlertService(
                 ? DescribeStatus((SyncStatus)run.SyncStatusId)
                 : "could not start";
 
+            var profileName = await GetProfileNameAsync(result.ProfileId);
+            var failedProducts = FormatFailedProducts(failedItems, failedCount);
+
             var tokens = new List<Token>
             {
+                new("Akeneo.Run.Type", $"product sync for profile {profileName}"),
                 new("Akeneo.Run.Id", run?.Id.ToString() ?? "none"),
                 new("Akeneo.Run.Status", status),
-                new("Akeneo.Run.Profile", await GetProfileNameAsync(result.ProfileId)),
+                new("Akeneo.Run.Profile", profileName),
                 new("Akeneo.Run.StartedOn", await FormatDateAsync(run?.StartedOnUtc)),
                 new("Akeneo.Run.FinishedOn", await FormatDateAsync(run?.FinishedOnUtc)),
                 new("Akeneo.Run.Counts", run == null
@@ -86,7 +91,9 @@ public class AkeneoSyncAlertService(
                 new("Akeneo.Run.Errors", runFailed
                     ? FormatMultiline(run?.ErrorSummary ?? result.Message)
                     : "-", true),
-                new("Akeneo.Run.FailedProducts", FormatFailedProducts(failedItems, failedCount), true)
+                new("Akeneo.Run.FailedItems", failedProducts, true),
+                // Kept for sync run templates edited before category runs shared them.
+                new("Akeneo.Run.FailedProducts", failedProducts, true)
             };
 
             await SendAsync(AkeneoConnectionConstants.SyncRunAlertMessageTemplateName, tokens);
@@ -109,6 +116,62 @@ public class AkeneoSyncAlertService(
             SyncStatus = SyncStatus.Failed,
             Message = exception.Message
         });
+    }
+
+    public async Task NotifyScheduledCategoryContentRunAsync(AkeneoCategoryContentRunResult result)
+    {
+        // Another catalog writer holding the lease is not a failure.
+        if (result == null || result.AlreadyRunning || GetRecipients().Count == 0)
+            return;
+
+        var failed = result.Categories
+            .Where(category => category.Status == AkeneoCategoryContentStatus.Failed)
+            .ToList();
+
+        // Success with no failed category covers "nothing to sync yet" too.
+        if (result.Success && failed.Count == 0)
+            return;
+
+        try
+        {
+            var run = result.SyncRunRecordId.HasValue
+                ? await syncRunRecordService.GetAkeneoSyncRunRecordByIdAsync(result.SyncRunRecordId.Value)
+                : null;
+
+            var runFailed = failed.Count == 0;
+            var status = run != null
+                ? DescribeStatus((SyncStatus)run.SyncStatusId, "categories")
+                : "could not start";
+
+            var failedCategories = FormatFailedCategories(failed);
+
+            // The same template as product runs; Akeneo.Run.Type says which sync it is.
+            var tokens = new List<Token>
+            {
+                new("Akeneo.Run.Type", "category content sync"),
+                new("Akeneo.Run.Id", run?.Id.ToString() ?? "none"),
+                new("Akeneo.Run.Status", status),
+                new("Akeneo.Run.Profile", "category content"),
+                new("Akeneo.Run.StartedOn", await FormatDateAsync(run?.StartedOnUtc)),
+                new("Akeneo.Run.FinishedOn", await FormatDateAsync(run?.FinishedOnUtc)),
+                new("Akeneo.Run.Counts", result.Categories.Count == 0
+                    ? "No categories were read."
+                    : $"Categories: updated {result.UpdatedCount}, unchanged {result.UnchangedCount}, " +
+                      $"skipped {result.SkippedCount}, failed {result.FailedCount}."),
+                // Category errors are in the table; this is for the run itself.
+                new("Akeneo.Run.Errors", runFailed
+                    ? FormatMultiline(run?.ErrorSummary ?? result.Message)
+                    : "-", true),
+                new("Akeneo.Run.FailedItems", failedCategories, true),
+                new("Akeneo.Run.FailedProducts", failedCategories, true)
+            };
+
+            await SendAsync(AkeneoConnectionConstants.SyncRunAlertMessageTemplateName, tokens);
+        }
+        catch (Exception exception)
+        {
+            await logger.ErrorAsync("Akeneo category content alert could not be sent.", exception);
+        }
     }
 
     public async Task CheckForStaleSyncAsync(DateTime utcNow)
@@ -242,12 +305,12 @@ public class AkeneoSyncAlertService(
             ? (await dateTimeHelper.ConvertToUserTimeAsync(utc.Value, DateTimeKind.Utc)).ToString("yyyy-MM-dd HH:mm")
             : "-";
 
-    private static string DescribeStatus(SyncStatus status) => status switch
+    private static string DescribeStatus(SyncStatus status, string items = "products") => status switch
     {
         SyncStatus.Started => "is still running",
         SyncStatus.Completed => "completed",
         SyncStatus.CompletedWithWarnings => "completed with warnings",
-        SyncStatus.CompletedWithErrors => "completed with failed products",
+        SyncStatus.CompletedWithErrors => $"completed with failed {items}",
         SyncStatus.Failed => "failed",
         SyncStatus.Cancelled => "was cancelled",
         _ => status.ToString()
@@ -286,6 +349,38 @@ public class AkeneoSyncAlertService(
         if (failedCount > items.Count)
             html.Append($"<p>&hellip;and {failedCount - items.Count} more. See the sync log for the full list.</p>");
 
+        return html.ToString();
+    }
+
+    /// <summary>
+    /// An HTML table of failed categories with every error, such as a URL slug
+    /// that is already taken. All of them are listed: a catalog has few categories.
+    /// </summary>
+    public static string FormatFailedCategories(IList<AkeneoCategoryContentItemResult> items)
+    {
+        if (items.Count == 0)
+            return "<p>No failed categories.</p>";
+
+        var html = new StringBuilder();
+        html.Append("<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\" style=\"border-collapse:collapse\">");
+        html.Append("<tr><th align=\"left\">Akeneo category</th><th align=\"left\">nopCommerce category</th><th align=\"left\">Error</th></tr>");
+
+        foreach (var item in items)
+        {
+            var category = item.NopCategoryName != null
+                ? $"{item.NopCategoryName} (ID {item.NopCategoryId})"
+                : $"ID {item.NopCategoryId}";
+
+            html.Append("<tr><td>")
+                .Append(WebUtility.HtmlEncode(item.AkeneoCode ?? "-"))
+                .Append("</td><td>")
+                .Append(WebUtility.HtmlEncode(category))
+                .Append("</td><td>")
+                .Append(WebUtility.HtmlEncode(item.Errors.Count == 0 ? "-" : string.Join(" ", item.Errors)))
+                .Append("</td></tr>");
+        }
+
+        html.Append("</table>");
         return html.ToString();
     }
 

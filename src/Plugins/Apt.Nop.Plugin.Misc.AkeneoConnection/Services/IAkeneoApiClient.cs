@@ -18,6 +18,16 @@ public interface IAkeneoApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every category with its category template values.</summary>
+    Task<IReadOnlyList<AkeneoCategoryDefinition>> GetCategoriesWithValuesAsync(
+        int limit = 100,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Downloads a category image by the file path in its value.</summary>
+    Task<AkeneoBinaryFile> DownloadCategoryMediaFileAsync(
+        string filePath,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AkeneoAttributeDefinition>> GetAttributesAsync(
         int limit = 100,
         CancellationToken cancellationToken = default);

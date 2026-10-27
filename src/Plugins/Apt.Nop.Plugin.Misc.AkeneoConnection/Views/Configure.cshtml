@@ -45,7 +45,8 @@
     </div>
 
     <section class="content">
-        <form asp-controller="AkeneoConnectionConfiguration" asp-action="Configure" method="post" id="submit-connection-info">
+        @* form-horizontal: nopCommerce's admin CSS only lays out nop-label and its help icon on one line inside it. *@
+        <form asp-controller="AkeneoConnectionConfiguration" asp-action="Configure" method="post" id="submit-connection-info" class="form-horizontal">
             <div class="cards-group">
                 <div class="card card-default">
                     <div class="card-header">
@@ -153,10 +154,12 @@
 
                         <div class="card-body">
                             <p class="text-muted">
-                                Emails are sent for scheduled syncs only, and apply to all stores. A scheduled run alerts when it fails,
-                                is cancelled, or has failed products (including products whose URL is already taken). Warnings stay in the
+                                Emails are sent for scheduled syncs only, and apply to all stores. A scheduled product run alerts when it fails,
+                                is cancelled, or has failed products; a scheduled category content run alerts when it fails or has any failed
+                                category. Products and categories whose URL is already taken count as failed. Warnings stay in the
                                 sync log. Edit the email text under Content management &gt; Message templates
-                                (@AkeneoConnectionConstants.SyncRunAlertMessageTemplateName, @AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName).
+                                (@AkeneoConnectionConstants.SyncRunAlertMessageTemplateName, used for product and category content runs;
+                                @AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName).
                             </p>
 
                             <div class="form-group row">

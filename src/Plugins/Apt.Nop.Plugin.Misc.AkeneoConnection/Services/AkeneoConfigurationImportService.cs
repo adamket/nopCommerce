@@ -2,6 +2,7 @@ using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Localization;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -27,7 +28,9 @@ public sealed class AkeneoConfigurationImportService(
     IRepository<Category> categories,
     IAkeneoTargetTypeResolver targetTypes,
     CustomMappings.AkeneoCustomMappingRegistry customHandlers = null,
-    IAkeneoApiClient api = null)
+    IAkeneoApiClient api = null,
+    IRepository<AkeneoCategoryContentMapping> categoryContent = null,
+    IRepository<Language> languages = null)
     : IAkeneoConfigurationImportService
 {
     private async Task ValidateDestinationsAsync(AkeneoConfigurationImportDocument document)
@@ -81,6 +84,9 @@ public sealed class AkeneoConfigurationImportService(
         }
         foreach (var category in document.CategoryMappings)
             await RequireEntityAsync(categories, category.NopEntityId);
+        if (languages != null)
+            foreach (var content in (document.CategoryContentMappings ?? []).Where(content => content.LanguageId > 0))
+                await RequireEntityAsync(languages, content.LanguageId);
     }
 
     private static async Task RequireEntityAsync<T>(IRepository<T> repository, int id) where T : global::Nop.Core.BaseEntity
@@ -157,6 +163,17 @@ public sealed class AkeneoConfigurationImportService(
                     cancellationToken.ThrowIfCancellationRequested();
                     category.Id = 0;
                     await entities.InsertAsync(category, false);
+                }
+                if (document.CategoryContentMappings != null && categoryContent != null)
+                {
+                    await categoryContent.DeleteAsync(_ => true);
+                    foreach (var content in document.CategoryContentMappings)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        content.Id = 0;
+                        content.CreatedOnUtc = content.UpdatedOnUtc = DateTime.UtcNow;
+                        await categoryContent.InsertAsync(content, false);
+                    }
                 }
                 cancellationToken.ThrowIfCancellationRequested();
                 transaction.Complete();

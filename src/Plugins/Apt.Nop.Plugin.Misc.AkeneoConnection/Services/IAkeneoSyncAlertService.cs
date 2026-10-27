@@ -1,3 +1,4 @@
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Categories;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -18,6 +19,12 @@ public interface IAkeneoSyncAlertService
     /// Alerts when a scheduled run threw before it could report a result.
     /// </summary>
     Task NotifyScheduledRunErrorAsync(Exception exception);
+
+    /// <summary>
+    /// Alerts when a scheduled category content run failed, could not start, or
+    /// had any failed category, such as one whose URL slug is already taken.
+    /// </summary>
+    Task NotifyScheduledCategoryContentRunAsync(AkeneoCategoryContentRunResult result);
 
     /// <summary>
     /// Alerts when no scheduled sync of the default profile has finished

@@ -19,6 +19,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data
             { typeof(AkeneoSyncLease), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoSyncLease)}" },
             { typeof(AkeneoProductSyncState), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoProductSyncState)}" },
             { typeof(AkeneoManagedRelation), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoManagedRelation)}" },
+            { typeof(AkeneoCategoryContentMapping), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoCategoryContentMapping)}" },
+            { typeof(AkeneoCategoryContentState), $"{AkeneoConnectionConstants.TablePrefix}{nameof(AkeneoCategoryContentState)}" },
 
         };
 

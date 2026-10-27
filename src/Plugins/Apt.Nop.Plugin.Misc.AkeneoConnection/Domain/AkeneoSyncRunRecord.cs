@@ -57,7 +57,8 @@ public enum SyncType
     ManualProfileSync = 40,
     ManualFullProfileSync = 50,
     ScheduledFullSync = 60,
-    CatalogBinding = 70
+    CatalogBinding = 70,
+    CategoryContent = 80
 }
 
 public enum AkeneoRunMode

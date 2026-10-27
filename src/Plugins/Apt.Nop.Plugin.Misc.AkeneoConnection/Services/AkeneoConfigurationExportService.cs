@@ -17,7 +17,8 @@ public sealed class AkeneoConfigurationExportService(
     IAkeneoFamilyMappingService familyMappingService,
     IAkeneoAttributeMappingService attributeMappingService,
     IAkeneoAssetMappingService assetMappingService,
-    IAkeneoNopEntityMappingService entityMappingService)
+    IAkeneoNopEntityMappingService entityMappingService,
+    IAkeneoCategoryContentMappingService categoryContentMappingService)
     : IAkeneoConfigurationExportService
 {
     private const string RedactedValue = "[REDACTED]";
@@ -118,6 +119,7 @@ public sealed class AkeneoConfigurationExportService(
                 fallbackSourcesByMappingId),
             ["assetMappings"] = assetMappings,
             ["categoryMappings"] = categoryMappings,
+            ["categoryContentMappings"] = await categoryContentMappingService.GetAllMappingsAsync(),
             ["enumCatalog"] = BuildEnumCatalog()
         };
 

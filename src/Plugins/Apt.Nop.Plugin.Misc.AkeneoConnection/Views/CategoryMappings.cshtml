@@ -1,3 +1,5 @@
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
+@using Apt.Nop.Plugin.Misc.AkeneoConnection.Services
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Types
 @model Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoCategoryMappingListModel
 
@@ -16,6 +18,62 @@
     {
         saveUrl = Url.Action("SaveCategoryMapping", "AkeneoMapping"),
         deleteUrl = Url.Action("DeleteCategoryMapping", "AkeneoMapping"),
+        content = new
+        {
+            saveMappingUrl = Url.Action("SaveMapping", "AkeneoCategoryContent"),
+            deleteMappingUrl = Url.Action("DeleteMapping", "AkeneoCategoryContent"),
+            previewUrl = Url.Action("Preview", "AkeneoCategoryContent"),
+            syncUrl = Url.Action("Sync", "AkeneoCategoryContent"),
+            syncLogsUrl = Url.Action("List", "AkeneoSyncLog"),
+            readError = Model.ContentReadError ?? string.Empty,
+            targets = Enum.GetValues(typeof(AkeneoCategoryContentTarget)).Cast<AkeneoCategoryContentTarget>().Select(target => new
+            {
+                id = (int)target,
+                name = AkeneoCategoryContentPlanner.DescribeTarget(target),
+                isImage = target == AkeneoCategoryContentTarget.Picture,
+                isName = target == AkeneoCategoryContentTarget.Name,
+                isSlug = target == AkeneoCategoryContentTarget.SeName
+            }).ToList(),
+            sourceTypes = new
+            {
+                label = (int)AkeneoCategoryContentSourceType.Label,
+                attribute = (int)AkeneoCategoryContentSourceType.TemplateAttribute
+            },
+            emptyHandling = new
+            {
+                keep = (int)AkeneoCategoryContentEmptyValueHandling.Keep,
+                clear = (int)AkeneoCategoryContentEmptyValueHandling.Clear
+            },
+            mappings = Model.ContentMappings.Select(mapping => new
+            {
+                id = mapping.Id,
+                targetId = mapping.TargetId,
+                languageId = mapping.LanguageId,
+                sourceTypeId = mapping.SourceTypeId,
+                attributeCode = mapping.AkeneoAttributeCode ?? string.Empty,
+                locale = mapping.Locale ?? string.Empty,
+                channel = mapping.Channel ?? string.Empty,
+                emptyValueHandlingId = mapping.EmptyValueHandlingId
+            }).ToList(),
+            attributes = Model.TemplateAttributes.Select(attribute => new
+            {
+                code = attribute.Code,
+                type = attribute.Type ?? string.Empty,
+                isImage = attribute.IsImage,
+                categoryCount = attribute.CategoryCount,
+                scopes = attribute.Scopes.Select(scope => new
+                {
+                    locale = scope.Locale ?? string.Empty,
+                    channel = scope.Channel ?? string.Empty
+                }).ToList()
+            }).ToList(),
+            labelLocales = Model.LabelLocales,
+            languages = Model.AvailableLanguages.Select(language => new
+            {
+                id = Convert.ToInt32(language.Value),
+                name = language.Text
+            }).ToList()
+        },
         categories = Model.Rows.Select((row, idx) => new
         {
             index = idx,
@@ -25,7 +83,10 @@
             level = row.Level,
             nopCategoryId = row.NopCategoryId.ToString(),
             nopCategoryName = row.NopCategoryName ?? string.Empty,
-            isMapped = row.IsMapped
+            isMapped = row.IsMapped,
+            contentStatusId = row.ContentStatusId ?? 0,
+            contentMessage = row.ContentMessage ?? string.Empty,
+            contentSyncedOn = row.ContentSyncedOnUtc.HasValue ? row.ContentSyncedOnUtc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC" : string.Empty
         }).ToList(),
         availableNopCategories = Model.AvailableNopCategories.Select(category => new
         {
@@ -46,8 +107,217 @@
     </div>
 
     <section class="content">
-        <div class="container-fluid">
-            <div id="akeneo-mapping-app" class="card card-default akeneo-mapping-card" v-cloak>
+        <div class="container-fluid" id="akeneo-mapping-app" v-cloak>
+            <div class="card card-default akeneo-mapping-card akeneo-content-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-align-left"></i>
+                        Category Content
+                    </div>
+                    <div class="card-tools">
+                        <button type="button"
+                                class="btn btn-sm btn-default"
+                                v-on:click="runContent(false, null)"
+                                v-bind:disabled="content.running || !content.mappings.length">
+                            <i class="fas fa-search"></i>
+                            Preview changes
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-primary ml-2"
+                                v-on:click="runContent(true, null)"
+                                v-bind:disabled="content.running || !content.mappings.length">
+                            <i class="fas fa-sync-alt"></i>
+                            Sync content now
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Copies Akeneo category template values (or the label) into every mapped nopCommerce category.
+                        Akeneo owns each mapped property: a sync overwrites edits made in nopCommerce.
+                        It runs daily as the "Akeneo Connection - Category Content Sync" schedule task, and on demand here.
+                    </p>
+
+                    <div class="alert alert-warning" v-if="content.readError">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        {{ content.readError }}
+                    </div>
+
+                    <div class="alert alert-info" v-else-if="!content.attributes.length">
+                        <i class="fas fa-info-circle"></i>
+                        No Akeneo category has template values yet, so only the category label can be mapped.
+                        Fill in the category template in Akeneo, then reload this page.
+                    </div>
+
+                    <table class="table table-sm akeneo-content-table mb-2">
+                        <thead>
+                            <tr>
+                                <th>nopCommerce property</th>
+                                <th>Language</th>
+                                <th>Akeneo source</th>
+                                <th>When Akeneo has no value</th>
+                                <th class="text-right">&nbsp;</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template v-for="row in contentRows" :key="row.key">
+                                <tr v-bind:class="{ 'akeneo-content-unmapped': !row.mapping && !row.editing }">
+                                    <td class="font-weight-bold">{{ targetName(row.targetId) }}</td>
+                                    <td>{{ languageName(row.editing ? row.draft.languageId : row.languageId) }}</td>
+                                    <td>
+                                        <span v-if="row.mapping">{{ describeSource(row.mapping) }}</span>
+                                        <span class="text-muted" v-else>Not mapped</span>
+                                    </td>
+                                    <td>
+                                        <span v-if="row.mapping">{{ describeEmpty(row.mapping) }}</span>
+                                    </td>
+                                    <td class="text-right text-nowrap">
+                                        <button type="button" class="btn btn-sm btn-primary"
+                                                v-show="!row.editing"
+                                                v-on:click="editContent(row)">
+                                            <i class="fas" v-bind:class="row.mapping ? 'fa-pencil-alt' : 'fa-plus'"></i>
+                                            {{ row.mapping ? 'Edit' : 'Map' }}
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-default"
+                                                v-show="row.editing"
+                                                v-on:click="cancelContent(row)">
+                                            Cancel
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="row.editing" class="akeneo-content-editor">
+                                    <td colspan="5">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2" v-if="!row.mapping && row.isLocalized">
+                                                <label class="font-weight-bold mb-1">Property</label>
+                                                <select class="form-control" v-model.number="row.targetId" v-on:change="row.draft.source = ''">
+                                                    <option v-for="target in textTargets()" :key="target.id" :value="target.id">{{ target.name }}</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-2" v-if="row.isLocalized">
+                                                <label class="font-weight-bold mb-1">Language</label>
+                                                <select class="form-control" v-model.number="row.draft.languageId">
+                                                    <option v-for="language in content.languages" :key="language.id" :value="language.id">{{ language.name }}</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group" v-bind:class="row.isLocalized ? 'col-md-4' : 'col-md-5'">
+                                                <label class="font-weight-bold mb-1">Akeneo source</label>
+                                                <select class="form-control" v-model="row.draft.source" v-on:change="sourceChanged(row)">
+                                                    <option value="">-- Choose --</option>
+                                                    <option value="label" v-if="!isImageTarget(row.targetId)">Category label</option>
+                                                    <option v-for="attribute in attributesFor(row)" :key="attribute.code" :value="'attr:' + attribute.code">
+                                                        {{ describeAttribute(attribute) }}
+                                                    </option>
+                                                    <option value="custom">Other template attribute (enter its code)</option>
+                                                </select>
+                                                <input type="text" class="form-control mt-1" placeholder="Attribute code, e.g. meta_title"
+                                                       v-if="row.draft.source === 'custom'"
+                                                       v-model="row.draft.customCode" />
+                                                <small class="form-text text-muted" v-if="row.draft.source === 'custom'">
+                                                    The list only shows attributes that already have a value on a category.
+                                                    Use the code from the category template; values are picked up once they are filled in.
+                                                </small>
+                                            </div>
+                                            <div class="form-group col-md-2" v-if="row.draft.source">
+                                                <label class="font-weight-bold mb-1">Locale</label>
+                                                <template v-if="row.draft.source === 'custom'">
+                                                    <input type="text" class="form-control" placeholder="(not localizable)"
+                                                           v-bind:list="'akeneo-locales-' + row.key"
+                                                           v-model="row.draft.locale" />
+                                                    <datalist v-bind:id="'akeneo-locales-' + row.key">
+                                                        <option v-for="locale in knownLocales()" :key="locale" :value="locale"></option>
+                                                    </datalist>
+                                                </template>
+                                                <select class="form-control" v-else v-model="row.draft.locale" v-on:change="localeChanged(row)">
+                                                    <option v-for="locale in localesFor(row)" :key="locale" :value="locale">{{ locale || '(not localizable)' }}</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-2" v-if="row.draft.source && row.draft.source !== 'label'">
+                                                <label class="font-weight-bold mb-1">Channel</label>
+                                                <template v-if="row.draft.source === 'custom'">
+                                                    <input type="text" class="form-control" placeholder="(not scopable)"
+                                                           v-bind:list="'akeneo-channels-' + row.key"
+                                                           v-model="row.draft.channel" />
+                                                    <datalist v-bind:id="'akeneo-channels-' + row.key">
+                                                        <option v-for="channel in knownChannels()" :key="channel" :value="channel"></option>
+                                                    </datalist>
+                                                </template>
+                                                <select class="form-control" v-else v-model="row.draft.channel">
+                                                    <option v-for="channel in channelsFor(row)" :key="channel" :value="channel">{{ channel || '(not scopable)' }}</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-2">
+                                                <label class="font-weight-bold mb-1">No value in Akeneo</label>
+                                                <select class="form-control" v-model.number="row.draft.emptyValueHandlingId" v-bind:disabled="isNameTarget(row.targetId)">
+                                                    <option :value="content.emptyHandling.keep">Keep nopCommerce value</option>
+                                                    <option :value="content.emptyHandling.clear" v-if="!isNameTarget(row.targetId)">{{ clearLabel(row.targetId) }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="alert alert-danger akeneo-row-errors" v-if="row.errors.length" role="alert">
+                                            <i class="fas fa-exclamation-circle akeneo-row-errors-icon" aria-hidden="true"></i>
+                                            <div class="akeneo-row-errors-body">
+                                                <ul class="mb-0">
+                                                    <li v-for="(err, eIdx) in row.errors" :key="eIdx">{{ err }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+
+                                        <button type="button" class="btn btn-sm btn-primary" v-on:click="saveContent(row)" v-bind:disabled="row.saving">
+                                            <i class="fas fa-save"></i> Save
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-danger ml-2" v-if="row.mapping" v-on:click="removeContent(row)" v-bind:disabled="row.saving">
+                                            <i class="fas fa-unlink"></i> Remove
+                                        </button>
+                                        <span class="akeneo-row-saving ml-2" v-show="row.saving">Saving...</span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+
+                    <button type="button" class="btn btn-sm btn-link p-0" v-on:click="addLocalizedRow" v-if="content.languages.length">
+                        <i class="fas fa-language"></i>
+                        Add a language-specific mapping
+                    </button>
+
+                    <div class="akeneo-content-results mt-3" v-if="content.result">
+                        <div class="alert" v-bind:class="resultAlertClass(content.result)">
+                            <strong>{{ content.result.applied ? 'Sync' : 'Preview' }}:</strong>
+                            {{ content.result.message }}
+                            <a v-if="content.result.syncRunRecordId" v-bind:href="content.syncLogsUrl" class="ml-2">Open sync logs</a>
+                        </div>
+                        <div class="custom-control custom-checkbox mb-2" v-if="content.result.categories && content.result.categories.length">
+                            <input type="checkbox" class="custom-control-input" id="akeneo-content-show-unchanged" v-model="content.showUnchanged" />
+                            <label class="custom-control-label" for="akeneo-content-show-unchanged">Show unchanged categories</label>
+                        </div>
+                        <div v-for="item in visibleResultItems(content.result)" :key="item.akeneoCode">
+                            <div class="akeneo-content-result">
+                                <div class="akeneo-content-result-head">
+                                    <span class="badge" v-bind:class="statusBadge(item.statusId)">{{ statusText(item.statusId, content.result.applied) }}</span>
+                                    <span class="font-weight-bold ml-2">{{ item.akeneoLabel }}</span>
+                                    <span class="akeneo-code ml-1">{{ item.akeneoCode }}</span>
+                                    <span class="text-muted ml-2" v-if="item.nopCategoryName">&rarr; {{ item.nopCategoryName }} (ID {{ item.nopCategoryId }})</span>
+                                </div>
+                                <ul class="akeneo-content-changes" v-if="item.changes.length">
+                                    <li v-for="(change, cIdx) in item.changes" :key="cIdx">
+                                        <strong>{{ change.property }}</strong><span v-if="change.language !== 'Standard'"> ({{ change.language }})</span>:
+                                        <span class="akeneo-content-from">{{ change.from }}</span>
+                                        <i class="fas fa-long-arrow-alt-right mx-1"></i>
+                                        <span class="akeneo-content-to">{{ change.to }}</span>
+                                    </li>
+                                </ul>
+                                <div class="text-danger small" v-for="(err, eIdx) in item.errors" :key="'e' + eIdx">{{ err }}</div>
+                                <div class="text-warning small" v-for="(warn, wIdx) in item.warnings" :key="'w' + wIdx">{{ warn }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-default akeneo-mapping-card">
                 <div class="card-header">
                     <div class="card-title">
                         <i class="fas fa-sitemap"></i>
@@ -117,6 +387,14 @@
 
                                                     <div class="akeneo-summary-target-detail">
                                                         {{ detail(category) }}
+                                                    </div>
+
+                                                    <div class="akeneo-content-state"
+                                                         v-if="category.contentStatusId"
+                                                         v-bind:data-ak-tooltip="category.contentMessage || null"
+                                                         tabindex="0">
+                                                        <span class="badge" v-bind:class="statusBadge(category.contentStatusId)">{{ contentStateText(category) }}</span>
+                                                        <span class="text-muted ml-1">{{ category.contentSyncedOn }}</span>
                                                     </div>
                                                 </div>
 
@@ -217,6 +495,44 @@
                                                         <span class="akeneo-row-saving ml-2" v-show="category.saving">
                                                             Saving...
                                                         </span>
+
+                                                        <span class="akeneo-content-row-actions" v-if="Number(category.nopCategoryId) > 0 && content.mappings.length">
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-default ml-3"
+                                                                    v-on:click="runContent(false, category)"
+                                                                    v-bind:disabled="content.running">
+                                                                <i class="fas fa-search"></i>
+                                                                Preview content
+                                                            </button>
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-default ml-2"
+                                                                    v-on:click="runContent(true, category)"
+                                                                    v-bind:disabled="content.running">
+                                                                <i class="fas fa-sync-alt"></i>
+                                                                Sync content
+                                                            </button>
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="akeneo-content-results mt-3" v-if="category.contentResult">
+                                                        <div class="alert mb-2" v-bind:class="resultAlertClass(category.contentResult)">
+                                                            {{ category.contentResult.message }}
+                                                        </div>
+                                                        <div class="akeneo-content-result" v-for="item in category.contentResult.categories" :key="item.akeneoCode">
+                                                            <div class="akeneo-content-result-head">
+                                                                <span class="badge" v-bind:class="statusBadge(item.statusId)">{{ statusText(item.statusId, category.contentResult.applied) }}</span>
+                                                            </div>
+                                                            <ul class="akeneo-content-changes" v-if="item.changes.length">
+                                                                <li v-for="(change, cIdx) in item.changes" :key="cIdx">
+                                                                    <strong>{{ change.property }}</strong><span v-if="change.language !== 'Standard'"> ({{ change.language }})</span>:
+                                                                    <span class="akeneo-content-from">{{ change.from }}</span>
+                                                                    <i class="fas fa-long-arrow-alt-right mx-1"></i>
+                                                                    <span class="akeneo-content-to">{{ change.to }}</span>
+                                                                </li>
+                                                            </ul>
+                                                            <div class="text-danger small" v-for="(err, eIdx) in item.errors" :key="'e' + eIdx">{{ err }}</div>
+                                                            <div class="text-warning small" v-for="(warn, wIdx) in item.warnings" :key="'w' + wIdx">{{ warn }}</div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </transition>
@@ -252,17 +568,38 @@
 <script asp-location="Footer">
     (function () {
         var appData = JSON.parse(document.getElementById('akeneo-category-app-data').textContent);
+        var contentData = appData.content;
+
+        var STATUS = { unchanged: 10, updated: 20, skipped: 30, failed: 40 };
 
         var categories = appData.categories.map(function (category) {
             return Object.assign({}, category, {
                 editing: false,
                 saving: false,
                 errors: [],
+                contentResult: null,
                 draft: {
                     nopCategoryId: category.nopCategoryId || '0'
                 }
             });
         });
+
+        // Content rows are rebuilt from the saved mappings; their edit state survives by key.
+        var contentRowCache = {};
+
+        function newContentRow(key, targetId, languageId, mapping, isLocalized) {
+            return {
+                key: key,
+                targetId: targetId,
+                languageId: languageId,
+                isLocalized: isLocalized,
+                mapping: mapping,
+                editing: false,
+                saving: false,
+                errors: [],
+                draft: {}
+            };
+        }
 
         Vue.createApp({
             data: function () {
@@ -270,7 +607,22 @@
                     categories: categories,
                     availableNopCategories: appData.availableNopCategories,
                     expanded: {},
-                    toasts: []
+                    toasts: [],
+                    content: {
+                        mappings: contentData.mappings,
+                        attributes: contentData.attributes,
+                        labelLocales: contentData.labelLocales,
+                        languages: contentData.languages,
+                        targets: contentData.targets,
+                        sourceTypes: contentData.sourceTypes,
+                        emptyHandling: contentData.emptyHandling,
+                        readError: contentData.readError,
+                        syncLogsUrl: contentData.syncLogsUrl,
+                        extraRows: [],
+                        running: false,
+                        result: null,
+                        showUnchanged: false
+                    }
                 };
             },
             computed: {
@@ -296,6 +648,28 @@
                     });
 
                     return groups;
+                },
+
+                // One row per property for the standard language (mapped or not),
+                // then one per language-specific mapping, then unsaved new rows.
+                contentRows: function () {
+                    var self = this;
+                    var rows = [];
+
+                    this.content.targets.forEach(function (target) {
+                        var mapping = self.content.mappings.find(function (m) {
+                            return m.targetId === target.id && m.languageId === 0;
+                        }) || null;
+                        rows.push(self.rowFor('std-' + target.id, target.id, 0, mapping, false));
+                    });
+
+                    this.content.mappings
+                        .filter(function (m) { return m.languageId > 0; })
+                        .forEach(function (mapping) {
+                            rows.push(self.rowFor('m' + mapping.id, mapping.targetId, mapping.languageId, mapping, true));
+                        });
+
+                    return rows.concat(this.content.extraRows);
                 }
             },
             methods: {
@@ -454,6 +828,370 @@
                             category.saving = false;
                         }
                     });
+                },
+
+                // ---- Category content mappings ----
+
+                rowFor: function (key, targetId, languageId, mapping, isLocalized) {
+                    var row = contentRowCache[key];
+                    if (!row) {
+                        row = Vue.reactive(newContentRow(key, targetId, languageId, mapping, isLocalized));
+                        contentRowCache[key] = row;
+                    }
+                    if (row.mapping !== mapping) row.mapping = mapping;
+                    if (row.languageId !== languageId) row.languageId = languageId;
+                    return row;
+                },
+
+                textTargets: function () {
+                    return this.content.targets.filter(function (t) { return !t.isImage; });
+                },
+
+                targetFor: function (targetId) {
+                    return this.content.targets.find(function (t) { return t.id === targetId; }) || {};
+                },
+
+                targetName: function (targetId) {
+                    return this.targetFor(targetId).name || ('Property ' + targetId);
+                },
+
+                isImageTarget: function (targetId) {
+                    return !!this.targetFor(targetId).isImage;
+                },
+
+                isNameTarget: function (targetId) {
+                    return !!this.targetFor(targetId).isName;
+                },
+
+                clearLabel: function (targetId) {
+                    if (this.targetFor(targetId).isSlug) return 'Rebuild from category name';
+                    if (this.isImageTarget(targetId)) return 'Remove nopCommerce picture';
+                    return 'Clear nopCommerce value';
+                },
+
+                languageName: function (languageId) {
+                    if (!languageId) return 'Standard';
+                    var language = this.content.languages.find(function (l) { return l.id === Number(languageId); });
+                    return language ? language.name : 'Language ID ' + languageId;
+                },
+
+                attributeFor: function (code) {
+                    return this.content.attributes.find(function (a) { return a.code.toLowerCase() === String(code || '').toLowerCase(); }) || null;
+                },
+
+                attributesFor: function (row) {
+                    var wantImage = this.isImageTarget(row.targetId);
+                    return this.content.attributes.filter(function (a) { return a.isImage === wantImage; });
+                },
+
+                // Every locale/channel seen on category values, suggested for attributes with no values yet.
+                knownLocales: function () {
+                    var locales = this.content.labelLocales.slice();
+                    this.content.attributes.forEach(function (a) {
+                        a.scopes.forEach(function (s) { if (s.locale && locales.indexOf(s.locale) < 0) locales.push(s.locale); });
+                    });
+                    return locales;
+                },
+
+                knownChannels: function () {
+                    var channels = [];
+                    this.content.attributes.forEach(function (a) {
+                        a.scopes.forEach(function (s) { if (s.channel && channels.indexOf(s.channel) < 0) channels.push(s.channel); });
+                    });
+                    return channels;
+                },
+
+                // The locale/channel most template values use, as a starting point for a typed-in attribute.
+                commonScope: function () {
+                    var counts = {};
+                    var best = null;
+                    this.content.attributes.forEach(function (a) {
+                        a.scopes.forEach(function (s) {
+                            var key = s.locale + '|' + s.channel;
+                            counts[key] = (counts[key] || 0) + 1;
+                            if (!best || counts[key] > counts[best.locale + '|' + best.channel]) best = s;
+                        });
+                    });
+                    return best || { locale: this.content.labelLocales.indexOf('en_US') >= 0 ? 'en_US' : (this.content.labelLocales[0] || ''), channel: '' };
+                },
+
+                describeAttribute: function (attribute) {
+                    var details = [];
+                    if (attribute.type) details.push(attribute.type);
+                    details.push(attribute.categoryCount
+                        ? attribute.categoryCount + ' categor' + (attribute.categoryCount === 1 ? 'y' : 'ies')
+                        : 'no values yet');
+                    return attribute.code + ' (' + details.join(', ') + ')';
+                },
+
+                describeSource: function (mapping) {
+                    var scope = [];
+                    if (mapping.locale) scope.push(mapping.locale);
+                    if (mapping.channel) scope.push(mapping.channel);
+                    var suffix = scope.length ? ' [' + scope.join(', ') + ']' : '';
+                    return mapping.sourceTypeId === this.content.sourceTypes.label
+                        ? 'Category label' + suffix
+                        : mapping.attributeCode + suffix;
+                },
+
+                describeEmpty: function (mapping) {
+                    return mapping.emptyValueHandlingId === this.content.emptyHandling.clear
+                        ? this.clearLabel(mapping.targetId)
+                        : 'Keep nopCommerce value';
+                },
+
+                scopesFor: function (row) {
+                    if (!row.draft.source || row.draft.source === 'label' || row.draft.source === 'custom') return [];
+                    var attribute = this.attributeFor(row.draft.source.slice(5));
+                    return attribute ? attribute.scopes : [];
+                },
+
+                localesFor: function (row) {
+                    if (row.draft.source === 'label') {
+                        var labelLocales = this.content.labelLocales.length ? this.content.labelLocales.slice() : ['en_US'];
+                        if (row.draft.locale && labelLocales.indexOf(row.draft.locale) < 0) labelLocales.push(row.draft.locale);
+                        return labelLocales;
+                    }
+                    var locales = [];
+                    this.scopesFor(row).forEach(function (s) { if (locales.indexOf(s.locale) < 0) locales.push(s.locale); });
+                    if (row.draft.locale !== undefined && locales.indexOf(row.draft.locale) < 0) locales.push(row.draft.locale);
+                    return locales.length ? locales : [''];
+                },
+
+                channelsFor: function (row) {
+                    var channels = [];
+                    this.scopesFor(row)
+                        .filter(function (s) { return s.locale === row.draft.locale; })
+                        .forEach(function (s) { if (channels.indexOf(s.channel) < 0) channels.push(s.channel); });
+                    if (row.draft.channel !== undefined && channels.indexOf(row.draft.channel) < 0) channels.push(row.draft.channel);
+                    return channels.length ? channels : [''];
+                },
+
+                sourceChanged: function (row) {
+                    if (row.draft.source === 'custom') {
+                        var scope = this.commonScope();
+                        row.draft.locale = scope.locale;
+                        row.draft.channel = scope.channel;
+                        return;
+                    }
+                    var locales = this.localesFor(row);
+                    row.draft.locale = locales.indexOf('en_US') >= 0 ? 'en_US' : locales[0];
+                    this.localeChanged(row);
+                },
+
+                localeChanged: function (row) {
+                    if (row.draft.source === 'label') {
+                        row.draft.channel = '';
+                        return;
+                    }
+                    var scoped = this.scopesFor(row).filter(function (s) { return s.locale === row.draft.locale; });
+                    var stillValid = scoped.some(function (s) { return s.channel === row.draft.channel; });
+                    if (!stillValid) row.draft.channel = scoped.length ? scoped[0].channel : '';
+                },
+
+                editContent: function (row) {
+                    var m = row.mapping;
+                    var isLabel = m && m.sourceTypeId === this.content.sourceTypes.label;
+                    // A saved attribute with no values on any category yet reopens as a typed-in code.
+                    var listed = m && !isLabel && this.attributesFor(row).some(function (a) { return a.code.toLowerCase() === m.attributeCode.toLowerCase(); });
+                    row.errors = [];
+                    row.draft = {
+                        languageId: row.isLocalized ? (m ? m.languageId : (this.content.languages[0] || {}).id || 0) : 0,
+                        source: !m ? '' : isLabel ? 'label' : listed ? 'attr:' + m.attributeCode : 'custom',
+                        customCode: m && !isLabel ? m.attributeCode : '',
+                        locale: m ? m.locale : '',
+                        channel: m ? m.channel : '',
+                        emptyValueHandlingId: m ? m.emptyValueHandlingId : this.content.emptyHandling.keep
+                    };
+                    row.editing = true;
+                },
+
+                cancelContent: function (row) {
+                    row.errors = [];
+                    row.editing = false;
+                    if (!row.mapping) {
+                        this.content.extraRows = this.content.extraRows.filter(function (r) { return r !== row; });
+                    }
+                },
+
+                addLocalizedRow: function () {
+                    var key = 'new-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                    this.content.extraRows.push(newContentRow(key, this.textTargets()[0].id, 0, null, true));
+                    // Edit the reactive copy the array now holds, not the plain object.
+                    this.editContent(this.content.extraRows[this.content.extraRows.length - 1]);
+                },
+
+                saveContent: function (row) {
+                    var self = this;
+                    var draft = row.draft;
+                    var isLabel = draft.source === 'label';
+                    row.errors = [];
+
+                    if (!draft.source) {
+                        row.errors = ['Choose the Akeneo source.'];
+                        return;
+                    }
+
+                    var attributeCode = isLabel ? ''
+                        : draft.source === 'custom' ? String(draft.customCode || '').trim()
+                        : draft.source.slice(5);
+
+                    if (!isLabel && !attributeCode) {
+                        row.errors = ['Enter the category template attribute code.'];
+                        return;
+                    }
+
+                    var payload = {
+                        Id: row.mapping ? row.mapping.id : 0,
+                        TargetId: Number(row.targetId),
+                        LanguageId: row.isLocalized ? Number(draft.languageId) : 0,
+                        SourceTypeId: isLabel ? this.content.sourceTypes.label : this.content.sourceTypes.attribute,
+                        AkeneoAttributeCode: attributeCode,
+                        Locale: String(draft.locale || '').trim(),
+                        Channel: isLabel ? '' : String(draft.channel || '').trim(),
+                        EmptyValueHandlingId: Number(draft.emptyValueHandlingId)
+                    };
+
+                    row.saving = true;
+                    $.ajax({
+                        type: 'POST',
+                        url: contentData.saveMappingUrl,
+                        data: addAntiForgeryToken(payload),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                row.errors = res && res.errors ? res.errors : ['Unable to save the content mapping.'];
+                                return;
+                            }
+
+                            var saved = {
+                                id: res.id,
+                                targetId: payload.TargetId,
+                                languageId: payload.LanguageId,
+                                sourceTypeId: payload.SourceTypeId,
+                                attributeCode: payload.AkeneoAttributeCode,
+                                locale: payload.Locale,
+                                channel: payload.Channel,
+                                emptyValueHandlingId: payload.EmptyValueHandlingId
+                            };
+
+                            self.content.mappings = self.content.mappings
+                                .filter(function (m) { return m.id !== saved.id; })
+                                .concat([saved]);
+                            self.content.extraRows = self.content.extraRows.filter(function (r) { return r !== row; });
+                            row.editing = false;
+                            self.notify(self.targetName(saved.targetId) + ' mapping saved');
+                        },
+                        error: function () {
+                            row.errors = ['Unable to save the content mapping due to a server error.'];
+                        },
+                        complete: function () {
+                            row.saving = false;
+                        }
+                    });
+                },
+
+                removeContent: function (row) {
+                    var self = this;
+                    var id = row.mapping.id;
+                    row.saving = true;
+                    $.ajax({
+                        type: 'POST',
+                        url: contentData.deleteMappingUrl,
+                        data: addAntiForgeryToken({ id: id }),
+                        success: function () {
+                            self.content.mappings = self.content.mappings.filter(function (m) { return m.id !== id; });
+                            row.editing = false;
+                            self.notify(self.targetName(row.targetId) + ' mapping removed');
+                        },
+                        error: function () {
+                            row.errors = ['Unable to remove the content mapping due to a server error.'];
+                        },
+                        complete: function () {
+                            row.saving = false;
+                        }
+                    });
+                },
+
+                // ---- Runs ----
+
+                runContent: function (apply, category) {
+                    var self = this;
+                    if (apply && !category &&
+                        !window.confirm('Write the mapped Akeneo content into every mapped nopCommerce category? Edits made in nopCommerce to mapped properties will be overwritten.')) {
+                        return;
+                    }
+
+                    this.content.running = true;
+                    if (category) category.contentResult = null; else this.content.result = null;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: apply ? contentData.syncUrl : contentData.previewUrl,
+                        data: addAntiForgeryToken(category ? { akeneoCode: category.code } : {}),
+                        success: function (res) {
+                            if (category) category.contentResult = res; else self.content.result = res;
+                            if (apply && res && res.categories) self.applyContentStates(res);
+                        },
+                        error: function () {
+                            var failed = { success: false, applied: apply, message: 'The request failed due to a server error.', categories: [] };
+                            if (category) category.contentResult = failed; else self.content.result = failed;
+                        },
+                        complete: function () {
+                            self.content.running = false;
+                        }
+                    });
+                },
+
+                applyContentStates: function (res) {
+                    var self = this;
+                    var now = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+                    res.categories.forEach(function (item) {
+                        var row = self.categories.find(function (c) { return c.code.toLowerCase() === item.akeneoCode.toLowerCase(); });
+                        if (!row) return;
+                        row.contentStatusId = item.statusId;
+                        row.contentMessage = item.errors.concat(item.warnings).join(' ');
+                        row.contentSyncedOn = now;
+                    });
+                },
+
+                visibleResultItems: function (result) {
+                    var self = this;
+                    return (result.categories || []).filter(function (item) {
+                        return self.content.showUnchanged || item.statusId !== STATUS.unchanged || item.warnings.length;
+                    });
+                },
+
+                resultAlertClass: function (result) {
+                    if (!result.success) return 'alert-danger';
+                    if (result.failedCount > 0) return 'alert-warning';
+                    return 'alert-success';
+                },
+
+                statusBadge: function (statusId) {
+                    switch (statusId) {
+                        case STATUS.updated: return 'badge-success';
+                        case STATUS.failed: return 'badge-danger';
+                        case STATUS.skipped: return 'badge-warning';
+                        default: return 'badge-secondary';
+                    }
+                },
+
+                statusText: function (statusId, applied) {
+                    switch (statusId) {
+                        case STATUS.updated: return applied ? 'Updated' : 'Will change';
+                        case STATUS.failed: return 'Failed';
+                        case STATUS.skipped: return 'Skipped';
+                        default: return 'Unchanged';
+                    }
+                },
+
+                contentStateText: function (category) {
+                    switch (category.contentStatusId) {
+                        case STATUS.updated: return 'Content updated';
+                        case STATUS.failed: return 'Content failed';
+                        case STATUS.skipped: return 'Content skipped';
+                        default: return 'Content in sync';
+                    }
                 }
             }
         }).mount('#akeneo-mapping-app');
