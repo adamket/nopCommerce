@@ -6,6 +6,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Moq;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
@@ -262,6 +263,120 @@ public class AkeneoCombinationAvailabilityTests
         else Assert.That(marked, Is.Null);
         fixture.Products.Verify(x => x.UpdateProductAsync(It.IsAny<Product>()), Times.Never);
     }
+
+    #region Published rule source
+
+    // Akeneo enabled is true throughout: with the Published rule source only the rule decides.
+    private static AkeneoVariantImportContext PublishedRuleContext(bool? published, bool held = false, int? combinationId = 200)
+    {
+        var context = Context(true, combinationId);
+        context.CombinationAvailabilitySource = AkeneoCombinationAvailabilitySource.PublishedRule;
+        context.PublishedRuleResult = published;
+        context.PublishedRuleHeld = held;
+        return context;
+    }
+
+    [TestCase(true, true)]
+    [TestCase(false, false)]
+    public async Task The_published_rule_decides_availability_whatever_akeneo_enabled_says(bool published, bool expected)
+    {
+        Assert.That(await new Fixture().Service.IsAvailableAsync(PublishedRuleContext(published)), Is.EqualTo(expected));
+    }
+
+    [TestCase(200, true)]
+    [TestCase(null, false)]
+    public async Task A_held_rule_keeps_an_existing_combination_and_creates_none(int? combinationId, bool expected)
+    {
+        Assert.That(await new Fixture().Service.IsAvailableAsync(PublishedRuleContext(null, held: true, combinationId)), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void A_rule_problem_blocks_instead_of_removing()
+    {
+        var fixture = new Fixture();
+        var context = PublishedRuleContext(null);
+        context.PublishedRuleProblem = "The Published rule produced no value.";
+
+        Assert.ThrowsAsync<NopException>(() => fixture.Service.IsAvailableAsync(context));
+        fixture.Attributes.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task A_false_published_rule_removes_the_combination()
+    {
+        var fixture = new Fixture();
+        fixture.Combinations.Add(new ProductAttributeCombination { Id = 200, ProductId = 100, Sku = "SKU", AttributesXml = Xml(10) });
+
+        var result = await RelationshipService(fixture).ApplyAsync(
+            fixture.Parent, PublishedRuleContext(false), () => throw new AssertionException("Child write"));
+
+        Assert.That(result.CombinationUnavailable, Is.True);
+        Assert.That(fixture.Combinations, Is.Empty);
+    }
+
+    private static AkeneoResolvedMappedValue Published(string? value, bool skipped = false) => new()
+    {
+        Mapping = new AkeneoAttributeMapping { NopTargetTypeId = (int)NopTargetType.ProductField, NopTargetKey = "Published" },
+        HasValue = value != null,
+        Value = value == null ? null : new AkeneoResolvedProductValue { DisplayValue = value },
+        EvaluationOutcome = skipped ? AkeneoMappingEvaluationOutcome.SkippedByCondition : default
+    };
+
+    [Test]
+    public void The_variants_published_mapping_sets_the_rule_result()
+    {
+        AkeneoVariantImportContext Read(params AkeneoResolvedMappedValue[] values)
+        {
+            var context = new AkeneoVariantImportContext();
+            AkeneoCombinationAvailabilityService.ApplyPublishedRule(context, values);
+            return context;
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Read(Published("false")).PublishedRuleResult, Is.False);
+            Assert.That(Read(Published("True")).PublishedRuleResult, Is.True);
+            Assert.That(Read(Published("false", skipped: true)).PublishedRuleHeld, Is.True);
+            Assert.That(Read().PublishedRuleProblem, Does.Contain("no Published mapping applies to variant products"));
+            Assert.That(Read(Published(null)).PublishedRuleProblem, Does.Contain("no value"));
+            Assert.That(Read(Published("maybe")).PublishedRuleProblem, Does.Contain("'maybe'"));
+        });
+    }
+
+    [Test]
+    public async Task The_early_enabled_status_shortcut_leaves_published_rule_families_alone()
+    {
+        var fixture = new Fixture();
+        fixture.Families[0].CombinationAvailabilitySource = AkeneoCombinationAvailabilitySource.PublishedRule;
+        var disabled = Context(false).SourceProduct;
+
+        var unavailable = await fixture.Service.GetUnavailableBindingAsync(
+            disabled, new AkeneoProductImportRequest { SyncProfileId = 7, SyncRunRecordId = 23 });
+        var source = await fixture.Service.GetAvailabilitySourceAsync(disabled);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(unavailable, Is.Null);
+            Assert.That(source, Is.EqualTo(AkeneoCombinationAvailabilitySource.PublishedRule));
+        });
+    }
+
+    [Test]
+    public async Task Existing_enabled_status_families_keep_their_scope_fingerprint()
+    {
+        var fixture = new Fixture();
+        var enabledStatus = await fixture.Service.GetConfigurationFingerprintAsync(["family"]);
+        fixture.Families[0].CombinationAvailabilitySource = AkeneoCombinationAvailabilitySource.PublishedRule;
+        var publishedRule = await fixture.Service.GetConfigurationFingerprintAsync(["family"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(enabledStatus, Does.Contain("\"ManageVariantsByEnabledStatus\":true"));
+            Assert.That(publishedRule, Does.Contain("\"ManageVariantsByEnabledStatus\":\"published-rule\""));
+        });
+    }
+
+    #endregion
 
     private static AkeneoVariantRelationshipService RelationshipService(Fixture fixture)
     {

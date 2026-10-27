@@ -32,7 +32,41 @@ public static class AkeneoBuiltInSources
         Scopable = false
     };
 
-    public static IReadOnlyList<AkeneoAttributeDefinition> All => [Enabled];
+    public const string CompleteCode = "complete";
+
+    /// <summary>
+    /// True when Akeneo rates the product 100% complete for the sync's channel and
+    /// locale. Product models have no completeness, so this only yields a value
+    /// for products; a template or condition that needs it blocks a product model.
+    /// </summary>
+    public static AkeneoAttributeDefinition Complete => new()
+    {
+        Code = CompleteCode,
+        Type = "pim_catalog_boolean",
+        Group = GroupCode,
+        Labels = new Dictionary<string, string>
+        {
+            ["en_US"] = "Complete (channel and locale)"
+        },
+        Localizable = false,
+        Scopable = false
+    };
+
+    public static IReadOnlyList<AkeneoAttributeDefinition> All => [Enabled, Complete];
+
+    /// <summary>
+    /// Whether the product is 100% complete for the channel and locale, or null when
+    /// Akeneo returned no completeness for them (product models, or a channel or
+    /// locale the product is not rated for).
+    /// </summary>
+    public static bool? IsComplete(AkeneoProductDefinition product, string channel, string locale)
+    {
+        var entry = product?.Completenesses?.FirstOrDefault(completeness =>
+            string.Equals(completeness.Scope, channel?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(completeness.Locale, locale?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return entry?.Data is { } percent ? percent >= 100 : null;
+    }
 
     /// <summary>
     /// Returns the built-in source for <paramref name="code"/>, or null when the

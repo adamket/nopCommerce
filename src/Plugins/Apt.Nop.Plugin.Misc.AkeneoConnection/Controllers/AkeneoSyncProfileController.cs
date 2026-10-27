@@ -326,7 +326,15 @@ public class AkeneoSyncProfileController(
         profile.Name = model.Name?.Trim();
         profile.Enabled = model.Enabled;
         profile.AkeneoChannel = model.AkeneoChannel?.Trim();
-        profile.AkeneoLocales = model.AkeneoLocale?.Trim();
+        // Primary locale first; the rest write nopCommerce localized values.
+        var primaryLocale = model.AkeneoLocale?.Trim();
+        profile.AkeneoLocales = string.Join(",", new[] { primaryLocale }
+            .Concat((model.AdditionalAkeneoLocales ?? new List<string>())
+                .Where(locale => !string.IsNullOrWhiteSpace(locale))
+                .Select(locale => locale.Trim())
+                .Where(locale => !string.Equals(locale, primaryLocale, StringComparison.OrdinalIgnoreCase)))
+            .Where(locale => !string.IsNullOrWhiteSpace(locale))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
         profile.CurrencyCode = AkeneoValueContext.ResolveCurrency(model.CurrencyCode);
 
         profile.ProductWriteModeId = model.ProductWriteModeId;

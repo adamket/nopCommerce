@@ -1,5 +1,7 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
+﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Tax;
 using Nop.Data;
 using Nop.Services.Catalog;
 
@@ -11,13 +13,19 @@ public partial class AkeneoProductCoreSynchronizer
 {
     private readonly IProductService _productService;
     private readonly IRepository<Product> _productRepository;
+    private readonly IAkeneoFamilyMappingService _familyMappingService;
+    private readonly TaxSettings _taxSettings;
 
     public AkeneoProductCoreSynchronizer(
         IProductService productService,
-        IRepository<Product> productRepository)
+        IRepository<Product> productRepository,
+        IAkeneoFamilyMappingService familyMappingService = null,
+        TaxSettings taxSettings = null)
     {
         _productService = productService;
         _productRepository = productRepository;
+        _familyMappingService = familyMappingService;
+        _taxSettings = taxSettings;
     }
 
     public int Order => 100;
@@ -27,7 +35,7 @@ public partial class AkeneoProductCoreSynchronizer
         CancellationToken cancellationToken = default)
     {
         var isNew = context.ExistingProduct == null;
-        var product = context.ExistingProduct ?? CreateBaseProduct(context);
+        var product = context.ExistingProduct ?? await CreateNewProductAsync(context);
         var plan = await BuildPlanAsync(
             context,
             product,
@@ -73,6 +81,37 @@ public partial class AkeneoProductCoreSynchronizer
         context.Product = product;
         context.Result.NopProductId = product.Id;
     }
+
+    /// <summary>
+    /// A product the sync creates, with the family mapping's new-product
+    /// defaults: commerce settings Akeneo does not own. Updates never touch them.
+    /// Without a family tax category it gets the store's default tax category,
+    /// as a product created on the admin's new-product form does.
+    /// </summary>
+    private async Task<Product> CreateNewProductAsync(AkeneoProductSyncContext context)
+    {
+        var product = CreateBaseProduct(context);
+        product.TaxCategoryId = _taxSettings?.DefaultTaxCategoryId ?? 0;
+
+        var defaults = await GetNewProductDefaultsAsync(context);
+        if (defaults == null)
+            return product;
+
+        product.IsShipEnabled = defaults.NewProductIsShipEnabled;
+        if (defaults.NewProductTaxCategoryId is > 0)
+            product.TaxCategoryId = defaults.NewProductTaxCategoryId.Value;
+        if (defaults.NewProductWarehouseId is > 0)
+            product.WarehouseId = defaults.NewProductWarehouseId.Value;
+        if (defaults.NewProductTemplateId is > 0)
+            product.ProductTemplateId = defaults.NewProductTemplateId.Value;
+
+        return product;
+    }
+
+    private Task<AkeneoFamilyMapping> GetNewProductDefaultsAsync(AkeneoProductSyncContext context) =>
+        _familyMappingService == null || string.IsNullOrWhiteSpace(context.MappingFamilyCode)
+            ? Task.FromResult<AkeneoFamilyMapping>(null)
+            : _familyMappingService.GetEffectiveMappingAsync(context.MappingFamilyCode, context.MappingFamilyVariantCode);
 
     private static Product CreateBaseProduct(
         AkeneoProductSyncContext context)

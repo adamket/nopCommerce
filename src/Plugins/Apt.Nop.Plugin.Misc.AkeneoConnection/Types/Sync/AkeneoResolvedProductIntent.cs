@@ -37,6 +37,9 @@ public sealed class AkeneoResolvedProductIntent
 
     public string Sku { get; init; }
 
+    /// <summary>Mapped text values in each secondary locale; see <see cref="AkeneoLocalizedValue"/>.</summary>
+    public IReadOnlyList<AkeneoLocalizedValue> LocalizedValues { get; init; } = Array.Empty<AkeneoLocalizedValue>();
+
     /// <summary>
     /// Diagnostics produced while resolving source-side mappings. These are
     /// replayed into each concrete import result that consumes this intent.

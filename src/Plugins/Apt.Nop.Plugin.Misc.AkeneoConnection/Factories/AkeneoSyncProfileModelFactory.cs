@@ -8,13 +8,15 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Services;
 using Nop.Services.Helpers;
+using Nop.Services.Localization;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
 public class AkeneoSyncProfileModelFactory(
     IAkeneoSyncProfileService syncProfileService,
     IAkeneoApiClient akeneoApiClient,
-    IDateTimeHelper dateTimeHelper)
+    IDateTimeHelper dateTimeHelper,
+    ILanguageService languageService)
     : IAkeneoSyncProfileModelFactory
 {
     public async Task<AkeneoSyncProfileListModel> PrepareListModelAsync()
@@ -100,6 +102,10 @@ public class AkeneoSyncProfileModelFactory(
             model.Enabled = profile.Enabled;
             model.AkeneoChannel = profile.AkeneoChannel;
             model.AkeneoLocale = AkeneoValueContext.ResolveLocale(profile.AkeneoLocales);
+            model.AdditionalAkeneoLocales = profile.AkeneoLocales.SplitCsv()
+                .Skip(1)
+                .Where(locale => !string.Equals(locale, model.AkeneoLocale, StringComparison.OrdinalIgnoreCase))
+                .ToList();
             model.AkeneoFamilyCodes = profile.AkeneoFamilyCodes;
             model.AkeneoCategoryCodes = profile.AkeneoCategoryCodes;
             model.AkeneoProductGroupCodes = profile.AkeneoProductGroupCodes;
@@ -202,6 +208,11 @@ public class AkeneoSyncProfileModelFactory(
 
         await PrepareAkeneoChannelOptionsAsync(model);
         await PrepareAkeneoLocaleOptionsAsync(model);
+
+        model.AvailableNopLanguages = (await languageService.GetAllLanguagesAsync(showHidden: true))
+            .Where(language => !string.IsNullOrWhiteSpace(language.LanguageCulture))
+            .Select(language => new SelectListItem(language.Name, language.LanguageCulture))
+            .ToList();
         await PrepareAkeneoFamilyOptionsAsync(model);
         await PrepareAkeneoCategoryOptionsAsync(model);
 

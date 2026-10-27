@@ -196,6 +196,7 @@ public class AkeneoProductModelHierarchyResolver
             FamilyVariant = source.FamilyVariant,
             Parent = source.Parent,
             Enabled = source.Enabled,
+            Completenesses = source.Completenesses,
             Categories = source.Categories?.ToList() ?? new List<string>(),
             Values = values,
             Associations = source.Associations

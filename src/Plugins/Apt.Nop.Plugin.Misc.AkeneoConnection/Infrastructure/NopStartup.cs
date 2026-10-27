@@ -121,6 +121,10 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductSeoSynchronizer>());
 
+        services.AddScoped<AkeneoProductLocalizationSynchronizer>();
+        services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
+            provider.GetRequiredService<AkeneoProductLocalizationSynchronizer>());
+
         services.AddScoped<AkeneoProductSpecificationSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductSpecificationSynchronizer>());

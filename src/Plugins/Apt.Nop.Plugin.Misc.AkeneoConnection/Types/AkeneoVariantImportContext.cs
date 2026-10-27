@@ -37,6 +37,17 @@ public class AkeneoVariantImportContext
 
     public bool ManageVariantsByEnabledStatus { get; set; }
 
+    // Only read when ManageVariantsByEnabledStatus is on.
+    public AkeneoCombinationAvailabilitySource CombinationAvailabilitySource { get; set; }
+
+    // The variant's computed Published value, for the Published rule source: true or false, or
+    // held (its mapping was skipped by "Apply only when"), or a problem that blocks the change.
+    public bool? PublishedRuleResult { get; set; }
+
+    public bool PublishedRuleHeld { get; set; }
+
+    public string PublishedRuleProblem { get; set; }
+
     // Null means the resolver decides from existing structure and family defaults.
     public AkeneoVariantRelationshipMode? VariantRelationshipModeOverride { get; set; }
 

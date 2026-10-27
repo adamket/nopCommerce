@@ -15,7 +15,7 @@ public partial class AkeneoProductCoreSynchronizer
         AkeneoProductMappingPreviewModel model,
         CancellationToken cancellationToken = default)
     {
-        var product = context.ExistingProduct ?? CreateBaseProduct(context);
+        var product = context.ExistingProduct ?? await CreateNewProductAsync(context);
         var isNew = context.ExistingProduct == null;
         var plan = await BuildPlanAsync(context, product, isNew, cancellationToken);
 
@@ -37,6 +37,8 @@ public partial class AkeneoProductCoreSynchronizer
 
         ApplyWritePolicy(context, plan, isNew);
         AddLifecycleOperations(context, plan, product, isNew);
+        if (isNew)
+            AddNewProductDefaultOperations(plan, product);
         context.PlanningState.ProposedProductName = AnalyzeProductFields(
             context,
             plan,
@@ -84,6 +86,30 @@ public partial class AkeneoProductCoreSynchronizer
             : "A new simple nopCommerce product would be created before mapped sections are synchronized. " +
               "It is visible individually unless the family mapping represents it as a child of its parent " +
               "(associated-to-product or grouped mode) with \"Hide child products when represented by parent\" turned on.";
+
+    /// <summary>
+    /// Shows the family mapping's new-product defaults that CreateNewProductAsync
+    /// already set on the product being created.
+    /// </summary>
+    private static void AddNewProductDefaultOperations(
+        AkeneoExecutableSectionPlan plan,
+        Product product)
+    {
+        const string source = "New product default (family mapping, or the store default tax category)";
+
+        void Show(string target, string value) => plan.AddOperation(
+            "New product defaults", target, source, null, value, AkeneoDryRunOperationType.Create,
+            "Set only when the product is created; later syncs leave it alone.");
+
+        if (product.IsShipEnabled)
+            Show("Shipping enabled", bool.TrueString);
+        if (product.TaxCategoryId > 0)
+            Show("Tax category", $"Tax category ID {product.TaxCategoryId}");
+        if (product.WarehouseId > 0)
+            Show("Warehouse", $"Warehouse ID {product.WarehouseId}");
+        if (product.ProductTemplateId > 0)
+            Show("Product template", $"Product template ID {product.ProductTemplateId}");
+    }
 
     private static void AddLifecycleOperations(
         AkeneoProductSyncContext context,
@@ -377,6 +403,7 @@ public partial class AkeneoProductCoreSynchronizer
             "FullDescription" => product.FullDescription,
             "Sku" => product.Sku,
             "Price" => product.Price.ToString(CultureInfo.InvariantCulture),
+            "OldPrice" => product.OldPrice.ToString(CultureInfo.InvariantCulture),
             "StockQuantity" => product.StockQuantity.ToString(CultureInfo.InvariantCulture),
             "Gtin" => product.Gtin,
             "ManufacturerPartNumber" => product.ManufacturerPartNumber,
@@ -404,6 +431,13 @@ public partial class AkeneoProductCoreSynchronizer
                            CultureInfo.InvariantCulture,
                            out var price) &&
                        SetIfChanged(product.Price, price, value => product.Price = value),
+            // nopCommerce shows a non-zero old price struck through next to the price.
+            "OldPrice" => decimal.TryParse(
+                              proposed,
+                              NumberStyles.Number,
+                              CultureInfo.InvariantCulture,
+                              out var oldPrice) &&
+                          SetIfChanged(product.OldPrice, oldPrice, value => product.OldPrice = value),
             "StockQuantity" => int.TryParse(
                                    proposed,
                                    NumberStyles.Integer,
@@ -476,6 +510,8 @@ public partial class AkeneoProductCoreSynchronizer
                 break;
 
             case "Price":
+            case "OldPrice":
+                // An empty old price clears it, so nothing is shown struck through.
                 if (!mapped.HasValue)
                 {
                     proposed = "0";

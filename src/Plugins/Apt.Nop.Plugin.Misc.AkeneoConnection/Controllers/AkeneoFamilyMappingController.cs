@@ -256,12 +256,17 @@ public class AkeneoFamilyMappingController(
                 model.AkeneoFamilyVariantCode),
             Enabled = model.Enabled,
             ManageVariantsByEnabledStatus = NormalizeAvailability(model),
+            CombinationAvailabilitySourceId = NormalizeAvailabilitySource(model),
             VariantRelationshipModeId = model.VariantRelationshipModeId,
             ProductModelHierarchyModeId = model.ProductModelHierarchyModeId,
             PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure,
             AssociatedProductAttributeId = model.AssociatedProductAttributeId,
             AssociatedValueNameTemplate = model.AssociatedValueNameTemplate,
             HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent,
+            NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId),
+            NewProductIsShipEnabled = model.NewProductIsShipEnabled,
+            NewProductWarehouseId = PositiveOrNull(model.NewProductWarehouseId),
+            NewProductTemplateId = PositiveOrNull(model.NewProductTemplateId),
             DisplayOrder = model.DisplayOrder
         };
 
@@ -324,12 +329,17 @@ public class AkeneoFamilyMappingController(
             model.AkeneoFamilyVariantCode);
         configuration.Enabled = model.Enabled;
         configuration.ManageVariantsByEnabledStatus = NormalizeAvailability(model);
+        configuration.CombinationAvailabilitySourceId = NormalizeAvailabilitySource(model);
         configuration.VariantRelationshipModeId = model.VariantRelationshipModeId;
         configuration.ProductModelHierarchyModeId = model.ProductModelHierarchyModeId;
         configuration.PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure;
         configuration.AssociatedProductAttributeId = model.AssociatedProductAttributeId;
         configuration.AssociatedValueNameTemplate = model.AssociatedValueNameTemplate;
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
+        configuration.NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId);
+        configuration.NewProductIsShipEnabled = model.NewProductIsShipEnabled;
+        configuration.NewProductWarehouseId = PositiveOrNull(model.NewProductWarehouseId);
+        configuration.NewProductTemplateId = PositiveOrNull(model.NewProductTemplateId);
         configuration.DisplayOrder = model.DisplayOrder;
 
         await familyMappingService.UpdateAsync(configuration);
@@ -548,6 +558,12 @@ public class AkeneoFamilyMappingController(
     private static bool NormalizeAvailability(AkeneoFamilyMappingModel model) =>
         model.VariantRelationshipModeId == (int)AkeneoVariantRelationshipMode.ProductAttributeCombinations && model.ManageVariantsByEnabledStatus;
 
+    // Only a managed combination family keeps a source; anything else falls back to enabled status.
+    private static int NormalizeAvailabilitySource(AkeneoFamilyMappingModel model) =>
+        NormalizeAvailability(model) && Enum.IsDefined(typeof(AkeneoCombinationAvailabilitySource), model.CombinationAvailabilitySourceId)
+            ? model.CombinationAvailabilitySourceId
+            : (int)AkeneoCombinationAvailabilitySource.EnabledStatus;
+
     private async Task SaveAxisMappingsAsync(
         int configurationId,
         IList<AkeneoFamilyVariantAxisMappingModel> models)
@@ -620,6 +636,9 @@ public class AkeneoFamilyMappingController(
             await familyMappingService.InsertSubModelRuleAsync(rule);
         }
     }
+
+    // The new-product default selects post an empty value for "nopCommerce default".
+    private static int? PositiveOrNull(int? id) => id is > 0 ? id : null;
 
     private static string NormalizeVariantCode(string value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();

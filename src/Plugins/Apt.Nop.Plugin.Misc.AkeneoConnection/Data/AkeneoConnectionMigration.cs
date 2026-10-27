@@ -9,9 +9,14 @@ using Nop.Data.Migrations;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 
+// Every step only adds what is missing, so the version moves forward whenever
+// a step is added: a database that already ran an earlier version runs this one
+// again and picks up only the new step. Column changes on an indexed column run
+// only while its index is missing, since SQL Server rejects altering an indexed
+// column on such a rerun.
 [NopMigration(
-    "2026-10-23 02:15:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state)",
+    "2026-10-27 22:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration : Migration
 {
@@ -30,12 +35,14 @@ public sealed class AkeneoConnectionMigration : Migration
         EnsureAttributeMappingColumns();
         EnsureAttributeMappingFallbackSourceSchema();
         EnsureFamilyMappingColumns();
+        EnsureSubModelRuleColumns();
         EnsureAssetMappingSchema();
         EnsureManagedAssetSchema();
         EnsureSyncProfileColumns();
         EnsureAdditionalSyncProfileColumns();
         EnsureFamilyCombinationAvailabilitySchema();
         EnsureSyncRunRecordColumns();
+        DropRawPayloadSnapshotColumns();
 
         EnsureFamilyMappingIndexes();
         EnsureEntityMappingSchema();
@@ -70,6 +77,8 @@ public sealed class AkeneoConnectionMigration : Migration
         EnsureTable<AkeneoAssetMapping>();
         EnsureTable<AkeneoManagedAsset>();
         EnsureTable<AkeneoSyncLease>();
+        EnsureTable<AkeneoCategoryContentMapping>();
+        EnsureTable<AkeneoCategoryContentState>();
     }
 
     private void EnsureTable<T>() where T : BaseEntity
@@ -255,6 +264,37 @@ public sealed class AkeneoConnectionMigration : Migration
                     (int)AkeneoProductModelHierarchyMode
                         .ImmediateParentProductModel);
         }
+
+        // New-product defaults: nullable IDs keep the nopCommerce default.
+        foreach (var column in new[]
+                 {
+                     nameof(AkeneoFamilyMapping.NewProductTaxCategoryId),
+                     nameof(AkeneoFamilyMapping.NewProductWarehouseId),
+                     nameof(AkeneoFamilyMapping.NewProductTemplateId)
+                 })
+        {
+            if (!ColumnExists(table, column))
+                Create.Column(column).OnTable(table).AsInt32().Nullable();
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoFamilyMapping.NewProductIsShipEnabled)))
+        {
+            Create.Column(nameof(AkeneoFamilyMapping.NewProductIsShipEnabled))
+                .OnTable(table)
+                .AsBoolean()
+                .NotNullable()
+                .WithDefaultValue(false);
+        }
+
+        // Existing managed families keep Akeneo enabled status as their availability source.
+        if (!ColumnExists(table, nameof(AkeneoFamilyMapping.CombinationAvailabilitySourceId)))
+        {
+            Create.Column(nameof(AkeneoFamilyMapping.CombinationAvailabilitySourceId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCombinationAvailabilitySource.EnabledStatus);
+        }
     }
 
     private void EnsureFamilyMappingIndexes()
@@ -328,15 +368,18 @@ public sealed class AkeneoConnectionMigration : Migration
     {
         var table = GetTableName<AkeneoNopEntityMapping>();
 
-        Alter.Table(table)
-            .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoCode))
-            .AsString(400)
-            .Nullable();
+        if (!IndexExists(table, $"IX_{table}_TypeCode"))
+        {
+            Alter.Table(table)
+                .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoCode))
+                .AsString(400)
+                .Nullable();
 
-        Alter.Table(table)
-            .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoUuid))
-            .AsString(64)
-            .Nullable();
+            Alter.Table(table)
+                .AlterColumn(nameof(AkeneoNopEntityMapping.AkeneoUuid))
+                .AsString(64)
+                .Nullable();
+        }
 
         EnsureEntityMappingTypeCodeIndex(table);
         EnsureEntityMappingTypeUuidIndex(table);
@@ -417,29 +460,29 @@ public sealed class AkeneoConnectionMigration : Migration
             nameof(AkeneoAssetMapping.FallbackSourceAttributeCode),
             255);
 
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.MappingKey)).AsString(100).NotNullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.Name)).AsString(255).NotNullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SourceAttributeCode)).AsString(255).NotNullable();
-        Alter.Table(table)
-            .AlterColumn(nameof(
-                AkeneoAssetMapping.FallbackSourceAttributeCode))
-            .AsString(255)
-            .Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetFamilyCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaAttributeCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaType)).AsString(100).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleAttributeCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleValuesCsv)).AsString(1000).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SortOrderAttributeCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AltTextTemplate)).AsString(2000).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.TitleTextTemplate)).AsString(2000).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SeoFilenameTemplate)).AsString(1000).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.CustomPropertyKey)).AsString(255).Nullable();
-
         var indexName = $"IX_{table}_FamilyKey";
         if (!IndexExists(table, indexName))
         {
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.MappingKey)).AsString(100).NotNullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.Name)).AsString(255).NotNullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SourceAttributeCode)).AsString(255).NotNullable();
+            Alter.Table(table)
+                .AlterColumn(nameof(
+                    AkeneoAssetMapping.FallbackSourceAttributeCode))
+                .AsString(255)
+                .Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetFamilyCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaAttributeCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AssetMediaType)).AsString(100).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleAttributeCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.RoleValuesCsv)).AsString(1000).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SortOrderAttributeCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.AltTextTemplate)).AsString(2000).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.TitleTextTemplate)).AsString(2000).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.SeoFilenameTemplate)).AsString(1000).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoAssetMapping.CustomPropertyKey)).AsString(255).Nullable();
+
             Create.Index(indexName)
                 .OnTable(table)
                 .OnColumn(nameof(AkeneoAssetMapping.AkeneoFamilyCode)).Ascending()
@@ -452,19 +495,19 @@ public sealed class AkeneoConnectionMigration : Migration
     {
         var table = GetTableName<AkeneoManagedAsset>();
 
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).AsString(100).NotNullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).AsString(64).NotNullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceFingerprint)).AsString(64).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceAttributeCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetFamilyCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetCode)).AsString(255).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.MediaFileCode)).AsString(500).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceUrl)).AsString(2000).Nullable();
-        Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.DestinationKey)).AsString(255).Nullable();
-
         var identityIndex = $"IX_{table}_ProductMappingIdentityV2";
         if (!IndexExists(table, identityIndex))
         {
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).AsString(100).NotNullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).AsString(64).NotNullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceFingerprint)).AsString(64).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceAttributeCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetFamilyCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetCode)).AsString(255).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.MediaFileCode)).AsString(500).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceUrl)).AsString(2000).Nullable();
+            Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.DestinationKey)).AsString(255).Nullable();
+
             Create.Index(identityIndex)
                 .OnTable(table)
                 .OnColumn(nameof(AkeneoManagedAsset.NopProductId)).Ascending()
@@ -673,15 +716,18 @@ public sealed class AkeneoConnectionMigration : Migration
     {
         var table = GetTableName<AkeneoProductSyncState>();
 
-        Alter.Table(table)
-            .AlterColumn(nameof(AkeneoProductSyncState.AkeneoCode))
-            .AsString(255)
-            .Nullable();
+        if (!IndexExists(table, $"IX_{table}_ProfileCode"))
+        {
+            Alter.Table(table)
+                .AlterColumn(nameof(AkeneoProductSyncState.AkeneoCode))
+                .AsString(255)
+                .Nullable();
 
-        Alter.Table(table)
-            .AlterColumn(nameof(AkeneoProductSyncState.AkeneoUuid))
-            .AsString(64)
-            .Nullable();
+            Alter.Table(table)
+                .AlterColumn(nameof(AkeneoProductSyncState.AkeneoUuid))
+                .AsString(64)
+                .Nullable();
+        }
 
         Alter.Table(table)
             .AlterColumn(
@@ -839,16 +885,15 @@ public sealed class AkeneoConnectionMigration : Migration
     private void EnsureSyncLeaseSchema()
     {
         var table = GetTableName<AkeneoSyncLease>();
+        var indexName = $"IX_{table}_LockKey";
+
+        if (IndexExists(table, indexName))
+            return;
 
         Alter.Table(table)
             .AlterColumn(nameof(AkeneoSyncLease.LockKey))
             .AsString(200)
             .NotNullable();
-
-        var indexName = $"IX_{table}_LockKey";
-
-        if (IndexExists(table, indexName))
-            return;
 
         Create.Index(indexName)
             .OnTable(table)
@@ -919,7 +964,69 @@ public sealed class AkeneoConnectionMigration : Migration
                 .Nullable();
         }
 
+        // Cross-sell sync, off by default.
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.CrossSellSyncModeId)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.CrossSellSyncModeId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoCollectionSyncMode.Disabled);
+        }
 
+        if (!ColumnExists(table, nameof(AkeneoSyncProfile.CrossSellAssociationType)))
+        {
+            Create.Column(nameof(AkeneoSyncProfile.CrossSellAssociationType))
+                .OnTable(table)
+                .AsString(100)
+                .Nullable();
+        }
+    }
+
+    /// <summary>
+    /// Sub-model parent rule settings. Existing rules keep the family's parent level.
+    /// </summary>
+    private void EnsureSubModelRuleColumns()
+    {
+        var table = GetTableName<AkeneoFamilySubModelRule>();
+
+        if (!ColumnExists(table, nameof(AkeneoFamilySubModelRule.ParentLevelId)))
+        {
+            Create.Column(nameof(AkeneoFamilySubModelRule.ParentLevelId))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue((int)AkeneoSubModelParentLevel.FamilySetting);
+        }
+
+        if (!ColumnExists(table, nameof(AkeneoFamilySubModelRule.AssociatedProductAttributeId)))
+        {
+            Create.Column(nameof(AkeneoFamilySubModelRule.AssociatedProductAttributeId))
+                .OnTable(table)
+                .AsInt32()
+                .Nullable();
+        }
+
+        EnsureNullableStringColumn(table, nameof(AkeneoFamilySubModelRule.AssociatedValueNameTemplate), int.MaxValue);
+
+        if (!ColumnExists(table, nameof(AkeneoFamilySubModelRule.HideChildProducts)))
+        {
+            Create.Column(nameof(AkeneoFamilySubModelRule.HideChildProducts))
+                .OnTable(table)
+                .AsBoolean()
+                .NotNullable()
+                .WithDefaultValue(true);
+        }
+    }
+
+    /// <summary>
+    /// Item logs stored the raw Akeneo payload, but nothing displayed it, and
+    /// the profile toggle that enabled it is gone.
+    /// </summary>
+    private void DropRawPayloadSnapshotColumns()
+    {
+        DropColumnIfExists(GetTableName<AkeneoSyncItemLog>(), "RawPayloadSnapshot");
+        DropColumnIfExists(GetTableName<AkeneoSyncProfile>(), "SaveRawPayloadSnapshot");
     }
 
     private void EnsureFamilyCombinationAvailabilitySchema()
@@ -1010,6 +1117,17 @@ public sealed class AkeneoConnectionMigration : Migration
         return Schema.Table(table)
             .Index(index)
             .Exists();
+    }
+
+    // A table created by this migration never has the column.
+    private void DropColumnIfExists(string table, string column)
+    {
+        if (!_createdTables.Contains(table) &&
+            Schema.Table(table).Exists() &&
+            Schema.Table(table).Column(column).Exists())
+        {
+            Delete.Column(column).FromTable(table);
+        }
     }
 
     private void EnsureNullableStringColumn(

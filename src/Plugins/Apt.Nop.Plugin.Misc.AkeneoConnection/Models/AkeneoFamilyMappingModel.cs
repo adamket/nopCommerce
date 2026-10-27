@@ -13,6 +13,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public bool ManageVariantsByEnabledStatus { get; set; }
 
+    public int CombinationAvailabilitySourceId { get; set; }
+
     public int VariantRelationshipModeId { get; set; }
 
     public int ProductModelHierarchyModeId { get; set; }
@@ -24,6 +26,16 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
+
+    public int? NewProductTaxCategoryId { get; set; }
+
+    // On for a new family mapping, as on the admin's new-product form; an
+    // existing mapping loads its saved value.
+    public bool NewProductIsShipEnabled { get; set; } = true;
+
+    public int? NewProductWarehouseId { get; set; }
+
+    public int? NewProductTemplateId { get; set; }
 
     public int DisplayOrder { get; set; }
 
@@ -41,6 +53,12 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public IList<SelectListItem> AvailableProductAttributes { get; set; } =
         new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableTaxCategories { get; set; } = new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableWarehouses { get; set; } = new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableProductTemplates { get; set; } = new List<SelectListItem>();
 
     public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } =
         new List<SelectListItem>();

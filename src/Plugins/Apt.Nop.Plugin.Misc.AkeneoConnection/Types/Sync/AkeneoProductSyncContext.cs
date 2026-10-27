@@ -21,6 +21,9 @@ public sealed class AkeneoProductSyncContext
     { get; init; }
         = Array.Empty<AkeneoResolvedMappedValue>();
 
+    /// <summary>Mapped text values in each secondary locale; see <see cref="AkeneoLocalizedValue"/>.</summary>
+    public IReadOnlyList<AkeneoLocalizedValue> LocalizedValues { get; init; } = Array.Empty<AkeneoLocalizedValue>();
+
     public string SkipReason { get; init; }
 
     public string SourceCode { get; init; }

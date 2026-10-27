@@ -40,6 +40,7 @@
             enabled = Model.Enabled,
             akeneoChannel = Model.AkeneoChannel ?? string.Empty,
             akeneoLocale = Model.AkeneoLocale ?? string.Empty,
+            additionalAkeneoLocales = Codes(Model.AdditionalAkeneoLocales),
             currencyCode = Model.CurrencyCode ?? string.Empty,
             pageSize = Model.PageSize > 0 ? Model.PageSize.ToString() : "100",
             maxProducts = Model.MaxProducts?.ToString() ?? string.Empty,
@@ -80,6 +81,7 @@
         {
             channels = Options(Model.AvailableAkeneoChannels),
             locales = Options(Model.AvailableAkeneoLocales),
+            nopLanguages = Options(Model.AvailableNopLanguages),
             families = Options(Model.AvailableAkeneoFamilies),
             categories = Options(Model.AvailableAkeneoCategories),
             productWriteModes = Options(Model.AvailableProductWriteModes),
@@ -354,7 +356,33 @@
                                                       placeholder="Search locales by code"
                                                       empty-text="No Akeneo locales are available."></akeneo-search-select>
                                 <div class="invalid-feedback d-block" v-if="fieldError('AkeneoLocale')">{{ fieldError('AkeneoLocale') }}</div>
-                                <span class="form-text text-muted">Localizable Akeneo values and labels are read in this locale.</span>
+                                <span class="form-text text-muted">The primary locale: its values and labels go into the base product fields.</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3 text-right"><label class="control-label">Additional locales</label></div>
+                            <div class="col-md-9">
+                                <akeneo-combobox v-model="form.additionalAkeneoLocales"
+                                                 v-bind:options="comboAdditionalLocales"
+                                                 placeholder="None · primary locale only"
+                                                 add-placeholder="Add a locale…"
+                                                 item-name="locale"
+                                                 empty-text="No other Akeneo locales are available."></akeneo-combobox>
+                                <ul class="list-unstyled mb-0 mt-2" v-if="additionalLocaleMatches.length">
+                                    <li v-for="match in additionalLocaleMatches" v-bind:key="match.locale">
+                                        <template v-if="match.language">
+                                            <i class="fas fa-check text-success"></i> {{ match.locale }} writes the nopCommerce language <strong>{{ match.language }}</strong>
+                                        </template>
+                                        <template v-else>
+                                            <i class="fas fa-exclamation-triangle text-warning"></i> {{ match.locale }} is skipped: no nopCommerce language has the culture {{ match.locale.replace('_', '-') }}
+                                        </template>
+                                    </li>
+                                </ul>
+                                <span class="form-text text-muted">
+                                    Each locale writes the product name, descriptions, meta fields and slug as nopCommerce translations for the language with the matching culture.
+                                    A missing translation removes the nopCommerce one, so the primary value shows. Run a resync after adding a locale.
+                                </span>
                             </div>
                         </div>
 
@@ -704,8 +732,9 @@
                     </div>
                 </div>
 
-                <!-- Advanced -->
-                <div class="card card-default">
+                <!-- Advanced: hidden. A saved value still applies; the panel shows only if that value
+                     is invalid JSON, which would otherwise block saving with nothing to fix. -->
+                <div class="card card-default" v-show="searchJsonError">
                     <div class="card-header">
                         <div class="card-title"><i class="fas fa-code"></i> Advanced</div>
                     </div>
@@ -877,6 +906,7 @@
             enabled: 'Enabled',
             akeneoChannel: 'AkeneoChannel',
             akeneoLocale: 'AkeneoLocale',
+            additionalAkeneoLocales: 'AdditionalAkeneoLocales',
             currencyCode: 'CurrencyCode',
             pageSize: 'PageSize',
             maxProducts: 'MaxProducts',
@@ -965,6 +995,22 @@
                 },
                 comboCategories: function () {
                     return toComboOptions(this.options.categories);
+                },
+                // Any locale except the primary one.
+                comboAdditionalLocales: function () {
+                    var primary = (this.form.akeneoLocale || '').toLowerCase();
+                    return toComboOptions(this.options.locales).filter(function (option) {
+                        return option.value.toLowerCase() !== primary;
+                    });
+                },
+                // The nopCommerce language each additional locale writes: es_US matches culture es-US.
+                additionalLocaleMatches: function () {
+                    var languages = this.options.nopLanguages || [];
+                    return (this.form.additionalAkeneoLocales || []).map(function (locale) {
+                        var culture = locale.replace('_', '-').toLowerCase();
+                        var language = languages.find(function (option) { return (option.value || '').toLowerCase() === culture; });
+                        return { locale: locale, language: language ? language.text : null };
+                    });
                 },
                 // A resync can only narrow the profile's families, never widen them.
                 resyncFamilyOptions: function () {

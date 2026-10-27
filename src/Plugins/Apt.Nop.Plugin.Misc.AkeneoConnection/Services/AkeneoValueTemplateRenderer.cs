@@ -45,7 +45,8 @@ public sealed class AkeneoValueTemplateRenderer(
         "family",
         "family_variant",
         "familyVariant",
-        "enabled"
+        "enabled",
+        "complete"
     };
 
     public AkeneoValueTemplateValidationResult Validate(string template)
@@ -404,6 +405,9 @@ public sealed class AkeneoValueTemplateRenderer(
                 context.FamilyVariantCode ?? source.FamilyVariant,
             "enabled" => source.Enabled.HasValue
                 ? source.Enabled.Value.ToString().ToLowerInvariant()
+                : null,
+            "complete" => AkeneoBuiltInSources.IsComplete(source, context.Channel, context.Locale) is { } complete
+                ? complete.ToString().ToLowerInvariant()
                 : null,
             _ => null
         };

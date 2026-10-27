@@ -10,6 +10,9 @@ public interface IAkeneoCombinationAvailabilityService
 {
     Task<bool> ManagesEnabledStatusAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default);
 
+    /// <summary>What decides the leaf's combination availability, or null when its family does not manage it.</summary>
+    Task<AkeneoCombinationAvailabilitySource?> GetAvailabilitySourceAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default);
+
     Task ValidateRulesAsync(IEnumerable<string> familyCodes, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates);
 
     Task<string> GetConfigurationFingerprintAsync(IEnumerable<string> familyCodes);

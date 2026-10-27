@@ -34,7 +34,7 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
 
         attributeCode = attributeCode.Trim();
 
-        if (TryGetRootValue(product, attributeCode, out var rootValue))
+        if (TryGetRootValue(product, attributeCode, locale, channel, out var rootValue))
         {
             var rootDisplay = FormatDataValue(rootValue, currency);
 
@@ -104,6 +104,8 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
     private static bool TryGetRootValue(
         AkeneoProductDefinition product,
         string attributeCode,
+        string locale,
+        string channel,
         out JsonElement value)
     {
         value = default;
@@ -146,6 +148,15 @@ public class AkeneoProductValueResolver : IAkeneoProductValueResolver
                 return false;
 
             value = JsonSerializer.SerializeToElement(product.Enabled.Value);
+            return true;
+        }
+
+        if (string.Equals(attributeCode, AkeneoBuiltInSources.CompleteCode, StringComparison.OrdinalIgnoreCase))
+        {
+            if (AkeneoBuiltInSources.IsComplete(product, channel, locale) is not { } complete)
+                return false;
+
+            value = JsonSerializer.SerializeToElement(complete);
             return true;
         }
 

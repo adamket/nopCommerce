@@ -48,24 +48,65 @@ public class AkeneoConsolidatedMigrationTests
         }
     }
 
+    // Dropped by the migration; an up-to-date schema no longer has them.
+    private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
+
     [Test]
     public void Existing_schema_rerun_does_not_create_or_delete_columns_or_repeat_legacy_transfer()
     {
-        var expressions = Plan(true);
+        var expressions = Plan(true, DroppedColumns);
         Assert.That(expressions.Any(x => x is CreateColumnExpression or CreateTableExpression or DeleteColumnExpression or DeleteTableExpression), Is.False);
         Assert.That(expressions.Any(x => x.GetType().Name.Contains("DBOperation")), Is.False);
+    }
+
+    [Test]
+    public void Existing_schema_rerun_does_not_alter_indexed_columns()
+    {
+        var indexedColumns = new[]
+        {
+            (Table: nameof(AkeneoNopEntityMapping), Column: nameof(AkeneoNopEntityMapping.AkeneoCode)),
+            (Table: nameof(AkeneoNopEntityMapping), Column: nameof(AkeneoNopEntityMapping.AkeneoUuid)),
+            (Table: nameof(AkeneoProductSyncState), Column: nameof(AkeneoProductSyncState.AkeneoCode)),
+            (Table: nameof(AkeneoProductSyncState), Column: nameof(AkeneoProductSyncState.AkeneoUuid)),
+            (Table: nameof(AkeneoAssetMapping), Column: nameof(AkeneoAssetMapping.MappingKey)),
+            (Table: nameof(AkeneoAssetMapping), Column: nameof(AkeneoAssetMapping.AkeneoFamilyCode)),
+            (Table: nameof(AkeneoManagedAsset), Column: nameof(AkeneoManagedAsset.AssetMappingKey)),
+            (Table: nameof(AkeneoManagedAsset), Column: nameof(AkeneoManagedAsset.SourceIdentityHash)),
+            (Table: nameof(AkeneoSyncLease), Column: nameof(AkeneoSyncLease.LockKey))
+        };
+
+        var altered = Plan(true, DroppedColumns).OfType<AlterColumnExpression>()
+            .Select(x => (Table: x.TableName, Column: x.Column.Name))
+            .ToList();
+
+        Assert.That(altered.Where(x => indexedColumns.Any(i => x.Table.EndsWith(i.Table) && x.Column == i.Column)), Is.Empty);
     }
 
     [Test]
     public void Older_schema_gets_every_consolidated_column_with_original_defaults()
     {
         var columns = new[] { "ApplyWhen", "SkipRulesJson", "ManageVariantsByEnabledStatus", "TagSyncModeId", "RelatedProductSyncModeId",
-            "RelatedProductAssociationType", "SyncLogRetentionEnabled", "SyncItemLogRetentionDays", "SyncRunRecordRetentionDays" };
-        var created = Plan(true, columns).OfType<CreateColumnExpression>().ToList();
+            "RelatedProductAssociationType", "SyncLogRetentionEnabled", "SyncItemLogRetentionDays", "SyncRunRecordRetentionDays",
+            "CrossSellSyncModeId", "CrossSellAssociationType",
+            "ParentLevelId", "AssociatedProductAttributeId", "AssociatedValueNameTemplate", "HideChildProducts",
+            "NewProductTaxCategoryId", "NewProductIsShipEnabled", "NewProductWarehouseId", "NewProductTemplateId",
+            "CombinationAvailabilitySourceId" };
+        var created = Plan(true, columns.Concat(DroppedColumns).ToArray()).OfType<CreateColumnExpression>().ToList();
         Assert.That(created.Select(x => x.Column.Name), Is.EquivalentTo(columns));
         Assert.That(created.Single(x => x.Column.Name == "SyncItemLogRetentionDays").Column.DefaultValue, Is.EqualTo(30));
         Assert.That(created.Single(x => x.Column.Name == "SyncRunRecordRetentionDays").Column.DefaultValue, Is.EqualTo(90));
         Assert.That(created.Single(x => x.Column.Name == "TagSyncModeId").Column.DefaultValue, Is.EqualTo((int)AkeneoCollectionSyncMode.Disabled));
+        Assert.That(created.Single(x => x.Column.Name == "CrossSellSyncModeId").Column.DefaultValue, Is.EqualTo((int)AkeneoCollectionSyncMode.Disabled));
+        Assert.That(created.Single(x => x.Column.Name == "ParentLevelId").Column.DefaultValue, Is.EqualTo((int)AkeneoSubModelParentLevel.FamilySetting));
+        Assert.That(created.Single(x => x.Column.Name == "HideChildProducts").Column.DefaultValue, Is.EqualTo(true));
+    }
+
+    [Test]
+    public void A_schema_still_holding_the_raw_payload_columns_drops_them()
+    {
+        var dropped = Plan(true).OfType<DeleteColumnExpression>().SelectMany(x => x.ColumnNames).ToList();
+
+        Assert.That(dropped, Is.EquivalentTo(DroppedColumns));
     }
 
     [Test]

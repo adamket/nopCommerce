@@ -40,6 +40,26 @@ public class AkeneoProductDefinition
     /// </summary>
     [JsonPropertyName("associations")]
     public Dictionary<string, AkeneoAssociationDefinition> Associations { get; set; } = new();
+
+    /// <summary>
+    /// Completeness per channel and locale, returned for products only when requested
+    /// with with_completenesses=true. Product models have none.
+    /// </summary>
+    [JsonPropertyName("completenesses")]
+    public List<AkeneoCompleteness> Completenesses { get; set; }
+}
+
+/// <summary>A product's completeness percentage for one channel and locale.</summary>
+public class AkeneoCompleteness
+{
+    [JsonPropertyName("scope")]
+    public string Scope { get; set; }
+
+    [JsonPropertyName("locale")]
+    public string Locale { get; set; }
+
+    [JsonPropertyName("data")]
+    public int? Data { get; set; }
 }
 
 /// <summary>

@@ -12,7 +12,7 @@ internal static class AkeneoMappingSourceCatalog
     private static readonly HashSet<string> ProductFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "sku", "identifier", "uuid", "code", "family", "family_variant", "familyVariant",
-        "parent", "enabled", "categories"
+        "parent", "enabled", "complete", "categories"
     };
 
     public static IReadOnlyList<string> GetAttributeCodes(AkeneoAttributeMapping mapping,

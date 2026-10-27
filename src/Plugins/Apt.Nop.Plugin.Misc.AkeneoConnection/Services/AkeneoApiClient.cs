@@ -160,7 +160,8 @@ public class AkeneoApiClient : IAkeneoApiClient
         {
             ["pagination_type"] = "search_after",
             ["limit"] = limit.ToString(),
-            ["with_attribute_options"] = "true"
+            ["with_attribute_options"] = "true",
+            ["with_completenesses"] = "true"
         };
 
         if (!string.IsNullOrWhiteSpace(searchJson))
@@ -194,7 +195,7 @@ public class AkeneoApiClient : IAkeneoApiClient
             throw new ArgumentException("Product UUID is required.", nameof(uuid));
 
         var product = await GetObjectOrNullAsync<AkeneoProductDefinition>(
-            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true",
+            $"api/rest/v1/products-uuid/{Uri.EscapeDataString(uuid)}?with_attribute_options=true&with_completenesses=true",
             cancellationToken);
 
         if (product != null)
@@ -420,6 +421,10 @@ public class AkeneoApiClient : IAkeneoApiClient
             ["limit"] = limit.ToString(),
             ["with_attribute_options"] = "true"
         };
+
+        // Completeness only exists for products; the product-model endpoint has no such option.
+        if (endpoint.StartsWith("api/rest/v1/products-uuid", StringComparison.OrdinalIgnoreCase))
+            query["with_completenesses"] = "true";
 
         if (!string.IsNullOrWhiteSpace(searchAfter))
             query["search_after"] = searchAfter;

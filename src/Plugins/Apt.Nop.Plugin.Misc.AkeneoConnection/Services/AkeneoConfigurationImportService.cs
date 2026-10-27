@@ -3,6 +3,8 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Localization;
+using Nop.Core.Domain.Shipping;
+using Nop.Core.Domain.Tax;
 using Nop.Data;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -31,7 +33,10 @@ public sealed class AkeneoConfigurationImportService(
     IAkeneoApiClient api = null,
     IRepository<AkeneoCategoryContentMapping> categoryContent = null,
     IRepository<Language> languages = null,
-    IAkeneoMappingChangeTracker mappingChanges = null)
+    IAkeneoMappingChangeTracker mappingChanges = null,
+    IRepository<TaxCategory> taxCategories = null,
+    IRepository<Warehouse> warehouses = null,
+    IRepository<ProductTemplate> productTemplates = null)
     : IAkeneoConfigurationImportService
 {
     private async Task ValidateDestinationsAsync(AkeneoConfigurationImportDocument document)
@@ -46,6 +51,12 @@ public sealed class AkeneoConfigurationImportService(
                 await RequireEntityAsync(productAttributes, axis.NopProductAttributeId);
             foreach (var rule in section.SubModelRules.Where(rule => rule.AssociatedProductAttributeId is > 0))
                 await RequireEntityAsync(productAttributes, rule.AssociatedProductAttributeId!.Value);
+            if (taxCategories != null && section.Configuration.NewProductTaxCategoryId is > 0)
+                await RequireEntityAsync(taxCategories, section.Configuration.NewProductTaxCategoryId.Value);
+            if (warehouses != null && section.Configuration.NewProductWarehouseId is > 0)
+                await RequireEntityAsync(warehouses, section.Configuration.NewProductWarehouseId.Value);
+            if (productTemplates != null && section.Configuration.NewProductTemplateId is > 0)
+                await RequireEntityAsync(productTemplates, section.Configuration.NewProductTemplateId.Value);
         }
         foreach (var section in document.AttributeMappings)
         {

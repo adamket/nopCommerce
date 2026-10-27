@@ -4,7 +4,10 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Core.Domain.Tax;
 using Nop.Services.Catalog;
+using Nop.Services.Shipping;
+using Nop.Services.Tax;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
@@ -14,15 +17,27 @@ public class AkeneoFamilyMappingModelFactory
     private readonly IAkeneoFamilyMappingService _configurationService;
     private readonly IAkeneoApiClient _akeneoApiClient;
     private readonly IProductAttributeService _productAttributeService;
+    private readonly ITaxCategoryService _taxCategoryService;
+    private readonly IWarehouseService _warehouseService;
+    private readonly IProductTemplateService _productTemplateService;
+    private readonly TaxSettings _taxSettings;
 
     public AkeneoFamilyMappingModelFactory(
         IAkeneoFamilyMappingService configurationService,
         IAkeneoApiClient akeneoApiClient,
-        IProductAttributeService productAttributeService)
+        IProductAttributeService productAttributeService,
+        ITaxCategoryService taxCategoryService,
+        IWarehouseService warehouseService,
+        IProductTemplateService productTemplateService,
+        TaxSettings taxSettings)
     {
         _configurationService = configurationService;
         _akeneoApiClient = akeneoApiClient;
         _productAttributeService = productAttributeService;
+        _taxCategoryService = taxCategoryService;
+        _warehouseService = warehouseService;
+        _productTemplateService = productTemplateService;
+        _taxSettings = taxSettings;
     }
 
     public async Task<AkeneoFamilyMappingListModel> PrepareListModelAsync()
@@ -68,12 +83,17 @@ public class AkeneoFamilyMappingModelFactory
             model.AkeneoFamilyVariantCode = configuration.AkeneoFamilyVariantCode;
             model.Enabled = configuration.Enabled;
             model.ManageVariantsByEnabledStatus = configuration.ManageVariantsByEnabledStatus;
+            model.CombinationAvailabilitySourceId = configuration.CombinationAvailabilitySourceId;
             model.VariantRelationshipModeId = configuration.VariantRelationshipModeId;
             model.ProductModelHierarchyModeId = configuration.ProductModelHierarchyModeId;
             model.PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure;
             model.AssociatedProductAttributeId = configuration.AssociatedProductAttributeId;
             model.AssociatedValueNameTemplate = configuration.AssociatedValueNameTemplate;
             model.HideChildProductsWhenRepresentedByParent = configuration.HideChildProductsWhenRepresentedByParent;
+            model.NewProductTaxCategoryId = configuration.NewProductTaxCategoryId;
+            model.NewProductIsShipEnabled = configuration.NewProductIsShipEnabled;
+            model.NewProductWarehouseId = configuration.NewProductWarehouseId;
+            model.NewProductTemplateId = configuration.NewProductTemplateId;
             model.DisplayOrder = configuration.DisplayOrder;
 
             var axisMappings = await _configurationService.GetAxisMappingsAsync(configuration.Id);
@@ -151,6 +171,30 @@ public class AkeneoFamilyMappingModelFactory
             .Select(x => new SelectListItem(x.Name, x.Id.ToString()))
             .ToList();
         model.AvailableProductAttributes.Insert(0, new SelectListItem("Select product attribute", string.Empty));
+
+        // New-product defaults. Blank tax category means the store's default tax
+        // category, as on the admin's new-product form.
+        var taxCategories = await _taxCategoryService.GetAllTaxCategoriesAsync();
+        var storeDefaultTax = taxCategories.FirstOrDefault(x => x.Id == _taxSettings.DefaultTaxCategoryId);
+        model.AvailableTaxCategories = taxCategories
+            .Select(x => new SelectListItem(x.Name, x.Id.ToString()))
+            .ToList();
+        model.AvailableTaxCategories.Insert(0, new SelectListItem(
+            storeDefaultTax == null ? "Store default (none set)" : $"Store default ({storeDefaultTax.Name})",
+            string.Empty));
+
+        model.AvailableWarehouses = (await _warehouseService.GetAllWarehousesAsync())
+            .Select(x => new SelectListItem(x.Name, x.Id.ToString()))
+            .ToList();
+        model.AvailableWarehouses.Insert(0, new SelectListItem("No warehouse", string.Empty));
+
+        model.AvailableProductTemplates = (await _productTemplateService.GetAllProductTemplatesAsync())
+            .Select(x => new SelectListItem(x.Name, x.Id.ToString()))
+            .ToList();
+        // Every template, no blank entry: a product without one uses the first
+        // template, which is also what the admin preselects.
+        if (model.NewProductTemplateId is not > 0)
+            model.NewProductTemplateId = model.AvailableProductTemplates.Select(x => (int?)int.Parse(x.Value)).FirstOrDefault();
 
         var families = await _akeneoApiClient.GetFamiliesAsync();
         model.AvailableAkeneoFamilies = families

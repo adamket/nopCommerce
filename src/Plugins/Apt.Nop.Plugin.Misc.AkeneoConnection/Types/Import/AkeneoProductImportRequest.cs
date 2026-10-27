@@ -25,6 +25,13 @@ public class AkeneoProductImportRequest
 
     public string Locale { get; set; }
 
+    /// <summary>
+    /// Further Akeneo locales from the profile, after the primary <see cref="Locale"/>.
+    /// Each writes nopCommerce localized values for the language with the
+    /// matching culture (es_US to es-US); English stays in the base fields.
+    /// </summary>
+    public IList<string> SecondaryLocales { get; set; } = new List<string>();
+
     public string Channel { get; set; }
 
     public string Currency { get; set; }

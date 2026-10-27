@@ -12,8 +12,17 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
 
     public string AkeneoChannel { get; set; }
 
-    /// <summary>The single Akeneo locale this profile reads values in.</summary>
+    /// <summary>The primary Akeneo locale: its values go into the base product fields.</summary>
     public string AkeneoLocale { get; set; }
+
+    /// <summary>
+    /// Further locales, saved after the primary one in AkeneoLocales. Each writes
+    /// nopCommerce localized values for the language with the matching culture.
+    /// </summary>
+    public IList<string> AdditionalAkeneoLocales { get; set; } = new List<string>();
+
+    /// <summary>nopCommerce languages (value = culture such as es-US), to show which one each additional locale writes.</summary>
+    public IList<SelectListItem> AvailableNopLanguages { get; set; } = new List<SelectListItem>();
 
     public IList<string> SelectedAkeneoFamilyCodes { get; set; } = new List<string>();
     public IList<string> SelectedAkeneoCategoryCodes { get; set; } = new List<string>();

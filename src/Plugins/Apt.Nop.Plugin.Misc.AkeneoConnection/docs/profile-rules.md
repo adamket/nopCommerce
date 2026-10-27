@@ -114,3 +114,46 @@ to add the boolean setting. Existing enabled-status conditions (enabled == true
 or enabled != false) are converted to an enabled toggle. Other custom conditions
 are kept in the legacy column as an inactive backup and leave the toggle off.
 Rerunning the migration does not reset a saved toggle.
+
+## Withdrawing products (4.90.38)
+
+A profile filter cannot withdraw anything: a product that stops matching the enabled, completeness
+or search filters is no longer read, so nopCommerce keeps it published. Read those inputs in the
+Published rule instead:
+
+1. On the sync profile, set the enabled filter to **Any** and the completeness filter to **None**,
+   and keep status conditions out of the additional search JSON.
+2. Add one computed mapping to **Product field → Published** for standalone and variant products.
+   **Apply only when** `sync_status != hold` freezes Published on hold while everything else syncs.
+   A template along these lines. `erp_status` (text) and `erp_blocked` (yes/no) come from the
+   Business Central feed; text comparisons ignore case:
+
+   ```text
+   {erp_blocked == true ? "false"
+    : sync_status == published AND erp_status == certified AND complete == true ? "true" : "false"}
+   ```
+
+   Mark it **Required**. Any input the template compares that is missing (`erp_status`, `erp_blocked`,
+   `sync_status` or completeness) then blocks the item with an alert rather than changing it. A
+   present value that fails a test (incomplete, not certified, unpublished) gives false.
+3. `complete` is the built-in **Complete (channel and locale)** source: true when Akeneo rates the
+   product 100% complete for the profile's channel and primary locale. Product models have no
+   completeness, so give parents their own Published mapping based on the model's `sync_status`.
+
+## Combination availability from the Published rule (4.90.39)
+
+A family mapped to **Product attribute combinations** chooses what decides whether a variant's
+combination exists, under **Combination availability**:
+
+- **Off**: every variant keeps its combination.
+- **Akeneo enabled status**: the earlier "Manage variants by Akeneo enabled status" behaviour.
+- **Published rule**: the variant's computed Published mapping, applied to the **Variant products**
+  role, decides. False removes the combination and true recreates it. A mapping skipped by
+  **Apply only when** (for example `sync_status` hold) leaves an existing combination as it is and
+  creates no new one. No Published mapping for variants, or no value from it, blocks the item with
+  an alert and changes nothing.
+
+Use **Published rule** for families whose variants are combinations and whose status comes from
+Business Central (`erp_status`, `erp_blocked`), so a closed or blocked SKU is withdrawn without
+anyone disabling it in Akeneo. The same profile requirements apply: enabled filter **Any** and a
+write mode that allows updates.

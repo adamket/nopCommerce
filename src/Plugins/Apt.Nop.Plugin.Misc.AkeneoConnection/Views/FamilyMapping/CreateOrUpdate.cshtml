@@ -29,12 +29,17 @@
             akeneoFamilyVariantCode = Model.AkeneoFamilyVariantCode,
             enabled = Model.Enabled,
             manageVariantsByEnabledStatus = Model.ManageVariantsByEnabledStatus,
+            combinationAvailabilitySourceId = Model.CombinationAvailabilitySourceId,
             variantRelationshipModeId = Model.VariantRelationshipModeId,
             productModelHierarchyModeId = Model.ProductModelHierarchyModeId,
             preserveExistingNopVariantStructure = Model.PreserveExistingNopVariantStructure,
             associatedProductAttributeId = Model.AssociatedProductAttributeId,
             associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
             hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
+            newProductTaxCategoryId = Model.NewProductTaxCategoryId,
+            newProductIsShipEnabled = Model.NewProductIsShipEnabled,
+            newProductWarehouseId = Model.NewProductWarehouseId,
+            newProductTemplateId = Model.NewProductTemplateId,
             displayOrder = Model.DisplayOrder,
             axisMappings = Model.AxisMappings.Select(x => new
             {
@@ -67,6 +72,9 @@
                 text = x.Text,
                 value = x.Value
             }),
+            availableTaxCategories = Model.AvailableTaxCategories.Select(x => new { text = x.Text, value = x.Value }),
+            availableWarehouses = Model.AvailableWarehouses.Select(x => new { text = x.Text, value = x.Value }),
+            availableProductTemplates = Model.AvailableProductTemplates.Select(x => new { text = x.Text, value = x.Value }),
             availableAkeneoFamilies = Model.AvailableAkeneoFamilies.Select(x => new
             {
                 text = x.Text,
@@ -365,17 +373,72 @@
                         </div>
                     </div>
 
+                    <div class="card akeneo-mapping-card">
+                        <div class="card-header"><h3 class="card-title">New product defaults</h3></div>
+                        <div class="card-body">
+                            <p class="form-text text-muted mt-0">
+                                Commerce settings Akeneo does not own, set only when the sync creates a product in this family:
+                                parents, standalone and child products. Later syncs never change them, so edits made in nopCommerce stay.
+                            </p>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Tax category</label>
+                                        <akeneo-search-select input-id="NewProductTaxCategoryId" item-name="tax category"
+                                                              v-model="form.newProductTaxCategoryId"
+                                                              v-bind:options="comboOptions(availableTaxCategories, true)"
+                                                              placeholder="Store default"></akeneo-search-select>
+                                        <input type="hidden" name="NewProductTaxCategoryId" v-bind:value="form.newProductTaxCategoryId ?? ''" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Warehouse</label>
+                                        <akeneo-search-select input-id="NewProductWarehouseId" item-name="warehouse"
+                                                              v-model="form.newProductWarehouseId"
+                                                              v-bind:options="comboOptions(availableWarehouses, true)"
+                                                              placeholder="No warehouse"></akeneo-search-select>
+                                        <input type="hidden" name="NewProductWarehouseId" v-bind:value="form.newProductWarehouseId ?? ''" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Product template</label>
+                                        <akeneo-search-select input-id="NewProductTemplateId" item-name="product template"
+                                                              v-model="form.newProductTemplateId"
+                                                              v-bind:options="comboOptions(availableProductTemplates, true)"
+                                                              placeholder="Select a product template"></akeneo-search-select>
+                                        <input type="hidden" name="NewProductTemplateId" v-bind:value="form.newProductTemplateId ?? ''" />
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="akeneo-switch mb-0">
+                                <input type="checkbox" name="NewProductIsShipEnabled" value="true" v-model="form.newProductIsShipEnabled" />
+                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                <span class="akeneo-switch-text">Shipping enabled</span>
+                            </label>
+                            @* Must follow the checkbox: a bool binds from the first posted value. *@
+                            <input type="hidden" name="NewProductIsShipEnabled" value="false" />
+                        </div>
+                    </div>
+
                     <input type="hidden" name="ManageVariantsByEnabledStatus" v-bind:value="manageVariantsByEnabledStatusValue" />
+                    <input type="hidden" name="CombinationAvailabilitySourceId" v-bind:value="form.combinationAvailabilitySourceId" />
                     <div v-if="isCombinationMode" class="card akeneo-mapping-card">
                         <div class="card-header"><h3 class="card-title">Combination availability</h3></div>
                         <div class="card-body">
-                            <label class="akeneo-switch">
-                                <input type="checkbox" v-model="form.manageVariantsByEnabledStatus" />
-                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
-                                <span class="akeneo-switch-text">Manage variants by Akeneo enabled status</span>
-                            </label>
-                            <span class="form-text text-muted">Disabled Akeneo SKUs have their combinations removed. Re-enabled SKUs have them recreated. The parent product and shared attribute values are preserved.</span>
-                            <span class="form-text text-muted">Applies to every profile using this family mapping. Profiles must allow updates and include both enabled and disabled SKUs. Profile skip rules take precedence.</span>
+                            <div class="form-group mb-2" style="max-width: 420px;">
+                                <akeneo-search-select item-name="Combination availability"
+                                                      v-model="availabilityChoice"
+                                                      v-bind:options="availabilityOptions"></akeneo-search-select>
+                            </div>
+                            <span class="form-text text-muted" v-if="availabilityChoice === 'enabled'">Disabled Akeneo SKUs have their combinations removed. Re-enabled SKUs have them recreated.</span>
+                            <span class="form-text text-muted" v-if="availabilityChoice === 'published'">
+                                Each variant's computed Published mapping (Variant product role) decides: false removes its combination, true recreates it,
+                                and a mapping held by "Apply only when" (for example sync_status hold) leaves it as it is. A missing value blocks the item with an alert.
+                            </span>
+                            <span class="form-text text-muted" v-if="availabilityChoice === 'off'">Every variant keeps its combination.</span>
+                            <span class="form-text text-muted" v-if="availabilityChoice !== 'off'">The parent product and shared attribute values are preserved. Applies to every profile using this family mapping. Profiles must allow updates and include both enabled and disabled SKUs. Profile skip rules take precedence.</span>
                         </div>
                     </div>
 
@@ -897,6 +960,9 @@
                         matchingSubModel: @((int)AkeneoSubModelParentLevel.MatchingSubModel)
                     },
                     availableProductAttributes: initialModel.availableProductAttributes,
+                    availableTaxCategories: initialModel.availableTaxCategories,
+                    availableWarehouses: initialModel.availableWarehouses,
+                    availableProductTemplates: initialModel.availableProductTemplates,
                     availableAkeneoFamilies: initialModel.availableAkeneoFamilies,
                     familyError: initialModel.akeneoFamilyError || '',
                     availableAkeneoFamilyVariants: initialModel.availableAkeneoFamilyVariants,
@@ -908,6 +974,9 @@
                         ...initialModel,
                         akeneoFamilyVariantCode: initialModel.akeneoFamilyVariantCode || '',
                         associatedProductAttributeId: initialModel.associatedProductAttributeId ?? '',
+                        newProductTaxCategoryId: initialModel.newProductTaxCategoryId ?? '',
+                        newProductWarehouseId: initialModel.newProductWarehouseId ?? '',
+                        newProductTemplateId: initialModel.newProductTemplateId ?? '',
                         axisMappings: initialModel.axisMappings.map((row, index) => ({
                             uid: `${Date.now()}-axis-${index}`,
                             id: row.id || 0,
@@ -948,6 +1017,31 @@
             },
 
             computed: {
+                // Off, Akeneo enabled status, or the Published rule: the switch plus its source.
+                availabilityChoice: {
+                    get() {
+                        if (!this.form.manageVariantsByEnabledStatus)
+                            return 'off';
+                        return Number(this.form.combinationAvailabilitySourceId) === @((int)AkeneoCombinationAvailabilitySource.PublishedRule)
+                            ? 'published'
+                            : 'enabled';
+                    },
+                    set(value) {
+                        this.form.manageVariantsByEnabledStatus = value !== 'off';
+                        this.form.combinationAvailabilitySourceId = value === 'published'
+                            ? @((int)AkeneoCombinationAvailabilitySource.PublishedRule)
+                            : @((int)AkeneoCombinationAvailabilitySource.EnabledStatus);
+                    }
+                },
+
+                availabilityOptions() {
+                    return [
+                        { value: 'off', label: 'Off: every variant keeps its combination', hint: '' },
+                        { value: 'enabled', label: 'Akeneo enabled status', hint: '' },
+                        { value: 'published', label: 'Published rule', hint: '' }
+                    ];
+                },
+
                 manageVariantsByEnabledStatusValue() {
                     return this.isCombinationMode && this.form.manageVariantsByEnabledStatus ? 'true' : 'false';
                 },

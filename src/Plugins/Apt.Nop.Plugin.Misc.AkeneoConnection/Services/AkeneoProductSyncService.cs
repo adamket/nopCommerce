@@ -8,6 +8,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
+using Nop.Services.Localization;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -23,7 +24,8 @@ public class AkeneoProductSyncService(
     IProductService productService,
     IAkeneoProductSyncPipeline syncPipeline,
     IAkeneoProfileRuleEvaluator profileRuleEvaluator,
-    IAkeneoApiClient akeneoApiClient)
+    IAkeneoApiClient akeneoApiClient,
+    ILanguageService languageService = null)
     : IAkeneoProductSyncService
 {
     // One fresh catalog per import request/run, shared by all products in it.
@@ -295,6 +297,16 @@ public class AkeneoProductSyncService(
             resolutionResult,
             cancellationToken);
 
+        var localizedValues = await ResolveLocalizedValuesAsync(
+            source,
+            applicableMappings,
+            mappedValues,
+            fallbackSourcesByMappingId,
+            mappingFamilyCode,
+            mappingFamilyVariantCode,
+            request,
+            cancellationToken);
+
         handledAssetAttributeCodes.AddRange(AkeneoProfileRules.ParseSkipRules(request.SkipRulesJson)
             .Select(rule => rule.AttributeCode));
 
@@ -328,6 +340,7 @@ public class AkeneoProductSyncService(
             MappingEntityScope = mappingEntityScope,
             ProductKey = productKey,
             Sku = sku,
+            LocalizedValues = localizedValues,
             Messages = resolutionResult.Messages.ToList(),
             Warnings = resolutionResult.Warnings.ToList(),
             Errors = resolutionResult.Errors.ToList()
@@ -380,7 +393,8 @@ public class AkeneoProductSyncService(
             ProductKey = intent.ProductKey,
             Sku = intent.Sku,
             ExistingProduct = existingProduct,
-            ExistingSyncState = existingState
+            ExistingSyncState = existingState,
+            LocalizedValues = intent.LocalizedValues
         };
     }
 
@@ -484,6 +498,97 @@ public class AkeneoProductSyncService(
             ? Task.CompletedTask
             : syncPipeline.PrepareAsync(context, cancellationToken);
 
+    /// <summary>
+    /// Resolves the localizable mappings again in each secondary locale whose
+    /// culture matches a nopCommerce language. A locale with no matching
+    /// language is skipped. A value missing in Akeneo, or the same as the
+    /// primary value (Akeneo labels fall back to en_US), is a null value: the
+    /// localized value is removed so the storefront shows the primary one.
+    /// Mappings with a fixed locale, or skipped in the primary pass, are left out.
+    /// </summary>
+    private async Task<IReadOnlyList<AkeneoLocalizedValue>> ResolveLocalizedValuesAsync(
+        AkeneoProductDefinition source,
+        IList<AkeneoAttributeMapping> applicableMappings,
+        IList<AkeneoResolvedMappedValue> primaryValues,
+        IReadOnlyDictionary<int, IReadOnlyList<AkeneoAttributeMappingFallbackSource>> fallbackSourcesByMappingId,
+        string mappingFamilyCode,
+        string mappingFamilyVariantCode,
+        AkeneoProductImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (languageService == null || request.SecondaryLocales is not { Count: > 0 })
+            return Array.Empty<AkeneoLocalizedValue>();
+
+        var localizable = primaryValues
+            .Where(mapped =>
+                !mapped.IsSkipped &&
+                mapped.EvaluationOutcome != AkeneoMappingEvaluationOutcome.Failed &&
+                string.IsNullOrWhiteSpace(mapped.Mapping.Locale) &&
+                AkeneoLocalizableTargets.IsLocalizable(mapped.Mapping))
+            .ToList();
+
+        if (localizable.Count == 0)
+            return Array.Empty<AkeneoLocalizedValue>();
+
+        // Templates can use {sku}, so the SKU mapping is resolved with them.
+        var toResolve = localizable.Select(mapped => mapped.Mapping)
+            .Concat(applicableMappings.Where(mapping =>
+                (NopTargetType)mapping.NopTargetTypeId == NopTargetType.ProductField &&
+                string.Equals(mapping.NopTargetKey, "Sku", StringComparison.OrdinalIgnoreCase)))
+            .Distinct()
+            .ToList();
+
+        var languages = await languageService.GetAllLanguagesAsync(showHidden: true);
+        var localized = new List<AkeneoLocalizedValue>();
+
+        foreach (var locale in request.SecondaryLocales)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var language = languages.FirstOrDefault(language =>
+                AkeneoLocalizableTargets.MatchesCulture(locale, language.LanguageCulture));
+            if (language == null)
+                continue;
+
+            // Diagnostics stay with the primary pass; a Spanish miss is not a warning.
+            var resolved = await ResolveMappedValuesAsync(
+                source,
+                toResolve,
+                fallbackSourcesByMappingId,
+                mappingFamilyCode,
+                mappingFamilyVariantCode,
+                request,
+                new AkeneoProductImportResult(),
+                cancellationToken,
+                locale);
+
+            foreach (var primary in localizable)
+            {
+                var secondary = resolved.FirstOrDefault(value => ReferenceEquals(value.Mapping, primary.Mapping));
+                var value = secondary is { HasValue: true, IsSkipped: false } &&
+                            !string.IsNullOrWhiteSpace(secondary.DisplayValue) &&
+                            !string.Equals(secondary.DisplayValue, primary.HasValue ? primary.DisplayValue : null, StringComparison.Ordinal)
+                    ? secondary.DisplayValue
+                    : null;
+
+                localized.Add(new AkeneoLocalizedValue(
+                    primary.TargetType,
+                    primary.Mapping.NopTargetKey,
+                    locale,
+                    language.Id,
+                    language.Name,
+                    value,
+                    primary.ResolvedSourceDisplayName ?? AkeneoMappingHelper.GetSourceDisplayName(primary.Mapping)));
+            }
+        }
+
+        // Several mappings for one field: the last one wins, as for the primary value.
+        return localized
+            .GroupBy(value => (value.TargetType, Key: value.TargetKey.ToLowerInvariant(), value.LanguageId))
+            .Select(group => group.Last())
+            .ToList();
+    }
+
     private async Task<IList<AkeneoResolvedMappedValue>> ResolveMappedValuesAsync(
         AkeneoProductDefinition source,
         IList<AkeneoAttributeMapping> mappings,
@@ -492,7 +597,8 @@ public class AkeneoProductSyncService(
         string mappingFamilyVariantCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string localeOverride = null)
     {
         var resolved = new List<AkeneoResolvedMappedValue>();
         var dependencies = mappings.Where(mapping => (NopTargetType)mapping.NopTargetTypeId != NopTargetType.Ignore)
@@ -547,7 +653,8 @@ public class AkeneoProductSyncService(
                 mappingFamilyVariantCode,
                 request,
                 result,
-                cancellationToken));
+                cancellationToken,
+                localeOverride));
         }
 
         var effectiveSku = resolved
@@ -576,7 +683,8 @@ public class AkeneoProductSyncService(
                 mappingFamilyVariantCode,
                 request,
                 result,
-                cancellationToken));
+                cancellationToken,
+                localeOverride));
         }
 
         return resolved;
@@ -590,7 +698,8 @@ public class AkeneoProductSyncService(
             string mappingFamilyVariantCode,
             AkeneoProductImportRequest request,
             AkeneoProductImportResult result,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string localeOverride = null)
     {
         var targetType = (NopTargetType)mapping.NopTargetTypeId;
 
@@ -605,7 +714,7 @@ public class AkeneoProductSyncService(
 
         var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
             ? mapping.Locale
-            : request.Locale;
+            : localeOverride ?? request.Locale;
         var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
             ? mapping.Channel
             : request.Channel;
@@ -710,7 +819,8 @@ public class AkeneoProductSyncService(
         string mappingFamilyVariantCode,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string localeOverride = null)
     {
         var sourceDisplayName =
             $"Template '{mapping.Name ?? mapping.MappingKey}'";
@@ -728,7 +838,7 @@ public class AkeneoProductSyncService(
 
         var locale = !string.IsNullOrWhiteSpace(mapping.Locale)
             ? mapping.Locale
-            : request.Locale;
+            : localeOverride ?? request.Locale;
         var channel = !string.IsNullOrWhiteSpace(mapping.Channel)
             ? mapping.Channel
             : request.Channel;

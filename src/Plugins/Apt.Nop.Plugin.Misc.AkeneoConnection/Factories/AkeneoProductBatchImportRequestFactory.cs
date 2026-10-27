@@ -46,6 +46,11 @@ public class AkeneoProductBatchImportRequestFactory(
 
             Channel = valueContext.Channel,
             Locale = valueContext.Locale,
+            SecondaryLocales = profile.AkeneoLocales.SplitCsv()
+                .Skip(1)
+                .Where(locale => !string.Equals(locale, valueContext.Locale, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Currency = valueContext.Currency,
 
             PageSize = profile.PageSize <= 0

@@ -11,6 +11,10 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public bool ManageVariantsByEnabledStatus { get; set; }
 
+    // What decides a managed combination's availability; only read when
+    // ManageVariantsByEnabledStatus is on (it has kept its name since it was the only source).
+    public int CombinationAvailabilitySourceId { get; set; }
+
     public int VariantRelationshipModeId { get; set; }
 
     public int ProductModelHierarchyModeId { get; set; }
@@ -22,6 +26,17 @@ public class AkeneoFamilyMapping : BaseEntity
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
+
+    // Commerce settings applied only when the sync creates a product in this
+    // family (parents, standalone and child products); never on updates.
+    // Null keeps the nopCommerce default.
+    public int? NewProductTaxCategoryId { get; set; }
+
+    public bool NewProductIsShipEnabled { get; set; }
+
+    public int? NewProductWarehouseId { get; set; }
+
+    public int? NewProductTemplateId { get; set; }
 
     public int DisplayOrder { get; set; }
 
@@ -35,6 +50,12 @@ public class AkeneoFamilyMapping : BaseEntity
         set => VariantRelationshipModeId = (int)value;
     }
 
+    public AkeneoCombinationAvailabilitySource CombinationAvailabilitySource
+    {
+        get => (AkeneoCombinationAvailabilitySource)CombinationAvailabilitySourceId;
+        set => CombinationAvailabilitySourceId = (int)value;
+    }
+
     public AkeneoProductModelHierarchyMode ProductModelHierarchyMode
     {
         get => (AkeneoProductModelHierarchyMode)ProductModelHierarchyModeId;
@@ -43,6 +64,19 @@ public class AkeneoFamilyMapping : BaseEntity
 }
 
 
+
+/// <summary>What decides whether a managed attribute combination exists.</summary>
+public enum AkeneoCombinationAvailabilitySource
+{
+    /// <summary>The variant's Akeneo enabled status.</summary>
+    EnabledStatus = 0,
+
+    /// <summary>
+    /// The variant's computed Published mapping (Variant product role): false removes the
+    /// combination, true creates it, a held (skipped) mapping leaves it as it is.
+    /// </summary>
+    PublishedRule = 10
+}
 
 public enum AkeneoVariantRelationshipMode
 {

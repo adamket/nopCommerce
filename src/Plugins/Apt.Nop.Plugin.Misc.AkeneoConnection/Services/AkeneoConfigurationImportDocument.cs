@@ -105,6 +105,7 @@ public sealed class AkeneoConfigurationImportDocument
                 "Duplicate family/variant configuration.");
             EnumValue<AkeneoVariantRelationshipMode>(f.VariantRelationshipModeId);
             EnumValue<AkeneoProductModelHierarchyMode>(f.ProductModelHierarchyModeId);
+            EnumValue<AkeneoCombinationAvailabilitySource>(f.CombinationAvailabilitySourceId);
             foreach (var axis in section.AxisMappings)
                 Require(axis != null && !string.IsNullOrWhiteSpace(axis.AkeneoAttributeCode) &&
                         axis.NopProductAttributeId > 0 && axis.AkeneoVariantAxisLevel is 1 or 2,

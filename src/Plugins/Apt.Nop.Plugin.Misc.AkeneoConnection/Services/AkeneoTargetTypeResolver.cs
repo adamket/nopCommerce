@@ -18,6 +18,7 @@ public sealed class AkeneoTargetTypeResolver(
                 new("FullDescription", "Full description"),
                 new("Sku", "SKU"),
                 new("Price", "Price"),
+                new("OldPrice", "Old price (shown struck through)"),
                 new("StockQuantity", "Stock quantity"),
                 new("Gtin", "GTIN"),
                 new("ManufacturerPartNumber", "Manufacturer part number"),

@@ -1365,7 +1365,7 @@ public class AkeneoProductBatchSyncService(
     {
         result.CombinationUnavailable = variantResult.CombinationUnavailable;
         if (variantResult.CombinationUnavailable)
-            result.AddMessage("Akeneo SKU is disabled. No combination will be created; the parent is retained.");
+            result.AddMessage("The combination is unavailable (the Akeneo SKU is disabled, the Published rule is false, or it is held and not yet created), so none is kept. The parent is retained.");
         result.NopProductId = variantResult.NopProductId ?? 0;
         result.NopParentProductId = variantResult.NopParentProductId;
         result.NopProductAttributeCombinationId =
@@ -1430,8 +1430,16 @@ public class AkeneoProductBatchSyncService(
             Locale = request.Locale,
             Channel = request.Channel,
             Currency = request.Currency,
-            ManageVariantsByEnabledStatus = AkeneoCombinationAvailabilityService.ManagesEnabledStatus(familyConfiguration)
+            ManageVariantsByEnabledStatus = AkeneoCombinationAvailabilityService.ManagesEnabledStatus(familyConfiguration),
+            CombinationAvailabilitySource = AkeneoCombinationAvailabilityService.GetAvailabilitySource(familyConfiguration)
+                ?? AkeneoCombinationAvailabilitySource.EnabledStatus
         };
+
+        if (context.ManageVariantsByEnabledStatus &&
+            context.CombinationAvailabilitySource == AkeneoCombinationAvailabilitySource.PublishedRule)
+        {
+            AkeneoCombinationAvailabilityService.ApplyPublishedRule(context, leafContext.MappedValues);
+        }
 
         context.Price = TryResolveDecimalTarget(
             leafContext,
@@ -2773,12 +2781,16 @@ public class AkeneoProductBatchSyncService(
         };
     }
 
+    // The availability source joins the fingerprint only when it is the Published rule, so
+    // other families keep their desired-state hashes.
     private static object BuildFamilyMappingFingerprint(
         AkeneoFamilyMapping configuration) => configuration == null
         ? null
         : new
         {
-            configuration.ManageVariantsByEnabledStatus,
+            ManageVariantsByEnabledStatus = configuration.CombinationAvailabilitySource == AkeneoCombinationAvailabilitySource.PublishedRule && configuration.ManageVariantsByEnabledStatus
+                ? (object)"published-rule"
+                : configuration.ManageVariantsByEnabledStatus,
             configuration.AkeneoFamilyCode,
             configuration.AkeneoFamilyVariantCode,
             configuration.Enabled,

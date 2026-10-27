@@ -273,21 +273,31 @@ public sealed class AkeneoProductMappingFactory(
         {
             try
             {
-                if (!await combinationAvailabilityService.IsAvailableAsync(new AkeneoVariantImportContext
+                var availabilitySource = await combinationAvailabilityService.GetAvailabilitySourceAsync(akeneoSource, cancellationToken);
+                var availabilityContext = new AkeneoVariantImportContext
                 {
                     SourceProduct = previewSource, AkeneoIdentifier = akeneoSource.Identifier,
                     AkeneoUuid = akeneoSource.Uuid, Sku = context.Sku,
                     AkeneoFamilyCode = akeneoSource.Family, AkeneoFamilyVariantCode = context.MappingFamilyVariantCode,
                     Locale = request.Locale, Channel = request.Channel, Currency = request.Currency,
-                    ManageVariantsByEnabledStatus = await combinationAvailabilityService.ManagesEnabledStatusAsync(akeneoSource, cancellationToken)
-                }, cancellationToken))
+                    ManageVariantsByEnabledStatus = availabilitySource != null,
+                    CombinationAvailabilitySource = availabilitySource ?? AkeneoCombinationAvailabilitySource.EnabledStatus
+                };
+                if (availabilitySource == AkeneoCombinationAvailabilitySource.PublishedRule)
+                    AkeneoCombinationAvailabilityService.ApplyPublishedRule(availabilityContext, context.MappedValues);
+
+                if (!await combinationAvailabilityService.IsAvailableAsync(availabilityContext, cancellationToken))
                 {
                     model.Action = "Do not create unavailable attribute combination";
                     model.Operations.Add(new AkeneoDryRunOperationPreviewModel
                     {
                         Area = "Variant relationship", Target = "Attribute combination",
                         ChangeType = AkeneoDryRunOperationType.Skip,
-                        Detail = "Akeneo SKU is disabled. No combination or axis values will be created. Parent synchronization still follows the profile."
+                        Detail = availabilitySource == AkeneoCombinationAvailabilitySource.PublishedRule
+                            ? (availabilityContext.PublishedRuleHeld
+                                ? "The Published rule is held and no combination exists yet, so none will be created. An existing one would be kept."
+                                : "The Published rule is false. An existing combination would be removed and none will be created. Parent synchronization still follows the profile.")
+                            : "Akeneo SKU is disabled. No combination or axis values will be created. Parent synchronization still follows the profile."
                     });
                     return model;
                 }

@@ -25,11 +25,18 @@ public sealed class AkeneoCombinationAvailabilityService(
         VariantRelationshipMode: AkeneoVariantRelationshipMode.ProductAttributeCombinations }
         && mapping.ManageVariantsByEnabledStatus;
 
-    public async Task<bool> ManagesEnabledStatusAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default)
+    /// <summary>What decides a managed family's combination availability, or null when unmanaged.</summary>
+    public static AkeneoCombinationAvailabilitySource? GetAvailabilitySource(AkeneoFamilyMapping mapping) =>
+        ManagesEnabledStatus(mapping) ? mapping.CombinationAvailabilitySource : null;
+
+    public async Task<bool> ManagesEnabledStatusAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default) =>
+        await GetAvailabilitySourceAsync(source, cancellationToken) != null;
+
+    public async Task<AkeneoCombinationAvailabilitySource?> GetAvailabilitySourceAsync(AkeneoProductDefinition source, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(source.Parent)) return false;
+        if (string.IsNullOrWhiteSpace(source.Parent)) return null;
         var mappings = (await GetMappingsAsync()).Where(m => string.Equals(m.AkeneoFamilyCode, source.Family, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (!mappings.Any(ManagesEnabledStatus)) return false;
+        if (!mappings.Any(ManagesEnabledStatus)) return null;
         // Akeneo leaves do not carry family_variant; resolve the immediate model, never guess a family default.
         var parent = await _parents.GetOrAdd(source.Parent, code => apiClient.GetProductModelByCodeAsync(code, cancellationToken));
         var resolution = Helpers.AkeneoLeafFamilyVariantResolver.Resolve(source, parent == null
@@ -37,7 +44,7 @@ public sealed class AkeneoCombinationAvailabilityService(
         if (!resolution.Success) throw new NopException(resolution.Error);
         var mapping = mappings.FirstOrDefault(m => m.Enabled && string.Equals(m.AkeneoFamilyVariantCode?.Trim(), resolution.FamilyVariantCode, StringComparison.OrdinalIgnoreCase))
             ?? mappings.FirstOrDefault(m => m.Enabled && string.IsNullOrWhiteSpace(m.AkeneoFamilyVariantCode));
-        return ManagesEnabledStatus(mapping);
+        return GetAvailabilitySource(mapping);
     }
 
     private async Task<IList<AkeneoFamilyMapping>> GetApplicableMappingsAsync(IEnumerable<string> familyCodes)
@@ -58,7 +65,10 @@ public sealed class AkeneoCombinationAvailabilityService(
     public async Task<string> GetConfigurationFingerprintAsync(IEnumerable<string> familyCodes) =>
         System.Text.Json.JsonSerializer.Serialize((await GetApplicableMappingsAsync(familyCodes))
             .OrderBy(m => m.AkeneoFamilyCode, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.AkeneoFamilyVariantCode, StringComparer.OrdinalIgnoreCase)
-            .Select(m => new { m.AkeneoFamilyCode, m.AkeneoFamilyVariantCode, m.Enabled, m.VariantRelationshipModeId, ManageVariantsByEnabledStatus = ManagesEnabledStatus(m) }));
+            .Select(m => new { m.AkeneoFamilyCode, m.AkeneoFamilyVariantCode, m.Enabled, m.VariantRelationshipModeId, 
+                // Unchanged JSON for the enabled-status source, so existing scope fingerprints keep.
+                ManageVariantsByEnabledStatus = GetAvailabilitySource(m) == AkeneoCombinationAvailabilitySource.PublishedRule
+                    ? (object)"published-rule" : ManagesEnabledStatus(m) }));
 
     public static void ValidateConfiguration(bool manageEnabledStatus, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates = true)
     {
@@ -73,6 +83,18 @@ public sealed class AkeneoCombinationAvailabilityService(
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!context.ManageVariantsByEnabledStatus) return Task.FromResult(true);
+
+        if (context.CombinationAvailabilitySource == AkeneoCombinationAvailabilitySource.PublishedRule)
+        {
+            if (context.PublishedRuleProblem != null)
+                throw new NopException($"{context.PublishedRuleProblem} No combination changes were made for '{context.AkeneoIdentifier ?? context.AkeneoUuid}'.");
+
+            // Held: an existing combination stays; a missing one is not created.
+            return Task.FromResult(context.PublishedRuleHeld
+                ? context.ExistingProductAttributeCombinationId.HasValue
+                : context.PublishedRuleResult == true);
+        }
+
         if (context.SourceProduct?.Enabled is not bool enabled)
             throw new NopException($"Akeneo enabled status is missing for '{context.AkeneoIdentifier ?? context.AkeneoUuid}'. No combination changes were made.");
         return Task.FromResult(enabled);
@@ -82,8 +104,10 @@ public sealed class AkeneoCombinationAvailabilityService(
         AkeneoProductDefinition source, AkeneoProductImportRequest request, CancellationToken cancellationToken = default)
     {
         if (!request.SyncProfileId.HasValue || string.IsNullOrWhiteSpace(source.Parent)) return null;
-        var manageEnabledStatus = await ManagesEnabledStatusAsync(source, cancellationToken);
-        if (!manageEnabledStatus) return null;
+        // Only enabled status is known before mappings are resolved; the Published rule is
+        // decided with the variant, in AkeneoVariantRelationshipService.
+        if (await GetAvailabilitySourceAsync(source, cancellationToken) != AkeneoCombinationAvailabilitySource.EnabledStatus) return null;
+        const bool manageEnabledStatus = true;
         var state = await syncStateService.GetBySourceAsync(request.SyncProfileId.Value,
             AkeneoEntityType.Product, source.Identifier, source.Uuid);
         if (state == null || state.DestinationKindId != (int)AkeneoProductDestinationKind.ProductAttributeCombination)
@@ -105,6 +129,38 @@ public sealed class AkeneoCombinationAvailabilityService(
         if (combination != null && combination.ProductId != state.NopProductId)
             throw new NopException("Combination availability found a binding to a different parent. No combination was removed.");
         return new(state, parent, context, combination != null);
+    }
+
+    /// <summary>
+    /// Reads the variant's computed Published mapping (Variant product role) for the Published
+    /// rule source: a value, held when "Apply only when" skipped it, or the problem that stops it.
+    /// </summary>
+    public static void ApplyPublishedRule(AkeneoVariantImportContext context, IEnumerable<Types.Sync.AkeneoResolvedMappedValue> mappedValues)
+    {
+        var published = (mappedValues ?? []).LastOrDefault(mapped =>
+            mapped.TargetType == NopTargetType.ProductField &&
+            string.Equals(mapped.Mapping?.NopTargetKey, "Published", StringComparison.OrdinalIgnoreCase));
+
+        if (published == null)
+            context.PublishedRuleProblem = "Combination availability uses the Published rule, but no Published mapping applies to variant products.";
+        else if (published.IsSkipped)
+            context.PublishedRuleHeld = true;
+        else if (!published.HasValue)
+            context.PublishedRuleProblem = "The Published rule produced no value.";
+        else if (TryParseBoolean(published.DisplayValue, out var value))
+            context.PublishedRuleResult = value;
+        else
+            context.PublishedRuleProblem = $"The Published rule produced '{published.DisplayValue}', which is not true or false.";
+    }
+
+    private static bool TryParseBoolean(string value, out bool result)
+    {
+        switch (value?.Trim().ToLowerInvariant())
+        {
+            case "true" or "1" or "yes": result = true; return true;
+            case "false" or "0" or "no": result = false; return true;
+            default: result = false; return false;
+        }
     }
 
     public async Task<bool> RemoveAsync(Product parent, AkeneoVariantImportContext context, CancellationToken cancellationToken = default)
