@@ -74,8 +74,8 @@ public class AkeneoCategoryContentSyncServiceTests
         _categories.Setup(s => s.GetCategoryByIdAsync(7)).ReturnsAsync(() => _category);
         _languages.Setup(s => s.GetAllLanguagesAsync(true, 0)).ReturnsAsync(new List<Language>
         {
-            new() { Id = 1, Name = "English" },
-            new() { Id = 2, Name = "Español" }
+            new() { Id = 1, Name = "English", LanguageCulture = "en-US" },
+            new() { Id = 2, Name = "Español", LanguageCulture = "es-ES" }
         });
         _api.Setup(s => s.GetCategoriesWithValuesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<AkeneoCategoryDefinition> { ShadeTrees() });
@@ -311,6 +311,49 @@ public class AkeneoCategoryContentSyncServiceTests
         Assert.That(result.Categories.Single().Changes.Single().Language, Is.EqualTo("Español"));
         _localized.Verify(s => s.SaveLocalizedValueAsync(_category, It.IsAny<Expression<Func<Category, string>>>(), "Árboles de sombra", 2), Times.Once);
         _categories.Verify(s => s.UpdateCategoryAsync(It.IsAny<Category>()), Times.Never);
+    }
+
+    private void TranslateInto(params string[] locales) =>
+        _content.Setup(s => s.GetTranslationLocalesAsync()).ReturnsAsync(locales.ToList());
+
+    [Test]
+    public async Task A_standard_mapping_is_translated_into_the_matching_language()
+    {
+        Map(AkeneoCategoryContentTarget.Name, null);
+        TranslateInto("es_ES", "fr_FR");
+
+        var result = await Service().SyncAsync();
+
+        var change = result.Categories.Single().Changes.Single();
+        Assert.That((change.Language, change.To), Is.EqualTo(("Español", "Árboles de sombra")));
+        _localized.Verify(s => s.SaveLocalizedValueAsync(_category, It.IsAny<Expression<Func<Category, string>>>(), "Árboles de sombra", 2), Times.Once);
+    }
+
+    [Test]
+    public async Task A_translation_akeneo_does_not_have_removes_the_localized_value()
+    {
+        Map(AkeneoCategoryContentTarget.Description, "description");
+        TranslateInto("es_ES");
+        _category.Description = "<p>From Akeneo</p>";
+        _localized.Setup(s => s.GetLocalizedValueAsync(2, 7, nameof(Category), nameof(Category.Description))).ReturnsAsync("Old Spanish text");
+
+        var result = await Service().SyncAsync();
+
+        Assert.That(result.Categories.Single().Changes.Single().To, Is.EqualTo("(empty)"));
+        _localized.Verify(s => s.SaveLocalizedValueAsync(_category, It.IsAny<Expression<Func<Category, string>>>(), string.Empty, 2), Times.Once);
+    }
+
+    [Test]
+    public async Task A_language_specific_mapping_overrides_the_automatic_translation()
+    {
+        Map(AkeneoCategoryContentTarget.Name, null);
+        Map(AkeneoCategoryContentTarget.Name, "description", languageId: 2);
+        TranslateInto("es_ES");
+
+        await Service().SyncAsync();
+
+        _localized.Verify(s => s.SaveLocalizedValueAsync(_category, It.IsAny<Expression<Func<Category, string>>>(), "<p>From Akeneo</p>", 2), Times.Once);
+        _localized.Verify(s => s.SaveLocalizedValueAsync(_category, It.IsAny<Expression<Func<Category, string>>>(), "Árboles de sombra", 2), Times.Never);
     }
 
     [Test]

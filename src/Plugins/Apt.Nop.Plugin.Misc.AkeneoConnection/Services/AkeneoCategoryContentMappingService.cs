@@ -1,5 +1,6 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Nop.Data;
+using Nop.Services.Configuration;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -20,6 +21,11 @@ public interface IAkeneoCategoryContentMappingService
     Task<AkeneoCategoryContentState> GetStateAsync(string akeneoCategoryCode);
 
     Task SaveStateAsync(AkeneoCategoryContentState state);
+
+    /// <summary>The Akeneo locales category content is translated into, in saved order.</summary>
+    Task<IList<string>> GetTranslationLocalesAsync();
+
+    Task SaveTranslationLocalesAsync(IEnumerable<string> locales);
 }
 
 /// <summary>
@@ -28,7 +34,8 @@ public interface IAkeneoCategoryContentMappingService
 /// </summary>
 public class AkeneoCategoryContentMappingService(
     IRepository<AkeneoCategoryContentMapping> mappingRepository,
-    IRepository<AkeneoCategoryContentState> stateRepository)
+    IRepository<AkeneoCategoryContentState> stateRepository,
+    ISettingService settingService)
     : IAkeneoCategoryContentMappingService
 {
     public async Task<IList<AkeneoCategoryContentMapping>> GetAllMappingsAsync() =>
@@ -79,4 +86,14 @@ public class AkeneoCategoryContentMappingService(
         else
             await stateRepository.InsertAsync(state, false);
     }
+
+    private string TranslationLocalesKey => settingService.GetSettingKey(
+        new AkeneoConnectionSettings(),
+        settings => settings.CategoryContentTranslationLocales);
+
+    public async Task<IList<string>> GetTranslationLocalesAsync() =>
+        AkeneoCategoryContentPlanner.ParseLocales(await settingService.GetSettingByKeyAsync<string>(TranslationLocalesKey));
+
+    public async Task SaveTranslationLocalesAsync(IEnumerable<string> locales) =>
+        await settingService.SetSettingAsync(TranslationLocalesKey, string.Join(",", locales ?? []));
 }

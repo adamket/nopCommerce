@@ -2279,14 +2279,113 @@
   margin-bottom: 8px;
 }
 
+/* Each conflict choice is a selectable card with a large custom radio. */
 .akeneo-connection .akeneo-binding-choice {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0;
-  padding: 4px 0;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--ak-line);
+  border-radius: 10px;
+  background: var(--ak-surface);
   font-weight: 400;
   cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.akeneo-connection .akeneo-binding-choice:last-child {
+  margin-bottom: 0;
+}
+
+.akeneo-connection .akeneo-binding-choice:hover {
+  border-color: var(--ak-line-strong);
+  background: var(--ak-canvas);
+}
+
+.akeneo-connection .akeneo-binding-choice:has(input:checked) {
+  border-color: var(--ak-accent);
+  background: var(--ak-accent-tint);
+  box-shadow: 0 0 0 1px var(--ak-accent);
+}
+
+/* The first choice is Skip: selected, it reads as neutral rather than as a binding. */
+.akeneo-connection .akeneo-binding-conflict-head + .akeneo-binding-choice:has(input:checked) {
+  border-color: var(--ak-line-strong);
+  background: var(--ak-ignored-tint);
+  box-shadow: 0 0 0 1px var(--ak-line-strong);
+}
+
+.akeneo-connection .akeneo-binding-choice:has(input:disabled) {
+  cursor: default;
+}
+
+.akeneo-connection .akeneo-binding-choice:has(input:disabled):not(:has(input:checked)) {
+  opacity: .55;
+}
+
+.akeneo-connection .akeneo-binding-choice:has(input:disabled):hover {
+  border-color: var(--ak-line);
+  background: var(--ak-surface);
+}
+
+.akeneo-connection .akeneo-binding-choice input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  display: grid;
+  place-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid var(--ak-line-strong);
+  border-radius: 50%;
+  background: var(--ak-surface);
+  cursor: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.akeneo-connection .akeneo-binding-choice input[type="radio"]::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ak-accent);
+  transform: scale(0);
+  transition: transform .15s ease;
+}
+
+.akeneo-connection .akeneo-binding-choice:hover input[type="radio"]:not(:disabled) {
+  border-color: var(--ak-accent);
+}
+
+.akeneo-connection .akeneo-binding-choice input[type="radio"]:checked {
+  border-color: var(--ak-accent);
+}
+
+.akeneo-connection .akeneo-binding-choice input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+
+.akeneo-connection .akeneo-binding-conflict-head + .akeneo-binding-choice input[type="radio"]:checked {
+  border-color: var(--ak-ignored);
+}
+
+.akeneo-connection .akeneo-binding-conflict-head + .akeneo-binding-choice input[type="radio"]::before {
+  background: var(--ak-ignored);
+}
+
+.akeneo-connection .akeneo-binding-choice input[type="radio"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ak-accent-tint), 0 0 0 5px var(--ak-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .akeneo-connection .akeneo-binding-choice,
+  .akeneo-connection .akeneo-binding-choice input[type="radio"],
+  .akeneo-connection .akeneo-binding-choice input[type="radio"]::before {
+    transition: none;
+  }
 }
 
 .akeneo-connection .akeneo-binding-table thead th {
@@ -2638,4 +2737,66 @@
 
 .akeneo-connection .akeneo-content-to {
     overflow-wrap: anywhere;
+}
+
+/* Category content translation locales: one toggle chip per Akeneo locale. */
+.akeneo-connection .akeneo-locale-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.akeneo-connection .akeneo-locale-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--ak-line);
+  border-radius: 999px;
+  background: var(--ak-surface);
+  font-weight: 400;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+
+.akeneo-connection .akeneo-locale-option:hover {
+  border-color: var(--ak-line-strong);
+}
+
+.akeneo-connection .akeneo-locale-option:has(input:checked) {
+  border-color: var(--ak-accent);
+  background: var(--ak-accent-tint);
+  box-shadow: 0 0 0 1px var(--ak-accent);
+}
+
+.akeneo-connection .akeneo-locale-option:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px var(--ak-accent-tint), 0 0 0 1px var(--ak-accent);
+}
+
+.akeneo-connection .akeneo-locale-option.is-unavailable {
+  opacity: .6;
+  cursor: default;
+}
+
+.akeneo-connection .akeneo-locale-option input {
+  margin: 0;
+  accent-color: var(--ak-accent);
+}
+
+.akeneo-connection .akeneo-locale-code {
+  font-family: SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .85rem;
+  color: var(--ak-ink);
+}
+
+.akeneo-connection .akeneo-locale-target {
+  font-size: .85rem;
+  color: var(--ak-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .akeneo-connection .akeneo-locale-option {
+    transition: none;
+  }
 }

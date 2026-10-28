@@ -120,13 +120,16 @@ public class AkeneoCategoryMappingModelFactory(
             })
             .ToList();
 
-        model.AvailableLanguages = (await languageService.GetAllLanguagesAsync(showHidden: true))
+        var languages = await languageService.GetAllLanguagesAsync(showHidden: true);
+        model.AvailableLanguages = languages
             .Select(language => new SelectListItem
             {
                 Value = language.Id.ToString(),
                 Text = language.Published ? language.Name : $"{language.Name} (unpublished)"
             })
             .ToList();
+        model.LanguageCultures = languages.ToDictionary(language => language.Id, language => language.LanguageCulture ?? string.Empty);
+        model.TranslationLocales = await categoryContentMappingService.GetTranslationLocalesAsync();
 
         return model;
     }

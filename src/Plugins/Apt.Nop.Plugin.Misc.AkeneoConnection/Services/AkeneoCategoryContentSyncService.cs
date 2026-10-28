@@ -5,6 +5,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Categories;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Seo;
@@ -213,6 +214,9 @@ public class AkeneoCategoryContentSyncService(
 
         public IDictionary<int, string> LanguageNames { get; init; }
 
+        /// <summary>Translation locales that have a nopCommerce language with the matching culture.</summary>
+        public IList<(string Locale, int LanguageId)> Translations { get; init; }
+
         public IDictionary<string, AkeneoCategoryDefinition> AkeneoCategories { get; init; }
 
         public IList<(string Code, int NopCategoryId)> Targets { get; init; }
@@ -256,13 +260,24 @@ public class AkeneoCategoryContentSyncService(
             .GroupBy(category => category.Code.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-        var languageNames = (await languageService.GetAllLanguagesAsync(showHidden: true))
-            .ToDictionary(language => language.Id, language => language.Name);
+        var languages = await languageService.GetAllLanguagesAsync(showHidden: true);
+        var languageNames = languages.ToDictionary(language => language.Id, language => language.Name);
+
+        // A locale with no nopCommerce language of that culture is skipped, as for products.
+        var translations = new List<(string Locale, int LanguageId)>();
+        foreach (var locale in await contentMappingService.GetTranslationLocalesAsync() ?? [])
+        {
+            var language = languages.FirstOrDefault(language =>
+                AkeneoLocalizableTargets.MatchesCulture(locale, language.LanguageCulture));
+            if (language != null && translations.All(translation => translation.LanguageId != language.Id))
+                translations.Add((locale, language.Id));
+        }
 
         return new RunContext
         {
             Mappings = mappings,
             LanguageNames = languageNames,
+            Translations = translations,
             AkeneoCategories = akeneoCategories,
             Targets = targets
         };
@@ -371,6 +386,8 @@ public class AkeneoCategoryContentSyncService(
             }
         }
 
+        await PlanTranslationsAsync(plan, context, akeneoCategory, values);
+
         result.Status = result.Errors.Count > 0
             ? AkeneoCategoryContentStatus.Failed
             : result.Changes.Count > 0
@@ -472,6 +489,100 @@ public class AkeneoCategoryContentSyncService(
 
         plan.SlugWrites.Add((mapping.LanguageId, proposed));
         AddChange(plan, context, mapping, current, proposed);
+    }
+
+    /// <summary>
+    /// Reads each translatable standard mapping again in every translation
+    /// locale and writes the matching language. A language-specific mapping
+    /// for the same property overrides the automatic translation.
+    /// </summary>
+    private async Task PlanTranslationsAsync(
+        CategoryPlan plan,
+        RunContext context,
+        AkeneoCategoryDefinition akeneoCategory,
+        IReadOnlyList<AkeneoCategoryValue> values)
+    {
+        var standardMappings = context.Mappings
+            .Where(AkeneoCategoryContentPlanner.IsTranslatable)
+            .OrderBy(mapping => Array.IndexOf(PlanningOrder, mapping.Target))
+            .ToList();
+
+        foreach (var (locale, languageId) in context.Translations)
+        {
+            foreach (var mapping in standardMappings)
+            {
+                if (context.Mappings.Any(other => other.TargetId == mapping.TargetId && other.LanguageId == languageId))
+                    continue;
+
+                // Source problems were already reported for the standard language.
+                var standard = AkeneoCategoryContentPlanner.ResolveSource(mapping, akeneoCategory, values);
+                var translation = AkeneoCategoryContentPlanner.ForTranslation(mapping, locale, languageId);
+                var source = AkeneoCategoryContentPlanner.ResolveSource(translation, akeneoCategory, values);
+                if (standard.Problem != null || source.Problem != null)
+                    continue;
+
+                if (translation.Target == AkeneoCategoryContentTarget.SeName)
+                {
+                    await PlanTranslatedSlugAsync(plan, context, translation, source.Text, standard.Text);
+                    continue;
+                }
+
+                var current = await GetCurrentTextAsync(plan.Category, translation.Target, languageId);
+                var decision = AkeneoCategoryContentPlanner.DecideTranslation(current, source.Text, standard.Text);
+                if (!decision.Change)
+                    continue;
+
+                plan.TextWrites.Add((translation.Target, languageId, decision.Value));
+                if (translation.Target == AkeneoCategoryContentTarget.Name)
+                    plan.PlannedNames[languageId] = decision.Value;
+
+                AddChange(plan, context, translation, current, decision.Value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A translated slug. Slugs are unique across all languages, so a taken
+    /// one is left unchanged with a warning instead of failing the category.
+    /// </summary>
+    private async Task PlanTranslatedSlugAsync(
+        CategoryPlan plan,
+        RunContext context,
+        AkeneoCategoryContentMapping translation,
+        string translated,
+        string standard)
+    {
+        var category = plan.Category;
+        var language = context.LanguageNames[translation.LanguageId];
+        var proposed = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(translated) && !string.Equals(translated, standard, StringComparison.OrdinalIgnoreCase))
+        {
+            var wanted = await CleanSlugAsync(translated);
+            if (string.IsNullOrWhiteSpace(wanted))
+            {
+                plan.Result.Warnings.Add(
+                    $"The {language} URL slug '{translated}' has no characters nopCommerce allows in URLs, so the {language} slug was left unchanged.");
+                return;
+            }
+
+            var validated = await urlRecordService.ValidateSeNameAsync(category, wanted, null, false);
+            if (!string.Equals(wanted, validated, StringComparison.OrdinalIgnoreCase))
+            {
+                plan.Result.Warnings.Add(
+                    $"The {language} URL slug '{wanted}' is {await DescribeSlugHolderAsync(wanted)}, so the {language} slug was left unchanged.");
+                return;
+            }
+
+            proposed = wanted;
+        }
+
+        var current = await urlRecordService.GetActiveSlugAsync(category.Id, nameof(Category), translation.LanguageId) ?? string.Empty;
+        if (string.Equals(current, proposed, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        plan.SlugWrites.Add((translation.LanguageId, proposed));
+        AddChange(plan, context, translation, current, proposed);
     }
 
     private async Task PlanPictureAsync(

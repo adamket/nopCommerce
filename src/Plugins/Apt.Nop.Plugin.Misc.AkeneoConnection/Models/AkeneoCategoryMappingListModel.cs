@@ -26,6 +26,12 @@ public record AkeneoCategoryMappingListModel : BaseNopModel
     /// <summary>nopCommerce languages a mapping can write to, besides the standard property.</summary>
     public IList<SelectListItem> AvailableLanguages { get; set; } = new List<SelectListItem>();
 
+    /// <summary>Each language's culture by ID, to show which language a translation locale writes.</summary>
+    public IDictionary<int, string> LanguageCultures { get; set; } = new Dictionary<int, string>();
+
+    /// <summary>Akeneo locales category content is translated into.</summary>
+    public IList<string> TranslationLocales { get; set; } = new List<string>();
+
     /// <summary>Set when the category template values could not be read.</summary>
     public string ContentReadError { get; set; }
 }

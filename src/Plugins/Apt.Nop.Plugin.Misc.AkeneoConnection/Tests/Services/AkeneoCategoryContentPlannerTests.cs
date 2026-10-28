@@ -236,6 +236,40 @@ public class AkeneoCategoryContentPlannerTests
         Assert.That(decision.Change, Is.False);
     }
 
+    [TestCase("", "Árboles", "Trees", true, "Árboles")]
+    [TestCase("Árboles", null, "Trees", true, "")]
+    [TestCase("Trees", "Trees", "Trees", true, "")]
+    [TestCase("", "", "Trees", false, "")]
+    public void A_translation_is_removed_when_missing_or_the_same_as_the_standard_value(
+        string current, string? translated, string standard, bool change, string value)
+    {
+        var decision = AkeneoCategoryContentPlanner.DecideTranslation(current, translated, standard);
+
+        Assert.That((decision.Change, decision.Value), Is.EqualTo((change, value)));
+    }
+
+    [Test]
+    public void Only_standard_text_mappings_that_read_a_locale_are_translated()
+    {
+        static AkeneoCategoryContentMapping Mapping(AkeneoCategoryContentTarget target, string? locale, int languageId = 0) =>
+            new() { Target = target, Locale = locale, LanguageId = languageId };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(AkeneoCategoryContentPlanner.IsTranslatable(Mapping(AkeneoCategoryContentTarget.Name, "en_US")), Is.True);
+            Assert.That(AkeneoCategoryContentPlanner.IsTranslatable(Mapping(AkeneoCategoryContentTarget.Name, null)), Is.False);
+            Assert.That(AkeneoCategoryContentPlanner.IsTranslatable(Mapping(AkeneoCategoryContentTarget.Name, "es_ES", 2)), Is.False);
+            Assert.That(AkeneoCategoryContentPlanner.IsTranslatable(Mapping(AkeneoCategoryContentTarget.Picture, "en_US")), Is.False);
+        });
+    }
+
+    [Test]
+    public void Translation_locales_are_parsed_in_akeneo_form_without_duplicates()
+    {
+        Assert.That(AkeneoCategoryContentPlanner.ParseLocales(" es-US, fr_CA;es_us\nde_DE "), Is.EqualTo(new[] { "es_US", "fr_CA", "de_DE" }));
+        Assert.That(AkeneoCategoryContentPlanner.ParseLocales(null), Is.Empty);
+    }
+
     [Test]
     public void Validation_rejects_impossible_mappings()
     {

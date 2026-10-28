@@ -50,4 +50,11 @@ public class AkeneoConnectionSettings : ISettings
     /// changed in Akeneo, so the profile page compares this with its last resync.
     /// </summary>
     public DateTime? MappingsChangedOnUtc { get; set; }
+
+    /// <summary>
+    /// Akeneo locales (comma-separated, e.g. "es_US") that category content is
+    /// translated into. Each writes the nopCommerce language with the matching
+    /// culture; empty syncs category content in the standard language only.
+    /// </summary>
+    public string CategoryContentTranslationLocales { get; set; }
 }

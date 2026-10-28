@@ -19,8 +19,9 @@ public class AkeneoCategoryContentMapping : BaseEntity
     }
 
     /// <summary>
-    /// 0 writes the category's own property. A language ID writes that
-    /// language's localized value (or slug) instead.
+    /// 0 writes the category's own property and, for a text property read in a
+    /// locale, its automatic translations. A language ID overrides the automatic
+    /// translation and writes that language's localized value (or slug).
     /// </summary>
     public int LanguageId { get; set; }
 

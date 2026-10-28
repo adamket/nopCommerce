@@ -121,6 +121,61 @@ public static class AkeneoCategoryContentPlanner
     }
 
     /// <summary>
+    /// A standard-language text mapping that reads a locale is translated
+    /// automatically: the same source is read in each translation locale.
+    /// </summary>
+    public static bool IsTranslatable(AkeneoCategoryContentMapping mapping) =>
+        mapping != null &&
+        mapping.LanguageId == 0 &&
+        IsTextTarget(mapping.Target) &&
+        !string.IsNullOrWhiteSpace(mapping.Locale);
+
+    /// <summary>The standard mapping as it reads and writes one translation.</summary>
+    public static AkeneoCategoryContentMapping ForTranslation(
+        AkeneoCategoryContentMapping mapping,
+        string locale,
+        int languageId) => new()
+    {
+        Id = mapping.Id,
+        TargetId = mapping.TargetId,
+        LanguageId = languageId,
+        SourceTypeId = mapping.SourceTypeId,
+        AkeneoAttributeCode = mapping.AkeneoAttributeCode,
+        Locale = locale,
+        Channel = mapping.Channel,
+        EmptyValueHandlingId = mapping.EmptyValueHandlingId
+    };
+
+    /// <summary>
+    /// Decides an automatic translation, as for products: a value Akeneo does
+    /// not have, or the same as the standard value, removes the translation so
+    /// the storefront shows the standard value.
+    /// </summary>
+    public static AkeneoCategoryContentTextDecision DecideTranslation(
+        string current,
+        string translated,
+        string standard)
+    {
+        var currentValue = current ?? string.Empty;
+        var value = !string.IsNullOrWhiteSpace(translated) && !string.Equals(translated, standard, StringComparison.Ordinal)
+            ? translated
+            : string.Empty;
+
+        return new AkeneoCategoryContentTextDecision(!string.Equals(currentValue, value, StringComparison.Ordinal), value);
+    }
+
+    /// <summary>
+    /// Locale codes from a comma-, semicolon- or space-separated list, in
+    /// Akeneo's underscore form (es-US becomes es_US), without duplicates.
+    /// </summary>
+    public static IList<string> ParseLocales(string value) =>
+        (value ?? string.Empty)
+            .Split([',', ';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(locale => locale.Replace('-', '_'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>
     /// Problems with a mapping's own settings, before any category is read.
     /// <paramref name="others"/> are the other saved mappings.
     /// </summary>

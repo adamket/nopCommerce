@@ -63,6 +63,16 @@ public class AkeneoCategoryContentController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
+    public async Task<IActionResult> SaveTranslationLocales(string locales)
+    {
+        var parsed = AkeneoCategoryContentPlanner.ParseLocales(locales);
+        await contentMappingService.SaveTranslationLocalesAsync(parsed);
+
+        return Json(new { success = true, locales = parsed });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
     public async Task<IActionResult> DeleteMapping(int id)
     {
         var mapping = await contentMappingService.GetMappingByIdAsync(id);

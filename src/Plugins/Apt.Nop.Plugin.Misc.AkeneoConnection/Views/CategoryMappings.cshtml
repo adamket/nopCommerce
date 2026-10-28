@@ -8,6 +8,7 @@
     Layout = "_AdminLayout";
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-combobox.js");
    // NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.CategoryMappings");
@@ -22,6 +23,8 @@
         {
             saveMappingUrl = Url.Action("SaveMapping", "AkeneoCategoryContent"),
             deleteMappingUrl = Url.Action("DeleteMapping", "AkeneoCategoryContent"),
+            saveTranslationLocalesUrl = Url.Action("SaveTranslationLocales", "AkeneoCategoryContent"),
+            translationLocales = Model.TranslationLocales,
             previewUrl = Url.Action("Preview", "AkeneoCategoryContent"),
             syncUrl = Url.Action("Sync", "AkeneoCategoryContent"),
             syncLogsUrl = Url.Action("List", "AkeneoSyncLog"),
@@ -71,7 +74,8 @@
             languages = Model.AvailableLanguages.Select(language => new
             {
                 id = Convert.ToInt32(language.Value),
-                name = language.Text
+                name = language.Text,
+                culture = Model.LanguageCultures.TryGetValue(Convert.ToInt32(language.Value), out var culture) ? culture : string.Empty
             }).ToList()
         },
         categories = Model.Rows.Select((row, idx) => new
@@ -139,6 +143,29 @@
                         It runs daily as the "Akeneo Connection - Category Content Sync" schedule task, and on demand here.
                     </p>
 
+                    <div class="akeneo-content-translations mb-3">
+                        <div class="font-weight-bold mb-1">Also sync these Akeneo locales as translations</div>
+                        <div class="akeneo-locale-options" v-if="translationOptions().length">
+                            <label class="akeneo-locale-option" v-for="option in translationOptions()" :key="option.locale"
+                                   v-bind:class="{ 'is-unavailable': !option.checked && option.disabled }"
+                                   v-bind:title="option.hint">
+                                <input type="checkbox"
+                                       v-bind:checked="option.checked"
+                                       v-bind:disabled="content.savingTranslations || (!option.checked && option.disabled)"
+                                       v-on:change="toggleTranslationLocale(option.locale)" />
+                                <span class="akeneo-locale-code">{{ option.locale }}</span>
+                                <span class="akeneo-locale-target">{{ option.target }}</span>
+                            </label>
+                        </div>
+                        <div class="text-muted small" v-else>No Akeneo category label or template value uses a locale yet.</div>
+                        <small class="form-text text-muted">
+                            Each standard mapping that reads a locale is also read in the checked locales and written to the nopCommerce
+                            language with the matching culture (es_US &rarr; es-US). A translation Akeneo does not have, or one that matches
+                            the standard value, is removed so the storefront shows the standard value. A language-specific override below
+                            replaces the automatic translation for that property.
+                        </small>
+                    </div>
+
                     <div class="alert alert-warning" v-if="content.readError">
                         <i class="fas fa-exclamation-triangle"></i>
                         {{ content.readError }}
@@ -164,7 +191,13 @@
                             <template v-for="row in contentRows" :key="row.key">
                                 <tr v-bind:class="{ 'akeneo-content-unmapped': !row.mapping && !row.editing }">
                                     <td class="font-weight-bold">{{ targetName(row.targetId) }}</td>
-                                    <td>{{ languageName(row.editing ? row.draft.languageId : row.languageId) }}</td>
+                                    <td>
+                                        {{ languageName(row.editing ? row.draft.languageId : row.languageId) }}
+                                        <span class="badge badge-light ml-1" v-if="row.isLocalized">override</span>
+                                        <div class="small text-muted" v-if="translationsFor(row).length">
+                                            + {{ translationsFor(row).join(', ') }}
+                                        </div>
+                                    </td>
                                     <td>
                                         <span v-if="row.mapping">{{ describeSource(row.mapping) }}</span>
                                         <span class="text-muted" v-else>Not mapped</span>
@@ -191,26 +224,21 @@
                                         <div class="form-row">
                                             <div class="form-group col-md-2" v-if="!row.mapping && row.isLocalized">
                                                 <label class="font-weight-bold mb-1">Property</label>
-                                                <select class="form-control" v-model.number="row.targetId" v-on:change="row.draft.source = ''">
-                                                    <option v-for="target in textTargets()" :key="target.id" :value="target.id">{{ target.name }}</option>
-                                                </select>
+                                                <akeneo-search-select item-name="Property" v-model="row.targetId"
+                                                    v-bind:options="textTargetOptions()"
+                                                    v-on:change="row.draft.source = ''"></akeneo-search-select>
                                             </div>
                                             <div class="form-group col-md-2" v-if="row.isLocalized">
                                                 <label class="font-weight-bold mb-1">Language</label>
-                                                <select class="form-control" v-model.number="row.draft.languageId">
-                                                    <option v-for="language in content.languages" :key="language.id" :value="language.id">{{ language.name }}</option>
-                                                </select>
+                                                <akeneo-search-select item-name="Language" v-model="row.draft.languageId"
+                                                    v-bind:options="languageOptions()"></akeneo-search-select>
                                             </div>
                                             <div class="form-group" v-bind:class="row.isLocalized ? 'col-md-4' : 'col-md-5'">
                                                 <label class="font-weight-bold mb-1">Akeneo source</label>
-                                                <select class="form-control" v-model="row.draft.source" v-on:change="sourceChanged(row)">
-                                                    <option value="">-- Choose --</option>
-                                                    <option value="label" v-if="!isImageTarget(row.targetId)">Category label</option>
-                                                    <option v-for="attribute in attributesFor(row)" :key="attribute.code" :value="'attr:' + attribute.code">
-                                                        {{ describeAttribute(attribute) }}
-                                                    </option>
-                                                    <option value="custom">Other template attribute (enter its code)</option>
-                                                </select>
+                                                <akeneo-search-select item-name="Akeneo source" v-model="row.draft.source"
+                                                    v-bind:options="sourceOptions(row)"
+                                                    placeholder="Choose · type to filter"
+                                                    v-on:change="sourceChanged(row)"></akeneo-search-select>
                                                 <input type="text" class="form-control mt-1" placeholder="Attribute code, e.g. meta_title"
                                                        v-if="row.draft.source === 'custom'"
                                                        v-model="row.draft.customCode" />
@@ -229,9 +257,9 @@
                                                         <option v-for="locale in knownLocales()" :key="locale" :value="locale"></option>
                                                     </datalist>
                                                 </template>
-                                                <select class="form-control" v-else v-model="row.draft.locale" v-on:change="localeChanged(row)">
-                                                    <option v-for="locale in localesFor(row)" :key="locale" :value="locale">{{ locale || '(not localizable)' }}</option>
-                                                </select>
+                                                <akeneo-search-select v-else item-name="Locale" v-model="row.draft.locale"
+                                                    v-bind:options="scopeOptions(localesFor(row), '(not localizable)')"
+                                                    v-on:change="localeChanged(row)"></akeneo-search-select>
                                             </div>
                                             <div class="form-group col-md-2" v-if="row.draft.source && row.draft.source !== 'label'">
                                                 <label class="font-weight-bold mb-1">Channel</label>
@@ -243,16 +271,14 @@
                                                         <option v-for="channel in knownChannels()" :key="channel" :value="channel"></option>
                                                     </datalist>
                                                 </template>
-                                                <select class="form-control" v-else v-model="row.draft.channel">
-                                                    <option v-for="channel in channelsFor(row)" :key="channel" :value="channel">{{ channel || '(not scopable)' }}</option>
-                                                </select>
+                                                <akeneo-search-select v-else item-name="Channel" v-model="row.draft.channel"
+                                                    v-bind:options="scopeOptions(channelsFor(row), '(not scopable)')"></akeneo-search-select>
                                             </div>
                                             <div class="form-group col-md-2">
                                                 <label class="font-weight-bold mb-1">No value in Akeneo</label>
-                                                <select class="form-control" v-model.number="row.draft.emptyValueHandlingId" v-bind:disabled="isNameTarget(row.targetId)">
-                                                    <option :value="content.emptyHandling.keep">Keep nopCommerce value</option>
-                                                    <option :value="content.emptyHandling.clear" v-if="!isNameTarget(row.targetId)">{{ clearLabel(row.targetId) }}</option>
-                                                </select>
+                                                <akeneo-search-select item-name="No value in Akeneo" v-model="row.draft.emptyValueHandlingId"
+                                                    v-bind:options="emptyHandlingOptions(row.targetId)"
+                                                    v-bind:disabled="isNameTarget(row.targetId)"></akeneo-search-select>
                                             </div>
                                         </div>
 
@@ -280,7 +306,7 @@
 
                     <button type="button" class="btn btn-sm btn-link p-0" v-on:click="addLocalizedRow" v-if="content.languages.length">
                         <i class="fas fa-language"></i>
-                        Add a language-specific mapping
+                        Add a language-specific override
                     </button>
 
                     <div class="akeneo-content-results mt-3" v-if="content.result">
@@ -430,14 +456,10 @@
                                                                 nopCommerce Category
                                                             </label>
 
-                                                            <select class="form-control akeneo-edit-target-key"
-                                                                    v-model="category.draft.nopCategoryId">
-                                                                <option v-for="option in availableNopCategories"
-                                                                        :key="option.value"
-                                                                        :value="option.value">
-                                                                    {{ option.text }}
-                                                                </option>
-                                                            </select>
+                                                            <akeneo-search-select class="akeneo-edit-target-key" item-name="nopCommerce category"
+                                                                v-model="category.draft.nopCategoryId"
+                                                                v-bind:options="nopCategoryOptions"
+                                                                placeholder="Search nopCommerce categories"></akeneo-search-select>
                                                         </div>
 
                                                         <div class="form-group col-md-4 akeneo-detail-block">
@@ -618,6 +640,8 @@
                         emptyHandling: contentData.emptyHandling,
                         readError: contentData.readError,
                         syncLogsUrl: contentData.syncLogsUrl,
+                        translationLocales: contentData.translationLocales,
+                        savingTranslations: false,
                         extraRows: [],
                         running: false,
                         result: null,
@@ -626,6 +650,12 @@
                 };
             },
             computed: {
+                nopCategoryOptions: function () {
+                    return this.availableNopCategories.map(function (option) {
+                        return { value: option.value, label: option.text, hint: '' };
+                    });
+                },
+
                 groups: function () {
                     var groups = [];
                     var currentGroup = null;
@@ -843,6 +873,39 @@
                     return row;
                 },
 
+                // ---- Options for the searchable selects ----
+
+                textTargetOptions: function () {
+                    return this.textTargets().map(function (t) { return { value: t.id, label: t.name, hint: '' }; });
+                },
+
+                languageOptions: function () {
+                    return this.content.languages.map(function (l) { return { value: l.id, label: l.name, hint: l.culture }; });
+                },
+
+                sourceOptions: function (row) {
+                    var options = [];
+                    if (!this.isImageTarget(row.targetId)) options.push({ value: 'label', label: 'Category label', hint: '' });
+                    this.attributesFor(row).forEach(function (a) {
+                        var count = a.categoryCount
+                            ? a.categoryCount + ' categor' + (a.categoryCount === 1 ? 'y' : 'ies')
+                            : 'no values yet';
+                        options.push({ value: 'attr:' + a.code, label: a.code, hint: (a.type ? a.type + ' · ' : '') + count });
+                    });
+                    options.push({ value: 'custom', label: 'Other template attribute (enter its code)', hint: '' });
+                    return options;
+                },
+
+                scopeOptions: function (values, emptyLabel) {
+                    return values.map(function (v) { return { value: v, label: v || emptyLabel, hint: '' }; });
+                },
+
+                emptyHandlingOptions: function (targetId) {
+                    var options = [{ value: this.content.emptyHandling.keep, label: 'Keep nopCommerce value', hint: '' }];
+                    if (!this.isNameTarget(targetId)) options.push({ value: this.content.emptyHandling.clear, label: this.clearLabel(targetId), hint: '' });
+                    return options;
+                },
+
                 textTargets: function () {
                     return this.content.targets.filter(function (t) { return !t.isImage; });
                 },
@@ -873,6 +936,90 @@
                     if (!languageId) return 'Standard';
                     var language = this.content.languages.find(function (l) { return l.id === Number(languageId); });
                     return language ? language.name : 'Language ID ' + languageId;
+                },
+
+                // The nopCommerce language a translation locale writes: es_US writes the es-US language.
+                translationLanguage: function (locale) {
+                    var culture = String(locale || '').replace('_', '-').toLowerCase();
+                    return this.content.languages.find(function (l) { return String(l.culture || '').toLowerCase() === culture; }) || null;
+                },
+
+                // Languages a standard row's mapping is translated into automatically (not overridden).
+                translationsFor: function (row) {
+                    var self = this;
+                    var m = row.mapping;
+                    if (row.isLocalized || !m || !m.locale || this.isImageTarget(row.targetId)) return [];
+                    var names = [];
+                    this.content.translationLocales.forEach(function (locale) {
+                        var language = self.translationLanguage(locale);
+                        if (!language) return;
+                        var overridden = self.content.mappings.some(function (o) { return o.targetId === m.targetId && o.languageId === language.id; });
+                        var name = language.name + ' (' + locale + ')';
+                        if (!overridden && names.indexOf(name) < 0) names.push(name);
+                    });
+                    return names;
+                },
+
+                // Every locale Akeneo uses on categories, plus any saved one it no longer uses.
+                // A standard mapping's own locale or one with no matching language cannot be added.
+                translationOptions: function () {
+                    var self = this;
+                    var locales = this.knownLocales().filter(function (l) { return !!l; });
+                    this.content.translationLocales.forEach(function (l) { if (locales.indexOf(l) < 0) locales.push(l); });
+                    var standardLocales = this.content.mappings
+                        .filter(function (m) { return m.languageId === 0 && m.locale; })
+                        .map(function (m) { return m.locale.toLowerCase(); });
+
+                    return locales.sort().map(function (locale) {
+                        var language = self.translationLanguage(locale);
+                        var isStandard = standardLocales.indexOf(locale.toLowerCase()) >= 0;
+                        var checked = self.content.translationLocales.indexOf(locale) >= 0;
+                        return {
+                            locale: locale,
+                            checked: checked,
+                            disabled: isStandard || !language,
+                            target: isStandard ? 'standard locale'
+                                : language ? '→ ' + language.name
+                                : 'no ' + locale.replace('_', '-') + ' language',
+                            hint: isStandard ? 'Standard mappings already read this locale into the standard fields.'
+                                : language ? 'Writes the ' + language.name + ' translations.'
+                                : 'Add a nopCommerce language with culture ' + locale.replace('_', '-') + ' to translate into this locale.'
+                        };
+                    });
+                },
+
+                toggleTranslationLocale: function (locale) {
+                    var locales = this.content.translationLocales.slice();
+                    var index = locales.indexOf(locale);
+                    if (index >= 0) locales.splice(index, 1); else locales.push(locale);
+                    this.saveTranslationLocales(locales);
+                },
+
+                saveTranslationLocales: function (locales) {
+                    var self = this;
+                    this.content.savingTranslations = true;
+                    $.ajax({
+                        type: 'POST',
+                        url: contentData.saveTranslationLocalesUrl,
+                        data: addAntiForgeryToken({ locales: locales.join(',') }),
+                        success: function (res) {
+                            if (!res || !res.success) {
+                                self.content.translationLocales = self.content.translationLocales.slice();
+                                self.notify('Unable to save the translation locales.');
+                                return;
+                            }
+                            self.content.translationLocales = res.locales;
+                            self.notify('Translation locales saved');
+                        },
+                        error: function () {
+                            // A new array re-renders the checkboxes back to the saved state.
+                            self.content.translationLocales = self.content.translationLocales.slice();
+                            self.notify('Unable to save the translation locales due to a server error.');
+                        },
+                        complete: function () {
+                            self.content.savingTranslations = false;
+                        }
+                    });
                 },
 
                 attributeFor: function (code) {
@@ -1193,6 +1340,12 @@
                         default: return 'Content in sync';
                     }
                 }
+            }
+        }).component('akeneo-search-select', {
+            extends: window.AkeneoCombobox,
+            props: {
+                multiple: { type: Boolean, default: false },
+                clearable: { type: Boolean, default: false }
             }
         }).mount('#akeneo-mapping-app');
     })();
