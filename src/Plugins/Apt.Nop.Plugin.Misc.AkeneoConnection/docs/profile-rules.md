@@ -118,27 +118,35 @@ Rerunning the migration does not reset a saved toggle.
 ## Withdrawing products (4.90.38)
 
 A profile filter cannot withdraw anything: a product that stops matching the enabled, completeness
-or search filters is no longer read, so nopCommerce keeps it published. Read those inputs in the
-Published rule instead:
+or search filters is no longer read, so nopCommerce keeps it published. Decide publication in a
+computed Published mapping instead:
 
 1. On the sync profile, set the enabled filter to **Any** and the completeness filter to **None**,
    and keep status conditions out of the additional search JSON.
-2. Add one computed mapping to **Product field → Published** for standalone and variant products.
-   **Apply only when** `sync_status != hold` freezes Published on hold while everything else syncs.
-   A template along these lines. `erp_status` (text) and `erp_blocked` (yes/no) come from the
-   Business Central feed; text comparisons ignore case:
+2. Add one computed mapping to **Product field → Published** for standalone and variant products,
+   with the template:
 
    ```text
-   {erp_blocked == true ? "false"
-    : sync_status == published AND erp_status == certified AND complete == true ? "true" : "false"}
+   {sync_status == published ? "true" : "false"}
    ```
 
-   Mark it **Required**. Any input the template compares that is missing (`erp_status`, `erp_blocked`,
-   `sync_status` or completeness) then blocks the item with an alert rather than changing it. A
-   present value that fails a test (incomplete, not certified, unpublished) gives false.
-3. `complete` is the built-in **Complete (channel and locale)** source: true when Akeneo rates the
-   product 100% complete for the profile's channel and primary locale. Product models have no
-   completeness, so give parents their own Published mapping based on the model's `sync_status`.
+   and **Apply only when** `sync_status != hold`, which keeps Published as it is on hold while
+   everything else syncs. Mark it **Required**, so a missing `sync_status` blocks the item with an
+   alert rather than changing it.
+3. Product models have no completeness or Business Central status, so give parents their own
+   Published mapping based on the model's `sync_status`.
+
+A conditional in a template holds exactly one comparison (`==` or `!=` against one value). It
+cannot join comparisons with AND or OR, and a branch cannot contain another conditional, so one
+Published template can test only one input. **Apply only when** does accept AND, OR and parentheses,
+but a false condition only leaves Published unchanged; it never withdraws a product.
+
+Other inputs can each drive a Published template on their own, for example
+`{complete == true ? "true" : "false"}`. `complete` is the built-in **Complete (channel and
+locale)** source: true when Akeneo rates the product 100% complete for the profile's channel and
+primary locale. `erp_status` (text) and `erp_blocked` (yes/no) come from the Business Central feed,
+and text comparisons ignore case. Combining `sync_status` with these inputs in a single Published
+rule is not supported yet.
 
 ## Combination availability from the Published rule (4.90.39)
 
@@ -153,7 +161,7 @@ combination exists, under **Combination availability**:
   creates no new one. No Published mapping for variants, or no value from it, blocks the item with
   an alert and changes nothing.
 
-Use **Published rule** for families whose variants are combinations and whose status comes from
-Business Central (`erp_status`, `erp_blocked`), so a closed or blocked SKU is withdrawn without
-anyone disabling it in Akeneo. The same profile requirements apply: enabled filter **Any** and a
+Use **Published rule** for families whose variants are combinations when the Published rule, not
+Akeneo's enabled flag, should decide whether a SKU is sold; the rule tests one input (see
+"Withdrawing products"). The same profile requirements apply: enabled filter **Any** and a
 write mode that allows updates.
