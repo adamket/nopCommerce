@@ -144,9 +144,9 @@ public class AkeneoProductBatchImportRequestFactory(
                 ? null
                 : ResolveUpdatedAfterUtc(profile, previousSuccessfulWatermarkUtc),
 
-            IncludeLinkedAssetUpdates =
-                runMode is not (AkeneoRunMode.Full or AkeneoRunMode.Resync) &&
-                profile.IncludeLinkedAssetUpdates,
+            // Linked-asset change search needs Akeneo SaaS Enterprise, so it is
+            // hidden and off for now; a profile's saved flag is ignored.
+            IncludeLinkedAssetUpdates = false,
 
             RepairDestination = resync?.RepairDestination == true,
 

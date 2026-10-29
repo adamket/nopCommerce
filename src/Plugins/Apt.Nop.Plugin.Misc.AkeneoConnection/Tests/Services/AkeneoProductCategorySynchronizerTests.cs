@@ -180,6 +180,45 @@ public class AkeneoProductCategorySynchronizerTests
             Times.Never);
     }
 
+    [TestCase(AkeneoCollectionSyncMode.Merge)]
+    [TestCase(AkeneoCollectionSyncMode.ReplaceAll)]
+    public async Task A_child_shown_through_its_parent_gets_no_categories_and_loses_only_managed_ones(AkeneoCollectionSyncMode mode)
+    {
+        var context = Context(mode, "shade");
+        context.RepresentedByParent = true;
+        var managed = new ProductCategory { Id = 2, ProductId = 10, CategoryId = 200 };
+        var manual = new ProductCategory { Id = 3, ProductId = 10, CategoryId = 300 };
+        var relation = new AkeneoManagedRelation { Id = 50, NopRelationEntityId = managed.Id, AkeneoValueCode = "shade" };
+        _categoryService
+            .Setup(service => service.GetProductCategoriesByProductIdAsync(10, true))
+            .ReturnsAsync(new List<ProductCategory> { managed, manual });
+        _categoryService
+            .Setup(service => service.GetCategoryByIdAsync(200))
+            .ReturnsAsync(new Category { Id = 200, Name = "Shade Trees" });
+        _managedRelationService
+            .Setup(service => service.GetByProductAsync(7, 10, AkeneoManagedRelationType.ProductCategory, null))
+            .ReturnsAsync(new List<AkeneoManagedRelation> { relation });
+        _categoryService
+            .Setup(service => service.DeleteProductCategoryAsync(managed))
+            .Returns(Task.CompletedTask);
+        _managedRelationService
+            .Setup(service => service.DeleteAsync(relation))
+            .Returns(Task.CompletedTask);
+
+        await _synchronizer.SynchronizeAsync(context);
+
+        _categoryService.Verify(service => service.DeleteProductCategoryAsync(managed), Times.Once);
+        _categoryService.Verify(service => service.DeleteProductCategoryAsync(manual), Times.Never);
+        _categoryService.Verify(service => service.InsertProductCategoryAsync(It.IsAny<ProductCategory>()), Times.Never);
+    }
+
+    [TestCase(AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue, true)]
+    [TestCase(AkeneoVariantRelationshipMode.GroupedProducts, true)]
+    [TestCase(AkeneoVariantRelationshipMode.ProductAttributeCombinations, false)]
+    [TestCase(AkeneoVariantRelationshipMode.None, false)]
+    public void Only_associated_and_grouped_children_are_shown_through_their_parent(AkeneoVariantRelationshipMode mode, bool represented) =>
+        Assert.That(AkeneoProductBatchSyncService.IsRepresentedByParent(mode), Is.EqualTo(represented));
+
     private void SetupMappedCategory(string code, int id)
     {
         // Removal previews look up stale categories by ID for their display name.

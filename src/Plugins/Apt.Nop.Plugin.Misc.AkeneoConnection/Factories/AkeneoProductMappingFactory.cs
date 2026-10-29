@@ -269,6 +269,10 @@ public sealed class AkeneoProductMappingFactory(
         AppendDistinct(model.Warnings, result.Warnings);
         AppendDistinct(model.Errors, result.Errors);
 
+        // As in the sync: a child shown through its parent gets no categories.
+        context.RepresentedByParent = sourceEntityType == AkeneoEntityType.Product &&
+                                      AkeneoProductBatchSyncService.IsRepresentedByParent(previewMode);
+
         if (previewMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations)
         {
             try
@@ -675,13 +679,18 @@ public sealed class AkeneoProductMappingFactory(
                     context.ExistingProduct,
                     context.Sku);
 
-                if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                if (AkeneoProductBatchSyncService.StandaloneRuleApplies(existingMode))
                 {
                     representation = "standalone nopCommerce product";
                     decisionSource = "matching submodel override rule";
-                    model.CurrentRepresentation = existingMode == null
-                        ? "No existing leaf product representation"
-                        : "Existing standalone nopCommerce product";
+                    model.CurrentRepresentation = existingMode switch
+                    {
+                        null => "No existing leaf product representation",
+                        AkeneoVariantRelationshipMode.None => "Existing standalone nopCommerce product",
+                        AkeneoVariantRelationshipMode.GroupedProducts =>
+                            "Existing grouped child; it stays in its grouped product and becomes visible individually",
+                        _ => $"Existing {FormatVariantMode(existingMode.Value)}; the value this profile bound it to is removed and it becomes visible individually"
+                    };
                 }
                 else
                 {

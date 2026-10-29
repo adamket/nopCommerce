@@ -25,6 +25,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
+    public string VariantDisplayOrderKeys { get; set; }
+
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
 
     public int? NewProductTaxCategoryId { get; set; }

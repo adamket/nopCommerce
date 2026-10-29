@@ -89,6 +89,7 @@ public class AkeneoFamilyMappingModelFactory
             model.PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure;
             model.AssociatedProductAttributeId = configuration.AssociatedProductAttributeId;
             model.AssociatedValueNameTemplate = configuration.AssociatedValueNameTemplate;
+            model.VariantDisplayOrderKeys = configuration.VariantDisplayOrderKeys;
             model.HideChildProductsWhenRepresentedByParent = configuration.HideChildProductsWhenRepresentedByParent;
             model.NewProductTaxCategoryId = configuration.NewProductTaxCategoryId;
             model.NewProductIsShipEnabled = configuration.NewProductIsShipEnabled;

@@ -1027,6 +1027,39 @@ public sealed class AkeneoProductAssetSynchronizer(
         };
     }
 
+    /// <summary>
+    /// A picture on the product with exactly these bytes that no managed asset
+    /// claims yet, or null. Only called before inserting a new picture.
+    /// </summary>
+    private async Task<(ProductPicture Relation, Picture Picture)?> FindIdenticalUnclaimedPictureAsync(
+        Product product,
+        byte[] bytes)
+    {
+        if (product == null || product.Id <= 0 || bytes is not { Length: > 0 })
+            return null;
+
+        var claimed = (await managedAssetService.GetByProductAsync(product.Id))
+            .Where(item => item.NopPictureId > 0)
+            .Select(item => item.NopPictureId.Value)
+            .ToHashSet();
+
+        foreach (var relation in await productService.GetProductPicturesByProductIdAsync(product.Id))
+        {
+            if (claimed.Contains(relation.PictureId))
+                continue;
+
+            var existing = await pictureService.GetPictureByIdAsync(relation.PictureId);
+            if (existing == null)
+                continue;
+
+            var existingBytes = await pictureService.LoadPictureBinaryAsync(existing);
+            if (existingBytes != null && existingBytes.AsSpan().SequenceEqual(bytes))
+                return (relation, existing);
+        }
+
+        return null;
+    }
+
     private async Task<AssetApplyResult> ApplyPictureAsync(
         AkeneoProductSyncContext context,
         AkeneoResolvedAsset asset,
@@ -1072,7 +1105,26 @@ public sealed class AkeneoProductAssetSynchronizer(
             var seoName = await ResolveSeoFilenameAsync(
                 asset,
                 file.FileName);
-            picture = picture == null
+
+            // A picture the product already has with the same image (often the nopCommerce
+            // original the Akeneo asset was made from) is taken over instead of copied.
+            var identical = picture == null && productPicture == null
+                ? await FindIdenticalUnclaimedPictureAsync(context.Product, file.Bytes)
+                : null;
+            if (identical != null)
+            {
+                (productPicture, picture) = identical.Value;
+                picture.SeoFilename = seoName;
+                picture.AltAttribute = asset.AltText;
+                picture.TitleAttribute = asset.TitleText;
+                await pictureService.UpdatePictureAsync(picture);
+                context.Result.AddMessage(
+                    $"Product picture #{picture.Id} already has the image of Akeneo asset '{asset.AssetCode ?? asset.MediaFileCode}', so it was reused instead of imported again.");
+            }
+
+            picture = identical != null
+                ? picture
+                : picture == null
                 ? await pictureService.InsertPictureAsync(
                     file.Bytes,
                     mimeType,

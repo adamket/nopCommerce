@@ -49,6 +49,14 @@ public sealed class AkeneoProductSyncContext
     /// </summary>
     public AkeneoAttributeMappingEntityScope MappingEntityScope { get; init; }
 
+    /// <summary>
+    /// A child product shown through its parent (an associated-product value or a
+    /// grouped child). Shoppers reach it through the parent, so it gets no
+    /// categories: category-level promotions and listings stay with the parent.
+    /// Set by the variant path once the relationship mode is known.
+    /// </summary>
+    public bool RepresentedByParent { get; set; }
+
     public string ProductKey { get; init; }
 
     public string Sku { get; init; }

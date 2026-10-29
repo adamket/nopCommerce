@@ -57,9 +57,8 @@
                                                  empty-text="No Akeneo families are available."></akeneo-combobox>
                                 <div class="akeneo-toolbar-panel-hint">
                                     <template v-if="familyCodes.length">
-                                        Scanning {{ familyCodes.length }} {{ familyCodes.length === 1 ? 'family' : 'families' }}.
+                                        Scanning {{ familyCodes.length }} {{ familyCodes.length === 1 ? 'family' : 'families' }}; categories are always scanned in full.
                                         The unbound-product report needs a whole-catalog scan.
-                                        Categories are always scanned in full.
                                     </template>
                                     <template v-else>
                                         No families selected: the whole Akeneo catalog is scanned.
@@ -108,12 +107,9 @@
                                     </label>
                                 </div>
                                 <div class="akeneo-toolbar-panel-hint">
-                                    Scan reads Akeneo and nopCommerce without writing anything. Commit rescans,
-                                    writes every matched binding plus the conflicts you resolved, and never changes an existing nopCommerce product or category.
-                                    Categories are matched by the name and parent the migration created them from; existing category mappings are kept.
-                                    With <strong>Create missing categories</strong>, Akeneo categories nothing in nopCommerce matches are also created
-                                    there, under their parent's category and named after their Akeneo label, then bound. They are created
-                                    unpublished, so publish them once reviewed.
+                                    Scan writes nothing. Commit rescans and saves matched bindings and resolved conflicts, without changing existing products or categories.
+                                    Categories match by name and parent; existing category mappings are kept.
+                                    <strong>Create missing categories</strong> adds unmatched Akeneo categories, unpublished, under their parent; publish them once reviewed.
                                 </div>
                             </div>
                         </div>
@@ -183,9 +179,8 @@
                                 </div>
                                 <div class="akeneo-toolbar-panel-body">
                                     <div class="akeneo-toolbar-panel-hint">
-                                        These product models have variants that live under more than one nopCommerce product.
-                                        Choose the parent to bind; leave a conflict on <strong>Skip</strong> to keep it unbound.
-                                        Parents not chosen are only reported.
+                                        These models' variants sit under more than one nopCommerce product. Choose the parent to bind,
+                                        or leave <strong>Skip</strong> to keep it unbound.
                                     </div>
 
                                     <div class="akeneo-binding-conflict" v-for="conflict in report.conflicts" v-bind:key="conflict.productModelCode">

@@ -35,6 +35,7 @@
             preserveExistingNopVariantStructure = Model.PreserveExistingNopVariantStructure,
             associatedProductAttributeId = Model.AssociatedProductAttributeId,
             associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
+            variantDisplayOrderKeys = Model.VariantDisplayOrderKeys ?? string.Empty,
             hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
             newProductTaxCategoryId = Model.NewProductTaxCategoryId,
             newProductIsShipEnabled = Model.NewProductIsShipEnabled,
@@ -294,8 +295,8 @@
                                             <input type="hidden" name="ProductModelHierarchyModeId" v-bind:value="form.productModelHierarchyModeId" />
                                             <span asp-validation-for="ProductModelHierarchyModeId"></span>
                                             <div class="form-text">
-                                                Choose <strong>Root product model</strong> to create only the root nopCommerce parent. Intermediate Akeneo submodels still contribute inherited values and variant-axis values, but are not imported as products.
-                                                Products created for submodels by earlier syncs are intentionally not deleted automatically.
+                                                <strong>Root product model</strong> creates only the root parent; submodels still supply inherited and axis values but aren't imported.
+                                                Products earlier syncs created for submodels aren't deleted.
                                             </div>
                                         </div>
                                     </div>
@@ -329,14 +330,30 @@
                                                 <span asp-validation-for="AssociatedValueNameTemplate"></span>
 
                                                 <div class="form-text">
-                                                    Uses the same template language as computed attribute mappings:
-                                                    attribute tokens such as {container_size} (label) or {container_size:code},
-                                                    reference-entity fields such as {root_variant.label}, built-ins {sku} and {identifier},
-                                                    and conditionals such as {root_variant == potted ? " {container_size}" : ""}.
-                                                    {axes}, {axis:code} and {attribute:code} still work.
-                                                    Separate alternatives with ||; the first with all its values wins,
-                                                    e.g. {attribute:variant_name} || {axes} uses variant_name when it is filled in.
-                                                    If no alternative has all its values, the SKU is used as the name.
+                                                    Same template language as computed mappings: {container_size}, {container_size:code},
+                                                    {root_variant.label}, {sku}, and conditionals such as {root_variant == potted ? " {container_size}" : ""}.
+                                                    Separate alternatives with ||; the first with all its values wins
+                                                    (e.g. {attribute:variant_name} || {axes}). If none does, the SKU is used.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+
+                                <transition name="akeneo-detail-slide">
+                                    <div v-if="isAssociatedMode || isCombinationMode" class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="VariantDisplayOrderKeys">Variant display order</label>
+                                                <input id="VariantDisplayOrderKeys" name="VariantDisplayOrderKeys"
+                                                       class="form-control"
+                                                       v-model="form.variantDisplayOrderKeys"
+                                                       placeholder="root_type.display_order, container_size, pack_quantity" />
+                                                <span asp-validation-for="VariantDisplayOrderKeys"></span>
+                                                <div class="form-text">
+                                                    Up to three attributes, most significant first. Selects sort by Akeneo option order, numbers by value;
+                                                    for a reference entity name a number field (root_type.display_order). Missing values sort last.
+                                                    Values are numbered 0, 10, 20…; empty keeps creation order. Resync after reordering in Akeneo.
                                                 </div>
                                             </div>
                                         </div>
@@ -377,8 +394,7 @@
                         <div class="card-header"><h3 class="card-title">New product defaults</h3></div>
                         <div class="card-body">
                             <p class="form-text text-muted mt-0">
-                                Commerce settings Akeneo does not own, set only when the sync creates a product in this family:
-                                parents, standalone and child products. Later syncs never change them, so edits made in nopCommerce stay.
+                                Set only when the sync creates a product in this family. Later syncs never change them.
                             </p>
                             <div class="row">
                                 <div class="col-md-4">
@@ -434,11 +450,11 @@
                             </div>
                             <span class="form-text text-muted" v-if="availabilityChoice === 'enabled'">Disabled Akeneo SKUs have their combinations removed. Re-enabled SKUs have them recreated.</span>
                             <span class="form-text text-muted" v-if="availabilityChoice === 'published'">
-                                Each variant's computed Published mapping (Variant product role) decides: false removes its combination, true recreates it,
-                                and a mapping held by "Apply only when" (for example sync_status hold) leaves it as it is. A missing value blocks the item with an alert.
+                                Each variant's Published mapping decides: false removes its combination, true recreates it,
+                                held by "Apply only when" leaves it. A missing value blocks the item.
                             </span>
                             <span class="form-text text-muted" v-if="availabilityChoice === 'off'">Every variant keeps its combination.</span>
-                            <span class="form-text text-muted" v-if="availabilityChoice !== 'off'">The parent product and shared attribute values are preserved. Applies to every profile using this family mapping. Profiles must allow updates and include both enabled and disabled SKUs. Profile skip rules take precedence.</span>
+                            <span class="form-text text-muted" v-if="availabilityChoice !== 'off'">The parent and shared values are kept. Applies to every profile using this family; profiles must allow updates and include enabled and disabled SKUs. Skip rules take precedence.</span>
                         </div>
                     </div>
 

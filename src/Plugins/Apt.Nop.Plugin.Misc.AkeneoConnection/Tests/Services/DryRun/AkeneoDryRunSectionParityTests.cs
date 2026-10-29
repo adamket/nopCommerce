@@ -8,6 +8,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Assets;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
+using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Data;
 using Nop.Services.Catalog;
@@ -234,7 +235,9 @@ public class AkeneoDryRunSectionParityTests
             Name = "Red"
         };
         specificationService.SetReturnsDefault(
-            Task.FromResult<IList<SpecificationAttribute>>([definition]));
+            Task.FromResult(Paged(definition)));
+        managedRelationService.SetReturnsDefault(
+            Task.FromResult<IList<AkeneoManagedRelation>>([]));
         specificationService.SetReturnsDefault(
             Task.FromResult<IList<SpecificationAttributeOption>>([option]));
         specificationService.SetReturnsDefault(
@@ -294,8 +297,9 @@ public class AkeneoDryRunSectionParityTests
         var managedRelationService = new Mock<IAkeneoManagedRelationService>();
 
         specificationService.SetReturnsDefault(
-            Task.FromResult<IList<SpecificationAttribute>>(
-                [new SpecificationAttribute { Id = 5, Name = "Color" }]));
+            Task.FromResult(Paged(new SpecificationAttribute { Id = 5, Name = "Color" })));
+        managedRelationService.SetReturnsDefault(
+            Task.FromResult<IList<AkeneoManagedRelation>>([]));
         specificationService.SetReturnsDefault(
             Task.FromResult<IList<SpecificationAttributeOption>>([]));
         specificationService.SetReturnsDefault(
@@ -364,7 +368,7 @@ public class AkeneoDryRunSectionParityTests
 
         var definition = new ProductAttribute { Id = 5, Name = "Size" };
         productAttributeService.SetReturnsDefault(
-            Task.FromResult<IList<ProductAttribute>>([definition]));
+            Task.FromResult(Paged(definition)));
         productAttributeService.SetReturnsDefault(
             Task.FromResult<IList<ProductAttributeMapping>>([]));
         productAttributeService.SetReturnsDefault(
@@ -441,8 +445,7 @@ public class AkeneoDryRunSectionParityTests
         var familyMappingService = new Mock<IAkeneoFamilyMappingService>();
 
         productAttributeService.SetReturnsDefault(
-            Task.FromResult<IList<ProductAttribute>>(
-                [new ProductAttribute { Id = 5, Name = "Size" }]));
+            Task.FromResult(Paged(new ProductAttribute { Id = 5, Name = "Size" })));
         productAttributeService.SetReturnsDefault(
             Task.FromResult<IList<ProductAttributeMapping>>([]));
         productAttributeService.SetReturnsDefault(
@@ -574,7 +577,6 @@ public class AkeneoDryRunSectionParityTests
         var plan = await InvokeBuildPlanAsync(
             synchronizer,
             context,
-            null,
             CancellationToken.None);
 
         RenamePreviewLabels(plan);
@@ -729,7 +731,7 @@ public class AkeneoDryRunSectionParityTests
                 "Apt.Documents",
                 It.IsAny<string>(),
                 It.IsAny<int>()))
-            .Callback<Product, string, string, int>((_, _, value, _) =>
+            .Callback<BaseEntity, string, string, int>((_, _, value, _) =>
                 savedPayload = value)
             .Returns(Task.CompletedTask);
 
@@ -930,6 +932,8 @@ public class AkeneoDryRunSectionParityTests
                 "The matching Dry Run planner must report the write as a planned change.");
         });
     }
+
+    private static IPagedList<T> Paged<T>(params T[] items) => new PagedList<T>(items, 0, int.MaxValue);
 
     private static async Task<object> InvokeBuildPlanAsync(
         object synchronizer,

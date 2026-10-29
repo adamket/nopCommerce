@@ -380,8 +380,8 @@
                                     </li>
                                 </ul>
                                 <span class="form-text text-muted">
-                                    Each locale writes the product name, descriptions, meta fields and slug as nopCommerce translations for the language with the matching culture.
-                                    A missing translation removes the nopCommerce one, so the primary value shows. Run a resync after adding a locale.
+                                    Writes name, descriptions, meta fields and slug to the language with the matching culture; a missing translation is removed.
+                                    Resync after adding a locale.
                                 </span>
                             </div>
                         </div>
@@ -653,17 +653,6 @@
                             </div>
                         </div>
 
-                        <div class="form-group row">
-                            <div class="col-md-3 text-right"><label class="control-label">Include asset-only updates</label></div>
-                            <div class="col-md-9">
-                                <label class="akeneo-switch">
-                                    <input type="checkbox" v-model="form.includeLinkedAssetUpdates" />
-                                    <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
-                                    <span class="akeneo-switch-text">{{ form.includeLinkedAssetUpdates ? 'On' : 'Off' }}</span>
-                                </label>
-                                <span class="form-text text-muted">Uses Akeneo's linked-entity updated filter during delta runs so a product is revisited when a linked Asset Manager record changes. Requires an active updated cutoff, Akeneo SaaS Enterprise, and linked asset updates enabled in Akeneo.</span>
-                            </div>
-                        </div>
 
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label" for="sp-parent-filter">Product parent filter mode</label></div>
@@ -686,7 +675,7 @@
                             <div class="col-md-3 text-right"><label class="control-label">Skip rules</label></div>
                             <div class="col-md-9">
                                 <span class="form-text text-muted">Skip the entire product when any attribute/value rule matches, using this profile's channel and locale. A matching parent also skips its descendants.</span>
-                                <span class="form-text text-muted">Skipped products remain unchanged and count as seen for missing-product reconciliation. Keep them inside the profile's source filters so these rules can evaluate them.</span>
+                                <span class="form-text text-muted">Skipped products stay unchanged and count as seen; keep them inside the source filters.</span>
                                 <span class="form-text text-muted">Use the raw option code or value, not its display label.</span>
                                 <span class="form-text text-muted" v-if="!form.skipRules.length">No skip rules configured.</span>
                             </div>
@@ -819,8 +808,7 @@
                                 <span class="akeneo-switch-text">Repair destination</span>
                             </label>
                             <span class="form-text text-muted">
-                                Writes every product again, putting back fields edited in nopCommerce. Much slower.
-                                Off, products whose output is unchanged are skipped, which is enough after a mapping change.
+                                Rewrites every product, undoing nopCommerce edits. Much slower; off is enough after a mapping change.
                             </span>
                         </div>
 
@@ -974,8 +962,8 @@
                         { key: 'customPropertyMissingValueBehaviorId', name: 'CustomPropertyMissingValueBehaviorId', label: 'Missing custom property values', options: 'customPropertyMissingValueBehaviors' },
                         { key: 'categorySyncModeId', name: 'CategorySyncModeId', label: 'Category sync mode', options: 'categorySyncModes' },
                         { key: 'tagSyncModeId', name: 'TagSyncModeId', label: 'Product tag sync mode', options: 'tagSyncModes', help: 'Tags come from attributes mapped to Product Tag, named after the Akeneo option labels. Missing tags are created.' },
-                        { key: 'relatedProductSyncModeId', name: 'RelatedProductSyncModeId', label: 'Related product sync mode', options: 'relatedProductSyncModes', help: 'Product models and standalone products get related products from an Akeneo association type. Targets must already be synced or bound; any that are not yet are retried at the end of the run.' },
-                        { key: 'crossSellSyncModeId', name: 'CrossSellSyncModeId', label: 'Cross-sell sync mode', options: 'crossSellSyncModes', help: 'Product models and standalone products get cross-sell products from an Akeneo association type, exactly like related products. Targets must already be synced or bound; any that are not yet are retried at the end of the run.' },
+                        { key: 'relatedProductSyncModeId', name: 'RelatedProductSyncModeId', label: 'Related product sync mode', options: 'relatedProductSyncModes', help: 'From an Akeneo association type, on product models and standalone products. Unsynced targets are retried at the end of the run.' },
+                        { key: 'crossSellSyncModeId', name: 'CrossSellSyncModeId', label: 'Cross-sell sync mode', options: 'crossSellSyncModes', help: 'Like related products, from an Akeneo association type. Unsynced targets are retried at the end of the run.' },
                         { key: 'specificationAttributeSyncModeId', name: 'SpecificationAttributeSyncModeId', label: 'Specification sync mode', options: 'specificationAttributeSyncModes', help: 'Missing specification values are handled per attribute mapping.' },
                         { key: 'productAttributeSyncModeId', name: 'ProductAttributeSyncModeId', label: 'Product attribute sync mode', options: 'productAttributeSyncModes' },
                         { key: 'assetSyncModeId', name: 'AssetSyncModeId', label: 'Asset sync mode', options: 'assetSyncModes', help: 'Replace managed is recommended: it reconciles only pictures, videos, and asset references owned by this plugin.' },

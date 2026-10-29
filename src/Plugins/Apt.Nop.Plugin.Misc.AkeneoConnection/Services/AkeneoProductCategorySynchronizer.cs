@@ -49,6 +49,13 @@ public partial class AkeneoProductCategorySynchronizer
         }
 
         var product = context.Product ?? context.ExistingProduct;
+
+        if (context.RepresentedByParent)
+        {
+            await PlanRepresentedChildAsync(context, product, plan);
+            return plan;
+        }
+
         var desiredCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Categories come only from the Akeneo product's own categories field.
@@ -251,5 +258,58 @@ public partial class AkeneoProductCategorySynchronizer
         }
 
         return plan;
+    }
+
+    /// <summary>
+    /// A child shown through its parent gets no categories. Assignments this
+    /// profile made earlier are removed; ones made by hand are left alone.
+    /// </summary>
+    private async Task PlanRepresentedChildAsync(
+        AkeneoProductSyncContext context,
+        Product product,
+        AkeneoExecutableSectionPlan plan)
+    {
+        plan.CoverageNotes.Add(
+            "Categories are not assigned to a child product shown through its parent; the parent carries them.");
+
+        if (product == null || !context.Request.SyncProfileId.HasValue)
+            return;
+
+        var currentMappings = (await _categoryService.GetProductCategoriesByProductIdAsync(product.Id, showHidden: true)).ToList();
+        var managedRelations = await _managedRelationService.GetByProductAsync(
+            context.Request.SyncProfileId.Value,
+            product.Id,
+            AkeneoManagedRelationType.ProductCategory);
+
+        foreach (var relation in managedRelations)
+        {
+            var current = currentMappings.FirstOrDefault(mapping => mapping.Id == relation.NopRelationEntityId);
+            if (current == null)
+            {
+                plan.AddInternalOperation(async _ =>
+                {
+                    await _managedRelationService.DeleteAsync(relation);
+                    return false;
+                });
+                continue;
+            }
+
+            var category = await _categoryService.GetCategoryByIdAsync(current.CategoryId);
+
+            plan.AddOperation(
+                "Categories",
+                category?.Name ?? $"Category #{current.CategoryId}",
+                relation.AkeneoValueCode,
+                "Assigned",
+                "Removed",
+                AkeneoDryRunOperationType.Remove,
+                "This child product is shown through its parent, so the category the plugin assigned earlier is removed.",
+                executeAsync: async _ =>
+                {
+                    await _categoryService.DeleteProductCategoryAsync(current);
+                    await _managedRelationService.DeleteAsync(relation);
+                    return true;
+                });
+        }
     }
 }

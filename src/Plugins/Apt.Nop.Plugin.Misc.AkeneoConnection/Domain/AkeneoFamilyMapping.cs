@@ -25,6 +25,11 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
+    // Comma-separated sort keys ("root_type.display_order, container_size, pack_quantity")
+    // that set the display order of variant values; empty leaves values in the order
+    // they were first created.
+    public string VariantDisplayOrderKeys { get; set; }
+
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
 
     // Commerce settings applied only when the sync creates a product in this

@@ -88,9 +88,11 @@ public class AkeneoVariantRepresentationCleanupService(
                 previousState.NopProductAttributeValueId.Value);
         }
 
+        // A product that becomes standalone keeps its grouped parent: it can be
+        // visible individually and still belong to a grouped product.
         if (previousKind == AkeneoProductDestinationKind.GroupedChildProduct &&
-            desiredResult.DestinationKind !=
-                AkeneoProductDestinationKind.GroupedChildProduct)
+            desiredResult.DestinationKind is not
+                (AkeneoProductDestinationKind.GroupedChildProduct or AkeneoProductDestinationKind.NopProduct))
         {
             var oldChild = await productService
                 .GetProductByIdAsync(previousState.NopProductId);

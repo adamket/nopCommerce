@@ -262,6 +262,7 @@ public class AkeneoFamilyMappingController(
             PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure,
             AssociatedProductAttributeId = model.AssociatedProductAttributeId,
             AssociatedValueNameTemplate = model.AssociatedValueNameTemplate,
+            VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys),
             HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent,
             NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId),
             NewProductIsShipEnabled = model.NewProductIsShipEnabled,
@@ -335,6 +336,7 @@ public class AkeneoFamilyMappingController(
         configuration.PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure;
         configuration.AssociatedProductAttributeId = model.AssociatedProductAttributeId;
         configuration.AssociatedValueNameTemplate = model.AssociatedValueNameTemplate;
+        configuration.VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys);
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
         configuration.NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId);
         configuration.NewProductIsShipEnabled = model.NewProductIsShipEnabled;
@@ -460,6 +462,9 @@ public class AkeneoFamilyMappingController(
                 }
             }
         }
+
+        if (!AkeneoVariantDisplayOrderKeys.TryParse(model.VariantDisplayOrderKeys, out _, out var displayOrderError))
+            ModelState.AddModelError(nameof(model.VariantDisplayOrderKeys), displayOrderError);
 
         model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();
         model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
@@ -639,6 +644,13 @@ public class AkeneoFamilyMappingController(
 
     // The new-product default selects post an empty value for "nopCommerce default".
     private static int? PositiveOrNull(int? id) => id is > 0 ? id : null;
+
+    // Saved in one canonical form ("a.b, c") so the sync fingerprint only changes when the keys do.
+    private static string NormalizeDisplayOrderKeys(string value)
+    {
+        var keys = AkeneoVariantDisplayOrderKeys.Parse(value);
+        return keys.Count == 0 ? null : string.Join(", ", keys);
+    }
 
     private static string NormalizeVariantCode(string value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();

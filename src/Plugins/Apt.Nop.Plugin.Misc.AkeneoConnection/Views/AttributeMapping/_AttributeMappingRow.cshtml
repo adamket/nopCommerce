@@ -409,7 +409,7 @@
                                   aria-label="Apply only when condition"
                                   v-model="m.draft.applyWhen" rows="2" maxlength="4000"
                                   placeholder="sync_status == published OR sync_status == unpublished"></textarea>
-                        <small class="form-text text-muted">Blank applies normally. A false condition preserves the destination and skips the template, transformations, and required checks. Missing or unreadable condition values block the item. Use raw option codes with ==, !=, AND, OR, and parentheses.</small>
+                        <small class="form-text text-muted">Blank always applies. False leaves the destination unchanged; a missing value blocks the item. Use raw option codes with ==, !=, AND, OR and parentheses.</small>
                     </div>
                 </div>
 
@@ -509,10 +509,8 @@
                     </button>
 
                     <small class="form-text text-muted">
-                        The primary source is used when it has a non-empty value.
-                        Fallback sources are tried from top to bottom. For example,
-                        map variant_name to Product Name and add product_name as its
-                        fallback for variant and standalone products.
+                        Used when the primary source is empty, tried top to bottom
+                        (e.g. variant_name, falling back to product_name).
                     </small>
                 </div>
 
@@ -598,10 +596,8 @@
                     </div>
 
                     <small class="form-text text-muted">
-                        This controls which nopCommerce product records receive
-                        the mapping. Inherited Akeneo values can still be used for
-                        variant axes and associated-value naming without mapping
-                        them onto the child product.
+                        Which nopCommerce products receive the mapping. Variant axes and value
+                        names can still use values not mapped onto the child.
                     </small>
                 </div>
             </div>

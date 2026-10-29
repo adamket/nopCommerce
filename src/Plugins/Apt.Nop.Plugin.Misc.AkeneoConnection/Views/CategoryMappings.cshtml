@@ -138,9 +138,8 @@
 
                 <div class="card-body">
                     <p class="text-muted mb-3">
-                        Copies Akeneo category template values (or the label) into every mapped nopCommerce category.
-                        Akeneo owns each mapped property: a sync overwrites edits made in nopCommerce.
-                        It runs daily as the "Akeneo Connection - Category Content Sync" schedule task, and on demand here.
+                        Copies Akeneo category template values (or the label) into mapped categories, overwriting nopCommerce edits.
+                        Runs daily ("Akeneo Connection - Category Content Sync" task) and on demand here.
                     </p>
 
                     <div class="akeneo-content-translations mb-3">
@@ -159,10 +158,8 @@
                         </div>
                         <div class="text-muted small" v-else>No Akeneo category label or template value uses a locale yet.</div>
                         <small class="form-text text-muted">
-                            Each standard mapping that reads a locale is also read in the checked locales and written to the nopCommerce
-                            language with the matching culture (es_US &rarr; es-US). A translation Akeneo does not have, or one that matches
-                            the standard value, is removed so the storefront shows the standard value. A language-specific override below
-                            replaces the automatic translation for that property.
+                            Checked locales are written to the nopCommerce language with the matching culture (es_US &rarr; es-US).
+                            A missing translation, or one equal to the standard value, is removed. Language-specific overrides below win.
                         </small>
                     </div>
 

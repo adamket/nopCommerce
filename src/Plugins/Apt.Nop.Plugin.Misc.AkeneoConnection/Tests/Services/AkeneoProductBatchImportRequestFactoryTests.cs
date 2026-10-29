@@ -127,6 +127,27 @@ public class AkeneoProductBatchImportRequestFactoryTests
     }
 
     [Test]
+    public void CreateFromProfile_delta_run_ignores_a_saved_linked_asset_flag()
+    {
+        var profile = CreateProfile();
+        profile.UpdatedFilterModeId = (int)AkeneoUpdatedFilterMode.FixedDate;
+        profile.UpdatedAfterUtc = DateTime.UtcNow.AddDays(-30);
+        profile.IncludeLinkedAssetUpdates = true;
+
+        var request = _factory.CreateFromProfile(
+            profile,
+            1,
+            runMode: AkeneoRunMode.Delta);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.UpdatedAfterUtc, Is.Not.Null);
+            Assert.That(request.IncludeLinkedAssetUpdates, Is.False);
+            Assert.That(request.SearchJson ?? string.Empty, Does.Not.Contain("updated_including_linked_entities"));
+        });
+    }
+
+    [Test]
     public void CreateFromProfile_generates_expected_search_filters()
     {
         var profile = CreateProfile();

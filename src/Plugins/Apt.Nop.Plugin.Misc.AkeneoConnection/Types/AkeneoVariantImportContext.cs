@@ -55,6 +55,9 @@ public class AkeneoVariantImportContext
     // child visibility replace the family's.
     public AkeneoFamilySubModelRule SubModelParentRule { get; set; }
 
+    // Set from the family's variant display order keys; null keeps the order values were created in.
+    public AkeneoVariantDisplayOrder DisplayOrder { get; set; }
+
     public IDictionary<string, AkeneoVariantAxisValue> AxisValuesByAkeneoCode { get; set; } =
         new Dictionary<string, AkeneoVariantAxisValue>(StringComparer.OrdinalIgnoreCase);
 

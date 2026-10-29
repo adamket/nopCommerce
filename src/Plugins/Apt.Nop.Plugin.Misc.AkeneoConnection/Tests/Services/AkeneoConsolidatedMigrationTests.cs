@@ -90,7 +90,7 @@ public class AkeneoConsolidatedMigrationTests
             "CrossSellSyncModeId", "CrossSellAssociationType",
             "ParentLevelId", "AssociatedProductAttributeId", "AssociatedValueNameTemplate", "HideChildProducts",
             "NewProductTaxCategoryId", "NewProductIsShipEnabled", "NewProductWarehouseId", "NewProductTemplateId",
-            "CombinationAvailabilitySourceId" };
+            "CombinationAvailabilitySourceId", "VariantDisplayOrderKeys" };
         var created = Plan(true, columns.Concat(DroppedColumns).ToArray()).OfType<CreateColumnExpression>().ToList();
         Assert.That(created.Select(x => x.Column.Name), Is.EquivalentTo(columns));
         Assert.That(created.Single(x => x.Column.Name == "SyncItemLogRetentionDays").Column.DefaultValue, Is.EqualTo(30));

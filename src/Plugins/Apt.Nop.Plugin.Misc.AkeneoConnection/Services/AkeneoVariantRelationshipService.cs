@@ -1,9 +1,11 @@
-﻿using System.Xml.Linq;
+﻿using System.Globalization;
+using System.Xml.Linq;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Services.Catalog;
+using Nop.Services.Common;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
@@ -14,9 +16,14 @@ public class AkeneoVariantRelationshipService(
     IAkeneoNopEntityMappingService entityMappingService,
     IAkeneoManagedRelationService managedRelationService,
     IAkeneoValueTemplateRenderer valueTemplateRenderer,
-    IAkeneoCombinationAvailabilityService combinationAvailabilityService)
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService,
+    IGenericAttributeService genericAttributeService = null,
+    IAkeneoAttributeValueCacheTracker cacheTracker = null)
     : IAkeneoVariantRelationshipService
 {
+    // Each synced value's sort key, kept with the value so siblings can be ranked together.
+    internal const string VariantSortKeyAttribute = "Akeneo.VariantSortKey";
+
     public async Task<AkeneoVariantSyncResult> ApplyAsync(
         Product parentProduct,
         AkeneoVariantImportContext context,
@@ -296,6 +303,9 @@ public class AkeneoVariantRelationshipService(
             value.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
             value.AssociatedProductId == childProduct.Id);
 
+        cacheTracker?.Touch(mappingResult.Mapping.Id);
+
+
         if (existingValue == null)
         {
             existingValue = new ProductAttributeValue
@@ -332,6 +342,9 @@ public class AkeneoVariantRelationshipService(
                 changed = true;
             }
         }
+
+        if (context.DisplayOrder != null)
+            changed |= await RenumberValuesAsync(mappingResult.Mapping.Id, existingValue, context.DisplayOrder.Value);
 
         if (context.SyncProfileId.HasValue)
         {
@@ -395,7 +408,10 @@ public class AkeneoVariantRelationshipService(
             var valueResult = await EnsureAxisValueAsync(
                 parentProduct.Id,
                 mappingResult.Mapping.Id,
-                axisValue);
+                axisValue,
+                context.DisplayOrder?.PositionsByAttributeCode.TryGetValue(axis.AkeneoAttributeCode, out var axisPosition) == true
+                    ? axisPosition
+                    : null);
 
             changed |= valueResult.Changed;
 
@@ -574,11 +590,63 @@ public class AkeneoVariantRelationshipService(
         return new ProductAttributeMappingResult(mapping, true);
     }
 
+    /// <summary>
+    /// Stores the value's sort key and renumbers every value of the attribute
+    /// 0, 10, 20… by key, leaving gaps to slot a value in by hand. Values with no
+    /// key (added by hand, or never synced with sort keys) follow, in their
+    /// current order. True when this value's display order changed.
+    /// </summary>
+    private async Task<bool> RenumberValuesAsync(
+        int productAttributeMappingId,
+        ProductAttributeValue value,
+        int sortKey)
+    {
+        if (genericAttributeService == null)
+            return false;
+
+        await genericAttributeService.SaveAttributeAsync(value, VariantSortKeyAttribute, sortKey.ToString(CultureInfo.InvariantCulture));
+
+        var values = await productAttributeService.GetProductAttributeValuesAsync(productAttributeMappingId);
+        var keyed = new List<(ProductAttributeValue Value, int? Key)>();
+        foreach (var item in values)
+        {
+            var stored = item.Id == value.Id
+                ? sortKey.ToString(CultureInfo.InvariantCulture)
+                : await genericAttributeService.GetAttributeAsync<string>(item, VariantSortKeyAttribute);
+            keyed.Add((item, int.TryParse(stored, NumberStyles.Integer, CultureInfo.InvariantCulture, out var key) ? key : null));
+        }
+
+        var changed = false;
+        var ranked = AkeneoVariantDisplayOrderKeys.Rank(keyed.Select(item => (item.Value.Id, item.Key, item.Value.DisplayOrder)));
+        foreach (var (item, _) in keyed)
+        {
+            var target = ranked[item.Id];
+            if (item.DisplayOrder == target)
+                continue;
+
+            item.DisplayOrder = target;
+            await productAttributeService.UpdateProductAttributeValueAsync(item);
+
+            if (item.Id == value.Id)
+            {
+                value.DisplayOrder = target;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    // A display order (the axis's own sort-key position) ranks new and existing values;
+    // null keeps an existing value's order and appends a new one.
     private async Task<AxisValueResult> EnsureAxisValueAsync(
         int parentProductId,
         int productAttributeMappingId,
-        AkeneoVariantAxisValue axisValue)
+        AkeneoVariantAxisValue axisValue,
+        int? displayOrder = null)
     {
+        cacheTracker?.Touch(productAttributeMappingId);
+
         var optionIdentity = axisValue.AkeneoOptionCode ?? axisValue.DisplayName;
         var mappingCode =
             $"variant-axis:{parentProductId}:{axisValue.AkeneoAttributeCode}:{optionIdentity}";
@@ -597,14 +665,21 @@ public class AkeneoVariantRelationshipService(
             if (mapped != null &&
                 mapped.ProductAttributeMappingId == productAttributeMappingId)
             {
+                var mappedChanged = false;
+
                 if (!string.Equals(mapped.Name, axisValue.DisplayName, StringComparison.OrdinalIgnoreCase))
                 {
                     mapped.Name = axisValue.DisplayName;
-                    await productAttributeService.UpdateProductAttributeValueAsync(mapped);
-                    return new AxisValueResult(mapped, true);
+                    mappedChanged = true;
                 }
 
-                return new AxisValueResult(mapped, false);
+                if (mappedChanged)
+                    await productAttributeService.UpdateProductAttributeValueAsync(mapped);
+
+                if (displayOrder.HasValue)
+                    mappedChanged |= await RenumberValuesAsync(productAttributeMappingId, mapped, displayOrder.Value);
+
+                return new AxisValueResult(mapped, mappedChanged);
             }
         }
 
@@ -627,6 +702,9 @@ public class AkeneoVariantRelationshipService(
 
             await productAttributeService.InsertProductAttributeValueAsync(existing);
         }
+
+        if (displayOrder.HasValue)
+            await RenumberValuesAsync(productAttributeMappingId, existing, displayOrder.Value);
 
         await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
             AkeneoEntityType.Option,

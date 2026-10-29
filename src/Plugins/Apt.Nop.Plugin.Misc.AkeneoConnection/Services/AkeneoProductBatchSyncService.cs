@@ -47,7 +47,9 @@ public class AkeneoProductBatchSyncService(
     IProductAttributeService productAttributeService = null,
     AkeneoProductRelatedProductSynchronizer relatedProductSynchronizer = null,
     IAkeneoCombinationAvailabilityService combinationAvailabilityService = null,
-    AkeneoProductCrossSellSynchronizer crossSellSynchronizer = null)
+    AkeneoProductCrossSellSynchronizer crossSellSynchronizer = null,
+    IAkeneoVariantDisplayOrderResolver variantDisplayOrderResolver = null,
+    IAkeneoAttributeValueCacheTracker attributeValueCacheTracker = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -711,7 +713,30 @@ public class AkeneoProductBatchSyncService(
         return await SaveLogAndReturnAsync(request, result);
     }
 
+    // The unit's transactions are finished when the core returns, so attribute values
+    // cached by a read during the unit (old ones on a snapshot-isolation database, or
+    // ones read inside a unit that rolled back) are cleared here, after the commit.
     private async Task<AkeneoProductImportResult> ReconcileProductUnitAsync(
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductImportResult result,
+        IDictionary<string, Product> parentProductCache,
+        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReconcileProductUnitCoreAsync(
+                source, request, result, parentProductCache, productModelCache, cancellationToken);
+        }
+        finally
+        {
+            if (attributeValueCacheTracker != null)
+                await attributeValueCacheTracker.ClearTouchedAsync();
+        }
+    }
+
+    private async Task<AkeneoProductImportResult> ReconcileProductUnitCoreAsync(
         AkeneoProductDefinition source,
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result,
@@ -1139,7 +1164,7 @@ public class AkeneoProductBatchSyncService(
                     rawLeafContext.ExistingProduct,
                     rawLeafContext.Sku);
 
-                if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                if (StandaloneRuleApplies(existingMode))
                 {
                     var standaloneSource = overrideRule.MergeAncestorValues
                         ? hierarchy.LeafWithInheritedValues
@@ -1196,6 +1221,7 @@ public class AkeneoProductBatchSyncService(
                         effectiveContext,
                         cancellationToken);
 
+                    await EnsureStandaloneVisibleAsync(effectiveContext, result);
                     result.DestinationKind = AkeneoProductDestinationKind.NopProduct;
                     return result;
                 }
@@ -1315,10 +1341,30 @@ public class AkeneoProductBatchSyncService(
             variantResult = await variantRelationshipService.ApplyAsync(
                 parentProduct,
                 variantContext,
-                upsertChildProductAsync: () =>
-                    productSyncService.SynchronizeAsync(
+                upsertChildProductAsync: async () =>
+                {
+                    // The relationship mode is final once the child is written.
+                    leafContext.RepresentedByParent = IsRepresentedByParent(variantContext.Options?.Mode);
+                    var child = await productSyncService.SynchronizeAsync(
                         leafContext,
-                        cancellationToken));
+                        cancellationToken);
+
+                    // No product and no error: the profile only updates and there is nothing
+                    // to update, or a rule skipped it. That is a skip, not a failure.
+                    if (child == null && result.Success)
+                        throw new AkeneoVariantChildSkippedException();
+
+                    return child;
+                });
+        }
+        catch (AkeneoVariantChildSkippedException)
+        {
+            // The parent's updates are kept; the variant keeps whatever binding it had,
+            // so the representation cleanup does not remove it.
+            ApplyPreviousStateBinding(result, previousState);
+            result.ActionType = SyncItemActionType.Skipped;
+            result.AddMessage("The variant has no nopCommerce product this profile may write, so it was skipped; its parent's updates were kept.");
+            return result;
         }
         catch (NopException ex)
         {
@@ -1481,6 +1527,21 @@ public class AkeneoProductBatchSyncService(
                 context.AxisValuesByAkeneoCode[axis.AkeneoAttributeCode] =
                     axisValue;
             }
+        }
+
+        var displayOrderKeys = AkeneoVariantDisplayOrderKeys.Parse(familyConfiguration.VariantDisplayOrderKeys);
+        if (displayOrderKeys.Count > 0 && variantDisplayOrderResolver != null)
+        {
+            context.DisplayOrder = await variantDisplayOrderResolver.ResolveAsync(
+                source,
+                displayOrderKeys,
+                request.Locale,
+                request.Channel,
+                request.Currency,
+                cancellationToken);
+
+            foreach (var warning in context.DisplayOrder.Warnings)
+                leafContext.Result?.AddWarning(warning);
         }
 
         return context;
@@ -2342,7 +2403,7 @@ public class AkeneoProductBatchSyncService(
                         rawLeafContext.ExistingProduct,
                         rawLeafContext.Sku);
 
-                    if (existingMode is null or AkeneoVariantRelationshipMode.None)
+                    if (StandaloneRuleApplies(existingMode))
                     {
                         var standaloneSource = overrideRule.MergeAncestorValues
                             ? hierarchy.LeafWithInheritedValues
@@ -2440,7 +2501,20 @@ public class AkeneoProductBatchSyncService(
                     // rule fingerprint; it adds no field so other hashes keep.
                     IsFlattened = hierarchy.IsFlattened,
                     ForcedMode = forcedMode.HasValue ? (int?)forcedMode.Value : null,
-                    Family = BuildFamilyMappingFingerprint(familyConfiguration),
+                    // The display order joins only families with sort keys, so other hashes keep.
+                    Family = variantContext.DisplayOrder == null
+                        ? BuildFamilyMappingFingerprint(familyConfiguration)
+                        : new
+                        {
+                            Mapping = BuildFamilyMappingFingerprint(familyConfiguration),
+                            familyConfiguration.VariantDisplayOrderKeys,
+                            // Values are ranked 0, 10, 20… by this key; the marker rewrites each variant once.
+                            Ordering = "rank-10",
+                            DisplayOrder = variantContext.DisplayOrder.Value,
+                            Positions = variantContext.DisplayOrder.PositionsByAttributeCode
+                                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                                .ToList()
+                        },
                     OverrideRule = BuildSubModelRuleFingerprint(overrideRule),
                     AxisMappings = axisMappings
                         .OrderBy(axis => axis.DisplayOrder)
@@ -2882,11 +2956,54 @@ public class AkeneoProductBatchSyncService(
         return now;
     }
 
+    // A unit can write a parent and all its pictures, which outlasts .NET's
+    // 60-second default; past the timeout the next write fails with "The
+    // operation is not valid for the state of the transaction". Ten minutes is
+    // TransactionManager.MaximumTimeout's default; a longer value is capped to it.
+    internal static readonly TimeSpan UnitTransactionTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// A matching standalone sub-model rule wins over an existing grouped or
+    /// associated-product child: the product is synced as its own visible product,
+    /// its grouped membership is kept, and the cleanup removes the associated value
+    /// this profile bound it to. Only an attribute combination (no product of its
+    /// own) keeps its representation.
+    /// </summary>
+    internal static bool StandaloneRuleApplies(AkeneoVariantRelationshipMode? existingMode) =>
+        existingMode is not AkeneoVariantRelationshipMode.ProductAttributeCombinations;
+
+    /// <summary>
+    /// A standalone product is shown on its own, even when it also belongs to a
+    /// grouped product or was hidden as a child before.
+    /// </summary>
+    private async Task EnsureStandaloneVisibleAsync(
+        AkeneoProductSyncContext context,
+        AkeneoProductImportResult result)
+    {
+        var product = context.Product;
+        if (product == null || product.VisibleIndividually || !result.Success)
+            return;
+
+        product.VisibleIndividually = true;
+        product.UpdatedOnUtc = DateTime.UtcNow;
+        await productService.UpdateProductAsync(product);
+        result.AddMessage($"Made product ID {product.Id} visible individually, as the standalone sub-model rule requires.");
+    }
+
+    /// <summary>
+    /// A child shown through its parent: an associated-product value or a grouped
+    /// child. A standalone variant (mode None) is its own storefront product.
+    /// </summary>
+    internal static bool IsRepresentedByParent(AkeneoVariantRelationshipMode? mode) =>
+        mode is AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue
+            or AkeneoVariantRelationshipMode.GroupedProducts;
+
     private static TransactionScope CreateUnitTransaction() => new(
         TransactionScopeOption.Required,
         new TransactionOptions
         {
-            IsolationLevel = IsolationLevel.ReadCommitted
+            IsolationLevel = IsolationLevel.ReadCommitted,
+            Timeout = UnitTransactionTimeout
         },
         TransactionScopeAsyncFlowOption.Enabled);
 }
