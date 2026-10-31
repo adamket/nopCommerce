@@ -15,8 +15,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 // only while its index is missing, since SQL Server rejects altering an indexed
 // column on such a rerun.
 [NopMigration(
-    "2026-10-28 12:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order)",
+    "2026-10-29 13:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration : Migration
 {
@@ -177,6 +177,28 @@ public sealed class AkeneoConnectionMigration : Migration
                 .WithDefaultValue(
                     (int)AkeneoSpecificationMissingValueHandling
                         .CreateSpecificationAttributeOption);
+        }
+
+        if (!ColumnExists(
+                table,
+                nameof(AkeneoAttributeMapping.SpecificationShowOnProductPage)))
+        {
+            Create.Column(nameof(AkeneoAttributeMapping.SpecificationShowOnProductPage))
+                .OnTable(table)
+                .AsBoolean()
+                .NotNullable()
+                .WithDefaultValue(true);
+        }
+
+        if (!ColumnExists(
+                table,
+                nameof(AkeneoAttributeMapping.SpecificationDisplayOrder)))
+        {
+            Create.Column(nameof(AkeneoAttributeMapping.SpecificationDisplayOrder))
+                .OnTable(table)
+                .AsInt32()
+                .NotNullable()
+                .WithDefaultValue(0);
         }
     }
 

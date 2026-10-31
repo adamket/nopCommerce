@@ -11,9 +11,9 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public bool Enabled { get; set; } = true;
 
-    public bool ManageVariantsByEnabledStatus { get; set; }
+    public bool ManageVariantsByEnabledStatus { get; set; } = true;
 
-    public int CombinationAvailabilitySourceId { get; set; }
+    public int CombinationAvailabilitySourceId { get; set; } = (int)Domain.AkeneoCombinationAvailabilitySource.PublishedRule;
 
     public int VariantRelationshipModeId { get; set; }
 

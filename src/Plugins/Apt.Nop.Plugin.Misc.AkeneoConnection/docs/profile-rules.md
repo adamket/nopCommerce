@@ -1,5 +1,47 @@
 # Publication templates and profile skip rules
 
+## Boolean publication gates and SKU holds (4.90.57)
+
+For the boolean publication contract, configure these profile skip rules:
+
+```json
+[
+  { "attributeCode": "enabled", "value": "false" },
+  { "attributeCode": "model_sync_hold", "value": "true" }
+]
+```
+
+`enabled` reads the product's top-level Akeneo payload flag, ignoring channel and
+locale. It is never inherited or read from the attribute collection. A missing
+flag (including on product models) does not match `false`. A disabled SKU is held
+before ancestor loading, mapping resolution, parent writes, or combination removal.
+`model_sync_hold` remains a channel-scoped attribute rule; an ancestor hold blocks
+the descendant even if the descendant overrides its attribute value.
+
+A hold preserves the destination and existing binding; it creates no new product
+or combination. It does not unpublish. Keep the enabled filter at **Any**, allow
+updates, and map publication separately with required **Published** mappings for
+the appropriate roles. The skip rules above must be saved on each applicable
+profile; this upgrade does not add or replace profile rules or Published mappings.
+
+The upgrade migrates existing managed combination family and family-variant
+mappings from **Akeneo enabled status** to **Published rule**, including currently
+disabled family mappings. It leaves availability **Off**, other relationship modes,
+and existing Published-rule choices unchanged. This is a separate one-time data
+migration; subsequent schema upgrades do not repeat it. New family mapping forms
+default combination availability to **Published rule**. Existing saved choices
+are retained when editing, and the legacy enabled-status option remains available.
+
+Published-rule availability already removes a combination for `false`, recreates
+it for `true`, and preserves an existing combination when the mapping is skipped.
+A missing Published mapping/value blocks the item. Save the new required Published
+mapping for **Variant products** before running the upgraded sync. The availability
+source participates in profile scope fingerprints, so migrated profiles revisit
+unchanged products. Use profile/family Resync after changing publication mappings.
+
+The status-based examples below describe the older `sync_status` contract and
+remain available for profiles that still use it.
+
 Publication conversion uses the existing **Attribute Mappings → Computed value**
 feature. Add a computed mapping with target **Product field → Published**, and
 set its template to:

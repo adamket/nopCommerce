@@ -540,8 +540,10 @@ public partial class AkeneoProductSpecificationSynchronizer
                                 SpecificationAttributeOptionId = state.Option.Id,
                                 CustomValue = optionName,
                                 AllowFiltering = false,
-                                ShowOnProductPage = true,
-                                DisplayOrder = 0
+                                ShowOnProductPage =
+                                    mapped.Mapping.SpecificationShowOnProductPage,
+                                DisplayOrder =
+                                    mapped.Mapping.SpecificationDisplayOrder
                             };
 
                             await _specificationAttributeService
@@ -622,8 +624,10 @@ public partial class AkeneoProductSpecificationSynchronizer
                                     (int)SpecificationAttributeType.Option,
                                 SpecificationAttributeOptionId = state.Option.Id,
                                 AllowFiltering = true,
-                                ShowOnProductPage = true,
-                                DisplayOrder = 0
+                                ShowOnProductPage =
+                                    mapped.Mapping.SpecificationShowOnProductPage,
+                                DisplayOrder =
+                                    mapped.Mapping.SpecificationDisplayOrder
                             };
 
                             await _specificationAttributeService

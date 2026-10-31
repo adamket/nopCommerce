@@ -158,8 +158,7 @@ public class AkeneoProductSearchJsonBuilder
         if (!updatedAfterUtc.HasValue)
             return;
 
-        var value = updatedAfterUtc.Value
-            .ToUniversalTime()
+        var value = AkeneoUtc.AsUtc(updatedAfterUtc.Value)
             .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
         if (request.IncludeLinkedAssetUpdates)

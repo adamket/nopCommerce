@@ -13,6 +13,76 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 [TestFixture]
 public class AkeneoResolvedDesiredStateHashTests
 {
+    [TestCase(null, "Bare-Root (Standard)")]
+    [TestCase(null, "Bare-Root (Semi-Dwarf)")]
+    [TestCase("Bare-Root (Standard)", null)]
+    public async Task Changing_only_the_associated_name_override_changes_the_hash(string? beforeName, string? afterName)
+    {
+        var renderer = new AkeneoValueTemplateRenderer(new AkeneoProductValueResolver());
+        var service = CreateBatchService(new SingleOperationAnalyzer("Product fields", "same"), renderer);
+        var request = CreateRequest();
+        var context = CreateContext(request);
+        var family = new AkeneoFamilyMapping { AssociatedValueNameTemplate = "{attribute:variant_name} || {root_label}" };
+
+        async Task<string> HashAsync(string? name)
+        {
+            context.Source.Values = JsonSerializer.SerializeToElement(new
+            {
+                variant_name = new[] { new { data = name, scope = "ecommerce", locale = "en_US" } },
+                root_label = new[] { new { data = "Bare-Root", scope = (string?)null, locale = (string?)null } }
+            });
+            var representation = await VariantRepresentationAsync(service, context, family);
+            Assert.That(JsonSerializer.SerializeToElement(representation).GetProperty("AssociatedValueName").GetString(),
+                Is.EqualTo(name ?? "Bare-Root"));
+            return await service.BuildResolvedContextHashAsync(context, request, representation, CancellationToken.None);
+        }
+
+        var before = await HashAsync(beforeName);
+        var after = await HashAsync(afterName);
+        Assert.That(after, Is.Not.Null.And.Not.EqualTo(before));
+        Assert.That(context.MappedValues, Is.Empty, "The option name is not an ordinary product-field mapping.");
+    }
+
+    [Test]
+    public async Task Submodel_name_template_and_inherited_values_participate_in_the_hash()
+    {
+        var parent = new AkeneoProductDefinition { Code = "parent" };
+        var api = new Moq.Mock<IAkeneoApiClient>();
+        api.Setup(client => client.GetProductModelByCodeAsync("parent", Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync(parent);
+        var renderer = new AkeneoValueTemplateRenderer(new AkeneoProductValueResolver(), akeneoApiClient: api.Object);
+        var service = CreateBatchService(new SingleOperationAnalyzer("Product fields", "same"), renderer);
+        var request = CreateRequest();
+        var context = CreateContext(request);
+        context.Source.Parent = "parent";
+        var family = new AkeneoFamilyMapping { AssociatedValueNameTemplate = "{sku}" };
+        var rule = new AkeneoFamilySubModelRule
+        {
+            ParentLevel = AkeneoSubModelParentLevel.MatchingSubModel,
+            AssociatedValueNameTemplate = "{attribute:variant_name}"
+        };
+        async Task<string> HashAsync(string name)
+        {
+            parent.Values = JsonSerializer.SerializeToElement(new
+            {
+                variant_name = new[] { new { data = name, scope = "ecommerce", locale = "en_US" } }
+            });
+            var representation = await VariantRepresentationAsync(service, context, family, rule);
+            Assert.That(JsonSerializer.SerializeToElement(representation).GetProperty("AssociatedValueName").GetString(), Is.EqualTo(name));
+            return await service.BuildResolvedContextHashAsync(context, request, representation, CancellationToken.None);
+        }
+        Assert.That(await HashAsync("After"), Is.Not.EqualTo(await HashAsync("Before")));
+    }
+
+    private static Task<object> VariantRepresentationAsync(AkeneoProductBatchSyncService service,
+        AkeneoProductSyncContext context, AkeneoFamilyMapping family, AkeneoFamilySubModelRule? rule = null) =>
+        service.BuildVariantRepresentationFingerprintAsync(new AkeneoVariantImportContext
+        {
+            SourceProduct = context.Source, Sku = context.Sku,
+            Locale = context.Request.Locale, Channel = context.Request.Channel, Currency = context.Request.Currency,
+            AkeneoFamilyCode = context.MappingFamilyCode, AkeneoFamilyVariantCode = context.MappingFamilyVariantCode
+        }, family, rule!, new AkeneoProductModelHierarchyResolution(), null, Array.Empty<AkeneoFamilyVariantAxisMapping>());
+
     [TestCase("Product fields")]
     [TestCase("SEO")]
     [TestCase("Categories")]
@@ -124,7 +194,7 @@ public class AkeneoResolvedDesiredStateHashTests
     }
 
     private static AkeneoProductBatchSyncService CreateBatchService(
-        IAkeneoDryRunChangeAnalyzer analyzer)
+        IAkeneoDryRunChangeAnalyzer analyzer, IAkeneoValueTemplateRenderer? renderer = null)
     {
         // This test exercises only BuildResolvedContextHashAsync. Asset sync is
         // disabled and the source has no categories, so unrelated collaborators
@@ -149,7 +219,8 @@ public class AkeneoResolvedDesiredStateHashTests
             analyzer,
             null!, // IAkeneoAssetMappingService
             null!, // IAkeneoAssetResolver
-            new AkeneoProfileRuleEvaluator(Moq.Mock.Of<IAkeneoApiClient>())
+            new AkeneoProfileRuleEvaluator(Moq.Mock.Of<IAkeneoApiClient>()),
+            valueTemplateRenderer: renderer!
         );
     }
 

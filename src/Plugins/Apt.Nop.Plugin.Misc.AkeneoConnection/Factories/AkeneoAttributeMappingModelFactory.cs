@@ -368,6 +368,10 @@ public class AkeneoAttributeMappingModelFactory(
                 NormalizeSpecificationMissingValueHandlingId(
                     existingAttributeMapping?
                         .SpecificationMissingValueHandlingId),
+            SpecificationShowOnProductPage =
+                existingAttributeMapping?.SpecificationShowOnProductPage ?? true,
+            SpecificationDisplayOrder =
+                existingAttributeMapping?.SpecificationDisplayOrder ?? 0,
             DefaultNopTargetTypeId = (int)defaultNopTargetType,
             DefaultNopTargetKey = targetTypeResolver.ResolveDefaultTargetKey(
                 akeneoAttribute,
@@ -434,6 +438,8 @@ public class AkeneoAttributeMappingModelFactory(
             SpecificationMissingValueHandlingId =
                 NormalizeSpecificationMissingValueHandlingId(
                     mapping.SpecificationMissingValueHandlingId),
+            SpecificationShowOnProductPage = mapping.SpecificationShowOnProductPage,
+            SpecificationDisplayOrder = mapping.SpecificationDisplayOrder,
             NopTargetEntityId = mapping.NopTargetEntityId,
             Locale = mapping.Locale,
             Channel = mapping.Channel,

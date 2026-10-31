@@ -94,10 +94,25 @@ public class AkeneoSpecificationOptionLabelTests
         Assert.That(_assignments, Is.Empty);
     }
 
+    [TestCase(true, 0)]
+    [TestCase(false, 30)]
+    public async Task ANewAssignmentTakesShowOnProductPageAndDisplayOrderFromTheMapping(bool show, int displayOrder)
+    {
+        GivenOptions(new SpecificationAttributeOption { Id = 50, SpecificationAttributeId = 5, Name = "Red Maple" });
+
+        await SynchronizeAsync("red_maple", payloadLabel: "Red Maple", showOnProductPage: show, displayOrder: displayOrder);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(_assignments.Single().ShowOnProductPage, Is.EqualTo(show));
+            Assert.That(_assignments.Single().DisplayOrder, Is.EqualTo(displayOrder));
+        });
+    }
+
     private void GivenOptions(params SpecificationAttributeOption[] options) =>
         _specifications.SetReturnsDefault(Task.FromResult<IList<SpecificationAttributeOption>>(options.ToList()));
 
-    private async Task SynchronizeAsync(string optionCode, string payloadLabel)
+    private async Task SynchronizeAsync(string optionCode, string payloadLabel, bool showOnProductPage = true, int displayOrder = 0)
     {
         var mapped = new AkeneoResolvedMappedValue
         {
@@ -106,7 +121,9 @@ public class AkeneoSpecificationOptionLabelTests
                 AkeneoAttributeCode = "species",
                 AkeneoAttributeTypeId = (int)AkeneoAttributeType.Select,
                 NopTargetTypeId = (int)NopTargetType.SpecificationAttribute,
-                NopTargetEntityId = 5
+                NopTargetEntityId = 5,
+                SpecificationShowOnProductPage = showOnProductPage,
+                SpecificationDisplayOrder = displayOrder
             },
             HasValue = true,
             Value = new AkeneoResolvedProductValue

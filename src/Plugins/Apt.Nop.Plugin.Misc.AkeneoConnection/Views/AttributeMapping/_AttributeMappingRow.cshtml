@@ -106,6 +106,16 @@
             </div>
 
             <div class="akeneo-summary-target-detail"
+                 v-if="isSpecType(m.nopTargetTypeId) && m.specificationShowOnProductPage === false">
+                Hidden on the product page
+            </div>
+
+            <div class="akeneo-summary-target-detail"
+                 v-if="isSpecType(m.nopTargetTypeId) && Number(m.specificationDisplayOrder)">
+                Display order {{ m.specificationDisplayOrder }}
+            </div>
+
+            <div class="akeneo-summary-target-detail"
                  v-if="templateSummary(m)">
                 {{ templateSummary(m) }}
             </div>
@@ -318,6 +328,53 @@
                 </div>
 
                 <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isSpecType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Show on Product Page
+                    </label>
+
+                    <div>
+                        <label class="akeneo-switch">
+                            <input type="checkbox"
+                                   v-model="m.draft.specificationShowOnProductPage" />
+
+                            <span class="akeneo-switch-track">
+                                <span class="akeneo-switch-thumb"></span>
+                            </span>
+
+                            <span class="akeneo-switch-text">
+                                {{ m.draft.specificationShowOnProductPage ? 'Shown' : 'Hidden' }}
+                            </span>
+                        </label>
+                    </div>
+
+                    <small class="form-text text-muted">
+                        Set on the specifications the sync assigns to a product.
+                        Existing assignments keep their setting.
+                    </small>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
+                     v-if="isSpecType(m.draft.nopTargetTypeId)">
+
+                    <label class="font-weight-bold mb-1">
+                        Display Order
+                    </label>
+
+                    <input type="number"
+                           step="1"
+                           class="form-control akeneo-edit-specification-display-order"
+                           v-model="m.draft.specificationDisplayOrder"
+                           placeholder="0" />
+
+                    <small class="form-text text-muted">
+                        Set on the specifications the sync assigns to a product.
+                        Existing assignments keep their order.
+                    </small>
+                </div>
+
+                <div class="form-group col-md-4 akeneo-detail-block"
                      v-if="isProductType(m.draft.nopTargetTypeId)">
 
                     <label class="font-weight-bold mb-1">
@@ -349,14 +406,15 @@
                     </label>
 
                     <input type="number"
-                           min="1"
+                           min="0"
                            step="1"
                            class="form-control akeneo-edit-tier-price-quantity"
                            v-model="m.draft.nopTargetKey"
                            placeholder="1" />
 
                     <small class="form-text text-muted">
-                        Applies to orders of at least this many. 1 covers every purchase.
+                        Applies to orders of at least this many; 0 or 1 covers every purchase
+                        (use 0 where the storefront reads a role's price from its quantity-0 tier).
                         All stores, no start or end date.
                     </small>
                 </div>

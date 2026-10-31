@@ -48,7 +48,8 @@ public class AkeneoCombinationAvailabilityTests
         public readonly List<ProductAttributeCombination> Combinations = new();
         public readonly List<ProductAttributeValue> Values = new();
         public readonly List<AkeneoFamilyMapping> Families = new() { new() { AkeneoFamilyCode = "family", Enabled = true,
-            VariantRelationshipMode = AkeneoVariantRelationshipMode.ProductAttributeCombinations, ManageVariantsByEnabledStatus = true } };
+            VariantRelationshipMode = AkeneoVariantRelationshipMode.ProductAttributeCombinations, ManageVariantsByEnabledStatus = true,
+            CombinationAvailabilitySource = AkeneoCombinationAvailabilitySource.EnabledStatus } };
         public readonly Mock<IAkeneoApiClient> Api = new();
         public readonly AkeneoCombinationAvailabilityService Service;
         public Fixture()
@@ -232,9 +233,7 @@ public class AkeneoCombinationAvailabilityTests
         api.Setup(x => x.GetProductByUuidAsync("uuid", It.IsAny<CancellationToken>())).ReturnsAsync(source);
         api.Setup(x => x.GetProductModelByCodeAsync("model", It.IsAny<CancellationToken>())).ReturnsAsync(new AkeneoProductDefinition
         { Code = "model", Family = "family", Values = JsonSerializer.SerializeToElement(new { }) });
-        var skip = new Mock<IAkeneoProfileRuleEvaluator>();
-        skip.Setup(x => x.GetSkipReasonAsync(source, It.IsAny<AkeneoProductImportRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(held ? "Held by profile" : null!);
+        var skip = new AkeneoProfileRuleEvaluator(api.Object);
         AkeneoProductImportResult? marked = null;
         fixture.States.Setup(x => x.MarkSeenAsync(7, 23, AkeneoEntityType.Product, "SKU", "uuid", "model", It.IsAny<AkeneoProductImportResult>(), null, It.IsAny<AkeneoProductSyncState>()))
             .Callback<int, int, AkeneoEntityType, string, string, string, AkeneoProductImportResult, string, AkeneoProductSyncState>((_, _, _, _, _, _, result, _, _) => marked = result)
@@ -246,10 +245,11 @@ public class AkeneoCombinationAvailabilityTests
             Mock.Of<IAkeneoProductSyncService>(MockBehavior.Strict), fixture.States.Object,
             Mock.Of<IAkeneoVariantRepresentationCleanupService>(MockBehavior.Strict), Mock.Of<IAkeneoCatalogReconciliationService>(MockBehavior.Strict),
             Mock.Of<IAkeneoSyncLeaseService>(), Mock.Of<IAkeneoProductModelDeltaFanOutService>(), Mock.Of<IAkeneoDryRunChangeAnalyzer>(MockBehavior.Strict),
-            Mock.Of<IAkeneoAssetMappingService>(MockBehavior.Strict), Mock.Of<IAkeneoAssetResolver>(MockBehavior.Strict), skip.Object,
+            Mock.Of<IAkeneoAssetMappingService>(MockBehavior.Strict), Mock.Of<IAkeneoAssetResolver>(MockBehavior.Strict), skip,
             combinationAvailabilityService: fixture.Service);
         var result = await batch.SyncProductByUuidAsync(new AkeneoProductImportRequest
-        { AkeneoProductUuid = "uuid", SyncProfileId = 7, SyncRunRecordId = 23 });
+        { AkeneoProductUuid = "uuid", SyncProfileId = 7, SyncRunRecordId = 23,
+            SkipRulesJson = held ? """[{"attributeCode":"enabled","value":"false"}]""" : null });
         Assert.That(result.Errors, Is.Empty);
         Assert.That(result.CombinationUnavailable, Is.EqualTo(!held));
         Assert.That(fixture.Combinations.Count, Is.EqualTo(held ? 1 : 0));

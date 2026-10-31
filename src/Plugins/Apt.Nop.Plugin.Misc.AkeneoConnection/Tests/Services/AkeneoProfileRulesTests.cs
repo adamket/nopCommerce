@@ -44,6 +44,57 @@ public class AkeneoProfileRulesTests
         Assert.That(await evaluator.GetSkipReasonAsync(Source("hold", channel: channel, locale: locale), Request()), Is.Null);
     }
 
+    [TestCase(false, "FALSE", true)]
+    [TestCase(true, "false", false)]
+    [TestCase(true, "true", true)]
+    [TestCase(null, "false", false)]
+    public async Task Enabled_rules_read_only_the_payload_flag(bool? enabled, string expected, bool skipped)
+    {
+        var request = Request();
+        request.SkipRulesJson = JsonSerializer.Serialize(new[] { new { attributeCode = "ENABLED", value = expected } });
+        var source = Source(null, "unfetched", "other", "fr_FR");
+        source.Enabled = enabled;
+        source.Values = JsonSerializer.SerializeToElement(new
+        {
+            enabled = new[] { new { data = false, scope = "ecommerce", locale = (string?)null } }
+        });
+        var api = new Mock<IAkeneoApiClient>(MockBehavior.Strict);
+        var reason = await new AkeneoProfileRuleEvaluator(api.Object).GetSkipReasonAsync(source, request);
+        Assert.That(reason != null, Is.EqualTo(skipped));
+        api.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task Product_model_without_enabled_is_not_disabled()
+    {
+        var model = new AkeneoProductDefinition { Code = "model" };
+        var request = Request();
+        request.SkipRulesJson = """[{"attributeCode":"enabled","value":"false"}]""";
+        Assert.That(await new AkeneoProfileRuleEvaluator(Mock.Of<IAkeneoApiClient>())
+            .GetSkipReasonAsync(model, request), Is.Null);
+    }
+
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    [TestCase(true, false)]
+    public async Task Model_hold_and_disabled_sku_rules_are_independent(bool enabled, bool modelHold)
+    {
+        var source = Source(null, "model");
+        source.Enabled = enabled;
+        var model = new AkeneoProductDefinition { Code = "model", Values = JsonSerializer.SerializeToElement(new
+        {
+            model_sync_hold = new[] { new { data = modelHold, scope = "ecommerce", locale = (string?)null } }
+        }) };
+        var api = new Mock<IAkeneoApiClient>();
+        api.Setup(x => x.GetProductModelByCodeAsync("model", It.IsAny<CancellationToken>())).ReturnsAsync(model);
+        var request = Request();
+        request.SkipRulesJson = """[{"attributeCode":"model_sync_hold","value":"true"},{"attributeCode":"enabled","value":"false"}]""";
+        var reason = await new AkeneoProfileRuleEvaluator(api.Object).GetSkipReasonAsync(source, request);
+        Assert.That(reason != null, Is.EqualTo(!enabled || modelHold));
+        if (!enabled)
+            api.VerifyNoOtherCalls();
+    }
+
     [Test]
     public async Task Held_parent_blocks_descendant_even_with_child_override()
     {
@@ -101,11 +152,13 @@ public class AkeneoProfileRulesTests
         Assert.That(request.AdditionalSearchJson, Is.Null);
     }
 
-    [TestCase(false, false)]
-    [TestCase(true, false)]
-    [TestCase(false, true)]
-    [TestCase(true, true)]
-    public async Task Batch_hold_has_no_destination_writes_and_only_marks_existing_binding_seen(bool hasBinding, bool inherited)
+    [TestCase(false, false, false)]
+    [TestCase(true, false, false)]
+    [TestCase(false, true, false)]
+    [TestCase(true, true, false)]
+    [TestCase(false, false, true)]
+    [TestCase(true, false, true)]
+    public async Task Batch_hold_has_no_destination_writes_and_only_marks_existing_binding_seen(bool hasBinding, bool inherited, bool disabled)
     {
         var api = new Mock<IAkeneoApiClient>();
         var stateService = new Mock<IAkeneoProductSyncStateService>(MockBehavior.Strict);
@@ -116,6 +169,13 @@ public class AkeneoProfileRulesTests
             LastDesiredStateHash = "existing-hash", SyncProfileId = 7
         } : null;
         var source = Source("hold");
+        var request = Request();
+        if (disabled)
+        {
+            source.Enabled = false;
+            source.Parent = "unfetched";
+            request.SkipRulesJson = """[{"attributeCode":"enabled","value":"false"}]""";
+        }
         if (inherited)
         {
             source.Parent = "model";
@@ -142,7 +202,7 @@ public class AkeneoProfileRulesTests
             new Mock<IAkeneoDryRunChangeAnalyzer>(MockBehavior.Strict).Object,
             new Mock<IAkeneoAssetMappingService>(MockBehavior.Strict).Object,
             new Mock<IAkeneoAssetResolver>(MockBehavior.Strict).Object, new AkeneoProfileRuleEvaluator(api.Object));
-        var result = await service.SyncProductByUuidAsync(Request());
+        var result = await service.SyncProductByUuidAsync(request);
         Assert.That(result.Errors, Is.Empty);
         Assert.That(result.ActionType, Is.EqualTo(SyncItemActionType.Skipped));
         Assert.That(result.NopProductId, Is.EqualTo(hasBinding ? 100 : 0));

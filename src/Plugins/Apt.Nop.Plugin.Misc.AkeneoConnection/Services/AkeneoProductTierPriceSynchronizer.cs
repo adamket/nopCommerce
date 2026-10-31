@@ -4,6 +4,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Planning;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Customers;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
 using static Apt.Nop.Plugin.Misc.AkeneoConnection.Services.DryRun.AkeneoDryRunPlanHelper;
@@ -52,11 +53,13 @@ public class AkeneoProductTierPriceSynchronizer(
     }
 
     /// <summary>
-    /// The minimum quantity stored on a tier-price mapping (its target key).
+    /// The minimum quantity stored on a tier-price mapping (its target key). 0 is allowed:
+    /// some storefronts (ADF's member pricing) read a role's price from its quantity-0 tier.
+    /// Blank or invalid means 1.
     /// </summary>
     public static int GetMinimumQuantity(AkeneoAttributeMapping mapping) =>
         int.TryParse(mapping?.NopTargetKey?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity) &&
-        quantity >= 1
+        quantity >= 0
             ? quantity
             : DefaultMinimumQuantity;
 
@@ -95,6 +98,11 @@ public class AkeneoProductTierPriceSynchronizer(
                 .ToDictionary(group => group.Key, group => group.First())
             : new Dictionary<int, AkeneoManagedRelation>();
 
+        // Every slot (role + quantity) a current mapping writes, so a stale slot is never one in use.
+        var usedSlots = mappings
+            .Select(m => (RoleId: m.Mapping.NopTargetEntityId ?? 0, Quantity: GetMinimumQuantity(m.Mapping)))
+            .ToHashSet();
+
         foreach (var mapped in mappings)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -125,6 +133,8 @@ public class AkeneoProductTierPriceSynchronizer(
                 tierPrice.StoreId == 0 &&
                 tierPrice.StartDateTimeUtc == null &&
                 tierPrice.EndDateTimeUtc == null);
+
+            PlanStaleSlots(plan, context, mapped, role, quantity, existingTierPrices, ownedRelations, usedSlots);
 
             var current = existing?.Price.ToString("0.####", CultureInfo.InvariantCulture);
 
@@ -237,6 +247,56 @@ public class AkeneoProductTierPriceSynchronizer(
         }
 
         return plan;
+    }
+
+    /// <summary>
+    /// A mapping whose minimum quantity changed writes a new slot; the tier prices it
+    /// wrote for the same role in a slot no current mapping uses are removed. Tier prices
+    /// made by hand, or written by another attribute, are never touched.
+    /// </summary>
+    private void PlanStaleSlots(
+        AkeneoExecutableSectionPlan plan,
+        AkeneoProductSyncContext context,
+        AkeneoResolvedMappedValue mapped,
+        CustomerRole role,
+        int quantity,
+        IEnumerable<TierPrice> existingTierPrices,
+        IReadOnlyDictionary<int, AkeneoManagedRelation> ownedRelations,
+        ISet<(int RoleId, int Quantity)> usedSlots)
+    {
+        foreach (var stale in existingTierPrices.Where(tierPrice =>
+                     tierPrice.CustomerRoleId == role.Id &&
+                     tierPrice.Quantity != quantity &&
+                     tierPrice.StoreId == 0 &&
+                     tierPrice.StartDateTimeUtc == null &&
+                     tierPrice.EndDateTimeUtc == null &&
+                     !usedSlots.Contains((role.Id, tierPrice.Quantity))))
+        {
+            if (!ownedRelations.TryGetValue(stale.Id, out var relation) ||
+                !string.Equals(relation.AkeneoAttributeCode, mapped.Mapping.AkeneoAttributeCode, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var staleTarget = $"{role.Name} · minimum quantity {stale.Quantity}";
+            plan.AddOperation(
+                Area,
+                staleTarget,
+                GetSourceName(mapped),
+                stale.Price.ToString("0.####", CultureInfo.InvariantCulture),
+                null,
+                AkeneoDryRunOperationType.Remove,
+                $"The mapping's minimum quantity is now {quantity}, so the tier price it wrote for {stale.Quantity} is removed.",
+                false,
+                async _ =>
+                {
+                    await productService.DeleteTierPriceAsync(stale);
+                    await managedRelationService.DeleteAsync(relation);
+
+                    context.Result.AddMessage($"Removed the {staleTarget} tier price, replaced by minimum quantity {quantity}.");
+                    return true;
+                });
+        }
     }
 
     private void PlanMissingValue(

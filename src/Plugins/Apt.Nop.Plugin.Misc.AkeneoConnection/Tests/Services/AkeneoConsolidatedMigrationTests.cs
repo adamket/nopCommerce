@@ -17,6 +17,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 public class AkeneoConsolidatedMigrationTests
 {
     private static IList<IMigrationExpression> Plan(bool tablesExist, params string[] missingColumns)
+        => PlanMigration(new AkeneoConnectionMigration(), tablesExist, missingColumns);
+
+    private static IList<IMigrationExpression> PlanMigration(Migration migration, bool tablesExist, params string[] missingColumns)
     {
         var installed = typeof(DataSettingsManager).GetField("_databaseIsInstalled", BindingFlags.Static | BindingFlags.NonPublic)!;
         var initialized = typeof(NameCompatibilityManager).GetField("_isInitialized", BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -36,7 +39,7 @@ public class AkeneoConsolidatedMigrationTests
             schema.Setup(x => x.IndexExists(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns((string _, string table, string index) => tablesExist && !index.EndsWith("_AkeneoFamilyCode"));
             var context = new MigrationContext(schema.Object, Mock.Of<IServiceProvider>(), "");
-            new AkeneoConnectionMigration().GetUpExpressions(context);
+            migration.GetUpExpressions(context);
             return context.Expressions.ToList();
         }
         finally
@@ -50,6 +53,35 @@ public class AkeneoConsolidatedMigrationTests
 
     // Dropped by the migration; an up-to-date schema no longer has them.
     private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
+
+    [Test]
+    public void Published_upgrade_only_switches_managed_enabled_status_combinations()
+    {
+        var expressions = PlanMigration(new AkeneoPublishedCombinationAvailabilityMigration(), true);
+        var update = expressions.OfType<UpdateDataExpression>().Single();
+        Assert.That(expressions, Has.Count.EqualTo(1));
+        Assert.That(update.TableName, Does.EndWith(nameof(AkeneoFamilyMapping)));
+        Assert.That(update.Set.ToDictionary(column => column.Key, column => column.Value), Is.EqualTo(new Dictionary<string, object>
+        {
+            [nameof(AkeneoFamilyMapping.CombinationAvailabilitySourceId)] = (int)AkeneoCombinationAvailabilitySource.PublishedRule
+        }));
+        Assert.That(update.Where.ToDictionary(column => column.Key, column => column.Value), Is.EqualTo(new Dictionary<string, object>
+        {
+            [nameof(AkeneoFamilyMapping.VariantRelationshipModeId)] = (int)AkeneoVariantRelationshipMode.ProductAttributeCombinations,
+            [nameof(AkeneoFamilyMapping.ManageVariantsByEnabledStatus)] = true,
+            [nameof(AkeneoFamilyMapping.CombinationAvailabilitySourceId)] = (int)AkeneoCombinationAvailabilitySource.EnabledStatus
+        }));
+    }
+
+    [Test]
+    public void New_combination_configuration_defaults_to_the_published_rule()
+    {
+        Assert.That(new AkeneoFamilyMapping { ManageVariantsByEnabledStatus = true }.CombinationAvailabilitySource,
+            Is.EqualTo(AkeneoCombinationAvailabilitySource.PublishedRule));
+        var editor = new Models.AkeneoFamilyMappingModel();
+        Assert.That(editor.ManageVariantsByEnabledStatus, Is.True);
+        Assert.That(editor.CombinationAvailabilitySourceId, Is.EqualTo((int)AkeneoCombinationAvailabilitySource.PublishedRule));
+    }
 
     [Test]
     public void Existing_schema_rerun_does_not_create_or_delete_columns_or_repeat_legacy_transfer()

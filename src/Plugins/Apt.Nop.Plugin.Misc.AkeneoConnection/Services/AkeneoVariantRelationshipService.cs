@@ -306,6 +306,7 @@ public class AkeneoVariantRelationshipService(
         cacheTracker?.Touch(mappingResult.Mapping.Id);
 
 
+        var created = existingValue == null;
         if (existingValue == null)
         {
             existingValue = new ProductAttributeValue
@@ -345,6 +346,10 @@ public class AkeneoVariantRelationshipService(
 
         if (context.DisplayOrder != null)
             changed |= await RenumberValuesAsync(mappingResult.Mapping.Id, existingValue, context.DisplayOrder.Value);
+
+        // The lowest value is the preselected one, whenever a value is added or the order changes.
+        if (created || context.DisplayOrder != null)
+            changed |= await AkeneoAttributeValuePreselection.ApplyAsync(productAttributeService, mappingResult.Mapping.Id);
 
         if (context.SyncProfileId.HasValue)
         {
@@ -677,7 +682,10 @@ public class AkeneoVariantRelationshipService(
                     await productAttributeService.UpdateProductAttributeValueAsync(mapped);
 
                 if (displayOrder.HasValue)
+                {
                     mappedChanged |= await RenumberValuesAsync(productAttributeMappingId, mapped, displayOrder.Value);
+                    mappedChanged |= await AkeneoAttributeValuePreselection.ApplyAsync(productAttributeService, productAttributeMappingId);
+                }
 
                 return new AxisValueResult(mapped, mappedChanged);
             }
@@ -690,6 +698,7 @@ public class AkeneoVariantRelationshipService(
             value.AttributeValueTypeId == (int)AttributeValueType.Simple &&
             string.Equals(value.Name, axisValue.DisplayName, StringComparison.OrdinalIgnoreCase));
 
+        var created = existing == null;
         if (existing == null)
         {
             existing = new ProductAttributeValue
@@ -705,6 +714,9 @@ public class AkeneoVariantRelationshipService(
 
         if (displayOrder.HasValue)
             await RenumberValuesAsync(productAttributeMappingId, existing, displayOrder.Value);
+
+        if (created || displayOrder.HasValue)
+            await AkeneoAttributeValuePreselection.ApplyAsync(productAttributeService, productAttributeMappingId);
 
         await entityMappingService.UpsertAkeneoNopEntityMappingAsync(
             AkeneoEntityType.Option,
@@ -827,7 +839,11 @@ public class AkeneoVariantRelationshipService(
         return null;
     }
 
-    private async Task<string> BuildAssociatedValueNameAsync(AkeneoVariantImportContext context)
+    private Task<string> BuildAssociatedValueNameAsync(AkeneoVariantImportContext context) =>
+        BuildAssociatedValueNameAsync(valueTemplateRenderer, context, context.Options?.AssociatedValueNameTemplate);
+
+    internal static async Task<string> BuildAssociatedValueNameAsync(
+        IAkeneoValueTemplateRenderer renderer, AkeneoVariantImportContext context, string template)
     {
         var axisValues = context.AxisValuesByAkeneoCode.Values
             .Select(item => (
@@ -847,8 +863,8 @@ public class AkeneoVariantRelationshipService(
         };
 
         var valueName = await RenderAssociatedValueNameAsync(
-            valueTemplateRenderer,
-            context.Options?.AssociatedValueNameTemplate,
+            renderer,
+            template,
             axisValues,
             templateContext);
 

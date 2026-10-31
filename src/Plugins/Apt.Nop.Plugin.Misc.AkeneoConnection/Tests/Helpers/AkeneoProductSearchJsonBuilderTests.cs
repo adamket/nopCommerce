@@ -97,6 +97,21 @@ public class AkeneoProductSearchJsonBuilderTests
     }
 
     [Test]
+    public void Build_does_not_shift_a_database_watermark_by_the_server_offset()
+    {
+        // Times read from the database have no kind; they are stored as UTC.
+        var request = new AkeneoProductBatchImportRequest
+        {
+            UpdatedAfterUtc = new DateTime(2026, 10, 29, 18, 30, 12, DateTimeKind.Unspecified)
+        };
+
+        using var document = JsonDocument.Parse(_builder.Build(request)!);
+
+        Assert.That(document.RootElement.GetProperty("updated")[0].GetProperty("value").GetString(),
+            Is.EqualTo("2026-10-29 18:30:12"));
+    }
+
+    [Test]
     public void Build_uses_linked_entity_filters_for_asset_updates()
     {
         var request = new AkeneoProductBatchImportRequest

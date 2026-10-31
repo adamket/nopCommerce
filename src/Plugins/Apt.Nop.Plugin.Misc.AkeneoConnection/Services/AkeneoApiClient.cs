@@ -333,7 +333,7 @@ public class AkeneoApiClient : IAkeneoApiClient
                 new
                 {
                     @operator = ">",
-                    value = updatedAfterUtc.ToUniversalTime()
+                    value = AkeneoUtc.AsUtc(updatedAfterUtc)
                         .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
                 }
             }

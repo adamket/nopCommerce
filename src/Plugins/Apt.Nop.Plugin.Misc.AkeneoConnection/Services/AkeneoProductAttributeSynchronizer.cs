@@ -315,6 +315,7 @@ public partial class AkeneoProductAttributeSynchronizer
 
                             await _productAttributeService
                                 .InsertProductAttributeValueAsync(valueState.Value);
+                            await AkeneoAttributeValuePreselection.ApplyAsync(_productAttributeService, state.Mapping.Id);
                             await _entityMappingService
                                 .UpsertAkeneoNopEntityMappingAsync(
                                     AkeneoEntityType.Option,

@@ -62,6 +62,18 @@ public class AkeneoAttributeMapping : BaseEntity
         set => SpecificationMissingValueHandlingId = (int)value;
     }
 
+    /// <summary>
+    /// ShowOnProductPage for the product specification attributes this mapping
+    /// creates. Existing assignments keep their setting.
+    /// </summary>
+    public bool SpecificationShowOnProductPage { get; set; } = true;
+
+    /// <summary>
+    /// DisplayOrder for the product specification attributes this mapping
+    /// creates. Existing assignments keep their order.
+    /// </summary>
+    public int SpecificationDisplayOrder { get; set; }
+
     public string Locale { get; set; }
     public string Channel { get; set; }
     public string TransformRuleJson { get; set; }

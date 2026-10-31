@@ -2,6 +2,7 @@
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 using Microsoft.AspNetCore.Mvc;
+using Nop.Services.Helpers;
 using Nop.Services.Security;
 using Nop.Web.Areas.Admin.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
@@ -10,7 +11,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 
 public class AkeneoSyncLogController(
     IAkeneoSyncItemLogService akeneoSyncItemLogService,
-    IAkeneoSyncRunRecordService syncRunRecordService) : BaseAdminController
+    IAkeneoSyncRunRecordService syncRunRecordService,
+    IDateTimeHelper dateTimeHelper) : BaseAdminController
 {
     private const int RunsPageSize = 15;
     private const int ItemsPageSize = 20;
@@ -41,24 +43,31 @@ public class AkeneoSyncLogController(
             pageIndex: page,
             pageSize: pageSize);
 
+        var runs = new List<object>();
+        foreach (var run in result)
+        {
+            runs.Add(new
+            {
+                id = run.Id,
+                syncRunRecordId = run.Id,
+                syncType = GetSyncTypeName(run.SyncTypeId),
+                status = GetStatusName(run.SyncStatusId),
+                startedOn = await FormatUserTimeAsync(run.StartedOnUtc),
+                finishedOn = run.FinishedOnUtc.HasValue
+                    ? await FormatUserTimeAsync(run.FinishedOnUtc.Value) : "",
+                totalRead = run.TotalRead,
+                createdCount = run.CreatedCount,
+                updatedCount = run.UpdatedCount,
+                skippedCount = run.SkippedCount,
+                failedCount = run.FailedCount,
+                errorSummary = run.ErrorSummary ?? ""
+            });
+        }
+
         return Json(new
         {
             success = true,
-            runs = result.Select(r => new
-            {
-                id = r.Id,
-                syncRunRecordId = r.Id,
-                syncType = GetSyncTypeName(r.SyncTypeId),
-                status = GetStatusName(r.SyncStatusId),
-                startedOnUtc = r.StartedOnUtc.ToString("u"),
-                finishedOnUtc = r.FinishedOnUtc?.ToString("u") ?? "",
-                totalRead = r.TotalRead,
-                createdCount = r.CreatedCount,
-                updatedCount = r.UpdatedCount,
-                skippedCount = r.SkippedCount,
-                failedCount = r.FailedCount,
-                errorSummary = r.ErrorSummary ?? ""
-            }).ToList(),
+            runs,
             pageIndex = result.PageIndex,
             totalPages = result.TotalPages,
             totalCount = result.TotalCount
@@ -77,24 +86,35 @@ public class AkeneoSyncLogController(
             pageIndex: page,
             pageSize: pageSize);
 
-        return Json(new
+        var items = new List<object>();
+        foreach (var item in result)
         {
-            success = true,
-            items = result.Select(item => new
+            items.Add(new
             {
                 id = item.Id,
-                createdOnUtc = item.CreatedOnUtc.ToString("u"),
+                createdOn = await FormatUserTimeAsync(item.CreatedOnUtc),
                 action = GetActionName(item.ActionTypeId),
                 akeneoIdentifier = item.AkeneoIdentifier ?? string.Empty,
                 akeneoProductUuid = item.AkeneoProductUuid ?? string.Empty,
                 nopProductId = item.NopProductId,
                 message = item.Message ?? string.Empty
-            }).ToList(),
+            });
+        }
+
+        return Json(new
+        {
+            success = true,
+            items,
             pageIndex = result.PageIndex,
             totalPages = result.TotalPages,
             totalCount = result.TotalCount
         });
     }
+
+    private async Task<string> FormatUserTimeAsync(DateTime utc) =>
+        (await dateTimeHelper.ConvertToUserTimeAsync(
+            DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+            DateTimeKind.Utc)).ToString("yyyy-MM-dd HH:mm:ss");
 
     private static string GetSyncTypeName(int id) =>
         Enum.IsDefined(typeof(SyncType), id) ? ((SyncType)id).ToString() : $"Type {id}";

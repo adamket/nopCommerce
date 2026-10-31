@@ -39,6 +39,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoReferenceEntityValueResolver, AkeneoReferenceEntityValueResolver>();
         services.AddScoped<IAkeneoVariantDisplayOrderResolver, AkeneoVariantDisplayOrderResolver>();
         services.AddScoped<IAkeneoAttributeValueCacheTracker, AkeneoAttributeValueCacheTracker>();
+        services.AddScoped<IAkeneoDeferredProductEvents, AkeneoDeferredProductEvents>();
         services.AddScoped<IAkeneoValueTransformationService, AkeneoValueTransformationService>();
         services.AddScoped<IAkeneoValueTemplateRenderer, AkeneoValueTemplateRenderer>();
         services.AddScoped<IAkeneoAssetMappingService, AkeneoAssetMappingService>();
@@ -72,6 +73,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoManagedRelationService, AkeneoManagedRelationService>();
         services.AddScoped<IAkeneoSyncLeaseService, AkeneoSyncLeaseService>();
         services.AddScoped<IAkeneoCatalogReconciliationService, AkeneoCatalogReconciliationService>();
+        services.AddScoped<AkeneoAssociatedOptionReconciliationService>();
         services.AddScoped<IAkeneoCatalogBindingService, AkeneoCatalogBindingService>();
         services.AddScoped<IAkeneoWritePolicyGate, AkeneoWritePolicyGate>();
         services.AddScoped<IAkeneoVariantRepresentationCleanupService, AkeneoVariantRepresentationCleanupService>();

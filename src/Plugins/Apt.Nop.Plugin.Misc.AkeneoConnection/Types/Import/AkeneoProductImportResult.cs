@@ -15,6 +15,10 @@ public class AkeneoProductImportResult
 
     public int? NopProductAttributeValueId { get; set; }
 
+    // Set only after the association was verified, including the unchanged-hash path.
+    // A profile/write-policy skip must not authorize collection cleanup.
+    internal bool AssociatedOptionsVerified { get; set; }
+
     public AkeneoProductDestinationKind DestinationKind { get; set; } =
         AkeneoProductDestinationKind.NopProduct;
 

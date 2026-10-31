@@ -53,7 +53,7 @@
                         <thead>
                             <tr>
                                 <th class="akeneo-chevron-cell"></th>
-                                <th>Started (UTC)</th>
+                                <th>Started (local)</th>
                                 <th>Type</th>
                                 <th>Status</th>
                                 <th class="text-right">Read</th>
@@ -67,7 +67,7 @@
                             <template v-for="run in runs" :key="run.id">
                                 <tr class="akeneo-run-row" v-bind:class="{ 'is-open': run.open }" v-on:click="toggle(run)">
                                     <td class="akeneo-chevron-cell"><i class="fas fa-chevron-right chevron"></i></td>
-                                    <td class="akeneo-dim">{{ run.startedOnUtc }}</td>
+                                    <td class="akeneo-dim">{{ run.startedOn }}</td>
                                     <td>{{ run.syncType }}</td>
                                     <td><span class="badge" v-bind:class="statusClass(run.status)">{{ run.status }}</span></td>
                                     <td class="text-right">{{ run.totalRead }}</td>
@@ -91,7 +91,7 @@
                                                 <table class="table table-sm mb-0 akeneo-item-table">
                                                     <thead>
                                                         <tr>
-                                                            <th>Created (UTC)</th>
+                                                            <th>Created (local)</th>
                                                             <th>Action</th>
                                                             <th>Identifier</th>
                                                             <th>Nop product</th>
@@ -100,7 +100,7 @@
                                                     </thead>
                                                     <tbody>
                                                         <tr v-for="item in run.items" :key="item.id">
-                                                            <td class="akeneo-dim">{{ item.createdOnUtc }}</td>
+                                                            <td class="akeneo-dim">{{ item.createdOn }}</td>
                                                             <td><span class="badge" v-bind:class="actionClass(item.action)">{{ item.action }}</span></td>
                                                             <td class="akeneo-mono">{{ item.akeneoIdentifier || item.akeneoProductUuid || '-' }}</td>
                                                             <td>

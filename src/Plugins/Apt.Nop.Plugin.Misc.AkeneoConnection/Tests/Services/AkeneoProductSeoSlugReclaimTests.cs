@@ -126,6 +126,44 @@ public class AkeneoProductSeoSlugReclaimTests
     }
 
     [Test]
+    public async Task Slug_generated_from_name_is_reclaimed_from_a_deleted_product_for_a_new_product()
+    {
+        var held = HeldBy(5, deleted: true);
+        _urlRecordService
+            .Setup(service => service.GetSeNameAsync("Red Maple", It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync("red-maple");
+
+        var context = Context(null, withSlugMapping: false);
+        context.PlanningState.ProposedProductName = "Red Maple";
+        context.Product = new Product { Id = 10, Name = "Red Maple" };
+        await Synchronizer().SynchronizeAsync(context);
+
+        _urlRecordService.Verify(service => service.DeleteUrlRecordsAsync(
+            It.Is<IList<UrlRecord>>(records => records.Single() == held)), Times.Once);
+        _urlRecordService.Verify(service => service.SaveSlugAsync(
+            context.Product, "red-maple", 0), Times.Once);
+        Assert.That(context.Result.Errors, Is.Empty);
+    }
+
+    [Test]
+    public async Task Slug_generated_from_name_is_reclaimed_when_the_slug_mapping_has_no_value()
+    {
+        var held = HeldBy(5, deleted: true);
+        _urlRecordService
+            .Setup(service => service.GetSeNameAsync("Red Maple", It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync("red-maple");
+
+        var context = Context(new Product { Id = 10, Name = "Red Maple" }, slugHasValue: false);
+        await Synchronizer().SynchronizeAsync(context);
+
+        _urlRecordService.Verify(service => service.DeleteUrlRecordsAsync(
+            It.Is<IList<UrlRecord>>(records => records.Single() == held)), Times.Once);
+        _urlRecordService.Verify(service => service.SaveSlugAsync(
+            context.Product, "red-maple", 0), Times.Once);
+        Assert.That(context.Result.Errors, Is.Empty);
+    }
+
+    [Test]
     public async Task Slug_with_only_disallowed_characters_is_saved_with_a_warning()
     {
         _urlRecordService
@@ -192,7 +230,7 @@ public class AkeneoProductSeoSlugReclaimTests
             urlRecordRepository: _urlRecordRepository.Object);
     }
 
-    private static AkeneoProductSyncContext Context(Product product, bool withSlugMapping = true)
+    private static AkeneoProductSyncContext Context(Product product, bool withSlugMapping = true, bool slugHasValue = true)
     {
         var source = new AkeneoProductDefinition
         {
@@ -224,7 +262,7 @@ public class AkeneoProductSeoSlugReclaimTests
                         NopTargetTypeId = (int)NopTargetType.SeoField,
                         NopTargetKey = "SeName"
                     },
-                    HasValue = true,
+                    HasValue = slugHasValue,
                     Value = new AkeneoResolvedProductValue
                     {
                         AttributeCode = "url_slug",

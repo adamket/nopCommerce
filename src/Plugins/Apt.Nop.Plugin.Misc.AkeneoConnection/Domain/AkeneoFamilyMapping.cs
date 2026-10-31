@@ -13,7 +13,7 @@ public class AkeneoFamilyMapping : BaseEntity
 
     // What decides a managed combination's availability; only read when
     // ManageVariantsByEnabledStatus is on (it has kept its name since it was the only source).
-    public int CombinationAvailabilitySourceId { get; set; }
+    public int CombinationAvailabilitySourceId { get; set; } = (int)AkeneoCombinationAvailabilitySource.PublishedRule;
 
     public int VariantRelationshipModeId { get; set; }
 

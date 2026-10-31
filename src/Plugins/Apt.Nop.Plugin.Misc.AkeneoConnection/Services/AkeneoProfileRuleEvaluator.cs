@@ -23,8 +23,21 @@ public sealed class AkeneoProfileRuleEvaluator(IAkeneoApiClient apiClient) : IAk
         if (rules.Count == 0)
             return null;
 
+        // Enabled is a product payload field, never an inherited attribute. Check
+        // it first so a held SKU cannot reach parent writes or combination cleanup.
+        foreach (var rule in rules.Where(rule => IsEnabledRule(rule.AttributeCode)))
+        {
+            if (source.Enabled.HasValue && string.Equals(
+                    source.Enabled.Value ? "true" : "false", rule.Value, StringComparison.OrdinalIgnoreCase))
+                return DescribeSkip(source, rule.AttributeCode, rule.Value, request);
+        }
+
+        var attributeRules = rules.Where(rule => !IsEnabledRule(rule.AttributeCode)).ToList();
+        if (attributeRules.Count == 0)
+            return null;
+
         var chain = await GetChainAsync(source, request, cancellationToken);
-        foreach (var rule in rules)
+        foreach (var rule in attributeRules)
         {
             // A held parent also blocks descendants, even if a child overrides
             // the value: importing that child could otherwise modify its parent.
@@ -32,13 +45,20 @@ public sealed class AkeneoProfileRuleEvaluator(IAkeneoApiClient apiClient) : IAk
             {
                 var raw = ResolveRaw(chain.Skip(index), rule.AttributeCode, request);
                 if (raw.HasValue && Matches(raw.Value, rule.Value))
-                    return $"Skipped by profile rule: '{rule.AttributeCode}' equals '{rule.Value}' " +
-                        $"on '{chain[index].Identifier ?? chain[index].Code ?? chain[index].Uuid}' " +
-                        $"(channel '{request.Channel}', locale '{request.Locale}').";
+                    return DescribeSkip(chain[index], rule.AttributeCode, rule.Value, request);
             }
         }
         return null;
     }
+
+    private static bool IsEnabledRule(string attributeCode) =>
+        string.Equals(attributeCode, "enabled", StringComparison.OrdinalIgnoreCase);
+
+    private static string DescribeSkip(AkeneoProductDefinition source, string attributeCode,
+        string expectedValue, AkeneoProductImportRequest request) =>
+        $"Skipped by profile rule: '{attributeCode}' equals '{expectedValue}' " +
+        $"on '{source.Identifier ?? source.Code ?? source.Uuid}' " +
+        $"(channel '{request.Channel}', locale '{request.Locale}').";
 
     private async Task<IReadOnlyList<AkeneoProductDefinition>> GetChainAsync(
         AkeneoProductDefinition source, AkeneoProductImportRequest request, CancellationToken cancellationToken)

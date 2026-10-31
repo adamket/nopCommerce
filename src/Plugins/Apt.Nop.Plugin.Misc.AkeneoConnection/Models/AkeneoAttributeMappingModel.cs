@@ -34,6 +34,8 @@ public record AkeneoAttributeMappingModel : BaseNopEntityModel
     public string NopTargetKey { get; set; }
     public int SpecificationMissingValueHandlingId { get; set; } =
         (int)AkeneoSpecificationMissingValueHandling.CreateSpecificationAttributeOption;
+    public bool SpecificationShowOnProductPage { get; set; } = true;
+    public int SpecificationDisplayOrder { get; set; }
 
     /// <summary>
     /// Default destination suggested by the Akeneo attribute metadata when no

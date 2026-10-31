@@ -235,6 +235,13 @@ public class AkeneoMappingController(
                 ? model.SpecificationMissingValueHandlingId
                 : (int)AkeneoSpecificationMissingValueHandling
                     .CreateSpecificationAttributeOption;
+        mapping.SpecificationShowOnProductPage =
+            model.NopTargetTypeId != (int)NopTargetType.SpecificationAttribute ||
+            model.SpecificationShowOnProductPage;
+        mapping.SpecificationDisplayOrder =
+            model.NopTargetTypeId == (int)NopTargetType.SpecificationAttribute
+                ? model.SpecificationDisplayOrder
+                : 0;
 
         // Only persist the entity id for target types that use one, so
         // switching targets cannot leave a stale destination id behind.
@@ -1006,16 +1013,16 @@ public class AkeneoMappingController(
             if (!model.NopTargetEntityId.HasValue || model.NopTargetEntityId <= 0)
                 errors.Add("Customer role is required when Target Type is Tier Price.");
 
-            // The target key holds the minimum quantity; blank means 1.
+            // The target key holds the minimum quantity; blank means 1, and 0 is allowed.
             var quantityText = model.NopTargetKey?.Trim();
 
             if (string.IsNullOrEmpty(quantityText))
             {
                 model.NopTargetKey = AkeneoProductTierPriceSynchronizer.DefaultMinimumQuantity.ToString();
             }
-            else if (!int.TryParse(quantityText, out var quantity) || quantity < 1)
+            else if (!int.TryParse(quantityText, out var quantity) || quantity < 0)
             {
-                errors.Add("Minimum quantity must be a whole number of 1 or more.");
+                errors.Add("Minimum quantity must be a whole number of 0 or more.");
             }
             else
             {
@@ -1145,6 +1152,10 @@ public class AkeneoMappingController(
                         replacementMapping
                             .SpecificationMissingValueHandlingId
                             .ToString(),
+                    specificationShowOnProductPage =
+                        replacementMapping.SpecificationShowOnProductPage,
+                    specificationDisplayOrder =
+                        replacementMapping.SpecificationDisplayOrder,
                     isRequired = replacementMapping.IsRequired,
                     entityScopeId = replacementMapping.EntityScopeId,
                     fallbackSources = fallbackSources.Select(source => new

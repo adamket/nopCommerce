@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Runtime.CompilerServices;
@@ -49,7 +49,10 @@ public class AkeneoProductBatchSyncService(
     IAkeneoCombinationAvailabilityService combinationAvailabilityService = null,
     AkeneoProductCrossSellSynchronizer crossSellSynchronizer = null,
     IAkeneoVariantDisplayOrderResolver variantDisplayOrderResolver = null,
-    IAkeneoAttributeValueCacheTracker attributeValueCacheTracker = null)
+    IAkeneoAttributeValueCacheTracker attributeValueCacheTracker = null,
+    IAkeneoDeferredProductEvents deferredProductEvents = null,
+    IAkeneoValueTemplateRenderer valueTemplateRenderer = null,
+    AkeneoAssociatedOptionReconciliationService associatedOptionReconciliation = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -69,6 +72,7 @@ public class AkeneoProductBatchSyncService(
         request ??= new AkeneoProductBatchImportRequest();
         await ValidateRequestAsync(request);
 
+        associatedOptionReconciliation?.Begin(request);
         var result = new AkeneoProductBatchImportResult
         {
             SyncRunRecordId = request.SyncRunRecordId
@@ -284,6 +288,11 @@ public class AkeneoProductBatchSyncService(
                     .ReconcileUnseenAsync(request, result, cancellationToken);
             }
 
+            if (associatedOptionReconciliation != null)
+                result.ReconciledCount += await associatedOptionReconciliation.ReconcileAsync(
+                    request, result, parentProductCache, cancellationToken,
+                    async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
+
             result.AddMessage(
                 $"Product synchronization completed. Read: {result.TotalRead}, " +
                 $"Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, " +
@@ -311,6 +320,12 @@ public class AkeneoProductBatchSyncService(
             result.CompletedAllPages = false;
             result.AddError(ex.Message);
             return result;
+        }
+        finally
+        {
+            // Safety net: anything still queued (a unit path that ended early) is published at the end.
+            if (deferredProductEvents != null)
+                await deferredProductEvents.PublishAsync();
         }
     }
 
@@ -472,6 +487,8 @@ public class AkeneoProductBatchSyncService(
                     itemResult.InclusionReason = inclusionReason;
                     ClearRolledBackDestination(itemResult);
                 }
+
+                associatedOptionReconciliation?.Observe(source, itemResult);
 
                 foreach (var related in TakeCommittedRelatedResults(itemResult))
                 {
@@ -696,6 +713,14 @@ public class AkeneoProductBatchSyncService(
                     transaction.Complete();
             }
 
+            if (deferredProductEvents != null)
+            {
+                if (result.Success && result.ActionType != SyncItemActionType.Failed)
+                    await deferredProductEvents.PublishAsync();
+                else
+                    deferredProductEvents.Discard();
+            }
+
             if (!result.Success || result.ActionType == SyncItemActionType.Failed)
                 ClearRolledBackDestination(result);
         }
@@ -724,15 +749,52 @@ public class AkeneoProductBatchSyncService(
         IDictionary<string, AkeneoProductDefinition> productModelCache,
         CancellationToken cancellationToken)
     {
+        var cachedParents = new Dictionary<string, Product>(parentProductCache, StringComparer.OrdinalIgnoreCase);
+        AkeneoProductImportResult outcome = null;
+
         try
         {
-            return await ReconcileProductUnitCoreAsync(
+            outcome = await ReconcileProductUnitCoreAsync(
                 source, request, result, parentProductCache, productModelCache, cancellationToken);
+            return outcome;
         }
         finally
         {
+            var rolledBack = outcome is not { Success: true } || outcome.ActionType == SyncItemActionType.Failed;
+
+            // A failed unit rolled back any parent it created, so the next variant must not reuse it.
+            if (rolledBack)
+                RestoreParentCache(parentProductCache, cachedParents);
+
             if (attributeValueCacheTracker != null)
                 await attributeValueCacheTracker.ClearTouchedAsync();
+
+            // Product updated events raised inside the unit, now that it has saved. A rolled-back
+            // unit updated nothing, so its events are dropped rather than clearing caches for nothing.
+            if (deferredProductEvents != null)
+            {
+                if (rolledBack)
+                    deferredProductEvents.Discard();
+                else
+                    await deferredProductEvents.PublishAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts the parent cache back as it was before a unit: entries the unit added are
+    /// removed and entries it replaced are restored.
+    /// </summary>
+    internal static void RestoreParentCache(
+        IDictionary<string, Product> parentProductCache,
+        IReadOnlyDictionary<string, Product> cachedBefore)
+    {
+        foreach (var (code, product) in parentProductCache.ToList())
+        {
+            if (!cachedBefore.TryGetValue(code, out var before))
+                parentProductCache.Remove(code);
+            else if (!ReferenceEquals(before, product))
+                parentProductCache[code] = before;
         }
     }
 
@@ -1318,6 +1380,7 @@ public class AkeneoProductBatchSyncService(
             result.ActionType = SyncItemActionType.Skipped;
             result.AddMessage(
                 "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this item.");
+            result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
             return result;
         }
 
@@ -1376,6 +1439,7 @@ public class AkeneoProductBatchSyncService(
         // Parent product-model changes are logged and counted on the parent's
         // own entry (RelatedResults), so they no longer promote this leaf.
         ApplyVariantResult(result, variantResult, previousState);
+        result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
 
         if (variantResult.Mode ==
             AkeneoVariantRelationshipMode.ProductAttributeCombinations)
@@ -2488,59 +2552,10 @@ public class AkeneoProductBatchSyncService(
                         familyConfiguration.Id)).ToList()
                     : Array.Empty<AkeneoFamilyVariantAxisMapping>();
 
+            var representation = await BuildVariantRepresentationFingerprintAsync(
+                variantContext, familyConfiguration, overrideRule, hierarchy, forcedMode, axisMappings);
             var desiredStateHash = await BuildResolvedContextHashAsync(
-                leafContext,
-                request,
-                new
-                {
-                    Path = "variant",
-                    ImmediateParentCode = hierarchy.ImmediateParentModel?.Code?.Trim(),
-                    EffectiveParentCode = hierarchy.EffectiveParentProductModel?.Code?.Trim(),
-                    HierarchyMode = (int)hierarchy.Mode,
-                    // A sub-model parent changes EffectiveParentCode and the
-                    // rule fingerprint; it adds no field so other hashes keep.
-                    IsFlattened = hierarchy.IsFlattened,
-                    ForcedMode = forcedMode.HasValue ? (int?)forcedMode.Value : null,
-                    // The display order joins only families with sort keys, so other hashes keep.
-                    Family = variantContext.DisplayOrder == null
-                        ? BuildFamilyMappingFingerprint(familyConfiguration)
-                        : new
-                        {
-                            Mapping = BuildFamilyMappingFingerprint(familyConfiguration),
-                            familyConfiguration.VariantDisplayOrderKeys,
-                            // Values are ranked 0, 10, 20… by this key; the marker rewrites each variant once.
-                            Ordering = "rank-10",
-                            DisplayOrder = variantContext.DisplayOrder.Value,
-                            Positions = variantContext.DisplayOrder.PositionsByAttributeCode
-                                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                                .ToList()
-                        },
-                    OverrideRule = BuildSubModelRuleFingerprint(overrideRule),
-                    AxisMappings = axisMappings
-                        .OrderBy(axis => axis.DisplayOrder)
-                        .ThenBy(axis => axis.Id)
-                        .Select(axis => new
-                        {
-                            axis.AkeneoAttributeCode,
-                            axis.NopProductAttributeId,
-                            axis.IsRequired,
-                            axis.DisplayOrder,
-                            axis.AkeneoVariantAxisLevel
-                        })
-                        .ToList(),
-                    AxisValues = variantContext.AxisValuesByAkeneoCode
-                        .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(pair => new
-                        {
-                            AttributeCode = pair.Key,
-                            pair.Value.AkeneoOptionCode,
-                            pair.Value.DisplayName
-                        })
-                        .ToList(),
-                    variantContext.Price,
-                    variantContext.StockQuantity
-                },
-                cancellationToken);
+                leafContext, request, representation, cancellationToken);
 
             return string.IsNullOrWhiteSpace(desiredStateHash)
                 ? null
@@ -2560,6 +2575,77 @@ public class AkeneoProductBatchSyncService(
             // falls back to the normal transactional reconciliation path.
             return null;
         }
+    }
+
+    internal async Task<object> BuildVariantRepresentationFingerprintAsync(
+        AkeneoVariantImportContext variantContext,
+        AkeneoFamilyMapping familyConfiguration,
+        AkeneoFamilySubModelRule overrideRule,
+        AkeneoProductModelHierarchyResolution hierarchy,
+        AkeneoVariantRelationshipMode? forcedMode,
+        IReadOnlyList<AkeneoFamilyVariantAxisMapping> axisMappings)
+    {
+        // A preserved nopCommerce structure can use associated values even when
+        // the family's configured mode differs. Resolve the name for every variant.
+        // A missing renderer must disable the optimization, not hash an incomplete state.
+        ArgumentNullException.ThrowIfNull(valueTemplateRenderer);
+        var nameTemplate = overrideRule.UsesSubModelParent()
+            && !string.IsNullOrWhiteSpace(overrideRule.AssociatedValueNameTemplate)
+                ? overrideRule.AssociatedValueNameTemplate
+                : familyConfiguration?.AssociatedValueNameTemplate;
+        var associatedValueName = await AkeneoVariantRelationshipService.BuildAssociatedValueNameAsync(
+            valueTemplateRenderer, variantContext, nameTemplate);
+
+        return new
+        {
+            Path = "variant",
+            AssociatedValueName = associatedValueName,
+            ImmediateParentCode = hierarchy.ImmediateParentModel?.Code?.Trim(),
+            EffectiveParentCode = hierarchy.EffectiveParentProductModel?.Code?.Trim(),
+            HierarchyMode = (int)hierarchy.Mode,
+            // A sub-model parent changes EffectiveParentCode and the
+            // rule fingerprint; it adds no field so other hashes keep.
+            IsFlattened = hierarchy.IsFlattened,
+            ForcedMode = forcedMode.HasValue ? (int?)forcedMode.Value : null,
+            // The display order joins only families with sort keys, so other hashes keep.
+            Family = variantContext.DisplayOrder == null
+                ? BuildFamilyMappingFingerprint(familyConfiguration)
+                : new
+                {
+                    Mapping = BuildFamilyMappingFingerprint(familyConfiguration),
+                    familyConfiguration.VariantDisplayOrderKeys,
+                    // Values are ranked 0, 10, 20… by this key; the marker rewrites each variant once (changed when preselection was added).
+                    Ordering = "rank-10-preselect-lowest",
+                    DisplayOrder = variantContext.DisplayOrder.Value,
+                    Positions = variantContext.DisplayOrder.PositionsByAttributeCode
+                        .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                },
+            OverrideRule = BuildSubModelRuleFingerprint(overrideRule),
+            AxisMappings = axisMappings
+                .OrderBy(axis => axis.DisplayOrder)
+                .ThenBy(axis => axis.Id)
+                .Select(axis => new
+                {
+                    axis.AkeneoAttributeCode,
+                    axis.NopProductAttributeId,
+                    axis.IsRequired,
+                    axis.DisplayOrder,
+                    axis.AkeneoVariantAxisLevel
+                })
+                .ToList(),
+            AxisValues = variantContext.AxisValuesByAkeneoCode
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => new
+                {
+                    AttributeCode = pair.Key,
+                    pair.Value.AkeneoOptionCode,
+                    pair.Value.DisplayName
+                })
+                .ToList(),
+            variantContext.Price,
+            variantContext.StockQuantity
+        };
     }
 
     internal async Task<string> BuildResolvedContextHashAsync(

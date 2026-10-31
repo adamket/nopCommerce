@@ -163,15 +163,18 @@ public partial class AkeneoProductSeoSynchronizer
         {
             var proposedName = ResolveProductNameForSeo(context);
             var slugProduct = new Product { Name = proposedName };
-            var proposedSlug = await _urlRecordService.ValidateSeNameAsync(
+            var reclaim = await FindReleasableSlugAsync(context, proposedName, 0);
+            var proposedSlug = reclaim?.Slug ?? await _urlRecordService.ValidateSeNameAsync(
                 slugProduct,
                 string.Empty,
                 proposedName,
                 ensureNotEmpty: true);
-            var conflict = await DescribeSlugConflictAsync(
-                proposedName,
-                proposedSlug,
-                fromMapping: false);
+            var conflict = reclaim == null
+                ? await DescribeSlugConflictAsync(
+                    proposedName,
+                    proposedSlug,
+                    fromMapping: false)
+                : null;
 
             if (conflict != null)
                 plan.Errors.Add(conflict);
@@ -184,10 +187,13 @@ public partial class AkeneoProductSeoSynchronizer
                 proposedSlug,
                 AkeneoDryRunOperationType.Create,
                 conflict ??
-                "New products receive a validated URL slug even when no explicit SeName mapping exists.",
-                executeAsync: async _ => await SaveSlugIfChangedAsync(
+                (reclaim != null
+                    ? $"The slug is held by {reclaim.DescribeHolders()} and will be moved to this product."
+                    : "New products receive a validated URL slug even when no explicit SeName mapping exists."),
+                executeAsync: async _ => await SaveReclaimedSlugAsync(
                     context,
-                    proposedSlug));
+                    proposedSlug,
+                    reclaim));
         }
 
         if (hasMetaWriteOperation)
@@ -249,9 +255,11 @@ public partial class AkeneoProductSeoSynchronizer
         };
 
         var requested = mapped.HasValue ? mapped.DisplayValue : string.Empty;
-        var reclaim = mapped.HasValue
-            ? await FindReleasableSlugAsync(context, requested, slugProduct.Id)
-            : null;
+        // A slug built from the name is reclaimed the same way as a mapped one.
+        var reclaim = await FindReleasableSlugAsync(
+            context,
+            mapped.HasValue ? requested : proposedName,
+            slugProduct.Id);
         var proposed = reclaim?.Slug ?? await _urlRecordService.ValidateSeNameAsync(
             slugProduct,
             requested,
@@ -297,19 +305,28 @@ public partial class AkeneoProductSeoSynchronizer
             executeAsync: type is AkeneoDryRunOperationType.Create or
                 AkeneoDryRunOperationType.Update or
                 AkeneoDryRunOperationType.Clear
-                ? async _ =>
-                {
-                    if (reclaim != null && context.Product != null)
-                        await ReleaseSlugAsync(context, reclaim);
-
-                    var saved = await SaveSlugIfChangedAsync(context, proposed);
-
-                    if (reclaim != null && context.Product != null)
-                        await GiveReleasedVariantsSlugsAsync(context, reclaim);
-
-                    return saved;
-                }
+                ? async _ => await SaveReclaimedSlugAsync(context, proposed, reclaim)
                 : null);
+    }
+
+    /// <summary>
+    /// Saves the slug, first releasing it from the records a reclaim found and
+    /// then giving any released variants a slug of their own.
+    /// </summary>
+    private async Task<bool> SaveReclaimedSlugAsync(
+        AkeneoProductSyncContext context,
+        string slug,
+        SlugReclaim reclaim)
+    {
+        if (reclaim != null && context.Product != null)
+            await ReleaseSlugAsync(context, reclaim);
+
+        var saved = await SaveSlugIfChangedAsync(context, slug);
+
+        if (reclaim != null && context.Product != null)
+            await GiveReleasedVariantsSlugsAsync(context, reclaim);
+
+        return saved;
     }
 
     private sealed record SlugReclaim(
@@ -331,7 +348,8 @@ public partial class AkeneoProductSeoSynchronizer
     }
 
     /// <summary>
-    /// Returns the cleaned Akeneo slug when every URL record holding it can be
+    /// Returns the cleaned slug (Akeneo's, or the one built from the product
+    /// name) when every URL record holding it can be
     /// moved to this product instead of the slug being suffixed with "-2":
     /// records of products that are deleted (or no longer exist), and, for a
     /// product-model parent, records of the live products this profile synced

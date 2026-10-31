@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 
@@ -447,8 +448,7 @@ public class AkeneoProductModelDeltaFanOutService(
         DateTime updatedAfterUtc,
         bool includeLinkedAssets)
     {
-        var value = updatedAfterUtc
-            .ToUniversalTime()
+        var value = AkeneoUtc.AsUtc(updatedAfterUtc)
             .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
         if (!includeLinkedAssets)

@@ -1,11 +1,13 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
+﻿using System.Transactions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
 using Nop.Core.Events;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 public class AkeneoProductSyncPipeline(
     IEnumerable<IAkeneoProductSectionSynchronizer> synchronizers,
-    IEventPublisher eventPublisher)
+    IEventPublisher eventPublisher,
+    IAkeneoDeferredProductEvents deferredProductEvents = null)
     : IAkeneoProductSyncPipeline
 {
     private readonly IReadOnlyList<IAkeneoProductSectionSynchronizer>
@@ -38,13 +40,17 @@ public class AkeneoProductSyncPipeline(
         }
         finally
         {
-            // Sections save the product row without an event; publish one here,
-            // even when a later section failed, so the product's caches are
-            // cleared once rather than once per section.
+            // Sections save the product row without an event; raise one here, even
+            // when a later section failed, so the product's caches are cleared once
+            // rather than once per section. Inside a sync unit's transaction it is
+            // queued and published once the transaction has finished.
             if (context.ProductUpdateEventPending && context.Product != null)
             {
                 context.ProductUpdateEventPending = false;
-                await eventPublisher.EntityUpdatedAsync(context.Product);
+                if (Transaction.Current != null && deferredProductEvents != null)
+                    deferredProductEvents.Defer(context.Product);
+                else
+                    await eventPublisher.EntityUpdatedAsync(context.Product);
             }
         }
     }
