@@ -127,6 +127,46 @@ public class AkeneoNewProductDefaultsTests
         });
     }
 
+    [TestCase("trees")]
+    [TestCase("merchandise")]
+    public async Task Standalone_template_overrides_the_family_default_for_new_products_only(string family)
+    {
+        var context = Context(existing: null, family: family);
+        context.StandaloneProductTemplateId = 7;
+        await Synchronizer().SynchronizeAsync(context);
+        Assert.That(_inserted!.ProductTemplateId, Is.EqualTo(7));
+
+        var existing = new Product { Id = 100, Sku = "SKU", Name = "Red Maple", ProductTemplateId = 9 };
+        var updateContext = Context(existing, family);
+        updateContext.StandaloneProductTemplateId = 7;
+        await Synchronizer().SynchronizeAsync(updateContext);
+        Assert.That(existing.ProductTemplateId, Is.EqualTo(9));
+    }
+
+    [TestCase(null)]
+    [TestCase(0)]
+    public async Task An_unselected_standalone_template_keeps_the_family_default(int? templateId)
+    {
+        var context = Context(existing: null);
+        context.StandaloneProductTemplateId = templateId;
+        await Synchronizer().SynchronizeAsync(context);
+        Assert.That(_inserted!.ProductTemplateId, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task Dry_run_and_apply_use_the_same_standalone_template()
+    {
+        var context = Context(existing: null);
+        context.StandaloneProductTemplateId = 7;
+        var preview = new AkeneoProductMappingPreviewModel();
+        await Synchronizer().PlanAsync(context, preview);
+        var template = preview.Operations.Single(operation => operation.Target == "Product template");
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(template), Does.Contain("Product template ID 7"));
+        Assert.That(_inserted, Is.Null);
+        await Synchronizer().SynchronizeAsync(context);
+        Assert.That(_inserted!.ProductTemplateId, Is.EqualTo(7));
+    }
+
     private static AkeneoProductSyncContext Context(Product? existing, string family = "trees") => new()
     {
         Source = new AkeneoProductDefinition

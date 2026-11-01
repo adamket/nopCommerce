@@ -15,10 +15,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 // only while its index is missing, since SQL Server rejects altering an indexed
 // column on such a rerun.
 [NopMigration(
-    "2026-10-29 13:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order)",
+    "2026-11-01 10:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template)",
     MigrationProcessType.NoMatter)]
-public sealed class AkeneoConnectionMigration : Migration
+public class AkeneoConnectionMigration : Migration
 {
     // FluentMigrator queues table creation until Up has finished. Treat columns
     // supplied by TableFor as present while building this migration's expressions.
@@ -1031,6 +1031,15 @@ public sealed class AkeneoConnectionMigration : Migration
                 .Nullable();
         }
 
+        if (!ColumnExists(table, nameof(AkeneoFamilySubModelRule.StandaloneProductTemplateId)))
+        {
+            Create.Column(nameof(AkeneoFamilySubModelRule.StandaloneProductTemplateId))
+                .OnTable(table)
+                .AsInt32()
+                .Nullable();
+        }
+
+        EnsureNullableStringColumn(table, nameof(AkeneoFamilySubModelRule.StandaloneProductNameTemplate), int.MaxValue);
         EnsureNullableStringColumn(table, nameof(AkeneoFamilySubModelRule.AssociatedValueNameTemplate), int.MaxValue);
 
         if (!ColumnExists(table, nameof(AkeneoFamilySubModelRule.HideChildProducts)))
@@ -1169,4 +1178,15 @@ public sealed class AkeneoConnectionMigration : Migration
     }
 
     #endregion
+}
+
+// Preserve the original schema version for fresh installs and older upgrades.
+// The one-time Published availability migration (2026-10-30) requires these
+// tables and columns to exist first. Both entries share the idempotent schema
+// logic above; installations that already applied this version skip this entry.
+[NopMigration("2026-10-29 13:00:00",
+    "AkeneoConnection: Initial consolidated schema",
+    MigrationProcessType.NoMatter)]
+public sealed class AkeneoConnectionInitialSchemaMigration : AkeneoConnectionMigration
+{
 }

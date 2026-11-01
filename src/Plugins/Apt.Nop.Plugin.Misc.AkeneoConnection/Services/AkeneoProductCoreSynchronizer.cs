@@ -53,6 +53,7 @@ public partial class AkeneoProductCoreSynchronizer
             return;
         }
 
+        var previousCoreValues = isNew ? null : CaptureCoreFieldValues(product, plan);
         var changed = await plan.ExecuteAsync(context, cancellationToken);
 
         if (isNew)
@@ -75,7 +76,7 @@ public partial class AkeneoProductCoreSynchronizer
             context.ProductUpdateEventPending = true;
 
             context.Result.AddMessage(
-                $"Updated core product fields for product ID {product.Id}.");
+                BuildCoreChangesMessage(product, previousCoreValues));
         }
 
         context.Product = product;
@@ -92,6 +93,8 @@ public partial class AkeneoProductCoreSynchronizer
     {
         var product = CreateBaseProduct(context);
         product.TaxCategoryId = _taxSettings?.DefaultTaxCategoryId ?? 0;
+        if (context.StandaloneProductTemplateId is > 0)
+            product.ProductTemplateId = context.StandaloneProductTemplateId.Value;
 
         var defaults = await GetNewProductDefaultsAsync(context);
         if (defaults == null)
@@ -102,7 +105,7 @@ public partial class AkeneoProductCoreSynchronizer
             product.TaxCategoryId = defaults.NewProductTaxCategoryId.Value;
         if (defaults.NewProductWarehouseId is > 0)
             product.WarehouseId = defaults.NewProductWarehouseId.Value;
-        if (defaults.NewProductTemplateId is > 0)
+        if (context.StandaloneProductTemplateId is not > 0 && defaults.NewProductTemplateId is > 0)
             product.ProductTemplateId = defaults.NewProductTemplateId.Value;
 
         return product;

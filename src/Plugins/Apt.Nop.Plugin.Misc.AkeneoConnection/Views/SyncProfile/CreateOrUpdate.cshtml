@@ -670,53 +670,63 @@
                     <div class="card-header">
                         <div class="card-title"><i class="fas fa-filter"></i> Profile Skip Rules</div>
                     </div>
-                    <div class="card-body">
-                        <div class="form-group row">
-                            <div class="col-md-3 text-right"><label class="control-label">Skip rules</label></div>
-                            <div class="col-md-9">
-                                <span class="form-text text-muted">Skip the entire product when any attribute/value rule matches, using this profile's channel and locale. A matching parent also skips its descendants.</span>
-                                <span class="form-text text-muted">Skipped products stay unchanged and count as seen; keep them inside the source filters.</span>
-                                <span class="form-text text-muted">Use the raw option code or value, not its display label.</span>
-                                <span class="form-text text-muted" v-if="!form.skipRules.length">No skip rules configured.</span>
-                            </div>
+                    <div class="card-body akeneo-skip-rules">
+                        <div class="akeneo-skip-intro">
+                            <span class="akeneo-skip-match"><i class="fas fa-filter" aria-hidden="true"></i> Match any rule</span>
+                            <p>Skip a product when <strong>any one</strong> of these conditions matches.</p>
+                            <span class="akeneo-skip-count" role="status">{{ form.skipRules.length }} {{ form.skipRules.length === 1 ? 'rule' : 'rules' }}</span>
                         </div>
 
-                        <div class="row" v-for="(row, index) in form.skipRules" v-bind:key="index">
-                            <div class="col-md-9 offset-md-3">
-                                <div class="form-row align-items-end">
-                                    <div class="form-group col-sm-5 col-lg-4">
-                                        <label class="d-block font-weight-bold mb-1" v-bind:for="'sp-skip-attribute-' + index">Akeneo attribute code</label>
-                                        <input type="text" class="form-control"
-                                               v-bind:id="'sp-skip-attribute-' + index"
-                                               v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
-                                               v-model="row.attributeCode" placeholder="Attribute code" />
-                                    </div>
-                                    <div class="form-group col-sm-5 col-lg-4">
-                                        <label class="d-block font-weight-bold mb-1" v-bind:for="'sp-skip-value-' + index">Equals value</label>
-                                        <input type="text" class="form-control"
-                                               v-bind:id="'sp-skip-value-' + index"
-                                               v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
-                                               v-model="row.value" placeholder="Option code or value" />
-                                    </div>
-                                    <div class="form-group col-auto">
-                                        <button type="button" class="btn btn-default"
-                                                v-on:click="form.skipRules.splice(index, 1)"
-                                                v-bind:aria-label="'Remove skip rule ' + (index + 1)"
-                                                title="Remove skip rule">
-                                            <i class="far fa-trash-alt" aria-hidden="true"></i>
-                                        </button>
-                                    </div>
+                        <div class="akeneo-skip-empty" v-if="!form.skipRules.length">
+                            <i class="fas fa-filter" aria-hidden="true"></i>
+                            <strong>No skip rules configured</strong>
+                            <p>Add a condition to hold matching products out of this profile's sync.</p>
+                        </div>
+
+                        <div v-for="(row, index) in form.skipRules" v-bind:key="index">
+                            <div class="akeneo-skip-or" v-if="index > 0"><span>or</span></div>
+                            <fieldset class="akeneo-skip-rule">
+                                <legend class="sr-only">Skip rule {{ index + 1 }}</legend>
+                                <span class="akeneo-skip-number" aria-hidden="true">{{ index + 1 }}</span>
+                                <div class="akeneo-skip-field">
+                                    <label v-bind:for="'sp-skip-attribute-' + index">Akeneo attribute code</label>
+                                    <input type="text" class="form-control"
+                                           v-bind:id="'sp-skip-attribute-' + index"
+                                           v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
+                                           v-bind:aria-invalid="!!fieldError('SkipRulesJson')"
+                                           aria-describedby="sp-skip-help sp-skip-error"
+                                           v-model="row.attributeCode" placeholder="Attribute code" spellcheck="false" />
                                 </div>
-                            </div>
+                                <span class="akeneo-skip-equals" aria-hidden="true">equals</span>
+                                <div class="akeneo-skip-field">
+                                    <label v-bind:for="'sp-skip-value-' + index">Equals value</label>
+                                    <input type="text" class="form-control"
+                                           v-bind:id="'sp-skip-value-' + index"
+                                           v-bind:class="{ 'is-invalid': fieldError('SkipRulesJson') }"
+                                           v-bind:aria-invalid="!!fieldError('SkipRulesJson')"
+                                           aria-describedby="sp-skip-help sp-skip-error"
+                                           v-model="row.value" placeholder="Option code or value" spellcheck="false" />
+                                </div>
+                                <button type="button" class="btn btn-default akeneo-skip-remove"
+                                        v-on:click="form.skipRules.splice(index, 1)"
+                                        v-bind:aria-label="'Remove skip rule ' + (index + 1)"
+                                        title="Remove skip rule">
+                                    <i class="far fa-trash-alt" aria-hidden="true"></i><span>Remove</span>
+                                </button>
+                            </fieldset>
                         </div>
 
-                        <div class="form-group row mb-0">
-                            <div class="col-md-9 offset-md-3">
-                                <div class="invalid-feedback d-block" v-if="fieldError('SkipRulesJson')">{{ fieldError('SkipRulesJson') }}</div>
-                                <button type="button" class="btn btn-default" v-on:click="addSkipRule">
-                                    <i class="fas fa-plus-square"></i> Add skip rule
-                                </button>
-                            </div>
+                        <div id="sp-skip-error" class="invalid-feedback d-block" role="alert">{{ fieldError('SkipRulesJson') }}</div>
+                        <div class="akeneo-skip-actions">
+                            <button type="button" class="btn btn-default" v-on:click="addSkipRule">
+                                <i class="fas fa-plus" aria-hidden="true"></i> Add skip rule
+                            </button>
+                            <span id="sp-skip-help">Use the raw option code or value, not its display label.</span>
+                        </div>
+                        <div class="akeneo-skip-note">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
+                            <p>Rules use this profile's channel and locale. A matching parent also skips its descendants.
+                                Skipped products stay unchanged and count as seen; keep them inside the source filters.</p>
                         </div>
                     </div>
                 </div>

@@ -55,6 +55,45 @@ public class AkeneoConsolidatedMigrationTests
     private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
 
     [Test]
+    public void Standalone_name_upgrade_adds_a_nullable_column_once()
+    {
+        var expressions = Plan(true, "StandaloneProductNameTemplate");
+        var column = expressions.OfType<CreateColumnExpression>().Single();
+        Assert.That(column.TableName, Does.EndWith(nameof(AkeneoFamilySubModelRule)));
+        Assert.That(column.Column.Name, Is.EqualTo("StandaloneProductNameTemplate"));
+        Assert.That(column.Column.IsNullable, Is.True);
+        Assert.That(Plan(true).OfType<CreateColumnExpression>(), Is.Empty);
+    }
+
+    [Test]
+    public void Standalone_template_upgrade_adds_a_nullable_column_once()
+    {
+        var expressions = Plan(true, "StandaloneProductTemplateId");
+        var column = expressions.OfType<CreateColumnExpression>().Single();
+        Assert.That(column.TableName, Does.EndWith(nameof(AkeneoFamilySubModelRule)));
+        Assert.That(column.Column.Name, Is.EqualTo("StandaloneProductTemplateId"));
+        Assert.That(column.Column.IsNullable, Is.True);
+        Assert.That(Plan(true).OfType<CreateColumnExpression>(), Is.Empty);
+    }
+
+    [Test]
+    public void Schema_bootstrap_precedes_the_one_time_update_and_refresh_runs_after_old_standalone_upgrades()
+    {
+        var initial = typeof(AkeneoConnectionInitialSchemaMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
+        var availability = typeof(AkeneoPublishedCombinationAvailabilityMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
+        var consolidated = typeof(AkeneoConnectionMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
+        Assert.That(initial.Version, Is.LessThan(availability.Version));
+        Assert.That(consolidated.Version, Is.GreaterThan(new DateTime(2026, 11, 1, 8, 0, 0).Ticks));
+        Assert.That(consolidated.TargetMigrationProcess, Is.EqualTo(global::Nop.Data.Migrations.MigrationProcessType.NoMatter));
+        var tables = PlanMigration(new AkeneoConnectionInitialSchemaMigration(), false).OfType<CreateTableExpression>().ToList();
+        Assert.That(tables.Any(table => table.TableName.EndsWith(nameof(AkeneoFamilyMapping))), Is.True);
+        var rules = tables.Single(table => table.TableName.EndsWith(nameof(AkeneoFamilySubModelRule)));
+        Assert.That(rules.Columns.Select(column => column.Name), Does.Contain("StandaloneProductTemplateId").And.Contain("StandaloneProductNameTemplate"));
+        Assert.That(Plan(true, DroppedColumns).OfType<UpdateDataExpression>(), Is.Empty,
+            "Schema refresh must not reapply the one-time availability selection.");
+    }
+
+    [Test]
     public void Published_upgrade_only_switches_managed_enabled_status_combinations()
     {
         var expressions = PlanMigration(new AkeneoPublishedCombinationAvailabilityMigration(), true);
@@ -122,13 +161,14 @@ public class AkeneoConsolidatedMigrationTests
             "CrossSellSyncModeId", "CrossSellAssociationType",
             "ParentLevelId", "AssociatedProductAttributeId", "AssociatedValueNameTemplate", "HideChildProducts",
             "NewProductTaxCategoryId", "NewProductIsShipEnabled", "NewProductWarehouseId", "NewProductTemplateId",
-            "CombinationAvailabilitySourceId", "VariantDisplayOrderKeys" };
+            "CombinationAvailabilitySourceId", "VariantDisplayOrderKeys", "StandaloneProductTemplateId", "StandaloneProductNameTemplate" };
         var created = Plan(true, columns.Concat(DroppedColumns).ToArray()).OfType<CreateColumnExpression>().ToList();
         Assert.That(created.Select(x => x.Column.Name), Is.EquivalentTo(columns));
         Assert.That(created.Single(x => x.Column.Name == "SyncItemLogRetentionDays").Column.DefaultValue, Is.EqualTo(30));
         Assert.That(created.Single(x => x.Column.Name == "SyncRunRecordRetentionDays").Column.DefaultValue, Is.EqualTo(90));
         Assert.That(created.Single(x => x.Column.Name == "TagSyncModeId").Column.DefaultValue, Is.EqualTo((int)AkeneoCollectionSyncMode.Disabled));
         Assert.That(created.Single(x => x.Column.Name == "CrossSellSyncModeId").Column.DefaultValue, Is.EqualTo((int)AkeneoCollectionSyncMode.Disabled));
+        Assert.That(created.Single(x => x.Column.Name == "StandaloneProductTemplateId").Column.IsNullable, Is.True);
         Assert.That(created.Single(x => x.Column.Name == "ParentLevelId").Column.DefaultValue, Is.EqualTo((int)AkeneoSubModelParentLevel.FamilySetting));
         Assert.That(created.Single(x => x.Column.Name == "HideChildProducts").Column.DefaultValue, Is.EqualTo(true));
     }

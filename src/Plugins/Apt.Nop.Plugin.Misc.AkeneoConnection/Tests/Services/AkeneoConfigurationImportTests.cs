@@ -101,7 +101,7 @@ public class AkeneoConfigurationImportTests
         var json = Document();
         json["familyMappings"]!.AsArray().Add(JsonNode.Parse("""
         {"configuration":{"id":12,"akeneoFamilyCode":"nursery"},"axisMappings":[],
-         "subModelRules":[{"id":13,"familyMappingId":12,"akeneoAxisAttributeCode":"root_variant","triggerValue":"seedling"}]}
+         "subModelRules":[{"id":13,"familyMappingId":12,"akeneoAxisAttributeCode":"root_variant","triggerValue":"seedling","standaloneProductTemplateId":7,"standaloneProductNameTemplate":"{root_variant_name}"}]}
         """));
         json["attributeMappings"]!.AsArray().Add(JsonNode.Parse("""
         {"configuration":{"id":22,"akeneoAttributeCode":"product_name","nopTargetTypeId":10,"nopTargetKey":"Name"},
@@ -112,8 +112,21 @@ public class AkeneoConfigurationImportTests
         _attributes.Setup(r => r.InsertAsync(It.IsAny<AkeneoAttributeMapping>(), false))
             .Callback<AkeneoAttributeMapping, bool>((m, _) => { Assert.That(m.Id, Is.Zero); m.Id = 202; }).Returns(Task.CompletedTask);
         await _service.ImportAsync(json.ToJsonString());
-        _rules.Verify(r => r.InsertAsync(It.Is<AkeneoFamilySubModelRule>(m => m.Id == 0 && m.FamilyMappingId == 101), false), Times.Once);
+        _rules.Verify(r => r.InsertAsync(It.Is<AkeneoFamilySubModelRule>(m => m.Id == 0 && m.FamilyMappingId == 101 && m.StandaloneProductTemplateId == 7 && m.StandaloneProductNameTemplate == "{root_variant_name}"), false), Times.Once);
         _fallbacks.Verify(r => r.InsertAsync(It.Is<AkeneoAttributeMappingFallbackSource>(m => m.Id == 0 && m.AttributeMappingId == 202), false), Times.Once);
+    }
+
+    [Test]
+    public void Invalid_standalone_name_template_is_rejected_before_writes()
+    {
+        var json = Document();
+        json["familyMappings"]!.AsArray().Add(JsonNode.Parse("""
+        {"configuration":{"akeneoFamilyCode":"nursery"},"axisMappings":[],
+         "subModelRules":[{"standaloneProductNameTemplate":"{root_variant_name"}]}
+        """));
+        Assert.ThrowsAsync<ArgumentException>(() => _service.ImportAsync(json.ToJsonString()));
+        _families.VerifyNoOtherCalls();
+        _leases.VerifyNoOtherCalls();
     }
 
     [Test]

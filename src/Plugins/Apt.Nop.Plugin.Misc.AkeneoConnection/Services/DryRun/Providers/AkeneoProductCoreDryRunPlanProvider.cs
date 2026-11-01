@@ -242,6 +242,20 @@ public partial class AkeneoProductCoreSynchronizer
             context.SourceCode ??
             context.ProductKey;
 
+        if (!string.IsNullOrWhiteSpace(context.StandaloneProductNameOverride))
+        {
+            var overrideName = context.StandaloneProductNameOverride.Trim();
+            mappings.RemoveAll(mapped => string.Equals(mapped.Mapping.NopTargetKey?.Trim(), "Name", StringComparison.OrdinalIgnoreCase));
+            mappedKeys.Add("Name");
+            proposedProductName = overrideName;
+            var currentName = isNew ? null : product.Name;
+            var operation = isNew ? AkeneoDryRunOperationType.Create : DetermineScalarChangeType(currentName, overrideName);
+            plan.AddOperation("Product fields", "Name", "Standalone override rule", currentName, overrideName,
+                operation, "The matching standalone rule supplied a product name.",
+                executeAsync: operation == AkeneoDryRunOperationType.NoChange
+                    ? null : _ => Task.FromResult(ApplyProductField(product, "Name", overrideName)));
+        }
+
         foreach (var mapped in mappings)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -408,6 +422,7 @@ public partial class AkeneoProductCoreSynchronizer
             "Gtin" => product.Gtin,
             "ManufacturerPartNumber" => product.ManufacturerPartNumber,
             "Published" => product.Published.ToString(),
+            "DisableBuyButton" => product.DisableBuyButton.ToString(),
             _ => null
         };
     }

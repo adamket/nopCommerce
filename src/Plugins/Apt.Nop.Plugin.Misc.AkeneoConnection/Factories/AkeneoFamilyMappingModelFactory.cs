@@ -124,6 +124,8 @@ public class AkeneoFamilyMappingModelFactory
                     VariantAxisAttributeCode = x.VariantAxisAttributeCode,
                     VariantTriggerValue = x.VariantTriggerValue,
                     VariantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
+                    StandaloneProductTemplateId = x.StandaloneProductTemplateId,
+                    StandaloneProductNameTemplate = x.StandaloneProductNameTemplate,
                     MergeAncestorValues = x.MergeAncestorValues,
                     ParentLevelId = x.ParentLevelId,
                     AssociatedProductAttributeId = x.AssociatedProductAttributeId,

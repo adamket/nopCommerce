@@ -10,6 +10,8 @@ public class AkeneoFamilySubModelRuleModel
     public string VariantTriggerValue { get; set; }
 
     public int VariantRelationshipOverrideModeId { get; set; }
+    public int? StandaloneProductTemplateId { get; set; }
+    public string StandaloneProductNameTemplate { get; set; }
     public bool MergeAncestorValues { get; set; } = true;
     public int DisplayOrder { get; set; }
 

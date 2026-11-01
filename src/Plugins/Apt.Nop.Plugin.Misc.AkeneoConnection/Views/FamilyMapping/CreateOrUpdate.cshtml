@@ -61,6 +61,8 @@
                 variantAxisAttributeCode = x.VariantAxisAttributeCode,
                 variantTriggerValue = x.VariantTriggerValue,
                 variantRelationshipOverrideModeId = x.VariantRelationshipOverrideModeId,
+                standaloneProductTemplateId = x.StandaloneProductTemplateId,
+                standaloneProductNameTemplate = x.StandaloneProductNameTemplate,
                 mergeAncestorValues = x.MergeAncestorValues,
                 displayOrder = x.DisplayOrder,
                 parentLevelId = x.ParentLevelId,
@@ -864,6 +866,39 @@
                                                                    min="0"
                                                                    v-bind:name="subModelRuleName(index, 'DisplayOrder')"
                                                                    v-model.number="row.displayOrder" />
+                                                            <span class="form-text">Lower numbers run first. Only the first matching rule applies.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row mt-3" v-if="!isSubModelParentRule(row) && Number(row.variantRelationshipOverrideModeId) === modes.none">
+                                                    <div class="col-md-5">
+                                                        <div class="form-group mb-0">
+                                                            <label v-bind:for="'standalone-template-' + row.uid">New standalone product template</label>
+                                                            <akeneo-search-select v-bind:input-id="'standalone-template-' + row.uid"
+                                                                                  item-name="standalone product template"
+                                                                                  v-model="row.standaloneProductTemplateId"
+                                                                                  v-bind:options="[{ value: '', text: 'Use family default' }, ...comboOptions(availableProductTemplates, true)]"
+                                                                                  placeholder="Use family default"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'StandaloneProductTemplateId')"
+                                                                   v-bind:value="row.standaloneProductTemplateId ?? ''" />
+                                                            <span class="form-text">Applied only when this rule creates a standalone product. Existing products keep their template.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row mt-3" v-if="!isSubModelParentRule(row) && Number(row.variantRelationshipOverrideModeId) === modes.none">
+                                                    <div class="col-md-9">
+                                                        <div class="form-group mb-0">
+                                                            <label v-bind:for="'standalone-name-' + row.uid">Standalone product name template</label>
+                                                            <input type="text" class="form-control"
+                                                                   v-bind:id="'standalone-name-' + row.uid"
+                                                                   v-bind:name="subModelRuleName(index, 'StandaloneProductNameTemplate')"
+                                                                   v-model="row.standaloneProductNameTemplate"
+                                                                   placeholder="{root_variant_name}" spellcheck="false" />
+                                                            <span class="form-text">Optional. Use <code>{root_variant_name}</code> to override the name when populated; blank or missing values use the normal name mapping. Applies to new and existing standalone products.</span>
+                                                            <span class="form-text">Enable Merge ancestor values when the attribute is on a parent model.</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1014,6 +1049,8 @@
                             variantRelationshipOverrideModeId:
                                 Number(row.variantRelationshipOverrideModeId ??
                                     @((int)AkeneoVariantRelationshipMode.None)),
+                            standaloneProductTemplateId: row.standaloneProductTemplateId ?? '',
+                            standaloneProductNameTemplate: row.standaloneProductNameTemplate ?? '',
                             mergeAncestorValues: row.mergeAncestorValues !== false,
                             displayOrder: row.displayOrder || index + 1,
                             parentLevelId: Number(row.parentLevelId || 0),
@@ -1497,6 +1534,8 @@
                         variantAxisAttributeCode: '',
                         variantTriggerValue: '',
                         variantRelationshipOverrideModeId: this.modes.none,
+                        standaloneProductTemplateId: '',
+                        standaloneProductNameTemplate: '',
                         mergeAncestorValues: true,
                         displayOrder: this.form.subModelRules.length + 1,
                         parentLevelId: this.parentLevels.familySetting,

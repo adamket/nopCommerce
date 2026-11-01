@@ -57,6 +57,12 @@ public sealed class AkeneoProductSyncContext
     /// </summary>
     public bool RepresentedByParent { get; set; }
 
+    /// <summary>Creation-only template selected by a matching standalone override rule.</summary>
+    public int? StandaloneProductTemplateId { get; set; }
+
+    /// <summary>Nonblank name from a matching standalone rule; null retains normal Name mapping.</summary>
+    public string StandaloneProductNameOverride { get; set; }
+
     public string ProductKey { get; init; }
 
     public string Sku { get; init; }

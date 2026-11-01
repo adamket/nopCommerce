@@ -51,6 +51,11 @@ public sealed class AkeneoConfigurationImportService(
                 await RequireEntityAsync(productAttributes, axis.NopProductAttributeId);
             foreach (var rule in section.SubModelRules.Where(rule => rule.AssociatedProductAttributeId is > 0))
                 await RequireEntityAsync(productAttributes, rule.AssociatedProductAttributeId!.Value);
+            if (productTemplates != null)
+            {
+                foreach (var rule in section.SubModelRules.Where(rule => rule.StandaloneProductTemplateId is > 0))
+                    await RequireEntityAsync(productTemplates, rule.StandaloneProductTemplateId.Value);
+            }
             if (taxCategories != null && section.Configuration.NewProductTaxCategoryId is > 0)
                 await RequireEntityAsync(taxCategories, section.Configuration.NewProductTaxCategoryId.Value);
             if (warehouses != null && section.Configuration.NewProductWarehouseId is > 0)
@@ -116,6 +121,13 @@ public sealed class AkeneoConfigurationImportService(
             var validation = templates.Validate(section.Configuration.ValueTemplate);
             AkeneoConfigurationImportDocument.Require(validation.Success,
                 "Invalid template in mapping '" + section.Configuration.Name + "'.");
+        }
+        foreach (var rule in document.FamilyMappings.SelectMany(section => section.SubModelRules)
+                     .Where(rule => !string.IsNullOrWhiteSpace(rule.StandaloneProductNameTemplate)))
+        {
+            var validation = templates.Validate(rule.StandaloneProductNameTemplate);
+            AkeneoConfigurationImportDocument.Require(validation.Success,
+                "Invalid standalone product name template: " + string.Join(" ", validation.Errors));
         }
         cancellationToken.ThrowIfCancellationRequested();
         await ValidateDestinationsAsync(document);

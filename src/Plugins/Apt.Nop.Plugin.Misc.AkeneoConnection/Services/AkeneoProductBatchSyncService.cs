@@ -1252,6 +1252,8 @@ public class AkeneoProductBatchSyncService(
                             AkeneoAttributeMappingEntityScope.StandaloneProduct,
                             cancellationToken);
                     effectiveContext.PreloadedAssetBinaries = assetBinaryCache;
+                    await AkeneoStandaloneProductOverrides.ApplyAsync(
+                        effectiveContext, overrideRule, valueTemplateRenderer, cancellationToken);
 
                     if (!result.Success)
                     {
@@ -2486,6 +2488,8 @@ public class AkeneoProductBatchSyncService(
                             cancellationToken,
                             knownState: previousState);
 
+                        await AkeneoStandaloneProductOverrides.ApplyAsync(
+                            context, overrideRule, valueTemplateRenderer, cancellationToken);
                         var hash = await BuildResolvedContextHashAsync(
                             context,
                             request,
@@ -2982,6 +2986,20 @@ public class AkeneoProductBatchSyncService(
                 rule.AssociatedValueNameTemplate,
                 rule.HideChildProducts
             }
+            : rule.VariantRelationshipOverrideMode == AkeneoVariantRelationshipMode.None &&
+                (rule.StandaloneProductTemplateId is > 0 || !string.IsNullOrWhiteSpace(rule.StandaloneProductNameTemplate))
+                ? new
+                {
+                    rule.AkeneoAxisAttributeCode,
+                    rule.TriggerValue,
+                    rule.VariantAxisAttributeCode,
+                    rule.VariantTriggerValue,
+                    rule.VariantRelationshipOverrideModeId,
+                    rule.MergeAncestorValues,
+                    rule.DisplayOrder,
+                    rule.StandaloneProductTemplateId,
+                    rule.StandaloneProductNameTemplate
+                }
             : new
             {
                 rule.AkeneoAxisAttributeCode,

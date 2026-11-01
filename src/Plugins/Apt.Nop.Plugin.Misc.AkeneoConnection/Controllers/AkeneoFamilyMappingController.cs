@@ -9,6 +9,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Services.Messages;
+using Nop.Services.Catalog;
 using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
@@ -24,7 +25,8 @@ public class AkeneoFamilyMappingController(
     IAkeneoFamilyMappingModelFactory modelFactory,
     IAkeneoApiClient akeneoApiClient,
     INotificationService notificationService,
-    IAkeneoValueTemplateRenderer valueTemplateRenderer)
+    IAkeneoValueTemplateRenderer valueTemplateRenderer,
+    IProductTemplateService productTemplateService)
     : BasePluginController
 {
     private const string ListViewPath =
@@ -480,6 +482,27 @@ public class AkeneoFamilyMappingController(
         }
 
         ValidateSubModelRules(model.SubModelRules, model.AssociatedProductAttributeId);
+        for (var index = 0; index < model.SubModelRules.Count; index++)
+        {
+            var rule = model.SubModelRules[index];
+            if (rule.ParentLevelId != (int)AkeneoSubModelParentLevel.MatchingSubModel &&
+                rule.VariantRelationshipOverrideModeId == (int)AkeneoVariantRelationshipMode.None &&
+                !string.IsNullOrWhiteSpace(rule.StandaloneProductNameTemplate))
+            {
+                var validation = valueTemplateRenderer.Validate(rule.StandaloneProductNameTemplate);
+                if (!validation.Success)
+                    ModelState.AddModelError($"SubModelRules[{index}].StandaloneProductNameTemplate",
+                        $"Sub-model rule {index + 1}: " + string.Join(" ", validation.Errors));
+            }
+            if (rule.ParentLevelId != (int)AkeneoSubModelParentLevel.MatchingSubModel &&
+                rule.VariantRelationshipOverrideModeId == (int)AkeneoVariantRelationshipMode.None &&
+                rule.StandaloneProductTemplateId is > 0 &&
+                await productTemplateService.GetProductTemplateByIdAsync(rule.StandaloneProductTemplateId.Value) == null)
+            {
+                ModelState.AddModelError($"SubModelRules[{index}].StandaloneProductTemplateId",
+                    $"Sub-model rule {index + 1}: select an existing product template.");
+            }
+        }
     }
 
     private void ValidateSubModelRules(IList<AkeneoFamilySubModelRuleModel> rules, int? familyAssociatedProductAttributeId)
@@ -628,6 +651,12 @@ public class AkeneoFamilyMappingController(
                 VariantRelationshipOverrideModeId = model.ParentLevelId == (int)AkeneoSubModelParentLevel.MatchingSubModel
                     ? (int)AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue
                     : model.VariantRelationshipOverrideModeId,
+                StandaloneProductTemplateId = model.ParentLevelId != (int)AkeneoSubModelParentLevel.MatchingSubModel &&
+                    model.VariantRelationshipOverrideModeId == (int)AkeneoVariantRelationshipMode.None
+                        ? PositiveOrNull(model.StandaloneProductTemplateId) : null,
+                StandaloneProductNameTemplate = model.ParentLevelId != (int)AkeneoSubModelParentLevel.MatchingSubModel &&
+                    model.VariantRelationshipOverrideModeId == (int)AkeneoVariantRelationshipMode.None
+                        ? model.StandaloneProductNameTemplate?.Trim() : null,
                 MergeAncestorValues = model.MergeAncestorValues,
                 ParentLevelId = model.ParentLevelId,
                 AssociatedProductAttributeId = model.AssociatedProductAttributeId is > 0 ? model.AssociatedProductAttributeId : null,
