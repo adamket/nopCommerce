@@ -414,6 +414,7 @@
                v-bind:id="inputId"
                v-bind:aria-label="itemName"
                type="text"
+               autocomplete="off"
                class="akeneo-combobox-input"
                role="combobox"
                aria-autocomplete="list"

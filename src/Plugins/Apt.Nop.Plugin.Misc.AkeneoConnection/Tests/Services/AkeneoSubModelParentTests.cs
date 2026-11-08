@@ -209,7 +209,8 @@ public class AkeneoSubModelParentTests
         await Synchronizer().SynchronizeAsync(context);
 
         _urls.Verify(s => s.DeleteUrlRecordsAsync(It.IsAny<IList<UrlRecord>>()), Times.Never);
-        Assert.That(context.Result.Success, Is.False);
+        Assert.That(context.Result.Success, Is.True);
+        Assert.That(context.Result.Warnings.Single(), Does.Contain("red-maple-seedling"));;
     }
 
     private UrlRecord SlugHeldByLiveProduct(int productId)

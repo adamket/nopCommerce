@@ -12,17 +12,33 @@ public interface IAkeneoSyncLeaseService
         AkeneoSyncLease lease,
         int syncRunRecordId);
 
-    Task RenewAsync(
+    /// <summary>
+    /// Extends a held lease. Returns false when the lease no longer exists
+    /// (it expired and was taken over, or was released manually), so the
+    /// holder must stop.
+    /// </summary>
+    Task<bool> RenewAsync(
         AkeneoSyncLease lease,
         TimeSpan duration);
 
     /// <summary>
-    /// Extends a held lease. Returns false when the lease no longer exists
-    /// (for example it was released manually), so the holder must stop.
+    /// Extends a held lease by ID. Returns false when the lease no longer
+    /// exists, so the holder must stop.
     /// </summary>
     Task<bool> RenewByIdAsync(
         int syncLeaseId,
         TimeSpan duration);
+
+    /// <summary>
+    /// Extends <paramref name="lease"/> when its last check-in is older than the
+    /// renewal interval, or always when <paramref name="force"/> is set. Throws
+    /// <see cref="AkeneoSyncLeaseLostException"/> when the lease is no longer
+    /// held, so the caller stops before writing anything else.
+    /// </summary>
+    Task RenewIfDueAsync(
+        AkeneoSyncLease lease,
+        TimeSpan duration,
+        bool force = false);
 
     Task ReleaseAsync(AkeneoSyncLease lease);
 
@@ -32,8 +48,12 @@ public interface IAkeneoSyncLeaseService
     Task<AkeneoSyncLease> GetLeaseAsync(string lockKey);
 
     /// <summary>
-    /// Deletes the lease for <paramref name="lockKey"/> regardless of its
-    /// holder. Returns the removed lease, or null when none was held.
+    /// Deletes the lease for <paramref name="lockKey"/> only when it has expired
+    /// or its holder has not checked in for <paramref name="staleAfter"/>, so a
+    /// run that is still working is never overlapped. Returns the removed
+    /// lease, or null when none was removed.
     /// </summary>
-    Task<AkeneoSyncLease> ForceReleaseAsync(string lockKey);
+    Task<AkeneoSyncLease> ForceReleaseAsync(
+        string lockKey,
+        TimeSpan staleAfter);
 }

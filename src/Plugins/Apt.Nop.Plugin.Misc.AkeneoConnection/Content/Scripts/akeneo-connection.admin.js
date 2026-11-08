@@ -49,3 +49,41 @@ HTMLElement.prototype.loading = function (isLoading, options) {
 
   return element;
 };
+
+// New log messages can use "product ID 123". Keep named products and lists readable in older logs.
+window.AkeneoProductLog = (function () {
+    function productReferenceParts(message) {
+        message = message || '';
+        var references = /\b(?:product\s+'(?:[^'\n]|'(?=\w))*'\s+\(ID\s+([1-9]\d*)(?=\))|(?:product\s+(?:IDs?\s*[:#]?\s*|#)|nopProductId\s*[:=]\s*)([1-9]\d*(?:,\s*[1-9]\d*)*))(?![\w-])/gi;
+        var parts = [];
+        var cursor = 0;
+        for (var match of message.matchAll(references)) {
+            var ids = match[1] || match[2];
+            var start = match.index + match[0].length - ids.length;
+            for (var number of ids.matchAll(/\d+/g)) {
+                if (Number(number[0]) > 2147483647) continue;
+                var offset = start + number.index;
+                parts.push({ text: message.slice(cursor, offset) });
+                parts.push({ text: number[0], productId: number[0] });
+                cursor = offset + number[0].length;
+            }
+        }
+        parts.push({ text: message.slice(cursor) });
+        return parts;
+    }
+
+    const component = {
+        props: ['message', 'productEditBase', 'parts'],
+        render: function () {
+            const parts = this.parts || productReferenceParts(this.message);
+            return Vue.h('span', parts.map(part => part.productId
+                ? Vue.h('a', {
+                    href: this.productEditBase + part.productId,
+                    target: '_blank',
+                    rel: 'noopener noreferrer'
+                }, part.text)
+                : part.text));
+        }
+    };
+    return { component, productReferenceParts };
+})();

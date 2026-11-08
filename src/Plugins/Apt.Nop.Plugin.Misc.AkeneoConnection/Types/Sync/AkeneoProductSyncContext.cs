@@ -57,6 +57,9 @@ public sealed class AkeneoProductSyncContext
     /// </summary>
     public bool RepresentedByParent { get; set; }
 
+    /// <summary>Visibility the variant relationship will apply after product sections run.</summary>
+    public bool? PlannedVisibleIndividually { get; set; }
+
     /// <summary>Creation-only template selected by a matching standalone override rule.</summary>
     public int? StandaloneProductTemplateId { get; set; }
 

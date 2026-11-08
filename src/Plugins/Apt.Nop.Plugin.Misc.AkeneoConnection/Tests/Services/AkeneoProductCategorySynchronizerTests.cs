@@ -219,6 +219,49 @@ public class AkeneoProductCategorySynchronizerTests
     public void Only_associated_and_grouped_children_are_shown_through_their_parent(AkeneoVariantRelationshipMode mode, bool represented) =>
         Assert.That(AkeneoProductBatchSyncService.IsRepresentedByParent(mode), Is.EqualTo(represented));
 
+    [TestCase(AkeneoCollectionSyncMode.Merge)]
+    [TestCase(AkeneoCollectionSyncMode.ReplaceManaged)]
+    [TestCase(AkeneoCollectionSyncMode.ReplaceAll)]
+    public async Task Batch_collects_missing_mappings_without_repeating_item_warnings_or_removing_categories(AkeneoCollectionSyncMode mode)
+    {
+        var context = Context(mode, "missing", "deleted");
+        var warnings = new AkeneoCategoryMappingWarnings();
+        context.Request.CategoryMappingWarnings = warnings;
+        _entityMappingService.Setup(x => x.GetMappedNopEntityIdByAkeneoCodeAsync(
+            AkeneoEntityType.Category, "missing", NopEntityType.Category)).ReturnsAsync((int?)null);
+        _entityMappingService.Setup(x => x.GetMappedNopEntityIdByAkeneoCodeAsync(
+            AkeneoEntityType.Category, "deleted", NopEntityType.Category)).ReturnsAsync(200);
+        _categoryService.Setup(x => x.GetCategoryByIdAsync(200))
+            .ReturnsAsync(new Category { Id = 200, Deleted = true });
+        _categoryService.Setup(x => x.GetProductCategoriesByProductIdAsync(10, true))
+            .ReturnsAsync(new List<ProductCategory> { new() { Id = 2, ProductId = 10, CategoryId = 300 } });
+
+        // Repeated preparation/parent/leaf passes share the same run collector.
+        await _synchronizer.SynchronizeAsync(context);
+        await _synchronizer.SynchronizeAsync(context);
+
+        Assert.That(context.Result.Warnings, Is.Empty);
+        Assert.That(warnings.BuildMessage(), Does.Contain("Unresolved category mappings (2): deleted (mapped nopCommerce category 200 is missing or deleted), missing."));
+        Assert.That(warnings.RemovalsSkipped, Is.EqualTo(mode != AkeneoCollectionSyncMode.Merge));
+        _categoryService.Verify(x => x.DeleteProductCategoryAsync(It.IsAny<ProductCategory>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Standalone_preview_still_explains_the_missing_mapping()
+    {
+        var context = Context(AkeneoCollectionSyncMode.Merge, "missing");
+        _entityMappingService.Setup(x => x.GetMappedNopEntityIdByAkeneoCodeAsync(
+            AkeneoEntityType.Category, "missing", NopEntityType.Category)).ReturnsAsync((int?)null);
+        _categoryService.Setup(x => x.GetProductCategoriesByProductIdAsync(10, true))
+            .ReturnsAsync(new List<ProductCategory>());
+        var preview = new Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoProductMappingPreviewModel();
+
+        await _synchronizer.PlanAsync(context, preview);
+
+        Assert.That(preview.Warnings.Single(), Does.Contain("No nopCommerce category mapping exists"));
+        Assert.That(preview.Operations.Single().ChangeType, Is.EqualTo(Apt.Nop.Plugin.Misc.AkeneoConnection.Models.AkeneoDryRunOperationType.Review));
+    }
+
     private void SetupMappedCategory(string code, int id)
     {
         // Removal previews look up stale categories by ID for their display name.

@@ -24,9 +24,15 @@ public sealed record AkeneoRelatedProductWork(
     IReadOnlyList<AkeneoRelatedProductTarget> Targets,
     AkeneoCollectionSyncMode Mode,
     int? SyncProfileId,
-    int SyncRunRecordId);
+    int SyncRunRecordId)
+{
+    internal AkeneoEntityType SourceEntityType { get; init; }
+}
 
-public sealed record AkeneoRelatedProductRetryOutcome(int Added, int Removed, int StillUnresolved);
+public sealed record AkeneoRelatedProductRetryOutcome(int Added, int Removed, int StillUnresolved)
+{
+    internal IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+}
 
 /// <summary>
 /// Syncs one kind of nopCommerce product-to-product link (related products, cross-sells) from
@@ -103,6 +109,7 @@ public abstract class AkeneoProductAssociationSynchronizer
         CancellationToken cancellationToken = default)
     {
         var (plan, work, unresolved) = await BuildContextPlanAsync(context, cancellationToken);
+        CollectBatchWarnings(context, plan);
         await plan.ExecuteAsync(context, cancellationToken);
 
         if (work != null && unresolved > 0)
@@ -119,7 +126,17 @@ public abstract class AkeneoProductAssociationSynchronizer
         CancellationToken cancellationToken = default)
     {
         var (plan, _, _) = await BuildContextPlanAsync(context, cancellationToken);
+        CollectBatchWarnings(context, plan);
         plan.Render(model);
+    }
+
+    private void CollectBatchWarnings(AkeneoProductSyncContext context, AkeneoExecutableSectionPlan plan)
+    {
+        if (context.Request.AssociationWarnings is not { } warnings)
+            return;
+
+        warnings.Replace(Area, context.SourceEntityType, context.SourceCode, plan.Warnings);
+        plan.Warnings.Clear();
     }
 
     /// <summary>Returns, and forgets, the products waiting for a retry.</summary>
@@ -161,7 +178,10 @@ public abstract class AkeneoProductAssociationSynchronizer
                 removed++;
         }
 
-        return new AkeneoRelatedProductRetryOutcome(added, removed, unresolved);
+        return new AkeneoRelatedProductRetryOutcome(added, removed, unresolved)
+        {
+            Warnings = plan.Warnings.ToArray()
+        };
     }
 
     private async Task<(AkeneoExecutableSectionPlan Plan, AkeneoRelatedProductWork Work, int Unresolved)>
@@ -201,11 +221,12 @@ public abstract class AkeneoProductAssociationSynchronizer
         if (context.Source?.Associations == null ||
             !context.Source.Associations.TryGetValue(associationType, out var association))
         {
+            var sourceDetail = request.AssociationWarnings == null ? $" for {context.SourceCode}" : string.Empty;
             plan.AddReview(
                 Area,
                 associationType,
                 associationType,
-                $"Akeneo returned no '{associationType}' association for {context.SourceCode}. Check the association type on the sync profile; {Area.ToLowerInvariant()} were left unchanged.");
+                $"Akeneo returned no '{associationType}' association{sourceDetail}. Check the association type on the sync profile; {Area.ToLowerInvariant()} were left unchanged.");
             return (plan, null, 0);
         }
 
@@ -225,7 +246,7 @@ public abstract class AkeneoProductAssociationSynchronizer
             targets,
             mode,
             request.SyncProfileId,
-            request.SyncRunRecordId);
+            request.SyncRunRecordId) { SourceEntityType = context.SourceEntityType };
 
         var unresolved = await AddWorkPlanAsync(plan, work, product, cancellationToken);
         return (plan, work, unresolved);

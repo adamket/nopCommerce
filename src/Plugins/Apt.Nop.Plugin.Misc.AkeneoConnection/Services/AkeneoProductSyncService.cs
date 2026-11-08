@@ -343,6 +343,7 @@ public class AkeneoProductSyncService(
             LocalizedValues = localizedValues,
             Messages = resolutionResult.Messages.ToList(),
             Warnings = resolutionResult.Warnings.ToList(),
+            MissingTokenGroups = resolutionResult.MissingTokenGroups,
             Errors = resolutionResult.Errors.ToList()
         };
     }
@@ -412,6 +413,8 @@ public class AkeneoProductSyncService(
             if (!result.Messages.Contains(message, StringComparer.Ordinal))
                 result.AddMessage(message);
         }
+
+        result.MissingTokenGroups.AddRange(intent.MissingTokenGroups);
 
         foreach (var warning in intent.Warnings)
         {
@@ -909,6 +912,8 @@ public class AkeneoProductSyncService(
 
             if (mapping.IsRequired)
                 result.AddError(message);
+            else if (request.MissingTokenWarnings != null)
+                result.MissingTokenGroups.Add(rendered.MissingTokens);
             else
                 result.AddWarning(message);
         }

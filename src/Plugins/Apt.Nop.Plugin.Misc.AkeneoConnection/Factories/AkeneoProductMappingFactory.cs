@@ -660,12 +660,14 @@ public sealed class AkeneoProductMappingFactory(
         AkeneoVariantRelationshipMode? selectedMode = null;
         string representation;
         string decisionSource;
+        var hideChild = familyMapping?.HideChildProductsWhenRepresentedByParent ?? true;
 
         if (overrideRule.UsesSubModelParent())
         {
             selectedMode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue;
             representation = FormatVariantMode(selectedMode.Value);
             decisionSource = "matching sub-model parent rule";
+            hideChild = overrideRule.HideChildProducts;
             model.CurrentRepresentation = context.ExistingProduct == null
                 ? "No existing leaf product representation"
                 : $"Existing nopCommerce product #{context.ExistingProduct.Id} becomes an associated child of the sub-model parent";
@@ -681,6 +683,7 @@ public sealed class AkeneoProductMappingFactory(
 
                 if (AkeneoProductBatchSyncService.StandaloneRuleApplies(existingMode))
                 {
+                    context.PlannedVisibleIndividually = true;
                     representation = "standalone nopCommerce product";
                     decisionSource = "matching submodel override rule";
                     model.CurrentRepresentation = existingMode switch
@@ -720,6 +723,7 @@ public sealed class AkeneoProductMappingFactory(
                     originalSource.Family,
                     context.MappingFamilyVariantCode);
                 selectedMode = resolution.Mode;
+                hideChild = resolution.Options?.HideChildProductsWhenRepresentedByParent ?? true;
                 representation = FormatVariantMode(resolution.Mode);
                 decisionSource = resolution.Source ==
                     AkeneoVariantRelationshipSource.ExistingNopParent
@@ -764,6 +768,11 @@ public sealed class AkeneoProductMappingFactory(
             model.ParentProductDecision +=
                 $" Parent preparation reported: {string.Join("; ", parentResult.Errors)}";
         }
+        if (AkeneoProductBatchSyncService.IsRepresentedByParent(selectedMode))
+            context.PlannedVisibleIndividually = !hideChild;
+        else if (selectedMode == AkeneoVariantRelationshipMode.None)
+            context.PlannedVisibleIndividually = true;
+
         return selectedMode;
     }
 

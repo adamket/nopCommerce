@@ -1,4 +1,5 @@
-﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
+﻿using System.Linq.Expressions;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.ScheduleTasks;
 using Nop.Core;
 using Nop.Core.Domain.Messages;
 using Nop.Core.Domain.ScheduleTasks;
@@ -25,9 +26,11 @@ public class AkeneoConnectionPlugin(
 
     public override async Task InstallAsync()
     {
-        await settingService.SaveSettingAsync(new AkeneoConnectionSettings());
+        await InitializeMissingSettingsAsync();
         await EnsureScheduleTasksAsync();
+        await EnsureConfigurationResourcesAsync();
         await EnsureAlertResourcesAsync();
+        await RestoreScheduleTasksAsync();
         await base.InstallAsync();
     }
 
@@ -39,42 +42,49 @@ public class AkeneoConnectionPlugin(
         // templates and labels are plugin resources, so ensure newly
         // introduced ones exist during an upgrade.
         await EnsureScheduleTasksAsync();
+        await EnsureConfigurationResourcesAsync();
         await EnsureAlertResourcesAsync();
         await base.UpdateAsync(currentVersion, targetVersion);
     }
 
     public override async Task UninstallAsync()
     {
-        await settingService.DeleteSettingAsync<AkeneoConnectionSettings>();
+        // Preserve settings, task rows and customized templates (including their
+        // localized values and store associations) for a later reinstall.
+        foreach (var taskType in ScheduleTaskTypes)
+            await SuspendScheduleTaskAsync(taskType);
 
-        await DeleteScheduleTaskAsync(
-            typeof(AkeneoStaleSyncCheckScheduleTask).FullName);
-
-        foreach (var templateName in new[]
-                 {
-                     AkeneoConnectionConstants.SyncRunAlertMessageTemplateName,
-                     AkeneoConnectionConstants.StaleSyncAlertMessageTemplateName
-                 })
-        {
-            foreach (var template in await messageTemplateService.GetMessageTemplatesByNameAsync(templateName))
-                await messageTemplateService.DeleteMessageTemplateAsync(template);
-        }
-
+        await localizationService.DeleteLocaleResourcesAsync(ConfigurationResources.Keys.ToList());
         await localizationService.DeleteLocaleResourcesAsync("Plugins.Misc.AkeneoConnection.SyncAlert");
 
-        await DeleteScheduleTaskAsync(
-            typeof(AkeneoProductSyncScheduleTask).FullName);
-
-        await DeleteScheduleTaskAsync(
-            typeof(AkeneoProductFullSyncScheduleTask).FullName);
-
-        await DeleteScheduleTaskAsync(
-            typeof(AkeneoSyncLogRetentionScheduleTask).FullName);
-
-        await DeleteScheduleTaskAsync(
-            typeof(AkeneoCategoryContentSyncScheduleTask).FullName);
-
         await base.UninstallAsync();
+    }
+
+    private async Task InitializeMissingSettingsAsync()
+    {
+        var defaults = new AkeneoConnectionSettings();
+
+        // A restored database can already be configured before the plugin is
+        // installed. Preserve every existing value, including blanks and false.
+        async Task EnsureSettingAsync<T>(Expression<Func<AkeneoConnectionSettings, T>> selector)
+        {
+            if (!await settingService.SettingExistsAsync(defaults, selector))
+                await settingService.SaveSettingAsync(defaults, selector);
+        }
+
+        await EnsureSettingAsync(x => x.AkeneoConnectionClientId);
+        await EnsureSettingAsync(x => x.AkeneoConnectionClientSecret);
+        await EnsureSettingAsync(x => x.AkeneoConnectionBaseUrl);
+        await EnsureSettingAsync(x => x.AkeneoConnectionUsername);
+        await EnsureSettingAsync(x => x.AkeneoConnectionPassword);
+        await EnsureSettingAsync(x => x.DefaultSyncProfileId);
+        await EnsureSettingAsync(x => x.SyncAlertsEnabled);
+        await EnsureSettingAsync(x => x.SyncAlertEmails);
+        await EnsureSettingAsync(x => x.SyncAlertMinimumFailedProducts);
+        await EnsureSettingAsync(x => x.SyncAlertStaleAfterHours);
+        await EnsureSettingAsync(x => x.SyncAlertLastStaleNotificationUtc);
+        await EnsureSettingAsync(x => x.MappingsChangedOnUtc);
+        await EnsureSettingAsync(x => x.CategoryContentTranslationLocales);
     }
 
     private async Task EnsureScheduleTasksAsync()
@@ -85,11 +95,8 @@ public class AkeneoConnectionPlugin(
             seconds: 60 * 60 * 24,
             enabled: true);
 
-        await EnsureScheduleTaskAsync(
-            typeof(AkeneoProductFullSyncScheduleTask).FullName,
-            "Akeneo Connection - Full Product Reconciliation",
-            seconds: 60 * 60 * 24 * 7,
-            enabled: false);
+        // The full reconciliation task is no longer created. A row left by an earlier
+        // version still runs and is still suspended and restored with the plugin.
 
         // Enabled, but it deletes nothing until a sync profile turns retention on.
         await EnsureScheduleTaskAsync(
@@ -112,6 +119,27 @@ public class AkeneoConnectionPlugin(
             seconds: 60 * 60,
             enabled: true);
     }
+
+    // Labels for the connection fields on the configure page.
+    private static readonly IReadOnlyDictionary<string, string> ConfigurationResources = new Dictionary<string, string>
+    {
+        ["Plugins.Misc.AkeneoConnection.BaseUrl"] = "Akeneo URL",
+        ["Plugins.Misc.AkeneoConnection.BaseUrl.Hint"] = "The base URL of the Akeneo PIM, e.g. https://example.cloud.akeneo.com/.",
+        ["Plugins.Misc.AkeneoConnection.ClientId"] = "Client ID",
+        ["Plugins.Misc.AkeneoConnection.ClientId.Hint"] = "The client ID of the Akeneo API connection.",
+        ["Plugins.Misc.AkeneoConnection.ClientSecret"] = "Client secret",
+        ["Plugins.Misc.AkeneoConnection.ClientSecret.Hint"] = "The secret of the Akeneo API connection.",
+        ["Plugins.Misc.AkeneoConnection.Username"] = "Username",
+        ["Plugins.Misc.AkeneoConnection.Username.Hint"] = "The username of the Akeneo API connection.",
+        ["Plugins.Misc.AkeneoConnection.Password"] = "Password",
+        ["Plugins.Misc.AkeneoConnection.Password.Hint"] = "The password of the Akeneo API connection.",
+        ["Plugins.Misc.AkeneoConnection.DefaultSyncProfile"] = "Default sync profile",
+        ["Plugins.Misc.AkeneoConnection.DefaultSyncProfile.Hint"] = "The sync profile used when a sync does not name one."
+    };
+
+    private async Task EnsureConfigurationResourcesAsync() =>
+        await localizationService.AddOrUpdateLocaleResourceAsync(
+            ConfigurationResources.ToDictionary(pair => pair.Key, pair => pair.Value));
 
     /// <summary>
     /// Adds the alert message templates (editable under Content management >
@@ -225,13 +253,52 @@ public class AkeneoConnectionPlugin(
         });
     }
 
-    private async Task DeleteScheduleTaskAsync(string taskType)
+    private static readonly string[] ScheduleTaskTypes =
+    [
+        typeof(AkeneoProductSyncScheduleTask).FullName,
+        typeof(AkeneoProductFullSyncScheduleTask).FullName,
+        typeof(AkeneoSyncLogRetentionScheduleTask).FullName,
+        typeof(AkeneoCategoryContentSyncScheduleTask).FullName,
+        typeof(AkeneoStaleSyncCheckScheduleTask).FullName
+    ];
+
+    private static string SuspendedTaskSettingKey(string taskType) =>
+        $"AkeneoConnection.SuspendedTaskEnabled.{taskType}";
+
+    private async Task SuspendScheduleTaskAsync(string taskType)
     {
-        if (string.IsNullOrWhiteSpace(taskType))
+        var task = await scheduleTaskService.GetTaskByTypeAsync(taskType);
+        if (task == null)
             return;
 
-        var task = await scheduleTaskService.GetTaskByTypeAsync(taskType);
-        if (task != null)
-            await scheduleTaskService.DeleteTaskAsync(task);
+        var key = SuspendedTaskSettingKey(taskType);
+        // Save before disabling, and retain the original state if uninstall is retried.
+        if (await settingService.GetSettingAsync(key) == null)
+            await settingService.SetSettingAsync(key, task.Enabled);
+
+        if (task.Enabled)
+        {
+            task.Enabled = false;
+            await scheduleTaskService.UpdateTaskAsync(task);
+        }
+    }
+
+    private async Task RestoreScheduleTasksAsync()
+    {
+        foreach (var taskType in ScheduleTaskTypes)
+        {
+            var task = await scheduleTaskService.GetTaskByTypeAsync(taskType);
+            if (task == null)
+                continue;
+
+            var savedState = await settingService.GetSettingAsync(SuspendedTaskSettingKey(taskType));
+            if (savedState == null)
+                continue;
+
+            task.Enabled = bool.Parse(savedState.Value);
+            await scheduleTaskService.UpdateTaskAsync(task);
+            // Clear only after restoring successfully, so an interrupted install can retry.
+            await settingService.DeleteSettingAsync(savedState);
+        }
     }
 }

@@ -130,6 +130,8 @@ public sealed class AkeneoBindingCandidate
     public bool Published { get; set; }
 
     /// <summary>Variants whose only match points to this parent.</summary>
+    public string MatchedSlug { get; set; }
+
     public int VariantVotes { get; set; }
 
     /// <summary>Variants with an ambiguous SKU that could belong to this parent.</summary>

@@ -144,6 +144,23 @@ public class AkeneoProductCrossSellSynchronizerTests
     }
 
     [Test]
+    public async Task Batch_keeps_only_the_unresolved_target_after_a_partial_retry()
+    {
+        var context = Context(AkeneoCollectionSyncMode.ReplaceAll, models: ["pruner", "gloves"]);
+        var warnings = context.Request.AssociationWarnings = new AkeneoAssociationWarnings();
+        await _synchronizer.SynchronizeAsync(context);
+
+        Assert.That(context.Result.Warnings, Is.Empty);
+        Assert.That(warnings.BuildMessages().Single(), Does.Contain("pruner").And.Contain("gloves"));
+
+        MapModel("pruner", 20);
+        var work = _synchronizer.TakePending().Single();
+        var outcome = await _synchronizer.RetryAsync(work);
+        warnings.Replace(_synchronizer.Area, work.SourceEntityType, work.SourceCode, outcome.Warnings);
+        Assert.That(warnings.BuildMessages().Single(), Does.Contain("gloves").And.Contain("removal was skipped").And.Not.Contain("pruner"));
+    }
+
+    [Test]
     public async Task Dry_run_shows_the_cross_sell_area()
     {
         MapModel("pruner", 20);

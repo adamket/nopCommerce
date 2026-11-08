@@ -179,7 +179,7 @@
                                 </div>
                                 <div class="akeneo-toolbar-panel-body">
                                     <div class="akeneo-toolbar-panel-hint">
-                                        These models' variants sit under more than one nopCommerce product. Choose the parent to bind,
+                                        Review the parent candidates found by variant SKU or exact URL slug. Choose the parent to bind,
                                         or leave <strong>Skip</strong> to keep it unbound.
                                     </div>
 
@@ -207,7 +207,8 @@
                                                 <a v-bind:href="productUrl(candidate.productId)" target="_blank">#{{ candidate.productId }} {{ candidate.name }}</a>
                                                 <span class="akeneo-dim" v-if="candidate.sku"> &middot; {{ candidate.sku }}</span>
                                                 <span class="akeneo-dim" v-if="!candidate.published"> &middot; unpublished</span>
-                                                <span class="badge badge-info ml-1">{{ candidate.variantVotes }} {{ candidate.variantVotes === 1 ? 'variant' : 'variants' }}</span>
+                                                <span v-if="candidate.matchedSlug" class="badge badge-info ml-1">Exact URL slug: {{ candidate.matchedSlug }}</span>
+                                                <span v-else class="badge badge-info ml-1">{{ candidate.variantVotes }} {{ candidate.variantVotes === 1 ? 'variant' : 'variants' }}</span>
                                                 <span class="badge badge-secondary ml-1" v-if="candidate.ambiguousVariants">{{ candidate.ambiguousVariants }} shared SKU</span>
                                             </span>
                                         </label>
@@ -311,12 +312,13 @@
                     </div>
                 </div>
 
-                <div v-if="commitConfirmVisible" class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-modal="true">
+                <transition name="akeneo-modal">
+                <div v-if="commitConfirmVisible" class="modal fade show" v-on:click.self="commitConfirmVisible = false" style="display: block;" tabindex="-1" role="dialog" aria-modal="true">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Commit catalog bindings</h5>
-                                <button type="button" class="close" aria-label="Close" v-on:click="commitConfirmVisible = false">
+                            <div class="modal-header bg-primary text-white">
+                                <h4 class="modal-title"><i class="fas fa-link mr-2"></i>Commit catalog bindings</h4>
+                                <button type="button" class="close text-white" aria-label="Close" v-on:click="commitConfirmVisible = false">
                                     <span aria-hidden="true">&times;</span>
                                 </button>
                             </div>
@@ -337,7 +339,7 @@
                                 </p>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-default" v-on:click="commitConfirmVisible = false">Cancel</button>
+                                <button type="button" class="btn btn-light border" v-on:click="commitConfirmVisible = false">Cancel</button>
                                 <button type="button" class="btn btn-primary" v-on:click="commit">
                                     <i class="fas fa-link"></i>
                                     Commit bindings
@@ -346,7 +348,10 @@
                         </div>
                     </div>
                 </div>
+                </transition>
+                <transition name="akeneo-backdrop">
                 <div v-if="commitConfirmVisible" class="modal-backdrop fade show" v-on:click="commitConfirmVisible = false"></div>
+                </transition>
             </div>
         </div>
     </section>

@@ -27,7 +27,6 @@ public class AkeneoConnectionConfigurationController(
     INotificationService notificationService,
     IPermissionService permissionService,
     ISettingService settingService,
-    IStoreContext storeContext,
     IAkeneoSyncProfileService syncProfileService)
     : BasePluginController
 {
@@ -62,8 +61,8 @@ public class AkeneoConnectionConfigurationController(
     public async Task<IActionResult> ExportConfiguration(
         CancellationToken cancellationToken)
     {
-        var storeScope =
-            await storeContext.GetActiveStoreScopeConfigurationAsync();
+        // The connection is configured once for all stores.
+        var storeScope = 0;
 
         var exportBytes = await configurationExportService.ExportAsync(
             storeScope,
@@ -119,8 +118,8 @@ public class AkeneoConnectionConfigurationController(
     [HttpGet("admin/akeneo-connection/configure")]
     public async Task<IActionResult> Configure()
     {
-        //load settings for a chosen store scope
-        var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
+        // The connection is configured once for all stores; the page has no store selector.
+        var storeScope = 0;
         var akeneoConnectionSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
 
         var model = new AkeneoConfigurationModel
@@ -179,8 +178,8 @@ public class AkeneoConnectionConfigurationController(
             return await Configure();
         }
 
-        //load settings for a chosen store scope
-        var storeScope = await storeContext.GetActiveStoreScopeConfigurationAsync();
+        // The connection is configured once for all stores; the page has no store selector.
+        var storeScope = 0;
         var akeneoConnectionSettings = await settingService.LoadSettingAsync<AkeneoConnectionSettings>(storeScope);
 
         //save settings

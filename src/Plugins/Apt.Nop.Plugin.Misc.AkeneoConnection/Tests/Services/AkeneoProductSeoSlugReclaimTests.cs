@@ -85,6 +85,20 @@ public class AkeneoProductSeoSlugReclaimTests
         });
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Hidden_product_accepts_numbered_slug_with_warning(bool hideAfterSeo)
+    {
+        var context = Context(new Product { Id = 10, Name = "Red Maple" });
+        context.Product.VisibleIndividually = hideAfterSeo;
+        context.PlannedVisibleIndividually = hideAfterSeo ? false : null;
+        await Synchronizer().SynchronizeAsync(context);
+
+        Assert.That(context.Result.Errors, Is.Empty);
+        Assert.That(context.Result.Warnings.Single(), Does.Contain("red-maple-2"));
+        _urlRecordService.Verify(service => service.SaveSlugAsync(context.Product, "red-maple-2", 0), Times.Once);
+    }
+
     [Test]
     public async Task Slug_held_by_another_entity_type_is_not_reclaimed()
     {
@@ -117,7 +131,7 @@ public class AkeneoProductSeoSlugReclaimTests
 
         var context = Context(null, withSlugMapping: false);
         context.PlanningState.ProposedProductName = "Red Maple";
-        context.Product = new Product { Name = "Red Maple" };
+        context.Product = new Product { Name = "Red Maple", VisibleIndividually = true };
         var model = new AkeneoProductMappingPreviewModel();
         await Synchronizer().PlanAsync(context, model);
 
@@ -240,6 +254,9 @@ public class AkeneoProductSeoSlugReclaimTests
             Enabled = true,
             Values = JsonSerializer.SerializeToElement(new Dictionary<string, object>())
         };
+
+        if (product != null)
+            product.VisibleIndividually = true;
 
         return new AkeneoProductSyncContext
         {

@@ -72,7 +72,7 @@ public class AkeneoSyncAlertServiceTests
     {
         Run(new AkeneoSyncRunRecord { Id = 9, SyncStatusId = (int)SyncStatus.CompletedWithErrors, FailedCount = 1 });
         _itemLogs
-            .Setup(service => service.SearchAkeneoSyncItemLogsAsync(9, null, null, null, (int)SyncItemActionType.Failed, 0, 50))
+            .Setup(service => service.SearchAkeneoSyncItemLogsAsync(9, null, null, null, (int)SyncItemActionType.Failed, 0, 50, null))
             .ReturnsAsync(new PagedList<AkeneoSyncItemLog>(new List<AkeneoSyncItemLog>
             {
                 new()

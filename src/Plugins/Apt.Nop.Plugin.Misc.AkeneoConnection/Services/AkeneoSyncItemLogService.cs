@@ -23,6 +23,30 @@ public class AkeneoSyncItemLogService(
         await syncItemLogRepository.DeleteAsync(syncItem);
     }
 
+    public async Task<IReadOnlyDictionary<int, int>> GetActionCountsAsync(int syncRunRecordId)
+    {
+        var logs = WithEffectiveActions(syncItemLogRepository.Table.Where(log => log.SyncRunRecordId == syncRunRecordId));
+        var counts = await logs.GroupBy(log => log.ActionTypeId)
+            .Select(group => new { Action = group.Key, Count = group.Count() })
+            .ToListAsync();
+        return counts.ToDictionary(group => group.Action, group => group.Count);
+    }
+
+    private static IQueryable<AkeneoSyncItemLog> WithEffectiveActions(IQueryable<AkeneoSyncItemLog> query) =>
+        query.Select(log => new AkeneoSyncItemLog
+        {
+            Id = log.Id,
+            SyncRunRecordId = log.SyncRunRecordId,
+            AkeneoProductUuid = log.AkeneoProductUuid,
+            AkeneoIdentifier = log.AkeneoIdentifier,
+            NopProductId = log.NopProductId,
+            CreatedOnUtc = log.CreatedOnUtc,
+            Message = log.Message,
+            ActionTypeId = log.ActionTypeId == (int)SyncItemActionType.Skipped && log.NopProductId == 0 &&
+                log.AkeneoIdentifier == "Run complete" && log.Message != null && log.Message.StartsWith("Run complete (")
+                ? (int)SyncItemActionType.RunComplete : log.ActionTypeId
+        });
+
     public async Task<IPagedList<AkeneoSyncItemLog>> SearchAkeneoSyncItemLogsAsync(
         int? syncRunRecordId = null,
         string akeneoProductUuid = null,
@@ -30,7 +54,8 @@ public class AkeneoSyncItemLogService(
         int? nopProductId = null,
         int? actionTypeId = null,
         int pageIndex = 0,
-        int pageSize = int.MaxValue)
+        int pageSize = int.MaxValue,
+        IReadOnlyCollection<int> actionTypeIds = null)
     {
         var query = syncItemLogRepository.Table;
 
@@ -46,8 +71,13 @@ public class AkeneoSyncItemLogService(
         if (nopProductId.HasValue)
             query = query.Where(log => log.NopProductId == nopProductId.Value);
 
+        query = WithEffectiveActions(query);
+
         if (actionTypeId.HasValue)
             query = query.Where(log => log.ActionTypeId == actionTypeId.Value);
+
+        if (actionTypeIds is { Count: > 0 })
+            query = query.Where(log => actionTypeIds.Contains(log.ActionTypeId));
 
         return await query
             .OrderByDescending(log => log.CreatedOnUtc)

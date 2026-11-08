@@ -13,6 +13,7 @@
     {
         runsUrl = Url.Action("Runs", "AkeneoSyncLog"),
         itemsUrl = Url.Action("RunItems", "AkeneoSyncLog"),
+        productEditBase = Url.Content("~/Admin/Product/Edit/"),
         runsPageSize = Model.SyncRunRecordPageSize,
         itemsPageSize = Model.SyncItemLogPageSize
     };
@@ -83,11 +84,41 @@
                                     <td></td>
                                     <td colspan="8" class="akeneo-run-detail">
                                         <div class="akeneo-run-detail-inner">
-                                            <div v-if="run.errorSummary" class="alert alert-danger py-2 mb-3">{{ run.errorSummary }}</div>
-                                            <div v-if="run.loading && !run.items.length" class="akeneo-detail-status">Loading items&hellip;</div>
+                                            <div v-if="run.errorSummary" class="alert alert-danger py-2 mb-3">
+                                                <button v-if="isLongMessage(run.errorSummary)" type="button" class="akeneo-message-preview"
+                                                        v-on:click.stop="showRunErrorSummary(run.errorSummary)" aria-haspopup="dialog">
+                                                    {{ messagePreview(run.errorSummary) }}
+                                                    <span class="akeneo-message-more">View full message</span>
+                                                </button>
+                                                <akeneo-error-summary v-else :message="run.errorSummary" :product-edit-base="productEditBase"></akeneo-error-summary>
+                                            </div>
+                                            <div v-if="run.availableActions.length" class="akeneo-status-filter" role="group" aria-label="Filter items by status">
+                                                <span class="akeneo-status-filter-label">Status</span>
+                                                <button type="button"
+                                                        v-for="({ action, count }) in run.availableActions"
+                                                        :key="action"
+                                                        class="akeneo-status-chip"
+                                                        v-bind:class="[actionChipClass(action), { 'is-active': run.actionFilter.indexOf(action) >= 0 }]"
+                                                        v-bind:aria-pressed="run.actionFilter.indexOf(action) >= 0 ? 'true' : 'false'"
+                                                        v-on:click="toggleActionFilter(run, action)">
+                                                    <i class="fas" v-bind:class="run.actionFilter.indexOf(action) >= 0 ? 'fa-check-square' : 'fa-square'"></i>
+                                                    {{ action }}
+                                                    <span class="akeneo-status-chip-count">{{ count }}</span>
+                                                </button>
+                                                <button type="button" class="btn btn-link btn-sm akeneo-status-filter-clear"
+                                                        v-bind:class="{ 'is-hidden': !run.actionFilter.length }"
+                                                        v-bind:tabindex="run.actionFilter.length ? null : -1"
+                                                        v-bind:aria-hidden="run.actionFilter.length ? null : 'true'"
+                                                        v-on:click="clearActionFilter(run)">
+                                                    Show all
+                                                </button>
+                                            </div>
+                                            <div v-if="run.loading && !run.loaded" class="akeneo-detail-status">Loading items&hellip;</div>
                                             <div v-else-if="run.loadError" class="akeneo-detail-status text-danger">{{ run.loadError }}</div>
-                                            <div v-else-if="run.loaded && !run.items.length" class="akeneo-detail-status">No item logs for this run.</div>
-                                            <template v-else>
+                                            <div v-else-if="run.loaded && !run.items.length" class="akeneo-detail-status">
+                                                {{ run.actionFilter.length ? 'No item logs match the selected statuses.' : 'No item logs for this run.' }}
+                                            </div>
+                                            <div v-else class="akeneo-item-results" v-bind:class="{ 'is-refreshing': run.loading }" v-bind:aria-busy="run.loading ? 'true' : 'false'">
                                                 <table class="table table-sm mb-0 akeneo-item-table">
                                                     <thead>
                                                         <tr>
@@ -101,7 +132,7 @@
                                                     <tbody>
                                                         <tr v-for="item in run.items" :key="item.id">
                                                             <td class="akeneo-dim">{{ item.createdOn }}</td>
-                                                            <td><span class="badge" v-bind:class="actionClass(item.action)">{{ item.action }}</span></td>
+                                                            <td><span v-if="item.action" class="badge" v-bind:class="actionClass(item.action)">{{ item.action }}</span></td>
                                                             <td class="akeneo-mono">{{ item.akeneoIdentifier || item.akeneoProductUuid || '-' }}</td>
                                                             <td>
                                                                 <a v-if="item.nopProductId > 0"
@@ -111,7 +142,15 @@
 
                                                                 <span v-else>-</span>
                                                             </td>
-                                                            <td class="akeneo-msg">{{ item.message }}</td>
+                                                            <td class="akeneo-msg">
+                                                                <button v-if="item.isRunComplete || isLongMessage(item.message) || (item.nopProductId > 0 && item.message)" type="button" class="akeneo-message-preview"
+                                                                        v-on:click.stop="showMessage(item.message, item.akeneoIdentifier || item.akeneoProductUuid || 'Sync message', item.isRunComplete ? 'RunComplete' : item.action, item.isRunComplete, item.nopProductId)"
+                                                                        aria-haspopup="dialog">
+                                                                    {{ messagePreview(item.message) }}
+                                                                    <span class="akeneo-message-more">View full message</span>
+                                                                </button>
+                                                                <akeneo-product-message v-else :message="item.message" :product-edit-base="productEditBase"></akeneo-product-message>
+                                                            </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -134,7 +173,7 @@
                                                         {{ run.itemTotal }} item{{ run.itemTotal === 1 ? '' : 's' }}
                                                     </span>
                                                 </div>
-                                            </template>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -161,16 +200,78 @@
                         {{ runsTotal }} run{{ runsTotal === 1 ? '' : 's' }}
                     </span>
                 </div>
+                <transition name="akeneo-modal">
+                <div v-if="messageVisible" ref="messageDialog" class="modal fade show akeneo-sync-message-modal"
+                     style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-sync-message-title"
+                     v-on:click.self="closeMessage" v-on:keydown="messageKeydown">
+                    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header" v-bind:class="messageHeaderClass">
+                                <h4 id="akeneo-sync-message-title" class="modal-title"><i class="fas fa-clipboard-list mr-2"></i>{{ messageTitle }}</h4>
+                                <button type="button" class="close" style="color: inherit;" aria-label="Close message" v-on:click="closeMessage">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body" tabindex="0" aria-label="Full message">
+                                <akeneo-error-summary v-if="showingRunErrors" :message="messageText" :product-edit-base="productEditBase"></akeneo-error-summary>
+                                <template v-else-if="messageBlocks">
+                                    <div v-for="(block, index) in messageBlocks" :key="index" class="akeneo-completion-block">
+                                        <div class="akeneo-message-full"><akeneo-product-message :message="block.text" :product-edit-base="productEditBase"></akeneo-product-message></div>
+                                        <div v-if="block.ids.length" class="mt-1">
+                                            <template v-for="(id, i) in block.ids" :key="i"><span v-if="i">, </span><a :href="productEditBase + id" target="_blank" rel="noopener noreferrer">{{ id }}</a></template>
+                                        </div>
+                                        <div v-if="block.detail" class="akeneo-message-full mt-1"><akeneo-product-message :message="block.detail" :product-edit-base="productEditBase"></akeneo-product-message></div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div class="akeneo-message-full"><akeneo-product-message :parts="itemMessageParts" :product-edit-base="productEditBase"></akeneo-product-message></div>
+                                    <div v-if="showItemProductLink" class="mt-2">nopCommerce product ID <a :href="productEditBase + messageProductId" target="_blank" rel="noopener noreferrer">{{ messageProductId }}</a></div>
+                                </template>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light border" v-on:click="closeMessage">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </transition>
+                <transition name="akeneo-backdrop">
+                <div v-if="messageVisible" class="modal-backdrop fade show" v-on:click="closeMessage"></div>
+                </transition>
             </div>
         </div>
     </section>
 </div>
+
+<script type="text/x-template" id="akeneo-error-summary-template">
+    <div>
+        <div v-for="(line, index) in messages" :key="index" class="akeneo-completion-block akeneo-message-full"><akeneo-product-message :message="line" :product-edit-base="productEditBase"></akeneo-product-message></div>
+    </div>
+</script>
 
 <script id="akeneo-sync-log-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(appModel))</script>
 
 <script asp-location="Footer">
     (function () {
         var appData = JSON.parse(document.getElementById('akeneo-sync-log-data').textContent);
+        var messageReturnFocus = null;
+
+        function completionBlocks(message) {
+            // Older runs used single newlines between warning groups.
+            var text = message.replace(/\r\n?/g, '\n')
+                .replace(/^(Warnings:) */m, '\n$1\n\n')
+                .replace(/^(Run complete .*?\.) Delta inclusion:/, '$1\n\nDelta inclusion:');
+            return text.split(/\n[ \t]*\n+|\n(?=Products missing: |Related products:$|Cross-sell products:$)/m)
+                .filter(function (block) { return block.trim().length > 0; })
+                .map(function (block) {
+                    var lines = block.split('\n');
+                    if (lines[0].startsWith('Products missing: {') && /^[1-9]\d*(?:, [1-9]\d*)*$/.test(lines[1] || '')) {
+                        return { text: lines[0], ids: lines[1].split(', '), detail: lines.slice(2).join('\n') };
+                    }
+                    return { text: block, ids: [], detail: '' };
+                });
+        }
+
 
         Vue.createApp({
             data: function () {
@@ -180,13 +281,82 @@
                     runsError: null,
                     runsPage: 0,
                     runsTotalPages: 0,
-                    runsTotal: 0
+                    runsTotal: 0,
+                    messageVisible: false,
+                    messageText: '',
+                    messageProductId: null,
+                    messageBlocks: null,
+                    showingRunErrors: false,
+                    productEditBase: appData.productEditBase,
+                    messageTitle: '',
+                    messageHeaderClass: ''
                 };
+            },
+            computed: {
+                itemMessageParts: function () { return AkeneoProductLog.productReferenceParts(this.messageText); },
+                showItemProductLink: function () {
+                    return this.messageProductId > 0 && !this.itemMessageParts.some(part => part.productId === String(this.messageProductId));
+                }
             },
             mounted: function () {
                 this.loadRuns(0);
             },
             methods: {
+                isLongMessage: function (message) {
+                    return !!message && (message.length > 220 || message.split(/\r?\n/).length > 3);
+                },
+                messagePreview: function (message) {
+                    var text = (message || '').replace(/\s+/g, ' ').trim();
+                    return text.length > 220 ? text.slice(0, 220) + '\u2026' : text;
+                },
+                showRunErrorSummary: function (message) {
+                    this.showMessage(message, 'Run error summary', 'Failed');
+                    this.showingRunErrors = true;
+                },
+                showMessage: function (message, title, action, isRunComplete, productId) {
+                    this.messageProductId = productId || null;
+                    this.showingRunErrors = false;
+                    if (!this.messageVisible) {
+                        messageReturnFocus = document.activeElement;
+                    }
+                    this.messageText = message || '';
+                    this.messageBlocks = isRunComplete ? completionBlocks(this.messageText) : null;
+                    this.messageTitle = title;
+                    this.messageHeaderClass = {
+                        Failed: 'akeneo-message-header-failed',
+                        Skipped: 'akeneo-message-header-skipped',
+                        Created: 'bg-success text-white',
+                        RunComplete: 'bg-primary text-white',
+                        Updated: 'bg-primary text-white'
+                    }[action] || 'akeneo-message-header-skipped';
+                    this.messageVisible = true;
+                    this.$nextTick(function () {
+                        if (this.messageVisible)
+                            this.$refs.messageDialog.querySelector('button').focus();
+                    });
+                },
+                closeMessage: function () {
+                    this.messageVisible = false;
+                    if (messageReturnFocus && messageReturnFocus.isConnected)
+                        messageReturnFocus.focus();
+                },
+                messageKeydown: function (event) {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.closeMessage();
+                    } else if (event.key === 'Tab') {
+                        var controls = this.$refs.messageDialog.querySelectorAll('button, a[href], [tabindex="0"]');
+                        var first = controls[0];
+                        var last = controls[controls.length - 1];
+                        if (event.shiftKey && document.activeElement === first) {
+                            event.preventDefault();
+                            last.focus();
+                        } else if (!event.shiftKey && document.activeElement === last) {
+                            event.preventDefault();
+                            first.focus();
+                        }
+                    }
+                },
                 loadRuns: function (page) {
                     if (page < 0) return;
                     if (this.runsTotalPages && page > this.runsTotalPages - 1) return;
@@ -211,6 +381,9 @@
                                     loading: false,
                                     loadError: null,
                                     items: [],
+                                    actionFilter: [],
+                                    availableActions: [],
+                                    requestId: 0,
                                     itemPage: 0,
                                     itemTotalPages: 0,
                                     itemTotal: 0
@@ -237,6 +410,10 @@
                     if (page < 0) return;
                     if (run.itemTotalPages && page > run.itemTotalPages - 1) return;
 
+                    // Rapid filter clicks can overlap; only the newest response is applied.
+                    var requestId = ++run.requestId;
+                    var isCurrent = function () { return run.requestId === requestId; };
+
                     run.loading = true;
                     run.loadError = null;
 
@@ -246,13 +423,17 @@
                         data: addAntiForgeryToken({
                             syncRunRecordId: run.syncRunRecordId,
                             page: page,
-                            pageSize: appData.itemsPageSize
+                            pageSize: appData.itemsPageSize,
+                            includeActionCounts: !run.loaded,
+                            actions: run.actionFilter.join(',')
                         }),
                         success: function (res) {
+                            if (!isCurrent()) return;
                             if (!res || !res.success) {
                                 run.loadError = (res && res.errors && res.errors[0]) || 'Unable to load items.';
                                 return;
                             }
+                            if (res.availableActions) run.availableActions = res.availableActions;
                             run.items = res.items || [];
                             run.itemPage = res.pageIndex;
                             run.itemTotalPages = res.totalPages;
@@ -260,12 +441,35 @@
                             run.loaded = true;
                         },
                         error: function () {
+                            if (!isCurrent()) return;
                             run.loadError = 'Server error while loading items.';
                         },
                         complete: function () {
-                            run.loading = false;
+                            if (isCurrent()) run.loading = false;
                         }
                     });
+                },
+                toggleActionFilter: function (run, action) {
+                    var index = run.actionFilter.indexOf(action);
+                    if (index >= 0)
+                        run.actionFilter.splice(index, 1);
+                    else
+                        run.actionFilter.push(action);
+                    this.reloadFilteredItems(run);
+                },
+                clearActionFilter: function (run) {
+                    run.actionFilter.splice(0, run.actionFilter.length);
+                    this.reloadFilteredItems(run);
+                },
+                reloadFilteredItems: function (run) {
+                    // The filter changes the page count, so start again from the first page.
+                    // The current rows stay on screen (dimmed) until the new page arrives,
+                    // so the panel doesn't collapse and re-expand on every click.
+                    run.itemTotalPages = 0;
+                    this.loadItems(run, 0);
+                },
+                actionChipClass: function (action) {
+                    return 'akeneo-status-chip-' + action.toLowerCase();
                 },
                 statusClass: function (status) {
                     switch (status) {
@@ -283,6 +487,14 @@
                         case 'Failed': return 'badge-danger';
                         default: return 'badge-secondary'; // Skipped
                     }
+                }
+            }
+        }).component('akeneo-product-message', AkeneoProductLog.component).component('akeneo-error-summary', {
+            template: '#akeneo-error-summary-template',
+            props: ['message', 'productEditBase'],
+            computed: {
+                messages: function () {
+                    return this.message.split(/\r\n|[\r\n]/).filter(line => line.trim());
                 }
             }
         }).mount('#akeneo-sync-log-app');

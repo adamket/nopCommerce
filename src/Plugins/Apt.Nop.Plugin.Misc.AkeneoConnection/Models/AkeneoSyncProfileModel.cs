@@ -45,6 +45,8 @@ public record AkeneoSyncProfileModel : BaseNopEntityModel
     [UIHint("Int32Nullable")]
     public int? MaxProducts { get; set; }
 
+    public bool LogSkips { get; set; }
+
     public bool ContinueOnError { get; set; }
 
     public bool SyncLogRetentionEnabled { get; set; }

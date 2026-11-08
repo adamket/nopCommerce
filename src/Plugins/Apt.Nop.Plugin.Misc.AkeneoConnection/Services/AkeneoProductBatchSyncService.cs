@@ -72,6 +72,9 @@ public class AkeneoProductBatchSyncService(
         request ??= new AkeneoProductBatchImportRequest();
         await ValidateRequestAsync(request);
 
+        request.CategoryMappingWarnings = new AkeneoCategoryMappingWarnings();
+        request.AssociationWarnings = new AkeneoAssociationWarnings();
+        request.MissingTokenWarnings = new AkeneoMissingTokenWarnings();
         associatedOptionReconciliation?.Begin(request);
         var result = new AkeneoProductBatchImportResult
         {
@@ -280,7 +283,7 @@ public class AkeneoProductBatchSyncService(
 
             result.CompletedAllPages = completedAllPhases && !result.WasTruncated;
 
-            await RetryRelatedProductsAsync(result, cancellationToken);
+            await RetryRelatedProductsAsync(result, request.AssociationWarnings, cancellationToken);
 
             if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
             {
@@ -292,17 +295,6 @@ public class AkeneoProductBatchSyncService(
                 result.ReconciledCount += await associatedOptionReconciliation.ReconcileAsync(
                     request, result, parentProductCache, cancellationToken,
                     async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
-
-            result.AddMessage(
-                $"Product synchronization completed. Read: {result.TotalRead}, " +
-                $"Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, " +
-                $"Skipped: {result.SkippedCount}, Failed: {result.FailedCount}, " +
-                $"Reconciled: {result.ReconciledCount}. Delta inclusion: " +
-                $"direct {result.DirectProductChangeCount}, " +
-                $"ancestor {result.AncestorProductModelChangeCount}, " +
-                $"linked asset {result.LinkedAssetChangeCount}, " +
-                $"linked reference entity {result.LinkedReferenceEntityChangeCount}; " +
-                $"deduplicated {result.DuplicateCandidateCount} candidate(s).");
 
             return result;
         }
@@ -323,10 +315,50 @@ public class AkeneoProductBatchSyncService(
         }
         finally
         {
+            await SaveRunCompletionAsync(request, result);
             // Safety net: anything still queued (a unit path that ended early) is published at the end.
             if (deferredProductEvents != null)
                 await deferredProductEvents.PublishAsync();
         }
+    }
+
+    private async Task SaveRunCompletionAsync(
+        AkeneoProductBatchImportRequest request,
+        AkeneoProductBatchImportResult result)
+    {
+        var warnings = request.AssociationWarnings.BuildMessages().ToList();
+        if (request.CategoryMappingWarnings.BuildMessage() is { } categoryWarning)
+            warnings.Insert(0, categoryWarning);
+        request.CategoryMappingWarnings = null;
+        request.AssociationWarnings = null;
+        warnings.AddRange(request.MissingTokenWarnings.BuildMessages());
+        request.MissingTokenWarnings = null;
+        result.WarningCount += warnings.Count;
+        result.AddItemWarnings(warnings);
+
+        var outcome = result.Canceled ? "canceled"
+            : !result.Success ? "with errors"
+            : result.WasTruncated || !result.CompletedAllPages ? "incomplete"
+            : result.WarningCount > 0 ? "with warnings" : "successful";
+        var message = $"Run complete ({outcome}). Read: {result.TotalRead}, " +
+            $"Created: {result.CreatedCount}, Updated: {result.UpdatedCount}, " +
+            $"Skipped: {result.SkippedCount}, Failed: {result.FailedCount}, " +
+            $"Reconciled: {result.ReconciledCount}. Delta inclusion: " +
+            $"direct {result.DirectProductChangeCount}, ancestor {result.AncestorProductModelChangeCount}, " +
+            $"linked asset {result.LinkedAssetChangeCount}, linked reference entity {result.LinkedReferenceEntityChangeCount}; " +
+            $"deduplicated {result.DuplicateCandidateCount} candidate(s).";
+        if (warnings.Count > 0)
+            message += Environment.NewLine + "Warnings: " + string.Join(Environment.NewLine + Environment.NewLine, warnings);
+
+        result.AddMessage(message);
+        await syncItemLogService.InsertAkeneoSyncItemLogAsync(new AkeneoSyncItemLog
+        {
+            SyncRunRecordId = request.SyncRunRecordId,
+            AkeneoIdentifier = "Run complete",
+            ActionTypeId = (int)SyncItemActionType.RunComplete,
+            Message = message,
+            CreatedOnUtc = DateTime.UtcNow
+        });
     }
 
     /// <summary>
@@ -337,18 +369,20 @@ public class AkeneoProductBatchSyncService(
     /// </summary>
     private async Task RetryRelatedProductsAsync(
         AkeneoProductBatchImportResult result,
+        AkeneoAssociationWarnings warnings,
         CancellationToken cancellationToken)
     {
-        await RetryAssociationsAsync(relatedProductSynchronizer, result, cancellationToken);
-        await RetryAssociationsAsync(crossSellSynchronizer, result, cancellationToken);
+        await RetryAssociationsAsync(relatedProductSynchronizer, result, warnings, cancellationToken);
+        await RetryAssociationsAsync(crossSellSynchronizer, result, warnings, cancellationToken);
     }
 
     private async Task RetryAssociationsAsync(
         AkeneoProductAssociationSynchronizer synchronizer,
         AkeneoProductBatchImportResult result,
+        AkeneoAssociationWarnings warnings,
         CancellationToken cancellationToken)
     {
-        var pending = synchronizer?.TakePending() ?? [];
+        var pending = synchronizer?.TakePending().Where(work => work.SyncRunRecordId == result.SyncRunRecordId).ToList() ?? [];
         if (pending.Count == 0)
             return;
 
@@ -360,9 +394,13 @@ public class AkeneoProductBatchSyncService(
 
             try
             {
-                using var transaction = CreateUnitTransaction();
-                var outcome = await synchronizer.RetryAsync(work, cancellationToken);
-                transaction.Complete();
+                AkeneoRelatedProductRetryOutcome outcome;
+                using (var transaction = CreateUnitTransaction())
+                {
+                    outcome = await synchronizer.RetryAsync(work, cancellationToken);
+                    transaction.Complete();
+                }
+                warnings.Replace(synchronizer.Area, work.SourceEntityType, work.SourceCode, outcome.Warnings);
 
                 added += outcome.Added;
                 removed += outcome.Removed;
@@ -371,8 +409,8 @@ public class AkeneoProductBatchSyncService(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 failed++;
-                result.AddMessage(
-                    $"{synchronizer.Area} for {work.SourceCode} could not be retried: {ex.Message}");
+                warnings.AddRetryFailure(synchronizer.Area, work.SourceEntityType, work.SourceCode,
+                    $"Could not retry the association links: {ex.Message}");
             }
         }
 
@@ -489,6 +527,11 @@ public class AkeneoProductBatchSyncService(
                 }
 
                 associatedOptionReconciliation?.Observe(source, itemResult);
+
+                var committed = itemResult.Success && itemResult.ActionType != SyncItemActionType.Failed;
+                request.MissingTokenWarnings.Collect(itemResult, committed);
+                foreach (var related in itemResult.RelatedResults)
+                    request.MissingTokenWarnings.Collect(related, committed);
 
                 foreach (var related in TakeCommittedRelatedResults(itemResult))
                 {
@@ -1100,6 +1143,8 @@ public class AkeneoProductBatchSyncService(
                 if (!prepareOnly)
                 {
                     ApplyPreviousStateBinding(result, previousState);
+                    if (resolvedDesiredState?.EffectiveLeafIntent is { } intent)
+                        result.MissingTokenGroups.AddRange(intent.MissingTokenGroups);
                     result.ActionType = SyncItemActionType.Skipped;
                     result.AddMessage(
                         "Skipped transactional product reconciliation because the resolved desired-state hash is unchanged. A resync with Repair rewrites it.");
@@ -1281,6 +1326,7 @@ public class AkeneoProductBatchSyncService(
                         return result;
                     }
 
+                    effectiveContext.PlannedVisibleIndividually = true;
                     await productSyncService.SynchronizeAsync(
                         effectiveContext,
                         cancellationToken);
@@ -1410,6 +1456,8 @@ public class AkeneoProductBatchSyncService(
                 {
                     // The relationship mode is final once the child is written.
                     leafContext.RepresentedByParent = IsRepresentedByParent(variantContext.Options?.Mode);
+                    leafContext.PlannedVisibleIndividually = !leafContext.RepresentedByParent ||
+                        !variantContext.Options.HideChildProductsWhenRepresentedByParent;
                     var child = await productSyncService.SynchronizeAsync(
                         leafContext,
                         cancellationToken);
@@ -1752,6 +1800,7 @@ public class AkeneoProductBatchSyncService(
         {
             // No separate parent entry is logged, so its messages stay with
             // this item.
+            request.MissingTokenWarnings?.Collect(parentResult);
             CopyMessages(
                 parentResult,
                 result,
@@ -2220,10 +2269,8 @@ public class AkeneoProductBatchSyncService(
         AkeneoProductImportRequest request,
         AkeneoProductImportResult result)
     {
-        // Only persist items that changed nopCommerce (created/updated), failed,
-        // or carry warnings. Unchanged items, including ones a delta merely
-        // picked up, are not logged so the table does not grow with every run.
         var shouldWrite =
+            (request.LogSkips && result.ActionType == SyncItemActionType.Skipped) ||
             result.ActionType is SyncItemActionType.Created or
                 SyncItemActionType.Updated or
                 SyncItemActionType.Failed ||

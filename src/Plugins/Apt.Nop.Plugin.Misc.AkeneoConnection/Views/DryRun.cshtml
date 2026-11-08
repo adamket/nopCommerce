@@ -421,9 +421,11 @@
      aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 id="akeneo-confirm-modal-title" class="modal-title">Confirm action</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <div class="modal-header bg-primary text-white">
+                <h4 class="modal-title">
+                    <i id="akeneo-confirm-modal-icon" class="fas fa-question-circle mr-2"></i><span id="akeneo-confirm-modal-title">Confirm action</span>
+                </h4>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -431,7 +433,7 @@
                 <p id="akeneo-confirm-modal-message" class="mb-0"></p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-light border" data-dismiss="modal">Cancel</button>
                 <button type="button" id="akeneo-confirm-modal-confirm" class="btn btn-primary">Confirm</button>
             </div>
         </div>
@@ -518,6 +520,13 @@
         }
 
         function showConfirmModal(options) {
+            // The header takes the confirm button's colour, like the Test Connection result.
+            var buttonClass = options.confirmButtonClass || 'btn-primary';
+            confirmModal.find('.modal-header')
+                .removeClass('bg-primary bg-success bg-danger bg-warning')
+                .addClass(buttonClass.replace('btn-', 'bg-'));
+            $('#akeneo-confirm-modal-icon')
+                .attr('class', (options.icon || 'fas fa-question-circle') + ' mr-2');
             confirmModalTitle.text(options.title || 'Confirm action');
             confirmModalMessage.text(options.message || 'Are you sure?');
 
@@ -624,6 +633,7 @@
                 message: 'Import this Akeneo source now? The current preview contains ' + changeCount + ' planned change(s), and the plan will be recalculated before writing.',
                 confirmButtonText: '<i class="fas fa-download"></i> Import',
                 confirmButtonClass: 'btn-primary',
+                icon: 'fas fa-download',
                 onConfirm: runImport
             });
         });

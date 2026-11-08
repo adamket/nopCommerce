@@ -461,8 +461,9 @@
                     </div>
                 </div>
 
+                <transition name="akeneo-modal">
                 <div v-if="deleteConfirmation.visible"
-                     class="modal fade show"
+                     class="modal fade show" v-on:click.self="closeDeleteConfirmation"
                      style="display: block;"
                      tabindex="-1"
                      role="dialog"
@@ -470,13 +471,13 @@
                      aria-labelledby="akeneo-delete-mapping-modal-title">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 id="akeneo-delete-mapping-modal-title"
+                            <div class="modal-header bg-danger text-white">
+                                <h4 id="akeneo-delete-mapping-modal-title"
                                     class="modal-title">
-                                    {{ deleteConfirmationTitle() }}
-                                </h5>
+                                    <i class="fas mr-2" v-bind:class="selectedFamilyCode ? 'fa-undo' : 'fa-trash'"></i>{{ deleteConfirmationTitle() }}
+                                </h4>
                                 <button type="button"
-                                        class="close"
+                                        class="close text-white"
                                         aria-label="Close"
                                         v-bind:disabled="deleteConfirmation.busy"
                                         v-on:click="closeDeleteConfirmation">
@@ -506,7 +507,7 @@
 
                             <div class="modal-footer">
                                 <button type="button"
-                                        class="btn btn-default"
+                                        class="btn btn-light border"
                                         v-bind:disabled="deleteConfirmation.busy"
                                         v-on:click="closeDeleteConfirmation">
                                     Cancel
@@ -531,13 +532,16 @@
                         </div>
                     </div>
                 </div>
-
+                </transition>
+                <transition name="akeneo-backdrop">
                 <div v-if="deleteConfirmation.visible"
                      class="modal-backdrop fade show"
                      v-on:click="closeDeleteConfirmation"></div>
+                </transition>
 
+                <transition name="akeneo-modal">
                 <div v-if="templateHelpVisible"
-                     class="modal fade show"
+                     class="modal fade show" v-on:click.self="closeTemplateHelp"
                      style="display: block;"
                      tabindex="-1"
                      role="dialog"
@@ -545,13 +549,12 @@
                      aria-labelledby="akeneo-template-help-modal-title">
                     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 id="akeneo-template-help-modal-title" class="modal-title">
-                                    <i class="fas fa-question-circle"></i>
-                                    Value template help
-                                </h5>
+                            <div class="modal-header bg-info text-white">
+                                <h4 id="akeneo-template-help-modal-title" class="modal-title">
+                                    <i class="fas fa-question-circle mr-2"></i>Value template help
+                                </h4>
                                 <button type="button"
-                                        class="close"
+                                        class="close text-white"
                                         aria-label="Close"
                                         v-on:click="closeTemplateHelp">
                                     <span aria-hidden="true">&times;</span>
@@ -591,7 +594,7 @@
 
                             <div class="modal-footer">
                                 <button type="button"
-                                        class="btn btn-default"
+                                        class="btn btn-light border"
                                         v-on:click="closeTemplateHelp">
                                     Close
                                 </button>
@@ -599,10 +602,12 @@
                         </div>
                     </div>
                 </div>
-
+                </transition>
+                <transition name="akeneo-backdrop">
                 <div v-if="templateHelpVisible"
                      class="modal-backdrop fade show"
                      v-on:click="closeTemplateHelp"></div>
+                </transition>
 
                 <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
                     <transition-group name="akeneo-toast">

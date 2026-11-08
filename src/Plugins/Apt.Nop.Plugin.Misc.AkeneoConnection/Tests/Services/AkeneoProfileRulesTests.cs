@@ -161,6 +161,7 @@ public class AkeneoProfileRulesTests
     public async Task Batch_hold_has_no_destination_writes_and_only_marks_existing_binding_seen(bool hasBinding, bool inherited, bool disabled)
     {
         var api = new Mock<IAkeneoApiClient>();
+        var logs = new Mock<IAkeneoSyncItemLogService>();
         var stateService = new Mock<IAkeneoProductSyncStateService>(MockBehavior.Strict);
         var previous = hasBinding ? new AkeneoProductSyncState
         {
@@ -170,6 +171,7 @@ public class AkeneoProfileRulesTests
         } : null;
         var source = Source("hold");
         var request = Request();
+        request.LogSkips = hasBinding;
         if (disabled)
         {
             source.Enabled = false;
@@ -190,7 +192,7 @@ public class AkeneoProfileRulesTests
         var service = new AkeneoProductBatchSyncService(
             api.Object, new Mock<IAkeneoProductValueResolver>(MockBehavior.Strict).Object,
             new Mock<IAkeneoNopEntityMappingService>(MockBehavior.Strict).Object,
-            Mock.Of<IAkeneoSyncItemLogService>(), new Mock<IProductService>(MockBehavior.Strict).Object,
+            logs.Object, new Mock<IProductService>(MockBehavior.Strict).Object,
             new Mock<IAkeneoFamilyMappingService>(MockBehavior.Strict).Object,
             new AkeneoProductModelHierarchyResolver(),
             new Mock<IAkeneoVariantRelationshipService>(MockBehavior.Strict).Object,
@@ -205,6 +207,8 @@ public class AkeneoProfileRulesTests
         var result = await service.SyncProductByUuidAsync(request);
         Assert.That(result.Errors, Is.Empty);
         Assert.That(result.ActionType, Is.EqualTo(SyncItemActionType.Skipped));
+        logs.Verify(log => log.InsertAkeneoSyncItemLogAsync(It.Is<AkeneoSyncItemLog>(row => row.ActionTypeId == (int)SyncItemActionType.Skipped)),
+            request.LogSkips ? Times.Once() : Times.Never());
         Assert.That(result.NopProductId, Is.EqualTo(hasBinding ? 100 : 0));
         Assert.That(result.NopProductAttributeCombinationId, Is.EqualTo(hasBinding ? 200 : null));
         stateService.VerifyAll();

@@ -116,6 +116,7 @@ public class AkeneoSyncProfileModelFactory(
 
             model.PageSize = profile.PageSize;
             model.MaxProducts = profile.MaxProducts;
+            model.LogSkips = profile.LogSkips;
             model.ContinueOnError = profile.ContinueOnError;
             model.SyncLogRetentionEnabled = profile.SyncLogRetentionEnabled;
             model.SyncItemLogRetentionDays = profile.SyncItemLogRetentionDays;

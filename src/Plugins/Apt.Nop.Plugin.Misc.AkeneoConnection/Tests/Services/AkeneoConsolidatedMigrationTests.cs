@@ -2,6 +2,7 @@ using System.Reflection;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
+using FluentMigrator.Runner;
 using FluentMigrator.Expressions;
 using FluentMigrator.Infrastructure;
 using Moq;
@@ -17,35 +18,45 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 public class AkeneoConsolidatedMigrationTests
 {
     private static IList<IMigrationExpression> Plan(bool tablesExist, params string[] missingColumns)
-        => PlanMigration(new AkeneoConnectionMigration(), tablesExist, missingColumns);
+        => PlanMigration(true, tablesExist, missingColumns);
 
-    private static IList<IMigrationExpression> PlanMigration(Migration migration, bool tablesExist, params string[] missingColumns)
+    private static IList<IMigrationExpression> PlanMigration(bool availabilityAlreadyApplied, bool tablesExist, params string[] missingColumns)
     {
         var installed = typeof(DataSettingsManager).GetField("_databaseIsInstalled", BindingFlags.Static | BindingFlags.NonPublic)!;
         var initialized = typeof(NameCompatibilityManager).GetField("_isInitialized", BindingFlags.Static | BindingFlags.NonPublic)!;
         var previousInstalled = installed.GetValue(null);
         var previousInitialized = initialized.GetValue(null);
+        var previousEngine = Singleton<IEngine>.Instance;
         var previousFinder = Singleton<ITypeFinder>.Instance;
         var previousData = Singleton<DataConfig>.Instance;
         try
         {
             installed.SetValue(null, true);
             Singleton<DataConfig>.Instance = new DataConfig { DataProvider = DataProviderType.MySql };
-            Singleton<ITypeFinder>.Instance = Mock.Of<ITypeFinder>();
+            var finder = new Mock<ITypeFinder>();
+            finder.Setup(x => x.FindClassesOfType(typeof(global::Nop.Data.Mapping.Builders.IEntityBuilder), true))
+                .Returns(new[] { typeof(AkeneoSyncProfileBuilder) });
+            Singleton<ITypeFinder>.Instance = finder.Object;
+            var engine = new Mock<IEngine>();
+            engine.Setup(x => x.ResolveUnregistered(typeof(AkeneoSyncProfileBuilder))).Returns(new AkeneoSyncProfileBuilder());
+            Singleton<IEngine>.Instance = engine.Object;
             var schema = new Mock<IQuerySchema>();
             schema.Setup(x => x.TableExists(It.IsAny<string>(), It.IsAny<string>())).Returns(tablesExist);
             schema.Setup(x => x.ColumnExists(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns((string _, string table, string column) => tablesExist && !missingColumns.Contains(column));
             schema.Setup(x => x.IndexExists(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns((string _, string table, string index) => tablesExist && !index.EndsWith("_AkeneoFamilyCode"));
+            var versions = new Mock<IVersionLoader>();
+            versions.Setup(loader => loader.VersionInfo.HasAppliedMigration(new DateTime(2026, 10, 30, 13, 0, 0).Ticks)).Returns(availabilityAlreadyApplied);
             var context = new MigrationContext(schema.Object, Mock.Of<IServiceProvider>(), "");
-            migration.GetUpExpressions(context);
+            new AkeneoConnectionMigration(versions.Object).GetUpExpressions(context);
             return context.Expressions.ToList();
         }
         finally
         {
             installed.SetValue(null, previousInstalled);
             initialized.SetValue(null, previousInitialized);
+            Singleton<IEngine>.Instance = previousEngine;
             Singleton<ITypeFinder>.Instance = previousFinder;
             Singleton<DataConfig>.Instance = previousData;
         }
@@ -77,15 +88,19 @@ public class AkeneoConsolidatedMigrationTests
     }
 
     [Test]
-    public void Schema_bootstrap_precedes_the_one_time_update_and_refresh_runs_after_old_standalone_upgrades()
+    public void Single_consolidated_migration_adds_log_skips_off_on_install_and_upgrade()
     {
-        var initial = typeof(AkeneoConnectionInitialSchemaMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
-        var availability = typeof(AkeneoPublishedCombinationAvailabilityMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
-        var consolidated = typeof(AkeneoConnectionMigration).GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>()!;
-        Assert.That(initial.Version, Is.LessThan(availability.Version));
-        Assert.That(consolidated.Version, Is.GreaterThan(new DateTime(2026, 11, 1, 8, 0, 0).Ticks));
-        Assert.That(consolidated.TargetMigrationProcess, Is.EqualTo(global::Nop.Data.Migrations.MigrationProcessType.NoMatter));
-        var tables = PlanMigration(new AkeneoConnectionInitialSchemaMigration(), false).OfType<CreateTableExpression>().ToList();
+        var migrations = typeof(AkeneoConnectionMigration).Assembly.GetTypes()
+            .Select(type => type.GetCustomAttribute<global::Nop.Data.Migrations.NopMigrationAttribute>())
+            .Where(attribute => attribute != null).ToList();
+        Assert.That(migrations, Has.Count.EqualTo(1));
+        Assert.That(migrations.Single()!.Version, Is.GreaterThan(new DateTime(2026, 11, 1, 10, 0, 0).Ticks));
+        var tables = Plan(false).OfType<CreateTableExpression>().ToList();
+        var newProfile = tables.Single(table => table.TableName.EndsWith(nameof(AkeneoSyncProfile)));
+        Assert.That(newProfile.Columns.Single(col => col.Name == nameof(AkeneoSyncProfile.LogSkips)).DefaultValue, Is.EqualTo(false));
+        var upgrade = Plan(true, nameof(AkeneoSyncProfile.LogSkips));
+        Assert.That(upgrade.OfType<CreateColumnExpression>().Single().Column.DefaultValue, Is.EqualTo(false));
+        Assert.That(upgrade.OfType<UpdateDataExpression>(), Is.Empty, "Keep saved availability choices after the legacy upgrade.");
         Assert.That(tables.Any(table => table.TableName.EndsWith(nameof(AkeneoFamilyMapping))), Is.True);
         var rules = tables.Single(table => table.TableName.EndsWith(nameof(AkeneoFamilySubModelRule)));
         Assert.That(rules.Columns.Select(column => column.Name), Does.Contain("StandaloneProductTemplateId").And.Contain("StandaloneProductNameTemplate"));
@@ -96,9 +111,8 @@ public class AkeneoConsolidatedMigrationTests
     [Test]
     public void Published_upgrade_only_switches_managed_enabled_status_combinations()
     {
-        var expressions = PlanMigration(new AkeneoPublishedCombinationAvailabilityMigration(), true);
+        var expressions = PlanMigration(false, true, nameof(AkeneoSyncProfile.LogSkips));
         var update = expressions.OfType<UpdateDataExpression>().Single();
-        Assert.That(expressions, Has.Count.EqualTo(1));
         Assert.That(update.TableName, Does.EndWith(nameof(AkeneoFamilyMapping)));
         Assert.That(update.Set.ToDictionary(column => column.Key, column => column.Value), Is.EqualTo(new Dictionary<string, object>
         {

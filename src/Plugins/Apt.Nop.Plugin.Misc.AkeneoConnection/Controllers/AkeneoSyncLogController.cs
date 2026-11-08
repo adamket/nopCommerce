@@ -76,7 +76,7 @@ public class AkeneoSyncLogController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
-    public async Task<IActionResult> RunItems(int syncRunRecordId, int page = 0, int pageSize = 0)
+    public async Task<IActionResult> RunItems(int syncRunRecordId, int page = 0, int pageSize = 0, string actions = null, bool includeActionCounts = false)
     {
         if (pageSize <= 0)
             pageSize = ItemsPageSize;
@@ -84,7 +84,8 @@ public class AkeneoSyncLogController(
         var result = await akeneoSyncItemLogService.SearchAkeneoSyncItemLogsAsync(
             syncRunRecordId: syncRunRecordId,
             pageIndex: page,
-            pageSize: pageSize);
+            pageSize: pageSize,
+            actionTypeIds: ParseActionTypeIds(actions));
 
         var items = new List<object>();
         foreach (var item in result)
@@ -93,7 +94,8 @@ public class AkeneoSyncLogController(
             {
                 id = item.Id,
                 createdOn = await FormatUserTimeAsync(item.CreatedOnUtc),
-                action = GetActionName(item.ActionTypeId),
+                isRunComplete = item.ActionTypeId == (int)SyncItemActionType.RunComplete,
+                action = item.ActionTypeId == (int)SyncItemActionType.RunComplete ? null : GetActionName(item.ActionTypeId),
                 akeneoIdentifier = item.AkeneoIdentifier ?? string.Empty,
                 akeneoProductUuid = item.AkeneoProductUuid ?? string.Empty,
                 nopProductId = item.NopProductId,
@@ -105,6 +107,12 @@ public class AkeneoSyncLogController(
         {
             success = true,
             items,
+            availableActions = includeActionCounts
+                ? (await akeneoSyncItemLogService.GetActionCountsAsync(syncRunRecordId))
+                    .Where(pair => pair.Key != (int)SyncItemActionType.RunComplete && Enum.IsDefined(typeof(SyncItemActionType), pair.Key))
+                    .OrderBy(pair => pair.Key)
+                    .Select(pair => new { action = GetActionName(pair.Key), count = pair.Value }).ToArray()
+                : null,
             pageIndex = result.PageIndex,
             totalPages = result.TotalPages,
             totalCount = result.TotalCount
@@ -121,6 +129,27 @@ public class AkeneoSyncLogController(
 
     private static string GetStatusName(int id) =>
         Enum.IsDefined(typeof(SyncStatus), id) ? ((SyncStatus)id).ToString() : $"Status {id}";
+
+    /// <summary>
+    /// Parses a comma-separated list of item action names (e.g. "Created,Failed").
+    /// Unknown names are ignored; an empty result means no action filter.
+    /// </summary>
+    private static IReadOnlyCollection<int> ParseActionTypeIds(string actions)
+    {
+        if (string.IsNullOrWhiteSpace(actions))
+            return null;
+
+        var ids = actions
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(name => Enum.TryParse<SyncItemActionType>(name, ignoreCase: true, out var action)
+                            && Enum.IsDefined(action) ? (int?)action : null)
+            .Where(id => id.HasValue)
+            .Select(id => id.Value)
+            .Distinct()
+            .ToArray();
+
+        return ids.Length > 0 ? ids : null;
+    }
 
     private static string GetActionName(int id) =>
         Enum.IsDefined(typeof(SyncItemActionType), id) ? ((SyncItemActionType)id).ToString() : $"Action {id}";

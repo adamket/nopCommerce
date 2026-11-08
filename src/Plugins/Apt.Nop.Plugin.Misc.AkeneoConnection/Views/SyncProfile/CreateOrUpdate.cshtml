@@ -27,6 +27,7 @@
 
     var appModel = new
     {
+        productEditBase = Url.Content("~/Admin/Product/Edit/"),
         id = Model.Id,
         savedEnabled = Model.Enabled,
         timeZone = Model.UpdatedAfterTimeZoneDisplayName ?? string.Empty,
@@ -44,6 +45,7 @@
             currencyCode = Model.CurrencyCode ?? string.Empty,
             pageSize = Model.PageSize > 0 ? Model.PageSize.ToString() : "100",
             maxProducts = Model.MaxProducts?.ToString() ?? string.Empty,
+            logSkips = Model.LogSkips,
             continueOnError = Model.ContinueOnError,
             syncLogRetentionEnabled = Model.SyncLogRetentionEnabled,
             syncItemLogRetentionDays = Model.SyncItemLogRetentionDays?.ToString() ?? "30",
@@ -197,103 +199,107 @@
 
         <section class="content">
             <div class="container-fluid">
-                <div class="alert alert-danger mb-3" role="alert" v-if="saveError">
-                    <strong>{{ saveError }}</strong>
-                    <ul class="mb-0 mt-1" v-if="errorList.length">
-                        <li v-for="(error, index) in errorList" v-bind:key="index">{{ error }}</li>
-                    </ul>
-                </div>
+                <section v-if="saveError || (lock && lock.held) || (resyncStatus.recommended && isEdit) || runResult"
+                         class="akeneo-profile-alerts mb-3" aria-label="Sync profile alerts" tabindex="0">
+                    <div class="alert alert-danger mb-3" role="alert" v-if="saveError">
+                        <strong>{{ saveError }}</strong>
+                        <ul class="mb-0 mt-1" v-if="errorList.length">
+                            <li v-for="(error, index) in errorList" v-bind:key="index">{{ error }}</li>
+                        </ul>
+                    </div>
 
-                <div class="alert mb-3 akeneo-lock-alert"
-                     role="status"
-                     v-if="lock && lock.held"
-                     v-bind:class="lockLooksAbandoned ? 'alert-danger' : 'alert-warning'">
-                    <div class="akeneo-lock-alert-body">
-                        <div>
-                            <strong>
-                                <i class="fas fa-lock"></i>
-                                A sync is holding the Akeneo catalog lock{{ lock.runRecordId ? ' (run record ' + lock.runRecordId + ')' : '' }}.
-                            </strong>
-                            <div class="mt-1">
-                                <span v-if="lock.runType">{{ lock.runType }} · </span>
-                                <span v-if="lock.runStatus">{{ lock.runStatus }} · </span>
-                                started {{ lock.acquired }} · last check-in {{ lock.heartbeatMinutesAgo }} min ago ({{ lock.lastHeartbeat }}) · expires {{ lock.expires }}
+                    <div class="alert mb-3 akeneo-lock-alert"
+                         role="status"
+                         v-if="lock && lock.held"
+                         v-bind:class="lockLooksAbandoned ? 'alert-danger' : 'alert-warning'">
+                        <div class="akeneo-lock-alert-body">
+                            <div>
+                                <strong>
+                                    <i class="fas fa-lock"></i>
+                                    A sync is holding the Akeneo catalog lock{{ lock.runRecordId ? ' (run record ' + lock.runRecordId + ')' : '' }}.
+                                </strong>
+                                <div class="mt-1">
+                                    <span v-if="lock.runType">{{ lock.runType }} · </span>
+                                    <span v-if="lock.runStatus">{{ lock.runStatus }} · </span>
+                                    started {{ lock.acquired }} · last check-in {{ lock.heartbeatMinutesAgo }} min ago ({{ lock.lastHeartbeat }}) · expires {{ lock.expires }}
+                                </div>
+                                <div class="mt-1" v-if="lockLooksAbandoned">
+                                    A running sync checks in every 5 minutes, so this run has most likely stopped.
+                                    Release the lock to run a sync now instead of waiting for it to expire.
+                                </div>
+                                <div class="mt-1" v-else>
+                                    A running sync checks in every 5 minutes, so this one is still working.
+                                    The lock can be released once it has not checked in for 30 minutes.
+                                </div>
+                                <div class="mt-1 akeneo-dim">The lock is shared by every sync profile and Catalog Binding.</div>
                             </div>
-                            <div class="mt-1" v-if="lockLooksAbandoned">
-                                A running sync checks in every 5 minutes, so this run has most likely stopped.
-                                Release the lock to run a sync now instead of waiting for it to expire.
+                            <div class="akeneo-lock-alert-actions">
+                                <button type="button"
+                                        class="btn btn-sm btn-default"
+                                        v-bind:disabled="lockBusy"
+                                        v-on:click="loadLock">
+                                    <i class="fas fa-redo"></i>
+                                    Refresh
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm btn-danger"
+                                        v-bind:disabled="lockBusy || !!busy || !lockLooksAbandoned"
+                                        v-bind:title="lockLooksAbandoned ? '' : 'The run holding the lock is still checking in.'"
+                                        v-on:click="confirmReleaseLock">
+                                    <span v-if="lockBusy" class="akeneo-button-spinner" aria-hidden="true"></span>
+                                    <i v-else class="fas fa-unlock"></i>
+                                    Release lock
+                                </button>
                             </div>
-                            <div class="mt-1" v-else>
-                                A running sync checks in every 5 minutes, so this one is probably still working.
-                                Releasing the lock stops it at its next checkpoint.
-                            </div>
-                            <div class="mt-1 akeneo-dim">The lock is shared by every sync profile and Catalog Binding.</div>
                         </div>
-                        <div class="akeneo-lock-alert-actions">
-                            <button type="button"
-                                    class="btn btn-sm btn-default"
-                                    v-bind:disabled="lockBusy"
-                                    v-on:click="loadLock">
-                                <i class="fas fa-redo"></i>
-                                Refresh
-                            </button>
-                            <button type="button"
-                                    class="btn btn-sm btn-danger"
-                                    v-bind:disabled="lockBusy || !!busy"
-                                    v-on:click="confirmReleaseLock">
-                                <span v-if="lockBusy" class="akeneo-button-spinner" aria-hidden="true"></span>
-                                <i v-else class="fas fa-unlock"></i>
-                                Release lock
+                    </div>
+
+                    <div class="alert alert-info mb-3 akeneo-resync-alert" role="status" v-if="resyncStatus.recommended && isEdit">
+                        <div class="akeneo-resync-alert-body">
+                            <div>
+                                <strong><i class="fas fa-info-circle"></i> Mappings or this profile changed since the last resync.</strong>
+                                <div class="mt-1">
+                                    Changed {{ resyncStatus.changedOn }} · last resync
+                                    {{ resyncStatus.lastResyncOn || 'never' }}.
+                                    A delta run only revisits products changed in Akeneo, so other products keep their old output until a resync.
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-warning" v-bind:disabled="!canRun" v-on:click="openResync">
+                                <i class="fas fa-sync-alt"></i> Resync
                             </button>
                         </div>
                     </div>
-                </div>
 
-                <div class="alert alert-info mb-3 akeneo-resync-alert" role="status" v-if="resyncStatus.recommended && isEdit">
-                    <div class="akeneo-resync-alert-body">
-                        <div>
-                            <strong><i class="fas fa-info-circle"></i> Mappings or this profile changed since the last resync.</strong>
-                            <div class="mt-1">
-                                Changed {{ resyncStatus.changedOn }} · last resync
-                                {{ resyncStatus.lastResyncOn || 'never' }}.
-                                A delta run only revisits products changed in Akeneo, so other products keep their old output until a resync.
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-warning" v-bind:disabled="!canRun" v-on:click="openResync">
-                            <i class="fas fa-sync-alt"></i> Resync
+                    <div class="alert mb-3"
+                         role="alert"
+                         v-if="runResult"
+                         v-bind:class="runResult.cls">
+                        <button type="button" class="close" aria-label="Close" v-on:click="runResult = null">
+                            <span aria-hidden="true">&times;</span>
                         </button>
-                    </div>
-                </div>
+                        <strong><akeneo-product-message :message="runResult.message" :product-edit-base="productEditBase"></akeneo-product-message></strong>
 
-                <div class="alert mb-3"
-                     role="alert"
-                     v-if="runResult"
-                     v-bind:class="runResult.cls">
-                    <button type="button" class="close" aria-label="Close" v-on:click="runResult = null">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                    <strong>{{ runResult.message }}</strong>
+                        <div class="akeneo-run-counts mt-2" v-if="runResult.counts">
+                            <span v-for="count in runCounts" v-bind:key="count.label">
+                                <strong>{{ count.label }}:</strong> {{ count.value }}
+                            </span>
+                        </div>
 
-                    <div class="akeneo-run-counts mt-2" v-if="runResult.counts">
-                        <span v-for="count in runCounts" v-bind:key="count.label">
-                            <strong>{{ count.label }}:</strong> {{ count.value }}
-                        </span>
-                    </div>
+                        <div class="mt-2" v-if="runResult.warnings.length">
+                            <strong>Warnings:</strong>
+                            <ul class="mb-0">
+                                <li v-for="(warning, index) in runResult.warnings" v-bind:key="'w' + index"><akeneo-product-message :message="warning" :product-edit-base="productEditBase"></akeneo-product-message></li>
+                            </ul>
+                        </div>
 
-                    <div class="mt-2" v-if="runResult.warnings.length">
-                        <strong>Warnings:</strong>
-                        <ul class="mb-0">
-                            <li v-for="(warning, index) in runResult.warnings" v-bind:key="'w' + index">{{ warning }}</li>
-                        </ul>
+                        <div class="mt-2" v-if="runResult.errors.length">
+                            <strong>Errors:</strong>
+                            <ul class="mb-0">
+                                <li v-for="(error, index) in runResult.errors" v-bind:key="'e' + index"><akeneo-product-message :message="error" :product-edit-base="productEditBase"></akeneo-product-message></li>
+                            </ul>
+                        </div>
                     </div>
-
-                    <div class="mt-2" v-if="runResult.errors.length">
-                        <strong>Errors:</strong>
-                        <ul class="mb-0">
-                            <li v-for="(error, index) in runResult.errors" v-bind:key="'e' + index">{{ error }}</li>
-                        </ul>
-                    </div>
-                </div>
+                </section>
 
                 <!-- Profile -->
                 <div class="card card-default">
@@ -425,6 +431,16 @@
                             </div>
                         </div>
 
+                        <div class="form-group row">
+                            <div class="col-md-3 text-right"><label class="control-label" for="akeneo-log-skips">Log skips</label></div>
+                            <div class="col-md-9">
+                                <label class="akeneo-switch">
+                                    <input id="akeneo-log-skips" type="checkbox" v-model="form.logSkips" />
+                                    <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                    <span class="akeneo-switch-text">Log every skipped product</span>
+                                </label>
+                            </div>
+                        </div>
                         <div class="form-group row">
                             <div class="col-md-3 text-right"><label class="control-label">Continue on error</label></div>
                             <div class="col-md-9">
@@ -757,12 +773,14 @@
         </section>
 
         <!-- Confirmation modal -->
-        <div v-if="confirm.visible" class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-profile-confirm-title">
+        <transition name="akeneo-modal">
+        <div v-if="confirm.visible" class="modal fade show" v-on:click.self="confirm.visible = false" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-profile-confirm-title">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 id="akeneo-profile-confirm-title" class="modal-title">{{ confirm.title }}</h5>
-                        <button type="button" class="close" aria-label="Close" v-on:click="confirm.visible = false">
+                    <!-- The header takes the confirm button's colour, like the Test Connection result. -->
+                    <div class="modal-header text-white" v-bind:class="(confirm.buttonClass || 'btn-primary').replace('btn-', 'bg-')">
+                        <h4 id="akeneo-profile-confirm-title" class="modal-title"><i class="mr-2" v-bind:class="confirm.icon"></i>{{ confirm.title }}</h4>
+                        <button type="button" class="close text-white" aria-label="Close" v-on:click="confirm.visible = false">
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
@@ -770,7 +788,7 @@
                         <p class="mb-0">{{ confirm.message }}</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-default" v-on:click="confirm.visible = false">Cancel</button>
+                        <button type="button" class="btn btn-light border" v-on:click="confirm.visible = false">Cancel</button>
                         <button type="button" class="btn" v-bind:class="confirm.buttonClass" v-on:click="acceptConfirm">
                             <i v-bind:class="confirm.icon"></i>
                             {{ confirm.buttonText }}
@@ -779,14 +797,18 @@
                 </div>
             </div>
         </div>
+        </transition>
+        <transition name="akeneo-backdrop">
         <div v-if="confirm.visible" class="modal-backdrop fade show" v-on:click="confirm.visible = false"></div>
+        </transition>
 
         <!-- Resync dialog -->
-        <div v-if="resync.visible" class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-resync-title">
+        <transition name="akeneo-modal">
+        <div v-if="resync.visible" class="modal fade show" v-on:click.self="resync.visible = false" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-resync-title">
             <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 id="akeneo-resync-title" class="modal-title">Resync Akeneo Sync Profile</h5>
+                    <div class="modal-header bg-warning">
+                        <h4 id="akeneo-resync-title" class="modal-title"><i class="fas fa-sync-alt mr-2"></i>Resync Akeneo Sync Profile</h4>
                         <button type="button" class="close" aria-label="Close" v-on:click="resync.visible = false">
                             <span aria-hidden="true">&times;</span>
                         </button>
@@ -836,7 +858,7 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-default" v-on:click="resync.visible = false">Cancel</button>
+                        <button type="button" class="btn btn-light border" v-on:click="resync.visible = false">Cancel</button>
                         <button type="button" class="btn btn-warning" v-on:click="runResync">
                             <i class="fas fa-sync-alt"></i>
                             {{ resync.familyCodes.length ? 'Resync ' + resync.familyCodes.length + ' famil' + (resync.familyCodes.length === 1 ? 'y' : 'ies') : 'Resync whole profile' }}
@@ -845,7 +867,10 @@
                 </div>
             </div>
         </div>
+        </transition>
+        <transition name="akeneo-backdrop">
         <div v-if="resync.visible" class="modal-backdrop fade show" v-on:click="resync.visible = false"></div>
+        </transition>
 
         <div class="akeneo-toast-container" aria-live="polite" aria-atomic="true">
             <transition-group name="akeneo-toast">
@@ -908,6 +933,7 @@
             currencyCode: 'CurrencyCode',
             pageSize: 'PageSize',
             maxProducts: 'MaxProducts',
+            logSkips: 'LogSkips',
             continueOnError: 'ContinueOnError',
             syncLogRetentionEnabled: 'SyncLogRetentionEnabled',
             syncItemLogRetentionDays: 'SyncItemLogRetentionDays',
@@ -946,6 +972,7 @@
             data: function () {
                 return {
                     id: appData.id,
+                    productEditBase: appData.productEditBase,
                     savedEnabled: appData.savedEnabled,
                     timeZone: appData.timeZone,
                     form: JSON.parse(JSON.stringify(appData.form)),
@@ -1298,9 +1325,7 @@
 
                     this.openConfirm({
                         title: 'Release the sync lock',
-                        message: this.lockLooksAbandoned
-                            ? 'Release the Akeneo catalog lock? The run holding it has not checked in recently and has most likely stopped; it will be marked as cancelled.'
-                            : 'This run checked in recently and may still be working. Releasing the lock stops it at its next checkpoint (within about 5 minutes) and marks it as cancelled. Release anyway?',
+                        message: 'Release the Akeneo catalog lock? The run holding it has not checked in recently and has most likely stopped; it will be marked as cancelled.',
                         buttonText: 'Release lock',
                         buttonClass: 'btn-danger',
                         icon: 'fas fa-unlock',
@@ -1319,7 +1344,10 @@
                         data: addAntiForgeryToken({})
                     }).done(function (response) {
                         self.lock = (response && response.status) || { held: false };
-                        self.notify((response && response.message) || 'Sync lock released.');
+                        if (response && response.success === false)
+                            self.saveError = response.message;
+                        else
+                            self.notify((response && response.message) || 'Sync lock released.');
                     }).fail(function (xhr) {
                         self.saveError = 'The sync lock could not be released (HTTP ' + (xhr ? xhr.status : '?') + ').';
                     }).always(function () {
@@ -1367,6 +1395,7 @@
                 clearable: { type: Boolean, default: false }
             }
         });
+        app.component('akeneo-product-message', AkeneoProductLog.component);
         app.mount('#akeneo-sync-profile-app');
     })();
 </script>

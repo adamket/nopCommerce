@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using FluentMigrator;
+using FluentMigrator.Runner;
 using Nop.Core;
 using Nop.Data;
 using Nop.Data.Extensions;
@@ -15,10 +16,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 // only while its index is missing, since SQL Server rejects altering an indexed
 // column on such a rerun.
 [NopMigration(
-    "2026-11-01 10:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template)",
+    "2026-11-06 17:45:13",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template, profile skip logging)",
     MigrationProcessType.NoMatter)]
-public class AkeneoConnectionMigration : Migration
+public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migration
 {
     // FluentMigrator queues table creation until Up has finished. Treat columns
     // supplied by TableFor as present while building this migration's expressions.
@@ -41,6 +42,7 @@ public class AkeneoConnectionMigration : Migration
         EnsureSyncProfileColumns();
         EnsureAdditionalSyncProfileColumns();
         EnsureFamilyCombinationAvailabilitySchema();
+        UpgradeProfileSkipLogging();
         EnsureSyncRunRecordColumns();
         DropRawPayloadSnapshotColumns();
 
@@ -931,6 +933,31 @@ public class AkeneoConnectionMigration : Migration
 
     #region Consolidated profile settings and family availability
 
+    private void UpgradeProfileSkipLogging()
+    {
+        var profileTable = GetTableName<AkeneoSyncProfile>();
+        if (ColumnExists(profileTable, nameof(AkeneoSyncProfile.LogSkips)))
+            return;
+
+        Create.Column(nameof(AkeneoSyncProfile.LogSkips)).OnTable(profileTable)
+            .AsBoolean().NotNullable().WithDefaultValue(false);
+
+        // Older installations may still need the former one-time data migration.
+        // Fresh tables have no legacy rows, and later schema refreshes already have LogSkips.
+        var legacyVersion = new DateTime(2026, 10, 30, 13, 0, 0).Ticks;
+        if (_createdTables.Contains(GetTableName<AkeneoFamilyMapping>()) || versions.VersionInfo.HasAppliedMigration(legacyVersion))
+            return;
+
+        Update.Table(NameCompatibilityManager.GetTableName(typeof(AkeneoFamilyMapping)))
+            .Set(new { CombinationAvailabilitySourceId = (int)AkeneoCombinationAvailabilitySource.PublishedRule })
+            .Where(new
+            {
+                VariantRelationshipModeId = (int)AkeneoVariantRelationshipMode.ProductAttributeCombinations,
+                ManageVariantsByEnabledStatus = true,
+                CombinationAvailabilitySourceId = (int)AkeneoCombinationAvailabilitySource.EnabledStatus
+            });
+    }
+
     private void EnsureAdditionalSyncProfileColumns()
     {
         var table = GetTableName<AkeneoSyncProfile>();
@@ -1178,15 +1205,4 @@ public class AkeneoConnectionMigration : Migration
     }
 
     #endregion
-}
-
-// Preserve the original schema version for fresh installs and older upgrades.
-// The one-time Published availability migration (2026-10-30) requires these
-// tables and columns to exist first. Both entries share the idempotent schema
-// logic above; installations that already applied this version skip this entry.
-[NopMigration("2026-10-29 13:00:00",
-    "AkeneoConnection: Initial consolidated schema",
-    MigrationProcessType.NoMatter)]
-public sealed class AkeneoConnectionInitialSchemaMigration : AkeneoConnectionMigration
-{
 }

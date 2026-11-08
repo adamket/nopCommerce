@@ -14,3 +14,9 @@ public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<Ak
             .WithDefaultValue(string.Empty);
     }
 }
+
+public class AkeneoSyncProfileBuilder : NopEntityBuilder<AkeneoSyncProfile>
+{
+    public override void MapEntity(CreateTableExpressionBuilder table) =>
+        table.WithColumn(nameof(AkeneoSyncProfile.LogSkips)).AsBoolean().NotNullable().WithDefaultValue(false);
+}

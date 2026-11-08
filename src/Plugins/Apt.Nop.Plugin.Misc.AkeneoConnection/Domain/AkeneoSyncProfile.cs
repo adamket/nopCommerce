@@ -63,6 +63,8 @@ public class AkeneoSyncProfile : BaseEntity
 
     public int? MaxProducts { get; set; }
 
+    public bool LogSkips { get; set; }
+
     public bool ContinueOnError { get; set; }
 
     // Sync log retention, applied by the daily retention task

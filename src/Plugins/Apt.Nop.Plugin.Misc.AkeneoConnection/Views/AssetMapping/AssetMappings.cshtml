@@ -1,4 +1,4 @@
-﻿@using System.Text.Json
+@using System.Text.Json
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
 @model AkeneoAssetMappingListModel
@@ -91,7 +91,7 @@
                         <div class="form-row align-items-end">
                             <div class="form-group col-md-5 mb-0">
                                 <label class="font-weight-bold" for="asset-family-scope">Mapping scope</label>
-                                <select id="asset-family-scope" class="form-control" v-model="selectedFamilyCode" v-on:change="changeFamilyScope">
+                                <select autocomplete="off" id="asset-family-scope" class="form-control" v-model="selectedFamilyCode" v-on:change="changeFamilyScope">
                                     <option value="">Global defaults</option>
                                     <option v-for="family in availableFamilies" v-bind:key="family.value" v-bind:value="family.value">{{ family.text }}</option>
                                 </select>
@@ -208,14 +208,14 @@
                             </div>
                             <div class="form-group col-md-4">
                                 <label>Primary Akeneo source</label>
-                                <select class="form-control" v-model="mapping.draft.sourceAttributeCode" v-on:change="sourceChanged(mapping)">
+                                <select autocomplete="off" class="form-control" v-model="mapping.draft.sourceAttributeCode" v-on:change="sourceChanged(mapping)">
                                     <option value="">Select a media attribute</option>
                                     <option v-for="source in availableSources" v-bind:key="source.code" v-bind:value="source.code">{{ source.label }} ({{ source.code }})</option>
                                 </select>
                             </div>
                             <div class="form-group col-md-4">
                                 <label>Fallback source <span class="text-muted">optional</span></label>
-                                <select class="form-control" v-model="mapping.draft.fallbackSourceAttributeCode" v-bind:disabled="!mapping.draft.sourceAttributeCode">
+                                <select autocomplete="off" class="form-control" v-model="mapping.draft.fallbackSourceAttributeCode" v-bind:disabled="!mapping.draft.sourceAttributeCode">
                                     <option value="">No fallback source</option>
                                     <option v-for="source in availableFallbackSources(mapping)" v-bind:key="source.code" v-bind:value="source.code">{{ source.label }} ({{ source.code }})</option>
                                 </select>
@@ -232,14 +232,14 @@
                         <div class="form-row mt-3" v-if="isAssetCollection(mapping)">
                             <div class="form-group col-md-6">
                                 <label>Asset media field</label>
-                                <select class="form-control" v-model="mapping.draft.assetMediaAttributeCode" v-on:change="mediaFieldChanged(mapping)" v-bind:disabled="mapping.loadingFields">
+                                <select autocomplete="off" class="form-control" v-model="mapping.draft.assetMediaAttributeCode" v-on:change="mediaFieldChanged(mapping)" v-bind:disabled="mapping.loadingFields">
                                     <option value="">{{ mapping.loadingFields ? 'Loading fields…' : 'Select a media_file or media_link field' }}</option>
                                     <option v-for="field in mapping.assetFields.filter(f => f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }} ({{ field.type }})</option>
                                 </select>
                             </div>
                             <div class="form-group col-md-3">
                                 <label>Role field <span class="text-muted">optional</span></label>
-                                <select class="form-control" v-model="mapping.draft.roleAttributeCode">
+                                <select autocomplete="off" class="form-control" v-model="mapping.draft.roleAttributeCode">
                                     <option value="">No role filter</option>
                                     <option v-for="field in mapping.assetFields.filter(f => !f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }}</option>
                                 </select>
@@ -253,7 +253,7 @@
                         <div class="form-row">
                             <div class="form-group col-md-4">
                                 <label>Destination</label>
-                                <select class="form-control" v-model.number="mapping.draft.destinationTypeId" v-on:change="destinationChanged(mapping)">
+                                <select autocomplete="off" class="form-control" v-model.number="mapping.draft.destinationTypeId" v-on:change="destinationChanged(mapping)">
                                     <option v-bind:value="enums.destination.picture">Product picture</option>
                                     <option v-bind:value="enums.destination.video" v-bind:disabled="!canUseVideo(mapping)">Product video</option>
                                     <option v-bind:value="enums.destination.customProperty">Managed custom property</option>
@@ -261,7 +261,7 @@
                             </div>
                             <div class="form-group col-md-4">
                                 <label>Storage behavior</label>
-                                <select class="form-control" v-model.number="mapping.draft.storageModeId" disabled>
+                                <select autocomplete="off" class="form-control" v-model.number="mapping.draft.storageModeId" disabled>
                                     <option v-bind:value="enums.storage.import">Import binary into nopCommerce</option>
                                     <option v-bind:value="enums.storage.external">Keep source/external reference</option>
                                 </select>
@@ -280,7 +280,7 @@
                         <div class="form-row" v-if="isAssetCollection(mapping)">
                             <div class="form-group col-md-6">
                                 <label>Sort-order field <span class="text-muted">optional</span></label>
-                                <select class="form-control" v-model="mapping.draft.sortOrderAttributeCode">
+                                <select autocomplete="off" class="form-control" v-model="mapping.draft.sortOrderAttributeCode">
                                     <option value="">Preserve collection order</option>
                                     <option v-for="field in mapping.assetFields.filter(f => !f.isMedia)" v-bind:key="field.code" v-bind:value="field.code">{{ field.label }}</option>
                                 </select>
@@ -332,14 +332,17 @@
         <div class="modal fade" id="akeneo-asset-delete-modal" tabindex="-1" role="dialog" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
-                    <div class="modal-header"><h5 class="modal-title">Delete asset mapping?</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+                    <div class="modal-header bg-danger text-white">
+                        <h4 class="modal-title"><i class="far fa-trash-alt mr-2"></i>Delete asset mapping?</h4>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    </div>
                     <div class="modal-body">
                         <div class="alert alert-danger" v-if="deleteErrors.length"><div v-for="error in deleteErrors" v-bind:key="error">{{ error }}</div></div>
                         <p>This removes <strong>{{ pendingDelete ? pendingDelete.name : '' }}</strong> from this mapping scope.</p>
                         <p class="text-muted mb-0">Existing nopCommerce assets remain until a profile runs with Replace managed or Replace all.</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-default" data-dismiss="modal" v-bind:disabled="deleting">Cancel</button>
+                        <button type="button" class="btn btn-light border" data-dismiss="modal" v-bind:disabled="deleting">Cancel</button>
                         <button type="button" class="btn btn-danger" v-on:click="confirmDelete" v-bind:disabled="deleting">
                             <span v-if="deleting" class="akeneo-button-spinner" aria-hidden="true"></span>
                             <i v-else class="far fa-trash-alt"></i>

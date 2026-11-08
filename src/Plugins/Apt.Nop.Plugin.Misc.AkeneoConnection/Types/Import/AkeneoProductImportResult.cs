@@ -36,6 +36,8 @@ public class AkeneoProductImportResult
 
     public IList<string> Messages { get; } = new List<string>();
 
+    internal List<IReadOnlyList<string>> MissingTokenGroups { get; } = new();
+
     public IList<string> Warnings { get; } = new List<string>();
 
     public IList<string> Errors { get; } = new List<string>();

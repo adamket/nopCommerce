@@ -939,8 +939,9 @@
 
         @if (!isCreate)
         {
+            <transition name="akeneo-modal">
             <div v-if="showDeleteModal"
-                 class="modal fade show"
+                 class="modal fade show" v-on:click.self="showDeleteModal = false"
                  style="display: block;"
                  tabindex="-1"
                  role="dialog"
@@ -951,10 +952,10 @@
                           asp-route-id="@Model.Id"
                           method="post">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Delete configuration</h5>
+                            <div class="modal-header bg-danger text-white">
+                                <h4 class="modal-title"><i class="far fa-trash-alt mr-2"></i>Delete configuration</h4>
                                 <button type="button"
-                                        class="close"
+                                        class="close text-white"
                                         aria-label="Close"
                                         v-on:click="showDeleteModal = false">
                                     <span aria-hidden="true">&times;</span>
@@ -967,7 +968,7 @@
 
                             <div class="modal-footer">
                                 <button type="button"
-                                        class="btn btn-default"
+                                        class="btn btn-light border"
                                         v-on:click="showDeleteModal = false">
                                     Cancel
                                 </button>
@@ -980,10 +981,12 @@
                     </form>
                 </div>
             </div>
-
+            </transition>
+            <transition name="akeneo-backdrop">
             <div v-if="showDeleteModal"
                  class="modal-backdrop fade show"
                  v-on:click="showDeleteModal = false"></div>
+            </transition>
         }
     </div>
 </div>

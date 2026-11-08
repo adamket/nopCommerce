@@ -46,6 +46,8 @@ public sealed class AkeneoResolvedProductIntent
     /// </summary>
     public IReadOnlyList<string> Messages { get; init; } = Array.Empty<string>();
 
+    internal IReadOnlyList<IReadOnlyList<string>> MissingTokenGroups { get; init; } = Array.Empty<IReadOnlyList<string>>();
+
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();

@@ -19,6 +19,7 @@ public class AkeneoProductBatchImportRequestFactoryTests
     {
         var profile = CreateProfile();
         profile.ProductWriteModeId = (int)AkeneoProductWriteMode.UpdateOnly;
+        profile.LogSkips = true;
         profile.PageSize = 0;
         profile.AkeneoLocales = "es_ES,en_US";
         profile.CurrencyCode = " CAD ";
@@ -36,6 +37,7 @@ public class AkeneoProductBatchImportRequestFactoryTests
             Assert.That(request.SyncRunRecordId, Is.EqualTo(19));
             Assert.That(request.Locale, Is.EqualTo("es_ES"));
             Assert.That(request.Currency, Is.EqualTo("CAD"));
+            Assert.That(request.LogSkips, Is.True);
             Assert.That(request.PageSize, Is.EqualTo(100));
             Assert.That(request.CreateNewProducts, Is.False);
             Assert.That(request.UpdateExistingProducts, Is.True);

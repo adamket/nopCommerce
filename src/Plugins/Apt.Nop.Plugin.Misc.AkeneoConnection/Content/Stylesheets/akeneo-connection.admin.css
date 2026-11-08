@@ -1406,6 +1406,66 @@
     color: var(--ak-ink);
   }
 
+.akeneo-connection .akeneo-msg {
+  overflow-wrap: anywhere;
+}
+
+.akeneo-connection .akeneo-message-preview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.akeneo-connection .akeneo-message-more {
+  display: block;
+  margin-top: .25rem;
+  color: #005ea8;
+  text-decoration: underline;
+}
+
+.akeneo-connection .akeneo-message-preview:focus-visible {
+  outline: 2px solid #005ea8;
+  outline-offset: 3px;
+}
+
+.akeneo-connection .akeneo-sync-message-modal .modal-header.akeneo-message-header-failed {
+  background: #b42318 !important;
+  color: #fff !important;
+}
+
+.akeneo-connection .akeneo-message-header-skipped {
+  background-color: #e2e3e5;
+  color: var(--ak-ink);
+}
+
+.akeneo-connection .akeneo-sync-message-modal .modal-content {
+  max-height: 85vh;
+}
+
+.akeneo-connection .akeneo-sync-message-modal .modal-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.akeneo-connection .akeneo-completion-block + .akeneo-completion-block {
+  margin-top: 1.25rem;
+}
+
+.akeneo-connection .akeneo-message-full {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Pager (runs footer + per-run items) */
 .akeneo-connection .akeneo-pager {
   display: flex;
@@ -1421,6 +1481,125 @@
   padding: 10px 0 0;
   background: transparent;
   border-top: 1px solid var(--ak-line);
+}
+
+/* Sync log item status filter — multi-select chips per run */
+.akeneo-connection .akeneo-status-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.akeneo-connection .akeneo-status-filter-label {
+  color: var(--ak-muted);
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.akeneo-connection .akeneo-status-chip {
+  --ak-chip: var(--ak-ignored);
+  --ak-chip-ink: var(--ak-ink-2);
+  --ak-chip-tint: var(--ak-ignored-tint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--ak-line-strong);
+  border-radius: 999px;
+  background: var(--ak-surface);
+  color: var(--ak-ink-2);
+  font-size: .8rem;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.akeneo-connection .akeneo-status-chip .fas {
+  color: var(--ak-muted);
+}
+
+.akeneo-connection .akeneo-status-chip:hover:not(:disabled) {
+  border-color: var(--ak-chip);
+}
+
+.akeneo-connection .akeneo-status-chip:focus-visible {
+  outline: 2px solid var(--ak-accent);
+  outline-offset: 2px;
+}
+
+.akeneo-connection .akeneo-status-chip:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.akeneo-connection .akeneo-status-chip.is-active {
+  border-color: var(--ak-chip);
+  background: var(--ak-chip-tint);
+  color: var(--ak-chip-ink);
+}
+
+.akeneo-connection .akeneo-status-chip.is-active .fas {
+  color: var(--ak-chip);
+}
+
+.akeneo-connection .akeneo-status-chip-count {
+  min-width: 1.4em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ak-canvas);
+  color: var(--ak-ink-2);
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.akeneo-connection .akeneo-status-chip.is-active .akeneo-status-chip-count {
+  background: var(--ak-surface);
+}
+
+.akeneo-connection .akeneo-status-chip-created {
+  --ak-chip: var(--ak-mapped);
+  --ak-chip-ink: var(--ak-mapped-ink);
+  --ak-chip-tint: var(--ak-mapped-tint);
+}
+
+.akeneo-connection .akeneo-status-chip-updated {
+  --ak-chip: var(--ak-accent);
+  --ak-chip-ink: var(--ak-accent-ink);
+  --ak-chip-tint: var(--ak-accent-tint);
+}
+
+.akeneo-connection .akeneo-status-chip-failed {
+  --ak-chip: var(--ak-danger);
+  --ak-chip-ink: var(--ak-danger-ink);
+  --ak-chip-tint: var(--ak-danger-tint);
+}
+
+.akeneo-connection .akeneo-status-filter-clear {
+  padding: 0 4px;
+  font-size: .8rem;
+}
+
+/* Reserve the slot so showing "Show all" never reflows the chip row */
+.akeneo-connection .akeneo-status-filter-clear.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* While a filter reloads, keep the previous rows in place and dim them
+   instead of collapsing the panel to a loading line. */
+.akeneo-connection .akeneo-item-results {
+  transition: opacity .15s ease;
+}
+
+.akeneo-connection .akeneo-item-results.is-refreshing {
+  opacity: .5;
+  pointer-events: none;
 }
 
 .akeneo-connection .akeneo-pager .akeneo-pager-info {
@@ -2741,6 +2920,16 @@
   }
 
 /* Sync lock notice on the sync profile page */
+.akeneo-connection .akeneo-profile-alerts {
+  max-height: min(18rem, 35vh);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.akeneo-connection .akeneo-profile-alerts > .alert:last-child {
+  margin-bottom: 0 !important;
+}
+
 .akeneo-connection .akeneo-lock-alert-body {
   display: flex;
   flex-wrap: wrap;
@@ -2989,6 +3178,42 @@
 
 @media (prefers-reduced-motion: reduce) {
   .akeneo-connection .akeneo-locale-option {
+    transition: none;
+  }
+}
+
+/* Vue-rendered modals: the same fade and slide-down Bootstrap gives jQuery modals. */
+.akeneo-connection .akeneo-modal-enter-active,
+.akeneo-connection .akeneo-modal-leave-active,
+.akeneo-connection .akeneo-backdrop-enter-active,
+.akeneo-connection .akeneo-backdrop-leave-active {
+  transition: opacity .15s linear;
+}
+
+.akeneo-connection .akeneo-modal-enter-active .modal-dialog,
+.akeneo-connection .akeneo-modal-leave-active .modal-dialog {
+  transition: transform .3s ease-out;
+}
+
+.akeneo-connection .modal.akeneo-modal-enter-from,
+.akeneo-connection .modal.akeneo-modal-leave-to,
+.akeneo-connection .modal-backdrop.akeneo-backdrop-enter-from,
+.akeneo-connection .modal-backdrop.akeneo-backdrop-leave-to {
+  opacity: 0;
+}
+
+.akeneo-connection .modal.akeneo-modal-enter-from .modal-dialog,
+.akeneo-connection .modal.akeneo-modal-leave-to .modal-dialog {
+  transform: translate(0, -50px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .akeneo-connection .akeneo-modal-enter-active,
+  .akeneo-connection .akeneo-modal-leave-active,
+  .akeneo-connection .akeneo-modal-enter-active .modal-dialog,
+  .akeneo-connection .akeneo-modal-leave-active .modal-dialog,
+  .akeneo-connection .akeneo-backdrop-enter-active,
+  .akeneo-connection .akeneo-backdrop-leave-active {
     transition: none;
   }
 }

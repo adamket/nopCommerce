@@ -170,14 +170,11 @@ public partial class AkeneoProductSeoSynchronizer
                 proposedName,
                 ensureNotEmpty: true);
             var conflict = reclaim == null
-                ? await DescribeSlugConflictAsync(
+                ? await ReportSlugConflictAsync(context, plan,
                     proposedName,
                     proposedSlug,
                     fromMapping: false)
                 : null;
-
-            if (conflict != null)
-                plan.Errors.Add(conflict);
 
             plan.AddOperation(
                 "SEO fields",
@@ -272,14 +269,11 @@ public partial class AkeneoProductSeoSynchronizer
 
         // Without a mapped value nopCommerce builds the slug from the name.
         var conflict = reclaim == null
-            ? await DescribeSlugConflictAsync(
+            ? await ReportSlugConflictAsync(context, plan,
                 mapped.HasValue ? requested : proposedName,
                 proposed,
                 fromMapping: mapped.HasValue)
             : null;
-
-        if (conflict != null)
-            plan.Errors.Add(conflict);
 
         var adjustmentWarning = conflict == null && mapped.HasValue && reclaim == null
             ? await DescribeSlugAdjustmentAsync(requested, proposed)
@@ -478,7 +472,7 @@ public partial class AkeneoProductSeoSynchronizer
     /// <summary>
     /// Explains a slug nopCommerce only cleaned up (characters, spacing or
     /// case), or returns null. Numbered slugs are conflicts, reported by
-    /// <see cref="DescribeSlugConflictAsync"/>.
+    /// <see cref="ReportSlugConflictAsync"/>.
     /// </summary>
     private async Task<string> DescribeSlugAdjustmentAsync(
         string requested,
@@ -501,11 +495,11 @@ public partial class AkeneoProductSeoSynchronizer
     }
 
     /// <summary>
-    /// Returns an error when nopCommerce would save a numbered slug
-    /// (red-maple-2) because the wanted one is taken or reserved, or null.
-    /// The product fails instead of going live on a different URL.
+    /// Records a numbered slug as a warning for a hidden product or an error for a storefront page.
     /// </summary>
-    private async Task<string> DescribeSlugConflictAsync(
+    private async Task<string> ReportSlugConflictAsync(
+        AkeneoProductSyncContext context,
+        AkeneoExecutableSectionPlan plan,
         string source,
         string proposed,
         bool fromMapping)
@@ -522,9 +516,22 @@ public partial class AkeneoProductSeoSynchronizer
             ? "Akeneo URL slug"
             : "URL slug generated from the product name";
 
-        return $"The {origin} '{wanted}' is {await DescribeSlugHolderAsync(wanted)}, " +
-               $"so nopCommerce would save '{proposed}' instead. The product was not synchronized; " +
-               "free the slug or change it in Akeneo, then sync again.";
+        var message = $"The {origin} '{wanted}' is {await DescribeSlugHolderAsync(wanted)}, " +
+               $"so nopCommerce would save '{proposed}' instead.";
+        var visible = context.PlannedVisibleIndividually ?? context.Product?.VisibleIndividually ??
+                      context.ExistingProduct?.VisibleIndividually ?? true;
+        if (context.SourceEntityType == AkeneoEntityType.Product && !visible)
+        {
+            message += " This is allowed because the product is hidden individually.";
+            plan.Warnings.Add(message);
+        }
+        else
+        {
+            message += " The product was not synchronized; free the slug or change it in Akeneo, then sync again.";
+            plan.Errors.Add(message);
+        }
+
+        return message;
     }
 
     private async Task<string> DescribeSlugHolderAsync(string slug)

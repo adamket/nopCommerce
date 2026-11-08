@@ -8,6 +8,8 @@ public interface IAkeneoSyncItemLogService
     Task UpdateAkeneoSyncItemLogAsync(AkeneoSyncItemLog entityMapping);
     Task DeleteAkeneoSyncItemLogAsync(AkeneoSyncItemLog entityMapping);
 
+    Task<IReadOnlyDictionary<int, int>> GetActionCountsAsync(int syncRunRecordId);
+
     Task<IPagedList<AkeneoSyncItemLog>> SearchAkeneoSyncItemLogsAsync(
         int? syncRunRecordId = null,
         string akeneoProductUuid = null,
@@ -15,5 +17,6 @@ public interface IAkeneoSyncItemLogService
         int? nopProductId = null,
         int? actionTypeId = null,
         int pageIndex = 0,
-        int pageSize = int.MaxValue);
+        int pageSize = int.MaxValue,
+        IReadOnlyCollection<int> actionTypeIds = null);
 }

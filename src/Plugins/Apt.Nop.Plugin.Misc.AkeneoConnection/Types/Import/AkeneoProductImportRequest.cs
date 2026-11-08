@@ -4,6 +4,14 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 public class AkeneoProductImportRequest
 {
+    // Shared by every product/model context in a batch, including hash checks.
+    // Null for standalone previews and single-item operations.
+    internal AkeneoCategoryMappingWarnings CategoryMappingWarnings { get; set; }
+    internal AkeneoAssociationWarnings AssociationWarnings { get; set; }
+    internal AkeneoMissingTokenWarnings MissingTokenWarnings { get; set; }
+
+    public bool LogSkips { get; set; }
+
     public int SyncRunRecordId { get; set; }
 
     /// <summary>

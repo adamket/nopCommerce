@@ -29,9 +29,11 @@ public class AkeneoSyncProfileController(
     IAkeneoMappingChangeTracker mappingChangeTracker)
     : BaseAdminController
 {
-    // A live run renews its lease every 5 minutes; a heartbeat older than this
-    // means the holder has almost certainly stopped.
-    private static readonly TimeSpan StaleHeartbeatAge = TimeSpan.FromMinutes(15);
+    // A live run renews its lease every 5 minutes, and the longest step between
+    // check-ins (one product unit, capped by its 10-minute transaction) is well
+    // under this. A heartbeat older than this means the holder has stopped, so
+    // only then may the lock be released without two runs overlapping.
+    private static readonly TimeSpan StaleHeartbeatAge = TimeSpan.FromMinutes(30);
 
     /// <summary>
     /// The catalog writer lock shared by every sync profile and catalog binding.
@@ -47,24 +49,45 @@ public class AkeneoSyncProfileController(
     }
 
     /// <summary>
-    /// Releases the catalog writer lock regardless of its holder, and marks the
-    /// run that held it as cancelled if it is still recorded as started. A run
-    /// that is genuinely still running stops at its next lease renewal.
+    /// Releases the catalog writer lock when its holder has stopped checking in
+    /// (or the lease has expired), and marks the run that held it as cancelled
+    /// if it is still recorded as started. A lock whose run is still checking in
+    /// is left alone, so two runs never write at the same time.
     /// </summary>
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
     public async Task<IActionResult> ReleaseLock()
     {
-        var lease = await syncLeaseService.ForceReleaseAsync(
+        var current = await syncLeaseService.GetLeaseAsync(
             AkeneoConnectionConstants.CatalogWriterLockKey);
 
-        if (lease == null)
+        if (current == null)
         {
             return Json(new
             {
                 success = true,
                 message = "No sync lock was held.",
                 status = await BuildLockStatusAsync(null)
+            });
+        }
+
+        var lease = await syncLeaseService.ForceReleaseAsync(
+            AkeneoConnectionConstants.CatalogWriterLockKey,
+            StaleHeartbeatAge);
+
+        if (lease == null)
+        {
+            var still = await syncLeaseService.GetLeaseAsync(
+                AkeneoConnectionConstants.CatalogWriterLockKey);
+
+            return Json(new
+            {
+                success = false,
+                message = still == null
+                    ? "The sync lock was released by its run while you were releasing it."
+                    : $"The run holding the sync lock checked in within the last {StaleHeartbeatAge.TotalMinutes:0} minutes, " +
+                      "so it is still working and the lock was not released. It can be released once the run stops checking in.",
+                status = await BuildLockStatusAsync(still)
             });
         }
 
@@ -342,6 +365,7 @@ public class AkeneoSyncProfileController(
 
         profile.PageSize = model.PageSize <= 0 ? 100 : model.PageSize;
         profile.MaxProducts = model.MaxProducts;
+        profile.LogSkips = model.LogSkips;
         profile.ContinueOnError = model.ContinueOnError;
         profile.SyncLogRetentionEnabled = model.SyncLogRetentionEnabled;
         profile.SyncItemLogRetentionDays = model.SyncItemLogRetentionDays ?? 30;

@@ -58,6 +58,7 @@ public class AkeneoProductBatchImportRequestFactory(
                 : profile.PageSize,
 
             MaxProducts = profile.MaxProducts,
+            LogSkips = profile.LogSkips,
             ContinueOnError = profile.ContinueOnError,
 
             CreateNewProducts =

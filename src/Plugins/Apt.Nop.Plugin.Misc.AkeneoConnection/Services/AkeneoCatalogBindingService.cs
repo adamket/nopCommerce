@@ -7,6 +7,7 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Binding;
 using Humanizer;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Seo;
 using Nop.Data;
 using Nop.Services.Catalog;
 using Nop.Services.Seo;
@@ -36,6 +37,7 @@ public class AkeneoCatalogBindingService(
     IRepository<ProductAttributeMapping> productAttributeMappingRepository,
     IRepository<ProductAttributeValue> productAttributeValueRepository,
     IRepository<Category> categoryRepository,
+    IRepository<UrlRecord> urlRecordRepository,
     ICategoryService categoryService,
     ICategoryTemplateService categoryTemplateService,
     IUrlRecordService urlRecordService,
@@ -77,6 +79,8 @@ public class AkeneoCatalogBindingService(
 
         public AkeneoFamilyMapping FamilyConfiguration { get; set; }
 
+        public AkeneoProductDefinition EffectiveParent { get; set; }
+
         public AkeneoProductDefinition EffectiveLeaf { get; set; }
 
         public List<LeafCandidate> Candidates { get; } = new();
@@ -101,6 +105,10 @@ public class AkeneoCatalogBindingService(
         public Dictionary<int, int> Ambiguous { get; } = new();
 
         public int? ParentProductId { get; set; }
+
+        public int? SlugCandidateId { get; set; }
+
+        public string MatchedSlug { get; set; }
 
         public bool ResolvedByChoice { get; set; }
 
@@ -215,6 +223,11 @@ public class AkeneoCatalogBindingService(
 
             runRecord.SearchJsonSnapshot = BuildFamilySearchJson(plan.FamilyCodes)?.Truncate(4000);
 
+            // Planning only reads and can be slow; confirm the catalog lock is
+            // still held and extend it before writing. The write is a single
+            // transaction, so it finishes well inside the extended lease.
+            await syncLeaseService.RenewIfDueAsync(lease, LeaseDuration, force: true);
+
             var written = await WritePlanAsync(plan, createMissingCategories, cancellationToken);
 
             // Bindings just written count as bound for the unbound-product report.
@@ -319,7 +332,7 @@ public class AkeneoCatalogBindingService(
         await ResolveLeafCandidatesAsync(plan, existing, cancellationToken);
 
         ResolveStandaloneLeaves(plan);
-        ResolveModels(plan, existing.ModelParents, conflictChoices);
+        await ResolveModelsAsync(plan, existing.ModelParents, conflictChoices, cancellationToken);
         await ResolveAxisValuesAsync(plan, existing.AxisValues, cancellationToken);
         await ResolveCategoriesAsync(plan, cancellationToken);
 
@@ -411,6 +424,7 @@ public class AkeneoCatalogBindingService(
                 AkeneoProductModelHierarchyMode.ImmediateParentProductModel);
 
             leaf.FamilyConfiguration = configuration;
+            leaf.EffectiveParent = hierarchy.EffectiveParentProductModel;
             leaf.EffectiveLeaf = hierarchy.EffectiveLeaf;
             leaf.BindingModelCode = hierarchy.ParentProductModel.Code?.Trim();
 
@@ -432,6 +446,7 @@ public class AkeneoCatalogBindingService(
                 {
                     var subModelHierarchy = hierarchyResolver.ResolveSubModelParent(source, ancestors);
                     leaf.BindingModelCode = subModelHierarchy.ParentProductModel.Code?.Trim();
+                    leaf.EffectiveParent = subModelHierarchy.EffectiveParentProductModel;
                     leaf.EffectiveLeaf = subModelHierarchy.EffectiveLeaf;
                 }
                 // A rule that imports this leaf as a standalone product.
@@ -747,10 +762,11 @@ public class AkeneoCatalogBindingService(
         }
     }
 
-    private static void ResolveModels(
+    private async Task ResolveModelsAsync(
         BindingPlan plan,
         IDictionary<string, int> existingModelParents,
-        IDictionary<string, int> conflictChoices)
+        IDictionary<string, int> conflictChoices,
+        CancellationToken cancellationToken)
     {
         foreach (var leaf in plan.Leaves.Where(leaf => leaf.BindingModelCode != null))
         {
@@ -774,6 +790,8 @@ public class AkeneoCatalogBindingService(
                 target[parentId] = target.GetValueOrDefault(parentId) + 1;
         }
 
+        await FindSlugCandidatesAsync(plan, existingModelParents, cancellationToken);
+
         foreach (var model in plan.Models.Values)
         {
             if (existingModelParents.TryGetValue(model.Code, out var boundParentId) &&
@@ -784,7 +802,7 @@ public class AkeneoCatalogBindingService(
             }
             else if (conflictChoices != null &&
                      conflictChoices.TryGetValue(model.Code, out var chosenParentId) &&
-                     (model.Votes.ContainsKey(chosenParentId) || model.Ambiguous.ContainsKey(chosenParentId)) &&
+                     (model.Votes.ContainsKey(chosenParentId) || model.Ambiguous.ContainsKey(chosenParentId) || model.SlugCandidateId == chosenParentId) &&
                      !IsUnanimous(model))
             {
                 model.ParentProductId = chosenParentId;
@@ -796,7 +814,7 @@ public class AkeneoCatalogBindingService(
                 model.ParentProductId = model.Votes.Keys.Single();
                 model.Status = AkeneoBindingStatus.Matched;
             }
-            else if (model.Votes.Count == 0 && model.Ambiguous.Count == 0)
+            else if (model.Votes.Count == 0 && model.Ambiguous.Count == 0 && !model.SlugCandidateId.HasValue)
             {
                 model.Status = AkeneoBindingStatus.Unmatched;
             }
@@ -807,6 +825,40 @@ public class AkeneoCatalogBindingService(
 
             foreach (var leaf in model.Leaves)
                 ResolveModelLeaf(plan, model, leaf);
+        }
+    }
+
+    private async Task FindSlugCandidatesAsync(BindingPlan plan, IDictionary<string, int> existingParents,
+        CancellationToken cancellationToken)
+    {
+        var unmatched = plan.Models.Values
+            .Where(model => model.Votes.Count == 0 && model.Ambiguous.Count == 0 &&
+                !(existingParents.TryGetValue(model.Code, out var id) && IsLiveProduct(plan, id)))
+            .ToLookup(model => productValueResolver.GetValue(model.Leaves[0].EffectiveParent, "url_slug")?.Trim(),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var slugs in unmatched.Select(group => group.Key).Where(slug => !string.IsNullOrEmpty(slug)).Chunk(QueryChunkSize))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var records = await urlRecordRepository.Table
+                .Where(record => record.IsActive && record.EntityName == nameof(Product) && slugs.Contains(record.Slug))
+                .Select(record => new { record.Slug, record.EntityId })
+                .ToListAsync();
+            await LoadProductsByIdAsync(plan, records.Select(record => record.EntityId), cancellationToken);
+
+            foreach (var owners in records.Where(record => IsLiveProduct(plan, record.EntityId))
+                         .GroupBy(record => record.Slug, StringComparer.OrdinalIgnoreCase))
+            {
+                var ids = owners.Select(record => record.EntityId).Distinct().ToList();
+                if (ids.Count != 1)
+                    continue;
+
+                foreach (var model in unmatched[owners.Key])
+                {
+                    model.SlugCandidateId = ids[0];
+                    model.MatchedSlug = owners.Key;
+                }
+            }
         }
     }
 
@@ -1263,8 +1315,16 @@ public class AkeneoCatalogBindingService(
                 ProductModelCode = model.Code,
                 FamilyCode = model.FamilyCode,
                 VariantCount = model.Leaves.Count,
-                Candidates = model.Votes.Keys
-                    .Union(model.Ambiguous.Keys)
+                Candidates = model.SlugCandidateId.HasValue
+                    ? new List<AkeneoBindingCandidate> { new()
+                    {
+                        ProductId = model.SlugCandidateId.Value,
+                        Name = plan.ProductsById[model.SlugCandidateId.Value].Name,
+                        Sku = plan.ProductsById[model.SlugCandidateId.Value].Sku,
+                        Published = plan.ProductsById[model.SlugCandidateId.Value].Published,
+                        MatchedSlug = model.MatchedSlug
+                    } }
+                    : model.Votes.Keys.Union(model.Ambiguous.Keys)
                     .Select(parentId =>
                     {
                         plan.ProductsById.TryGetValue(parentId, out var product);

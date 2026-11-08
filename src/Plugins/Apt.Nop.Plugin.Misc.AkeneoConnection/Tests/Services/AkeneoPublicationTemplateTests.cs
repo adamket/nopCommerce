@@ -76,6 +76,27 @@ public class AkeneoPublicationTemplateTests
         pipeline.VerifyNoOtherCalls();
     }
 
+    [Test]
+    public async Task Batch_routes_optional_missing_tokens_to_the_summary_and_keeps_required_errors()
+    {
+        var request = Request();
+        request.MissingTokenWarnings = new AkeneoMissingTokenWarnings();
+        var result = new AkeneoProductImportResult();
+        var service = CreateService(Mock.Of<IProductService>(), required: false);
+        await service.PrepareAsync(Source(null), AkeneoEntityType.Product, request, result);
+        Assert.That(result.Warnings, Has.None.Contains("tokens had no value"));
+        Assert.That(result.Errors, Is.Empty);
+        result.NopProductId = 1051;
+        request.MissingTokenWarnings.Collect(result);
+        Assert.That(request.MissingTokenWarnings.BuildMessages().Single(), Is.EqualTo(
+            "Products missing: {sync_status}" + Environment.NewLine + "1051"));
+
+        var requiredResult = new AkeneoProductImportResult();
+        await CreateService(Mock.Of<IProductService>()).PrepareAsync(Source(null), AkeneoEntityType.Product, request, requiredResult);
+        Assert.That(requiredResult.Errors.Single(), Does.Contain("tokens had no value"));
+        Assert.That(requiredResult.MissingTokenGroups, Is.Empty);
+    }
+
     [TestCase("published", "true")]
     [TestCase("unpublished", "false")]
     public async Task Template_inherits_common_model_value_without_changing_leaf_payload(string status, string expected)
@@ -123,13 +144,13 @@ public class AkeneoPublicationTemplateTests
     };
 
     private static AkeneoProductSyncService CreateService(IProductService products,
-        IAkeneoProductSyncPipeline? pipeline = null, IAkeneoValueTemplateRenderer? renderer = null)
+        IAkeneoProductSyncPipeline? pipeline = null, IAkeneoValueTemplateRenderer? renderer = null, bool required = true)
     {
         var mappings = new Mock<IAkeneoAttributeMappingService>();
         mappings.Setup(x => x.GetEffectiveMappingsAsync(It.IsAny<string>())).ReturnsAsync(new List<AkeneoAttributeMapping>
         {
             new() { MappingKey = "publication", Name = "Publication status", ValueMode = AkeneoAttributeMappingValueMode.Template,
-                ValueTemplate = Template, IsRequired = true, NopTargetTypeId = (int)NopTargetType.ProductField, NopTargetKey = "Published" }
+                ValueTemplate = Template, IsRequired = required, NopTargetTypeId = (int)NopTargetType.ProductField, NopTargetKey = "Published" }
         });
         mappings.Setup(x => x.GetAllFallbackSourcesAsync()).ReturnsAsync(new List<AkeneoAttributeMappingFallbackSource>());
         var assets = new Mock<IAkeneoAssetMappingService>();

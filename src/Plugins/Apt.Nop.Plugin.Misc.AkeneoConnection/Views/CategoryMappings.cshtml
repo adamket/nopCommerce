@@ -575,6 +575,34 @@
                     </transition-group>
                 </div>
             </div>
+
+            <transition name="akeneo-modal">
+            <div v-if="content.confirmSyncVisible" class="modal fade show" v-on:click.self="content.confirmSyncVisible = false" style="display: block;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="akeneo-content-sync-title">
+                <div class="modal-dialog modal-dialog-centered" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h4 id="akeneo-content-sync-title" class="modal-title"><i class="fas fa-sync-alt mr-2"></i>Sync category content</h4>
+                            <button type="button" class="close text-white" aria-label="Close" v-on:click="content.confirmSyncVisible = false">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">Write the mapped Akeneo content into every mapped nopCommerce category? Edits made in nopCommerce to mapped properties will be overwritten.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light border" v-on:click="content.confirmSyncVisible = false">Cancel</button>
+                            <button type="button" class="btn btn-primary" v-on:click="content.confirmSyncVisible = false; runContent(true, null, true)">
+                                <i class="fas fa-sync-alt"></i>
+                                Sync content now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </transition>
+            <transition name="akeneo-backdrop">
+            <div v-if="content.confirmSyncVisible" class="modal-backdrop fade show" v-on:click="content.confirmSyncVisible = false"></div>
+            </transition>
         </div>
     </section>
 </div>
@@ -628,6 +656,7 @@
                     expanded: {},
                     toasts: [],
                     content: {
+                        confirmSyncVisible: false,
                         mappings: contentData.mappings,
                         attributes: contentData.attributes,
                         labelLocales: contentData.labelLocales,
@@ -1258,10 +1287,10 @@
 
                 // ---- Runs ----
 
-                runContent: function (apply, category) {
+                runContent: function (apply, category, confirmed) {
                     var self = this;
-                    if (apply && !category &&
-                        !window.confirm('Write the mapped Akeneo content into every mapped nopCommerce category? Edits made in nopCommerce to mapped properties will be overwritten.')) {
+                    if (apply && !category && !confirmed) {
+                        this.content.confirmSyncVisible = true;
                         return;
                     }
 

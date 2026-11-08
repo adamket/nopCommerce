@@ -141,6 +141,9 @@ public class AkeneoCategoryContentSyncService(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // Stops the run if another instance has taken the catalog lock.
+                await syncLeaseService.RenewIfDueAsync(lease, LeaseDuration);
+
                 var plan = await PlanCategoryAsync(context, code, nopCategoryId);
 
                 if (plan.Result.Status == AkeneoCategoryContentStatus.Updated)

@@ -81,10 +81,7 @@ public partial class AkeneoProductCategorySynchronizer
             if (!categoryId.HasValue)
             {
                 desiredStateComplete = false;
-                plan.AddReview(
-                    "Categories",
-                    code,
-                    code,
+                AddMappingReview(plan, context, code, null,
                     $"No nopCommerce category mapping exists for Akeneo category '{code}'.");
                 continue;
             }
@@ -94,10 +91,7 @@ public partial class AkeneoProductCategorySynchronizer
             if (category == null || category.Deleted)
             {
                 desiredStateComplete = false;
-                plan.AddReview(
-                    "Categories",
-                    code,
-                    code,
+                AddMappingReview(plan, context, code, categoryId.Value,
                     $"Akeneo category '{code}' maps to missing or deleted nopCommerce category ID {categoryId.Value}.");
                 continue;
             }
@@ -172,7 +166,10 @@ public partial class AkeneoProductCategorySynchronizer
         {
             const string warning =
                 "Category removal was skipped because the complete desired category state could not be resolved.";
-            plan.Warnings.Add(warning);
+            if (context.Request.CategoryMappingWarnings is { } warnings)
+                warnings.RemovalsSkipped = true;
+            else
+                plan.Warnings.Add(warning);
             plan.CoverageNotes.Add(
                 "Category removals are not planned because the complete desired category state could not be resolved. The real synchronizer executes this same plan.");
             return plan;
@@ -258,6 +255,25 @@ public partial class AkeneoProductCategorySynchronizer
         }
 
         return plan;
+    }
+
+    private static void AddMappingReview(
+        AkeneoExecutableSectionPlan plan,
+        AkeneoProductSyncContext context,
+        string code,
+        int? missingDestinationId,
+        string detail)
+    {
+        if (context.Request.CategoryMappingWarnings is not { } warnings)
+        {
+            plan.AddReview("Categories", code, code, detail);
+            return;
+        }
+
+        warnings.Add(code, missingDestinationId);
+        // Keep the review operation for planning, but do not repeat it in item logs.
+        plan.AddOperation("Categories", code, code, null, null,
+            AkeneoDryRunOperationType.Review, detail);
     }
 
     /// <summary>
