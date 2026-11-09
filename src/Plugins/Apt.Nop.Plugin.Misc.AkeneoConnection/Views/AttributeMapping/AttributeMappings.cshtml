@@ -1217,7 +1217,7 @@
                         if (this.isTierPriceType(t)) {
                             var role = this.availableCustomerRoles.find(function (o) { return o.value === String(m.nopTargetEntityId); });
                             return role
-                                ? role.text + ' · minimum quantity ' + (m.nopTargetKey || '1')
+                                ? role.text + ' · minimum quantity ' + (m.nopTargetKey == null || m.nopTargetKey === '' ? '1' : m.nopTargetKey)
                                 : 'No customer role selected';
                         }
                         return 'No additional target selected';
@@ -1990,7 +1990,7 @@
                                 AkeneoReferenceEntityCode: m.referenceEntityCode || '',
                                 AkeneoReferenceEntityAttributeCode: d.referenceEntityAttributeCode || '',
                                 NopTargetTypeId: d.nopTargetTypeId,
-                                NopTargetKey: d.nopTargetKey || '',
+                                NopTargetKey: d.nopTargetKey == null ? '' : String(d.nopTargetKey), // A number input binds 0 as a number, which || would drop.
                                 NopTargetEntityId: d.nopTargetEntityId || '',
                                 SpecificationMissingValueHandlingId:
                                     d.specificationMissingValueHandlingId || '0',

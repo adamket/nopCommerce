@@ -180,6 +180,17 @@ test('save sends the selected source and family, then retains the saved row', ()
     assert.ok(!app.availableSources.some(source => source.code === 'name'));
 });
 
+test('a tier price minimum quantity of 0 from the number input is saved as 0, not blank', () => {
+    const { app, request } = editor();
+    app.newSourceCode = 'name';
+    app.addMapping();
+    const draft = app.mappings.at(-1);
+    draft.draft.nopTargetTypeId = '1';
+    draft.draft.nopTargetKey = 0; // v-model on type="number" binds a number
+    app.save(draft);
+    assert.equal(request().data.NopTargetKey, '0');
+});
+
 test('computed condition saves, reloads into a draft, and survives cancel', () => {
     const { app, request } = editor({ mappings: [], referenceEntityAttributes: [] });
     app.newMappingKind = 'computed';
