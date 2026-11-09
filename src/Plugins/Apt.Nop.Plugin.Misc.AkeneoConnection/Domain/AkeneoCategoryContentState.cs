@@ -5,7 +5,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 /// <summary>
 /// What the last category content sync did for one Akeneo category, and the
 /// picture it owns. A picture is only replaced in place or deleted when the
-/// category still shows the picture this sync created.
+/// category still shows the picture this sync created or adopted.
 /// </summary>
 public class AkeneoCategoryContentState : BaseEntity
 {
@@ -13,10 +13,10 @@ public class AkeneoCategoryContentState : BaseEntity
 
     public int NopCategoryId { get; set; }
 
-    /// <summary>Akeneo's file path of the image last written; it changes whenever the image does.</summary>
+    /// <summary>Akeneo's file path of the image last synced; it changes whenever the image does.</summary>
     public string PictureFilePath { get; set; }
 
-    /// <summary>The nopCommerce picture this sync created for the category, if any.</summary>
+    /// <summary>The nopCommerce picture this sync created or adopted for the category, if any.</summary>
     public int? NopPictureId { get; set; }
 
     public int LastStatusId { get; set; }

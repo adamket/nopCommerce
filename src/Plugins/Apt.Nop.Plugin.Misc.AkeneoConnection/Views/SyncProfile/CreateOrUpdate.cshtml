@@ -116,6 +116,7 @@
         {
             save = Url.Action("Save", "AkeneoSyncProfile"),
             list = Url.Action("List", "AkeneoSyncProfile"),
+            progress = Url.Action("Progress", "AkeneoSyncProfile"),
             lockStatus = Url.Action("LockStatus", "AkeneoSyncProfile"),
             releaseLock = Url.Action("ReleaseLock", "AkeneoSyncProfile"),
             edit = isEdit ? Url.Action("Edit", "AkeneoSyncProfile", new { id = Model.Id }) : null,
@@ -199,6 +200,15 @@
 
         <section class="content">
             <div class="container-fluid">
+                <div v-if="syncInProgress" class="mb-3">
+                    <div id="akeneo-sync-progress-label" class="mb-1">
+                        <template v-if="syncProgress">{{ syncProgress.processed }} of {{ syncProgress.total }} products processed<span v-if="syncProgress.total"> ({{ syncPercent }}%)</span><span v-if="syncProgress.processed === syncProgress.total"> · Finishing sync…</span></template>
+                        <template v-else>Preparing sync…</template>
+                    </div>
+                    <div class="progress" role="progressbar" aria-labelledby="akeneo-sync-progress-label" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="syncProgress ? syncPercent : null">
+                        <div class="progress-bar akeneo-sync-progress-fill" :style="{ width: syncPercent + '%' }"></div>
+                    </div>
+                </div>
                 <section v-if="saveError || (lock && lock.held) || (resyncStatus.recommended && isEdit) || runResult"
                          class="akeneo-profile-alerts mb-3" aria-label="Sync profile alerts" tabindex="0">
                     <div class="alert alert-danger mb-3" role="alert" v-if="saveError">
@@ -224,12 +234,10 @@
                                     started {{ lock.acquired }} · last check-in {{ lock.heartbeatMinutesAgo }} min ago ({{ lock.lastHeartbeat }}) · expires {{ lock.expires }}
                                 </div>
                                 <div class="mt-1" v-if="lockLooksAbandoned">
-                                    A running sync checks in every 5 minutes, so this run has most likely stopped.
                                     Release the lock to run a sync now instead of waiting for it to expire.
                                 </div>
                                 <div class="mt-1" v-else>
-                                    A running sync checks in every 5 minutes, so this one is still working.
-                                    The lock can be released once it has not checked in for 30 minutes.
+                                    You can release the lock after 30 minutes without a check-in.
                                 </div>
                                 <div class="mt-1 akeneo-dim">The lock is shared by every sync profile and Catalog Binding.</div>
                             </div>
@@ -986,6 +994,8 @@
                     errors: {},
                     saveError: '',
                     runResult: null,
+                    syncProgress: null,
+                    progressGeneration: 0,
                     lock: null,
                     lockBusy: false,
                     toasts: [],
@@ -1009,6 +1019,13 @@
                 };
             },
             computed: {
+                syncPercent: function () {
+                    if (!this.syncProgress || !this.syncProgress.total) return 0;
+                    return Math.min(100, Math.floor(100 * this.syncProgress.processed / this.syncProgress.total));
+                },
+                syncInProgress: function () {
+                    return this.busy === 'run' || this.busy === 'resync';
+                },
                 isEdit: function () {
                     return this.id > 0;
                 },
@@ -1109,6 +1126,14 @@
                     ].filter(function (count) { return count.value !== undefined && count.value !== null; });
                 }
             },
+            watch: {
+                syncInProgress: function (active) {
+                    var generation = ++this.progressGeneration;
+                    this.syncProgress = null;
+                    if (active) this.pollProgress(generation);
+                }
+            },
+            beforeUnmount: function () { this.progressGeneration++; },
             mounted: function () {
                 var self = this;
 
@@ -1302,6 +1327,20 @@
                         // A run that was refused ("already running") or just
                         // finished changes the lock state.
                         self.loadLock();
+                    });
+                },
+                pollProgress: function (generation) {
+                    if (generation !== this.progressGeneration || !this.syncInProgress) return;
+                    $.ajax({ url: this.urls.progress, data: { id: this.id }, dataType: 'json', cache: false, global: false }).done(response => {
+                        if (generation !== this.progressGeneration || !response.progress) return;
+                        var snapshot = response.progress;
+                        var processed = snapshot.processed ?? snapshot.Processed;
+                        var total = snapshot.total ?? snapshot.Total;
+                        if (Number.isInteger(processed) && Number.isInteger(total) && processed >= 0 && processed <= total)
+                            this.syncProgress = { processed, total };
+                    }).always(() => {
+                        if (generation === this.progressGeneration)
+                            setTimeout(() => this.pollProgress(generation), 1500);
                     });
                 },
                 loadLock: function () {

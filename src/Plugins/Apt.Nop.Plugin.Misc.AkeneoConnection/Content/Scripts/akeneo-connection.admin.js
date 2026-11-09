@@ -1,3 +1,8 @@
+// Akeneo views provide their own loading feedback for admin requests.
+if (document.querySelector('.akeneo-connection')) {
+  document.getElementById('ajaxBusy')?.remove();
+}
+
 HTMLElement.prototype.loading = function (isLoading, options) {
   options = options || {};
 

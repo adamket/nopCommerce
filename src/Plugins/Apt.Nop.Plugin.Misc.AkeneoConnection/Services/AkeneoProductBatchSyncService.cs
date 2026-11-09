@@ -63,6 +63,17 @@ public class AkeneoProductBatchSyncService(
     private const int ProductModelCodeBatchSize = 50;
 
     private static readonly TimeSpan LeaseRenewalInterval = TimeSpan.FromMinutes(5);
+    internal sealed record ProductProgress(int Processed, int Total);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, ProductProgress> ActiveProgress = new();
+
+    internal static ProductProgress GetProgress(int profileId) => ActiveProgress.GetValueOrDefault(profileId);
+
+    private static void ReportProgress(AkeneoProductBatchImportRequest request, int processed, int total)
+    {
+        if (request.SyncProfileId is int profileId)
+            ActiveProgress[profileId] = new ProductProgress(processed, total);
+    }
+
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
 
     public async Task<AkeneoProductBatchImportResult> SyncProductsAsync(
@@ -86,6 +97,7 @@ public class AkeneoProductBatchSyncService(
         var productModelCache = new Dictionary<string, AkeneoProductDefinition>(StringComparer.OrdinalIgnoreCase);
         var processedProductKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var lastLeaseRenewalUtc = DateTime.MinValue;
+        var candidates = new List<(AkeneoProductDefinition Source, AkeneoSyncInclusionReason Reason)>();
         var completedAllPhases = true;
 
         try
@@ -102,7 +114,7 @@ public class AkeneoProductBatchSyncService(
                     "uses separate phase-specific Akeneo searches.");
             }
 
-            var directPhase = await ProcessProductSearchAsync(
+            var directPhase = await CollectProductSearchAsync(
                 request,
                 result,
                 directSearchJson,
@@ -111,8 +123,7 @@ public class AkeneoProductBatchSyncService(
                     ? _ => AkeneoSyncInclusionReason.DirectProductChange
                     : _ => AkeneoSyncInclusionReason.None,
                 processedProductKeys,
-                parentProductCache,
-                productModelCache,
+                candidates,
                 pageSize,
                 lastLeaseRenewalUtc,
                 cancellationToken);
@@ -128,15 +139,14 @@ public class AkeneoProductBatchSyncService(
                 !directPhase.StopRun &&
                 !result.WasTruncated)
             {
-                var assetPhase = await ProcessProductSearchAsync(
+                var assetPhase = await CollectProductSearchAsync(
                     request,
                     result,
                     productModelDeltaFanOutService.BuildLinkedAssetProductSearchJson(request),
                     null,
                     _ => AkeneoSyncInclusionReason.LinkedAssetChange,
                     processedProductKeys,
-                    parentProductCache,
-                    productModelCache,
+                    candidates,
                     pageSize,
                     lastLeaseRenewalUtc,
                     cancellationToken);
@@ -189,7 +199,7 @@ public class AkeneoProductBatchSyncService(
                         break;
                     }
 
-                    var fanOutPhase = await ProcessProductSearchAsync(
+                    var fanOutPhase = await CollectProductSearchAsync(
                         request,
                         result,
                         productModelDeltaFanOutService.BuildDescendantProductSearchJson(
@@ -200,8 +210,7 @@ public class AkeneoProductBatchSyncService(
                             source,
                             fanOutPlan.AffectedProductModelReasons),
                         processedProductKeys,
-                        parentProductCache,
-                        productModelCache,
+                        candidates,
                         pageSize,
                         lastLeaseRenewalUtc,
                         cancellationToken);
@@ -253,7 +262,7 @@ public class AkeneoProductBatchSyncService(
                             break;
                         }
 
-                        var recordPhase = await ProcessProductSearchAsync(
+                        var recordPhase = await CollectProductSearchAsync(
                             request,
                             result,
                             productModelDeltaFanOutService.BuildReferenceEntityProductSearchJson(
@@ -263,8 +272,7 @@ public class AkeneoProductBatchSyncService(
                             null,
                             _ => AkeneoSyncInclusionReason.LinkedReferenceEntityRecordChange,
                             processedProductKeys,
-                            parentProductCache,
-                            productModelCache,
+                            candidates,
                             pageSize,
                             lastLeaseRenewalUtc,
                             cancellationToken);
@@ -278,6 +286,84 @@ public class AkeneoProductBatchSyncService(
                             break;
                         }
                     }
+                }
+            }
+
+            ReportProgress(request, 0, candidates.Count);
+            foreach (var (source, inclusionReason) in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc);
+                result.TotalRead++;
+                RecordInclusionReason(result, inclusionReason);
+
+                var itemResult = CreateInitialResult(source);
+                itemResult.InclusionReason = inclusionReason;
+
+                try
+                {
+                    // Warm the product-model cache first so the reconcile
+                    // unit performs no product-model HTTP inside its
+                    // transaction. Asset binaries are downloaded by the
+                    // reconcile unit's own pre-transaction prepare pass.
+                    await PrefetchProductModelsAsync(
+                        source,
+                        productModelCache,
+                        cancellationToken);
+
+                    itemResult = await ReconcileProductUnitAsync(
+                        source,
+                        request,
+                        itemResult,
+                        parentProductCache,
+                        productModelCache,
+                        cancellationToken);
+                    itemResult.InclusionReason = inclusionReason;
+
+                    if (!itemResult.Success ||
+                        itemResult.ActionType == SyncItemActionType.Failed)
+                    {
+                        ClearRolledBackDestination(itemResult);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    itemResult.AddError(ex.Message);
+                    itemResult.ActionType = SyncItemActionType.Failed;
+                    itemResult.InclusionReason = inclusionReason;
+                    ClearRolledBackDestination(itemResult);
+                }
+
+                associatedOptionReconciliation?.Observe(source, itemResult);
+
+                var committed = itemResult.Success && itemResult.ActionType != SyncItemActionType.Failed;
+                request.MissingTokenWarnings.Collect(itemResult, committed);
+                foreach (var related in itemResult.RelatedResults)
+                    request.MissingTokenWarnings.Collect(related, committed);
+
+                foreach (var related in TakeCommittedRelatedResults(itemResult))
+                {
+                    ApplyItemResultToBatchResult(result, related);
+                    await SaveBatchItemLogIfNeededAsync(request, related);
+                    result.AddItemWarnings(related.Warnings);
+                }
+
+                ApplyItemResultToBatchResult(result, itemResult);
+                await SaveBatchItemLogIfNeededAsync(request, itemResult);
+                result.AddItemWarnings(itemResult.Warnings);
+
+                ReportProgress(request, result.TotalRead, candidates.Count);
+
+                if (!itemResult.Success && !request.ContinueOnError)
+                {
+                    result.AddError(
+                        $"Synchronization stopped after product '{GetIdentity(itemResult)}' failed.");
+                    completedAllPhases = false;
+                    break;
                 }
             }
 
@@ -315,6 +401,8 @@ public class AkeneoProductBatchSyncService(
         }
         finally
         {
+            if (request.SyncProfileId is int profileId)
+                ActiveProgress.TryRemove(profileId, out _);
             await SaveRunCompletionAsync(request, result);
             // Safety net: anything still queued (a unit path that ended early) is published at the end.
             if (deferredProductEvents != null)
@@ -420,15 +508,14 @@ public class AkeneoProductBatchSyncService(
             (failed > 0 ? $", {failed} failed." : "."));
     }
 
-    private async Task<ProductSearchPhaseResult> ProcessProductSearchAsync(
+    private async Task<ProductSearchPhaseResult> CollectProductSearchAsync(
         AkeneoProductBatchImportRequest request,
         AkeneoProductBatchImportResult result,
         string searchJson,
         string? initialSearchAfter,
         Func<AkeneoProductDefinition, AkeneoSyncInclusionReason> inclusionReasonResolver,
         ISet<string> processedProductKeys,
-        IDictionary<string, Product> parentProductCache,
-        IDictionary<string, AkeneoProductDefinition> productModelCache,
+        List<(AkeneoProductDefinition Source, AkeneoSyncInclusionReason Reason)> candidates,
         int pageSize,
         DateTime lastLeaseRenewalUtc,
         CancellationToken cancellationToken)
@@ -443,14 +530,14 @@ public class AkeneoProductBatchSyncService(
                 request,
                 lastLeaseRenewalUtc);
 
-            if (HasReachedLimit(request, result))
+            if (HasReachedLimit(request, candidates.Count))
             {
                 MarkTruncated(request, result);
                 return new ProductSearchPhaseResult(false, true, lastLeaseRenewalUtc);
             }
 
             var page = await akeneoApiClient.GetProductsPageAsync(
-                GetEffectivePageSize(request, result, pageSize),
+                GetEffectivePageSize(request, candidates.Count, pageSize),
                 searchAfter,
                 searchJson,
                 cancellationToken);
@@ -474,82 +561,13 @@ public class AkeneoProductBatchSyncService(
                     continue;
                 }
 
-                if (HasReachedLimit(request, result))
+                if (HasReachedLimit(request, candidates.Count))
                 {
                     MarkTruncated(request, result);
                     return new ProductSearchPhaseResult(false, true, lastLeaseRenewalUtc);
                 }
 
-                result.TotalRead++;
-                var inclusionReason = inclusionReasonResolver?.Invoke(source) ??
-                    AkeneoSyncInclusionReason.None;
-                RecordInclusionReason(result, inclusionReason);
-
-                var itemResult = CreateInitialResult(source);
-                itemResult.InclusionReason = inclusionReason;
-
-                try
-                {
-                    // Warm the product-model cache first so the reconcile
-                    // unit performs no product-model HTTP inside its
-                    // transaction. Asset binaries are downloaded by the
-                    // reconcile unit's own pre-transaction prepare pass.
-                    await PrefetchProductModelsAsync(
-                        source,
-                        productModelCache,
-                        cancellationToken);
-
-                    itemResult = await ReconcileProductUnitAsync(
-                        source,
-                        request,
-                        itemResult,
-                        parentProductCache,
-                        productModelCache,
-                        cancellationToken);
-                    itemResult.InclusionReason = inclusionReason;
-
-                    if (!itemResult.Success ||
-                        itemResult.ActionType == SyncItemActionType.Failed)
-                    {
-                        ClearRolledBackDestination(itemResult);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    itemResult.AddError(ex.Message);
-                    itemResult.ActionType = SyncItemActionType.Failed;
-                    itemResult.InclusionReason = inclusionReason;
-                    ClearRolledBackDestination(itemResult);
-                }
-
-                associatedOptionReconciliation?.Observe(source, itemResult);
-
-                var committed = itemResult.Success && itemResult.ActionType != SyncItemActionType.Failed;
-                request.MissingTokenWarnings.Collect(itemResult, committed);
-                foreach (var related in itemResult.RelatedResults)
-                    request.MissingTokenWarnings.Collect(related, committed);
-
-                foreach (var related in TakeCommittedRelatedResults(itemResult))
-                {
-                    ApplyItemResultToBatchResult(result, related);
-                    await SaveBatchItemLogIfNeededAsync(request, related);
-                    result.AddItemWarnings(related.Warnings);
-                }
-
-                ApplyItemResultToBatchResult(result, itemResult);
-                await SaveBatchItemLogIfNeededAsync(request, itemResult);
-                result.AddItemWarnings(itemResult.Warnings);
-
-                if (!itemResult.Success && !request.ContinueOnError)
-                {
-                    result.AddError(
-                        $"Synchronization stopped after product '{GetIdentity(itemResult)}' failed.");
-                    return new ProductSearchPhaseResult(false, true, lastLeaseRenewalUtc);
-                }
+                candidates.Add((source, inclusionReasonResolver?.Invoke(source) ?? AkeneoSyncInclusionReason.None));
             }
 
             if (result.WasTruncated)
@@ -2194,13 +2212,13 @@ public class AkeneoProductBatchSyncService(
 
     private static bool HasReachedLimit(
         AkeneoProductBatchImportRequest request,
-        AkeneoProductBatchImportResult result) =>
+        int candidateCount) =>
         request.MaxProducts.HasValue &&
-        result.TotalRead >= request.MaxProducts.Value;
+        candidateCount >= request.MaxProducts.Value;
 
     private static int GetEffectivePageSize(
         AkeneoProductBatchImportRequest request,
-        AkeneoProductBatchImportResult result,
+        int candidateCount,
         int pageSize)
     {
         if (!request.MaxProducts.HasValue)
@@ -2208,7 +2226,7 @@ public class AkeneoProductBatchSyncService(
 
         return Math.Max(
             1,
-            Math.Min(pageSize, request.MaxProducts.Value - result.TotalRead));
+            Math.Min(pageSize, request.MaxProducts.Value - candidateCount));
     }
 
     private static void MarkTruncated(

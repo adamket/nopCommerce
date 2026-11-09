@@ -285,10 +285,38 @@ public class AkeneoCategoryContentSyncServiceTests
     }
 
     [Test]
-    public async Task A_picture_set_by_hand_is_replaced_with_a_new_one_and_not_deleted()
+    public async Task First_sync_reuses_an_identical_category_picture_and_the_next_sync_skips_the_download()
+    {
+        Map(AkeneoCategoryContentTarget.Picture, "image", locale: null, channel: null);
+        var original = new Picture { Id = 12 };
+        _category.PictureId = original.Id;
+        _pictures.Setup(s => s.GetPictureByIdAsync(original.Id)).ReturnsAsync(original);
+        _pictures.Setup(s => s.LoadPictureBinaryAsync(original)).ReturnsAsync(new byte[] { 1, 2, 3 });
+        _api.Setup(s => s.DownloadCategoryMediaFileAsync(ImagePath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AkeneoBinaryFile { Bytes = [1, 2, 3], ContentType = "image/jpeg" });
+        _content.Setup(s => s.SaveStateAsync(It.IsAny<AkeneoCategoryContentState>()))
+            .Callback<AkeneoCategoryContentState>(state => _state = state).Returns(Task.CompletedTask);
+
+        var first = await Service().SyncAsync();
+        Assert.That(first.Success, Is.True);
+        Assert.That((_category.PictureId, _state?.NopPictureId, _state?.PictureFilePath), Is.EqualTo((12, 12, ImagePath)));
+
+        var second = await Service().SyncAsync();
+        Assert.That(second.Categories.Single().Status, Is.EqualTo(AkeneoCategoryContentStatus.Unchanged));
+        _api.Verify(s => s.DownloadCategoryMediaFileAsync(ImagePath, It.IsAny<CancellationToken>()), Times.Once);
+        _pictures.Verify(s => s.LoadPictureBinaryAsync(original), Times.Once);
+        Assert.That(_pictures.Invocations.Select(call => call.Method.Name), Has.None.EqualTo(nameof(IPictureService.InsertPictureAsync)));
+        Assert.That(_pictures.Invocations.Select(call => call.Method.Name), Has.None.EqualTo(nameof(IPictureService.UpdatePictureAsync)));
+    }
+
+    [Test]
+    public async Task A_different_picture_set_by_hand_is_replaced_with_a_new_one_and_not_deleted()
     {
         Map(AkeneoCategoryContentTarget.Picture, "image", locale: null, channel: null);
         _category.PictureId = 12;
+        var original = new Picture { Id = 12 };
+        _pictures.Setup(s => s.GetPictureByIdAsync(12)).ReturnsAsync(original);
+        _pictures.Setup(s => s.LoadPictureBinaryAsync(original)).ReturnsAsync(new byte[] { 1, 2, 4 });
         _pictures.Setup(s => s.InsertPictureAsync(It.IsAny<byte[]>(), "image/jpeg", "shade-trees", null, null, true, true))
             .ReturnsAsync(new Picture { Id = 60 });
         _api.Setup(s => s.DownloadCategoryMediaFileAsync(ImagePath, It.IsAny<CancellationToken>()))

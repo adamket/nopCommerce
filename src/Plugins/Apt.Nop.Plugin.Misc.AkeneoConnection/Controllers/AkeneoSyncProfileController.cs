@@ -40,6 +40,15 @@ public class AkeneoSyncProfileController(
     /// </summary>
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult Progress(int id)
+    {
+        var snapshot = AkeneoProductBatchSyncService.GetProgress(id);
+        return Json(new { progress = snapshot == null ? null : new { processed = snapshot.Processed, total = snapshot.Total } });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
     public async Task<IActionResult> LockStatus()
     {
         var lease = await syncLeaseService.GetLeaseAsync(

@@ -165,6 +165,57 @@ public class AkeneoCatalogBindingService(
 
     #region Public API
 
+    public async Task<(int CurrentId, string CurrentName, string ReplacementName)> RebindAsync(
+        string modelCode, int replacementId, int? expectedParentId)
+    {
+        if (string.IsNullOrWhiteSpace(modelCode) || replacementId <= 0)
+            throw new ArgumentException("Enter a product model code and a positive replacement product ID.");
+
+        // A missing expected ID requests a read-only review. Saving also requires the catalog writer lock.
+        var lease = expectedParentId.HasValue
+            ? await syncLeaseService.TryAcquireAsync(AkeneoConnectionConstants.CatalogWriterLockKey, LeaseDuration)
+            : null;
+        if (expectedParentId.HasValue && lease == null)
+            throw new InvalidOperationException("A catalog sync or binding is running. Try again when it finishes.");
+
+        try
+        {
+            var mapping = await entityMappingService.GetAkeneoNopEntityMappingByAkeneoCodeAsync(
+                AkeneoEntityType.ProductModel, modelCode.Trim(), NopEntityType.Product);
+            if (mapping == null)
+                throw new InvalidOperationException("No existing product model binding was found for this code.");
+
+            var currentId = mapping.NopEntityId;
+            if (expectedParentId.HasValue && expectedParentId.Value != currentId)
+                throw new InvalidOperationException("The current parent changed. Review the binding again.");
+            if (currentId == replacementId)
+                throw new InvalidOperationException("This model is already bound to that product.");
+
+            var products = await productRepository.Table
+                .Where(p => p.Id == currentId || p.Id == replacementId)
+                .ToListAsync();
+            var replacement = products.FirstOrDefault(p => p.Id == replacementId && !p.Deleted);
+            if (replacement == null)
+                throw new InvalidOperationException("The replacement product does not exist or has been deleted.");
+            var otherBindings = await entityMappingService.GetMappingsByNopEntityAsync(NopEntityType.Product, replacementId);
+            if (otherBindings.Any(m => m.AkeneoEntityTypeId == (int)AkeneoEntityType.ProductModel))
+                throw new InvalidOperationException("The replacement product is already bound to another product model.");
+
+            if (expectedParentId.HasValue)
+            {
+                mapping.NopEntityId = replacementId;
+                mapping.UpdatedOnUtc = DateTime.UtcNow;
+                await entityMappingService.UpdateAkeneoNopEntityMappingAsync(mapping);
+            }
+            return (currentId, products.FirstOrDefault(p => p.Id == currentId)?.Name, replacement.Name);
+        }
+        finally
+        {
+            if (lease != null)
+                await syncLeaseService.ReleaseAsync(lease);
+        }
+    }
+
     public async Task<AkeneoCatalogBindingReport> ScanAsync(
         IList<string> familyCodes,
         CancellationToken cancellationToken = default)

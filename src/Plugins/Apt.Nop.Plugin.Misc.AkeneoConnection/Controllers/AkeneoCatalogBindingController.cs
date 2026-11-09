@@ -97,6 +97,21 @@ public class AkeneoCatalogBindingController(
             : Report(report, StatusCodes.Status500InternalServerError);
     }
 
+    [HttpPost]
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    public async Task<IActionResult> Rebind(string modelCode, int replacementId, int? expectedParentId)
+    {
+        try
+        {
+            var review = await catalogBindingService.RebindAsync(modelCode, replacementId, expectedParentId);
+            return Json(new { currentId = review.CurrentId, currentName = review.CurrentName, replacementName = review.ReplacementName });
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private ContentResult Report(
         AkeneoCatalogBindingReport report,
         int statusCode = StatusCodes.Status200OK) =>

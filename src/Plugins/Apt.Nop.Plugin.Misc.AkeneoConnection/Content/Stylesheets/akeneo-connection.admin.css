@@ -3217,3 +3217,16 @@
     transition: none;
   }
 }
+
+/* nopCommerce toggles the shared spinner with inline display styles. */
+/* This stylesheet is loaded by the Akeneo admin views. */
+#ajaxBusy {
+  display: none !important;
+}
+
+.akeneo-connection .akeneo-sync-progress-fill {
+  transition: width 0.45s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .akeneo-connection .akeneo-sync-progress-fill { transition: none; }
+}

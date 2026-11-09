@@ -662,13 +662,8 @@ public class AkeneoCategoryContentSyncService(
         {
             if (image != null)
             {
-                var seoFilename = await pictureService.GetPictureSeNameAsync(category.Name);
-                var picture = ownedPictureId > 0 && await pictureService.GetPictureByIdAsync(ownedPictureId) != null
-                    ? await pictureService.UpdatePictureAsync(ownedPictureId, file.Bytes, mimeType, seoFilename)
-                    : await pictureService.InsertPictureAsync(file.Bytes, mimeType, seoFilename);
-
-                category.PictureId = picture.Id;
-                state.NopPictureId = picture.Id;
+                category.PictureId = await ApplyPictureAsync(plan, file.Bytes, mimeType);
+                state.NopPictureId = category.PictureId;
                 state.PictureFilePath = image.ImageFilePath;
             }
             else
@@ -703,6 +698,27 @@ public class AkeneoCategoryContentSyncService(
         plan.State = state;
 
         transaction.Complete();
+    }
+
+    private async Task<int> ApplyPictureAsync(CategoryPlan plan, byte[] bytes, string mimeType)
+    {
+        var category = plan.Category;
+        var seoFilename = await pictureService.GetPictureSeNameAsync(category.Name);
+        if (category.PictureId > 0 && await pictureService.GetPictureByIdAsync(category.PictureId) is { } current)
+        {
+            if (OwnsCurrentPicture(plan))
+                return (await pictureService.UpdatePictureAsync(current.Id, bytes, mimeType, seoFilename)).Id;
+
+            // On first import, the category may still show the original exported to Akeneo.
+            if (plan.State?.NopPictureId == null && bytes is { Length: > 0 })
+            {
+                var existingBytes = await pictureService.LoadPictureBinaryAsync(current);
+                if (existingBytes != null && existingBytes.AsSpan().SequenceEqual(bytes))
+                    return current.Id;
+            }
+        }
+
+        return (await pictureService.InsertPictureAsync(bytes, mimeType, seoFilename)).Id;
     }
 
     private async Task SaveOutcomeAsync(CategoryPlan plan)

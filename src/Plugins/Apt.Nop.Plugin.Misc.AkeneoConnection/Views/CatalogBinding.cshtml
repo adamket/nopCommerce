@@ -10,6 +10,7 @@
 
     var appModel = new
     {
+        rebindUrl = Url.Action("Rebind", "AkeneoCatalogBinding"),
         scanUrl = Url.Action("Scan", "AkeneoCatalogBinding"),
         commitUrl = Url.Action("Commit", "AkeneoCatalogBinding"),
         productEditUrl = Url.Action("Edit", "Product", new { area = "Admin", id = 0 }),
@@ -91,6 +92,7 @@
                                         <i v-else class="fas fa-link"></i>
                                         {{ busy === 'commit' ? 'Committing...' : 'Commit bindings' }}
                                     </button>
+                                    <button ref="rebindTrigger" type="button" class="btn btn-default ml-auto" :disabled="!!busy" aria-haspopup="dialog" v-on:click="openRebind"><i class="fas fa-link"></i> Rebind a product model</button>
                                 </div>
                                 <div class="mt-2">
                                     <label class="akeneo-switch">
@@ -313,6 +315,38 @@
                 </div>
 
                 <transition name="akeneo-modal">
+                    <div v-if="rebindVisible" class="modal fade show" style="display: block;" tabindex="-1" role="dialog"
+                         aria-modal="true" aria-labelledby="rebind-title" v-on:click.self="closeRebind" v-on:keydown.esc="closeRebind"
+                         v-on:keydown.tab="trapRebindFocus">
+                        <div class="modal-dialog modal-dialog-centered" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header bg-primary text-white">
+                                    <h4 id="rebind-title" class="modal-title"><i class="fas fa-link mr-2"></i>Rebind a product model</h4>
+                                    <button type="button" class="close text-white" aria-label="Close" :disabled="!!busy" v-on:click="closeRebind">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div v-if="rebindError" class="alert alert-danger" role="alert">{{ rebindError }}</div>
+                                    <label for="rebind-code">Akeneo product model code</label>
+                                    <input id="rebind-code" class="form-control mb-2" v-model.trim="rebindCode" v-on:input="rebindReview = null" :disabled="!!busy" />
+                                    <label for="rebind-id">Replacement nopCommerce product ID</label>
+                                    <input id="rebind-id" type="number" min="1" class="form-control mb-2" v-model.number="replacementId" v-on:input="rebindReview = null" :disabled="!!busy" />
+                                    <p v-if="rebindReview">Change the parent of <strong>{{ rebindCode }}</strong> from
+                                        <a :href="productUrl(rebindReview.currentId)" target="_blank" rel="noopener">{{ rebindReview.currentName }} (#{{ rebindReview.currentId }})</a> to
+                                        <a :href="productUrl(replacementId)" target="_blank" rel="noopener">{{ rebindReview.replacementName }} (#{{ replacementId }})</a>?
+                                    </p>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-light border" :disabled="!!busy" v-on:click="closeRebind">Cancel</button>
+                                    <button class="btn btn-primary" type="button" :disabled="!!busy || !rebindCode || !replacementId" v-on:click="rebind">{{ rebindReview ? 'Confirm rebind' : 'Review binding' }}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+                <transition name="akeneo-backdrop">
+                    <div v-if="rebindVisible" class="modal-backdrop fade show"></div>
+                </transition>
+                <transition name="akeneo-modal">
                 <div v-if="commitConfirmVisible" class="modal fade show" v-on:click.self="commitConfirmVisible = false" style="display: block;" tabindex="-1" role="dialog" aria-modal="true">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                         <div class="modal-content">
@@ -385,6 +419,11 @@
                     familyCodes: [],
                     report: null,
                     choices: {},
+                    rebindCode: '',
+                    replacementId: null,
+                    rebindReview: null,
+                    rebindVisible: false,
+                    rebindError: '',
                     busy: false, // false or 'scan' / 'commit'; never '' (Vue renders disabled="" as disabled)
                     message: '',
                     messageLevel: 'info',
@@ -418,6 +457,54 @@
                 }
             },
             methods: {
+                openRebind: function () {
+                    this.rebindCode = '';
+                    this.replacementId = null;
+                    this.rebindReview = null;
+                    this.rebindError = '';
+                    this.rebindVisible = true;
+                    this.$nextTick(() => document.getElementById('rebind-code').focus());
+                },
+                closeRebind: function () {
+                    if (this.busy) return;
+                    this.rebindVisible = false;
+                    this.$nextTick(() => this.$refs.rebindTrigger.focus());
+                },
+                trapRebindFocus: function (event) {
+                    var controls = event.currentTarget.querySelectorAll('button:enabled, input:enabled, a[href]');
+                    var first = controls[0], last = controls[controls.length - 1];
+                    if (event.shiftKey && event.target === first || !event.shiftKey && event.target === last) {
+                        event.preventDefault();
+                        (event.shiftKey ? last : first).focus();
+                    }
+                },
+                rebind: async function () {
+                    this.rebindError = '';
+                    var saving = !!this.rebindReview;
+                    this.busy = 'rebind';
+                    this.message = '';
+                    try {
+                        var data = { modelCode: this.rebindCode, replacementId: this.replacementId };
+                        if (saving) data.expectedParentId = this.rebindReview.currentId;
+                        var review = await this.post(appData.rebindUrl, data);
+                        if (saving) {
+                            this.rebindReview = null;
+                            this.report = null;
+                            this.choices = {};
+                            this.messageLevel = 'success';
+                            this.message = this.rebindCode + ' is now bound to product #' + this.replacementId + '.';
+                        } else {
+                            this.rebindReview = review;
+                        }
+                    } catch (xhr) {
+                        this.rebindReview = null;
+                        this.messageLevel = 'danger';
+                        this.rebindError = this.errorMessage(xhr, 'Unable to review or save the binding.');
+                    } finally {
+                        this.busy = false;
+                        if (saving && !this.rebindError) this.closeRebind();
+                    }
+                },
                 productUrl: function (id) {
                     return appData.productEditUrl.replace(/0$/, String(id));
                 },

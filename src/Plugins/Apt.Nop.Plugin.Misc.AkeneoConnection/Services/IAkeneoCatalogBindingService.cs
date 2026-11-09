@@ -9,6 +9,9 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// </summary>
 public interface IAkeneoCatalogBindingService
 {
+    Task<(int CurrentId, string CurrentName, string ReplacementName)> RebindAsync(
+        string modelCode, int replacementId, int? expectedParentId);
+
     /// <summary>
     /// Reads Akeneo and nopCommerce and reports what would be bound. Writes nothing.
     /// </summary>
