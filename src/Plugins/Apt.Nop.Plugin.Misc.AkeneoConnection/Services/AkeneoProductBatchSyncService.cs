@@ -2665,6 +2665,14 @@ public class AkeneoProductBatchSyncService(
         var associatedValueName = await AkeneoVariantRelationshipService.BuildAssociatedValueNameAsync(
             valueTemplateRenderer, variantContext, nameTemplate);
 
+        var optionNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var axis in axisMappings.Where(axis => !string.IsNullOrWhiteSpace(axis.OptionNameTemplate)))
+        {
+            if (variantContext.AxisValuesByAkeneoCode.TryGetValue(axis.AkeneoAttributeCode, out var value))
+                optionNames[axis.AkeneoAttributeCode] = await AkeneoVariantRelationshipService.RenderOptionNameAsync(
+                    valueTemplateRenderer, variantContext, axis, value);
+        }
+
         return new
         {
             Path = "variant",
@@ -2708,8 +2716,8 @@ public class AkeneoProductBatchSyncService(
                 .Select(pair => new
                 {
                     AttributeCode = pair.Key,
-                    pair.Value.AkeneoOptionCode,
-                    pair.Value.DisplayName
+                    AkeneoOptionCode = pair.Value.AkeneoOptionCode ?? (optionNames.ContainsKey(pair.Key) ? pair.Value.DisplayName : null),
+                    DisplayName = optionNames.GetValueOrDefault(pair.Key) ?? pair.Value.DisplayName
                 })
                 .ToList(),
             variantContext.Price,

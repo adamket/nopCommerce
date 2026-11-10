@@ -108,6 +108,7 @@ public class AkeneoFamilyMappingModelFactory
                     NopProductAttributeId = x.NopProductAttributeId,
                     IsRequired = x.IsRequired,
                     DisplayOrder = x.DisplayOrder,
+                    OptionNameTemplate = x.OptionNameTemplate,
                     AkeneoVariantAxisLevel = x.AkeneoVariantAxisLevel
                 })
                 .ToList();

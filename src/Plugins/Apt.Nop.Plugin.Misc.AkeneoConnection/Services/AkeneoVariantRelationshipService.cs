@@ -414,6 +414,7 @@ public class AkeneoVariantRelationshipService(
                 parentProduct.Id,
                 mappingResult.Mapping.Id,
                 axisValue,
+                await RenderOptionNameAsync(valueTemplateRenderer, context, axis, axisValue),
                 context.DisplayOrder?.PositionsByAttributeCode.TryGetValue(axis.AkeneoAttributeCode, out var axisPosition) == true
                     ? axisPosition
                     : null);
@@ -648,6 +649,7 @@ public class AkeneoVariantRelationshipService(
         int parentProductId,
         int productAttributeMappingId,
         AkeneoVariantAxisValue axisValue,
+        string optionName,
         int? displayOrder = null)
     {
         cacheTracker?.Touch(productAttributeMappingId);
@@ -672,9 +674,9 @@ public class AkeneoVariantRelationshipService(
             {
                 var mappedChanged = false;
 
-                if (!string.Equals(mapped.Name, axisValue.DisplayName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(mapped.Name, optionName, StringComparison.OrdinalIgnoreCase))
                 {
-                    mapped.Name = axisValue.DisplayName;
+                    mapped.Name = optionName;
                     mappedChanged = true;
                 }
 
@@ -705,11 +707,17 @@ public class AkeneoVariantRelationshipService(
             {
                 ProductAttributeMappingId = productAttributeMappingId,
                 AttributeValueTypeId = (int)AttributeValueType.Simple,
-                Name = axisValue.DisplayName,
+                Name = optionName,
                 DisplayOrder = values.Count + 1
             };
 
             await productAttributeService.InsertProductAttributeValueAsync(existing);
+        }
+
+        else if (!string.Equals(existing.Name, optionName, StringComparison.OrdinalIgnoreCase))
+        {
+            existing.Name = optionName;
+            await productAttributeService.UpdateProductAttributeValueAsync(existing);
         }
 
         if (displayOrder.HasValue)
@@ -839,6 +847,30 @@ public class AkeneoVariantRelationshipService(
         return null;
     }
 
+    internal static async Task<string> RenderOptionNameAsync(IAkeneoValueTemplateRenderer renderer,
+        AkeneoVariantImportContext context, AkeneoFamilyVariantAxisMapping axis, AkeneoVariantAxisValue value)
+    {
+        if (string.IsNullOrWhiteSpace(axis.OptionNameTemplate))
+            return value.DisplayName;
+
+        var result = await renderer.RenderAsync(axis.OptionNameTemplate, CreateTemplateContext(context));
+        if (!result.Success || string.IsNullOrWhiteSpace(result.Value))
+            throw new NopException($"Could not render the {axis.AkeneoAttributeCode} option name for SKU {context.Sku}: {string.Join(", ", result.Errors.Concat(result.MissingTokens))}");
+
+        return result.Value.Trim();
+    }
+
+    private static AkeneoValueTemplateContext CreateTemplateContext(AkeneoVariantImportContext context) => new()
+    {
+        Source = context.SourceProduct,
+        Locale = context.Locale,
+        Channel = context.Channel,
+        Currency = context.Currency,
+        FamilyCode = context.AkeneoFamilyCode,
+        FamilyVariantCode = context.AkeneoFamilyVariantCode,
+        Sku = context.Sku
+    };
+
     private Task<string> BuildAssociatedValueNameAsync(AkeneoVariantImportContext context) =>
         BuildAssociatedValueNameAsync(valueTemplateRenderer, context, context.Options?.AssociatedValueNameTemplate);
 
@@ -851,16 +883,7 @@ public class AkeneoVariantRelationshipService(
                 DisplayValue: item.DisplayName))
             .ToList();
 
-        var templateContext = new AkeneoValueTemplateContext
-        {
-            Source = context.SourceProduct,
-            Locale = context.Locale,
-            Channel = context.Channel,
-            Currency = context.Currency,
-            FamilyCode = context.AkeneoFamilyCode,
-            FamilyVariantCode = context.AkeneoFamilyVariantCode,
-            Sku = context.Sku
-        };
+        var templateContext = CreateTemplateContext(context);
 
         var valueName = await RenderAssociatedValueNameAsync(
             renderer,

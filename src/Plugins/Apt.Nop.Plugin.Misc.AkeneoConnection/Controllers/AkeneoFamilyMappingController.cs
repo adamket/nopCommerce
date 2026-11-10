@@ -469,6 +469,11 @@ public class AkeneoFamilyMappingController(
             ModelState.AddModelError(nameof(model.VariantDisplayOrderKeys), displayOrderError);
 
         model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();
+        foreach (var axis in model.AxisMappings.Where(axis => !string.IsNullOrWhiteSpace(axis.OptionNameTemplate)))
+        {
+            foreach (var error in valueTemplateRenderer.Validate(axis.OptionNameTemplate).Errors)
+                ModelState.AddModelError(nameof(model.AxisMappings), $"{axis.AkeneoAttributeCode} option name: {error}");
+        }
         model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
 
         if (mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
@@ -612,6 +617,7 @@ public class AkeneoFamilyMappingController(
                 NopProductAttributeId = model.NopProductAttributeId,
                 IsRequired = model.IsRequired,
                 DisplayOrder = model.DisplayOrder,
+                OptionNameTemplate = model.OptionNameTemplate?.Trim(),
                 AkeneoVariantAxisLevel = model.AkeneoVariantAxisLevel > 0
                     ? model.AkeneoVariantAxisLevel
                     : 1

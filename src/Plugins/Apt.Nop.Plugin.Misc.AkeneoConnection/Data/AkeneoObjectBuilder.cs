@@ -15,6 +15,12 @@ public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<Ak
     }
 }
 
+public class AkeneoFamilyVariantAxisMappingBuilder : NopEntityBuilder<AkeneoFamilyVariantAxisMapping>
+{
+    public override void MapEntity(CreateTableExpressionBuilder table) =>
+        table.WithColumn(nameof(AkeneoFamilyVariantAxisMapping.OptionNameTemplate)).AsString(int.MaxValue).Nullable();
+}
+
 public class AkeneoSyncProfileBuilder : NopEntityBuilder<AkeneoSyncProfile>
 {
     public override void MapEntity(CreateTableExpressionBuilder table) =>

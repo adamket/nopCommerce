@@ -150,6 +150,23 @@ public class AkeneoValueTemplateRendererTests
         });
     }
 
+    [TestCase("1_bag", "12 oz bag")]
+    [TestCase("12_bag", "Box of 12 × 12 oz bags")]
+    public async Task Combination_option_template_uses_weight_and_bag_count(string count, string expected)
+    {
+        var product = AkeneoTestData.Product(valuesJson: $$$"""
+            {"coffee_weight":[{"locale":null,"scope":null,"data":{"amount":"12.0000","unit":"ONCE"}}],
+             "coffee_bag_count":[{"locale":null,"scope":null,"data":"{{{count}}}"}]}
+            """);
+        var context = new AkeneoVariantImportContext { SourceProduct = product };
+        var axis = new Domain.AkeneoFamilyVariantAxisMapping { AkeneoAttributeCode = "coffee_bag_count" };
+        var value = new AkeneoVariantAxisValue { DisplayName = count, AkeneoOptionCode = count };
+        Assert.That(await AkeneoVariantRelationshipService.RenderOptionNameAsync(_renderer, context, axis, value), Is.EqualTo(count));
+        axis.OptionNameTemplate = "{coffee_bag_count == 12_bag ? \"Box of 12 × \" : \"\"}{coffee_weight:amount} oz {coffee_bag_count == 12_bag ? \"bags\" : \"bag\"}";
+        Assert.That(await AkeneoVariantRelationshipService.RenderOptionNameAsync(_renderer, context, axis, value), Is.EqualTo(expected));
+        Assert.That(value.AkeneoOptionCode, Is.EqualTo(count));
+    }
+
     private static AkeneoValueTemplateContext Context(
         AkeneoProductDefinition product,
         string? sku = null) => new()

@@ -50,6 +50,7 @@
                 nopProductAttributeId = x.NopProductAttributeId,
                 isRequired = x.IsRequired,
                 displayOrder = x.DisplayOrder,
+                optionNameTemplate = x.OptionNameTemplate,
                 akeneoVariantAxisLevel = x.AkeneoVariantAxisLevel
             }),
             subModelRules = Model.SubModelRules.Select(x => new
@@ -536,6 +537,14 @@
                                                                    v-bind:name="axisName(index, 'NopProductAttributeId')"
                                                                    v-bind:value="row.nopProductAttributeId ?? ''" />
                                                         </div>
+                                                    </div>
+
+                                                    <div class="akeneo-col">
+                                                        <label v-bind:for="'option-name-' + row.uid">Combination option name template</label>
+                                                        <input class="form-control" v-bind:id="'option-name-' + row.uid"
+                                                               v-bind:name="axisName(index, 'OptionNameTemplate')" v-model="row.optionNameTemplate"
+                                                               placeholder="{coffee_weight:amount} oz · {coffee_bag_count}" />
+                                                        <small>Leave blank to use the axis label. Each option on a product shares one name.</small>
                                                     </div>
 
                                                     <div class="akeneo-col">
@@ -1039,6 +1048,7 @@
                             nopProductAttributeId: row.nopProductAttributeId || '',
                             isRequired: row.isRequired !== false,
                             displayOrder: row.displayOrder || index + 1,
+                            optionNameTemplate: row.optionNameTemplate || '',
                             akeneoVariantAxisLevel: row.akeneoVariantAxisLevel || 1
                         })),
                             subModelRules: initialModel.subModelRules.map((row, index) => ({
@@ -1475,6 +1485,7 @@
                         nopProductAttributeId: '',
                         isRequired: true,
                         displayOrder: this.form.axisMappings.length + 1,
+                        optionNameTemplate: '',
                         akeneoVariantAxisLevel: 1
                     });
 

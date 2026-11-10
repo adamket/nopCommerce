@@ -66,6 +66,17 @@ public class AkeneoConsolidatedMigrationTests
     private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
 
     [Test]
+    public void Axis_option_name_upgrade_adds_a_nullable_column_once()
+    {
+        var expressions = Plan(true, nameof(AkeneoFamilyVariantAxisMapping.OptionNameTemplate));
+        var column = expressions.OfType<CreateColumnExpression>().Single();
+        Assert.That(column.TableName, Does.EndWith(nameof(AkeneoFamilyVariantAxisMapping)));
+        Assert.That(column.Column.Name, Is.EqualTo(nameof(AkeneoFamilyVariantAxisMapping.OptionNameTemplate)));
+        Assert.That(column.Column.IsNullable, Is.True);
+        Assert.That(Plan(true).OfType<CreateColumnExpression>(), Is.Empty);
+    }
+
+    [Test]
     public void Standalone_name_upgrade_adds_a_nullable_column_once()
     {
         var expressions = Plan(true, "StandaloneProductNameTemplate");

@@ -275,6 +275,18 @@ public sealed class AkeneoValueTemplateRenderer(
         TemplateToken token,
         AkeneoValueTemplateContext context)
     {
+        if (token.OutputMode == TemplateTokenOutputMode.Amount)
+        {
+            if (productValueResolver.TryGetValue(context.Source, token.AttributeCode, out var measurement,
+                    context.Locale, context.Channel, context.Currency) &&
+                measurement.RawData is { ValueKind: JsonValueKind.Object } data && data.TryGetProperty("unit", out _) &&
+                data.TryGetProperty("amount", out var amount) && decimal.TryParse(amount.ToString(),
+                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number))
+                return number.ToString("0.############################", System.Globalization.CultureInfo.InvariantCulture);
+
+            return null;
+        }
+
         if (token.IsBuiltIn)
             return ResolveBuiltInToken(token.Name, context);
 
@@ -338,9 +350,9 @@ public sealed class AkeneoValueTemplateRenderer(
         TemplateToken token,
         AkeneoValueTemplateContext context)
     {
-        if (token.IsBuiltIn)
+        if (token.IsBuiltIn || token.OutputMode == TemplateTokenOutputMode.Amount)
         {
-            var builtInValue = ResolveBuiltInToken(token.Name, context);
+            var builtInValue = ResolveToken(token, context);
 
             return string.IsNullOrWhiteSpace(builtInValue)
                 ? Array.Empty<string>()
@@ -1236,10 +1248,10 @@ public sealed class AkeneoValueTemplateRenderer(
                 ? "code"
                 : "label";
 
-        if (modifier is not ("label" or "code"))
+        if (modifier is not ("label" or "code" or "amount"))
         {
             errors.Add(
-                $"Template token '{{{tokenText}}}' uses unsupported modifier '{modifier}'. Use 'label' or 'code'.");
+                $"Template token '{{{tokenText}}}' uses unsupported modifier '{modifier}'. Use 'label', 'code', or 'amount'.");
             return null;
         }
 
@@ -1269,6 +1281,12 @@ public sealed class AkeneoValueTemplateRenderer(
                         referenceFieldCode == null &&
                         BuiltInTokens.Contains(name);
 
+        if (modifier == "amount" && (isBuiltIn || referenceFieldCode != null))
+        {
+            errors.Add($"The amount modifier requires a measurement attribute: {tokenText}.");
+            return null;
+        }
+
         return new TemplateToken
         {
             Original = tokenText,
@@ -1276,7 +1294,7 @@ public sealed class AkeneoValueTemplateRenderer(
             IsBuiltIn = isBuiltIn,
             AttributeCode = isBuiltIn ? null : name,
             ReferenceFieldCode = referenceFieldCode,
-            OutputMode = modifier == "code"
+            OutputMode = modifier == "amount" ? TemplateTokenOutputMode.Amount : modifier == "code"
                 ? TemplateTokenOutputMode.Code
                 : TemplateTokenOutputMode.Label
         };
@@ -1337,7 +1355,8 @@ public sealed class AkeneoValueTemplateRenderer(
     private enum TemplateTokenOutputMode
     {
         Label = 0,
-        Code = 10
+        Code = 10,
+        Amount = 20
     }
 
     private enum TemplateComparisonOperator

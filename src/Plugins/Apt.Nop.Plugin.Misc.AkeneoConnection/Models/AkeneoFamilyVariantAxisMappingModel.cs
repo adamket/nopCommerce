@@ -13,5 +13,7 @@ public record AkeneoFamilyVariantAxisMappingModel : BaseNopEntityModel
 
     public int DisplayOrder { get; set; }
 
+    public string OptionNameTemplate { get; set; }
+
     public int AkeneoVariantAxisLevel { get; set; } = 1;
 }
