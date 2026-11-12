@@ -101,6 +101,7 @@ public partial class AkeneoProductCoreSynchronizer
             return product;
 
         product.IsShipEnabled = defaults.NewProductIsShipEnabled;
+        product.AllowCustomerReviews = defaults.NewProductAllowCustomerReviews;
         if (defaults.NewProductTaxCategoryId is > 0)
             product.TaxCategoryId = defaults.NewProductTaxCategoryId.Value;
         if (defaults.NewProductWarehouseId is > 0)

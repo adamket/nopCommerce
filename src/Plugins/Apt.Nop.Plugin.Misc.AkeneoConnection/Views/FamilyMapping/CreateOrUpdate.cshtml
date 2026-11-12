@@ -39,6 +39,7 @@
             hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
             newProductTaxCategoryId = Model.NewProductTaxCategoryId,
             newProductIsShipEnabled = Model.NewProductIsShipEnabled,
+            newProductAllowCustomerReviews = Model.NewProductAllowCustomerReviews,
             newProductWarehouseId = Model.NewProductWarehouseId,
             newProductTemplateId = Model.NewProductTemplateId,
             displayOrder = Model.DisplayOrder,
@@ -438,6 +439,12 @@
                             </label>
                             @* Must follow the checkbox: a bool binds from the first posted value. *@
                             <input type="hidden" name="NewProductIsShipEnabled" value="false" />
+                            <label class="akeneo-switch mb-0">
+                                <input type="checkbox" name="NewProductAllowCustomerReviews" value="true" v-model="form.newProductAllowCustomerReviews" />
+                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                <span class="akeneo-switch-text">Allow customer reviews</span>
+                            </label>
+                            <input type="hidden" name="NewProductAllowCustomerReviews" value="false" />
                         </div>
                     </div>
 

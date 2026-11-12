@@ -268,6 +268,7 @@ public class AkeneoFamilyMappingController(
             HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent,
             NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId),
             NewProductIsShipEnabled = model.NewProductIsShipEnabled,
+            NewProductAllowCustomerReviews = model.NewProductAllowCustomerReviews,
             NewProductWarehouseId = PositiveOrNull(model.NewProductWarehouseId),
             NewProductTemplateId = PositiveOrNull(model.NewProductTemplateId),
             DisplayOrder = model.DisplayOrder
@@ -342,6 +343,7 @@ public class AkeneoFamilyMappingController(
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
         configuration.NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId);
         configuration.NewProductIsShipEnabled = model.NewProductIsShipEnabled;
+        configuration.NewProductAllowCustomerReviews = model.NewProductAllowCustomerReviews;
         configuration.NewProductWarehouseId = PositiveOrNull(model.NewProductWarehouseId);
         configuration.NewProductTemplateId = PositiveOrNull(model.NewProductTemplateId);
         configuration.DisplayOrder = model.DisplayOrder;

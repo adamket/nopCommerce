@@ -39,6 +39,8 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public bool NewProductIsShipEnabled { get; set; }
 
+    public bool NewProductAllowCustomerReviews { get; set; } = true;
+
     public int? NewProductWarehouseId { get; set; }
 
     public int? NewProductTemplateId { get; set; }

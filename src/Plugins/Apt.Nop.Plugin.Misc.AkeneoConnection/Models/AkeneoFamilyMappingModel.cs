@@ -35,6 +35,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     // existing mapping loads its saved value.
     public bool NewProductIsShipEnabled { get; set; } = true;
 
+    public bool NewProductAllowCustomerReviews { get; set; } = true;
+
     public int? NewProductWarehouseId { get; set; }
 
     public int? NewProductTemplateId { get; set; }

@@ -41,6 +41,7 @@ public class AkeneoNewProductDefaultsTests
             Enabled = true,
             NewProductTaxCategoryId = 3,
             NewProductIsShipEnabled = true,
+            NewProductAllowCustomerReviews = false,
             NewProductWarehouseId = 2,
             NewProductTemplateId = 4
         });
@@ -59,6 +60,7 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(_inserted, Is.Not.Null);
             Assert.That(_inserted!.TaxCategoryId, Is.EqualTo(3));
             Assert.That(_inserted.IsShipEnabled, Is.True);
+            Assert.That(_inserted.AllowCustomerReviews, Is.False);
             Assert.That(_inserted.WarehouseId, Is.EqualTo(2));
             Assert.That(_inserted.ProductTemplateId, Is.EqualTo(4));
         });
@@ -67,7 +69,7 @@ public class AkeneoNewProductDefaultsTests
     [Test]
     public async Task An_existing_product_keeps_its_own_commerce_settings()
     {
-        var existing = new Product { Id = 100, Sku = "SKU", Name = "Red Maple", TaxCategoryId = 9, WarehouseId = 0, IsShipEnabled = false };
+        var existing = new Product { Id = 100, Sku = "SKU", Name = "Red Maple", TaxCategoryId = 9, WarehouseId = 0, IsShipEnabled = false, AllowCustomerReviews = true };
 
         await Synchronizer().SynchronizeAsync(Context(existing));
 
@@ -76,6 +78,7 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(existing.TaxCategoryId, Is.EqualTo(9));
             Assert.That(existing.WarehouseId, Is.EqualTo(0));
             Assert.That(existing.IsShipEnabled, Is.False);
+            Assert.That(existing.AllowCustomerReviews, Is.True);
         });
         _families.Verify(s => s.GetEffectiveMappingAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
@@ -91,7 +94,7 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(_inserted!.OrderMinimumQuantity, Is.EqualTo(1));
             Assert.That(_inserted.OrderMaximumQuantity, Is.EqualTo(10000));
             Assert.That(_inserted.NotifyAdminForQuantityBelow, Is.EqualTo(1));
-            Assert.That(_inserted.AllowCustomerReviews, Is.True);
+
         });
     }
 
@@ -120,6 +123,7 @@ public class AkeneoNewProductDefaultsTests
         {
             Assert.That(_inserted!.TaxCategoryId, Is.EqualTo(0));
             Assert.That(_inserted.IsShipEnabled, Is.False);
+            Assert.That(_inserted.AllowCustomerReviews, Is.True);
             Assert.That(_inserted.ProductTemplateId, Is.EqualTo(0));
         });
     }
@@ -132,7 +136,7 @@ public class AkeneoNewProductDefaultsTests
         await Synchronizer().PlanAsync(Context(existing: null), model);
 
         Assert.That(model.Operations.Where(operation => operation.Area == "New product defaults").Select(operation => operation.Target),
-            Is.EquivalentTo(new[] { "Shipping enabled", "Tax category", "Warehouse", "Product template" }));
+            Is.EquivalentTo(new[] { "Allow customer reviews", "Shipping enabled", "Tax category", "Warehouse", "Product template" }));
         _products.Verify(s => s.InsertProductAsync(It.IsAny<Product>()), Times.Never);
     }
 
