@@ -128,11 +128,17 @@ public partial class AkeneoProductCoreSynchronizer
         {
             ProductType = ProductType.SimpleProduct,
             VisibleIndividually = true,
+            // The admin new-product form's defaults. Left at 0, the maximum blocks every
+            // add-to-cart ("The maximum quantity allowed for purchase is 0").
+            OrderMinimumQuantity = 1,
+            OrderMaximumQuantity = 10000,
+            NotifyAdminForQuantityBelow = 1,
+            AllowCustomerReviews = true,
             Sku = fallbackName,
             Name = fallbackName,
-            Published = context.GetMappings(Domain.NopTargetType.ProductField, includeSkipped: true)
-                .Any(mapped => mapped.IsSkipped && string.Equals(mapped.Mapping.NopTargetKey, "Published", StringComparison.OrdinalIgnoreCase))
-                ? false : context.Source.Enabled ?? false,
+            // Only a Published mapping publishes a product. Without a value from Akeneo it
+            // starts unpublished; Akeneo's enabled flag is not a publication rule.
+            Published = false,
             CreatedOnUtc = DateTime.UtcNow,
             UpdatedOnUtc = DateTime.UtcNow
         };

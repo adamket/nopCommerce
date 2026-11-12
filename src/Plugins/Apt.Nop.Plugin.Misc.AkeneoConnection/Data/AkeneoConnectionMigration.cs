@@ -16,8 +16,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 // only while its index is missing, since SQL Server rejects altering an indexed
 // column on such a rerun.
 [NopMigration(
-    "2026-11-09 20:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template, profile skip logging, combination option name templates)",
+    "2026-11-11 20:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template, profile skip logging, combination option name templates, combination pictures)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migration
 {
@@ -522,8 +522,9 @@ public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migrati
     {
         var table = GetTableName<AkeneoManagedAsset>();
 
-        var identityIndex = $"IX_{table}_ProductMappingIdentityV2";
-        if (!IndexExists(table, identityIndex))
+        var legacyIdentityIndex = $"IX_{table}_ProductMappingIdentityV2";
+        var identityIndex = $"IX_{table}_ProductMappingIdentityV3";
+        if (!IndexExists(table, legacyIdentityIndex) && !IndexExists(table, identityIndex))
         {
             Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).AsString(100).NotNullable();
             Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).AsString(64).NotNullable();
@@ -534,13 +535,40 @@ public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migrati
             Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.MediaFileCode)).AsString(500).Nullable();
             Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.SourceUrl)).AsString(2000).Nullable();
             Alter.Table(table).AlterColumn(nameof(AkeneoManagedAsset.DestinationKey)).AsString(255).Nullable();
+        }
+
+        // Combination pictures sit on the parent product, one row per
+        // combination, so several combinations can share one image.
+        if (!ColumnExists(table, nameof(AkeneoManagedAsset.NopProductAttributeCombinationId)))
+        {
+            Create.Column(nameof(AkeneoManagedAsset.NopProductAttributeCombinationId))
+                .OnTable(table)
+                .AsInt32()
+                .Nullable();
+        }
+
+        // V3 adds the combination to the identity. SQL Server treats NULLs as
+        // equal in a unique index, so product-level rows stay unique as before.
+        if (!IndexExists(table, identityIndex))
+        {
+            if (IndexExists(table, legacyIdentityIndex))
+                Delete.Index(legacyIdentityIndex).OnTable(table);
 
             Create.Index(identityIndex)
                 .OnTable(table)
                 .OnColumn(nameof(AkeneoManagedAsset.NopProductId)).Ascending()
                 .OnColumn(nameof(AkeneoManagedAsset.AssetMappingKey)).Ascending()
                 .OnColumn(nameof(AkeneoManagedAsset.SourceIdentityHash)).Ascending()
+                .OnColumn(nameof(AkeneoManagedAsset.NopProductAttributeCombinationId)).Ascending()
                 .WithOptions().Unique();
+        }
+
+        var combinationIndex = $"IX_{table}_Combination";
+        if (!IndexExists(table, combinationIndex))
+        {
+            Create.Index(combinationIndex)
+                .OnTable(table)
+                .OnColumn(nameof(AkeneoManagedAsset.NopProductAttributeCombinationId)).Ascending();
         }
 
         var destinationIndex = $"IX_{table}_Destination";

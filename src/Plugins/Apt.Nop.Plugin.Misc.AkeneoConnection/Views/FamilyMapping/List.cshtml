@@ -72,9 +72,9 @@
                                             <div class="akeneo-col">
                                                 <div class="akeneo-code" v-text="item.akeneoFamilyCode"></div>
                                                 <div class="akeneo-label">Akeneo family code</div>
-                                                <div class="akeneo-summary-target-detail">
+                                                <div class="akeneo-summary-target-detail" v-if="item.akeneoFamilyVariantCode">
                                                     Family variant:
-                                                    <span v-text="item.akeneoFamilyVariantCode || 'All (default fallback)'"></span>
+                                                    <span v-text="item.akeneoFamilyVariantCode"></span>
                                                 </div>
                                             </div>
 

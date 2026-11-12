@@ -85,7 +85,7 @@ public class AkeneoAssetPictureReuseTests
 
         _synchronizer = new AkeneoProductAssetSynchronizer(
             mappings.Object, _managed.Object, resolver.Object, Mock.Of<IAkeneoApiClient>(), downloader.Object,
-            _pictures.Object, Mock.Of<IVideoService>(), _products.Object, genericAttributes.Object);
+            _pictures.Object, Mock.Of<IVideoService>(), _products.Object, genericAttributes.Object, Mock.Of<IProductAttributeService>());
 
         var product = new Product { Id = 10, Name = "Colorado Blue Spruce" };
         _context = new AkeneoProductSyncContext
@@ -130,7 +130,7 @@ public class AkeneoAssetPictureReuseTests
     [Test]
     public async Task A_picture_another_asset_already_manages_is_not_taken_over()
     {
-        _managed.Setup(s => s.GetByProductAsync(10))
+        _managed.Setup(s => s.GetAllByProductAsync(10))
             .ReturnsAsync([new AkeneoManagedAsset { NopProductId = 10, NopPictureId = 739 }]);
         _pictures.Setup(s => s.InsertPictureAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))

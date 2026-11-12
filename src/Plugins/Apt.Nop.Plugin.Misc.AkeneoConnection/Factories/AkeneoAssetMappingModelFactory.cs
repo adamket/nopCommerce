@@ -3,13 +3,15 @@ using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 
 public sealed class AkeneoAssetMappingModelFactory(
     IAkeneoApiClient apiClient,
-    IAkeneoAssetMappingService assetMappingService)
+    IAkeneoAssetMappingService assetMappingService,
+    IAkeneoFamilyMappingService familyMappingService = null)
     : IAkeneoAssetMappingModelFactory
 {
     public async Task<AkeneoAssetMappingListModel> PrepareListModelAsync(
@@ -74,7 +76,72 @@ public sealed class AkeneoAssetMappingModelFactory(
             .Select(mapping => PrepareMappingModel(mapping, familyCode))
             .ToList();
 
+        if (familyCode != null && familyMappingService != null)
+        {
+            try
+            {
+                var variants = await apiClient.GetFamilyVariantsAsync(familyCode);
+                var combinationVariants = new List<AkeneoFamilyVariantDefinition>();
+                foreach (var variant in variants.Where(item => !string.IsNullOrWhiteSpace(item.Code)))
+                {
+                    var familyMapping = await familyMappingService.GetEffectiveMappingAsync(familyCode, variant.Code.Trim());
+                    if (familyMapping is { Enabled: true } &&
+                        familyMapping.VariantRelationshipMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+                    {
+                        combinationVariants.Add(variant);
+                    }
+                }
+
+                foreach (var warning in BuildCombinationPictureWarnings(mappings, combinationVariants))
+                    model.Warnings.Add(warning);
+            }
+            catch (Exception ex)
+            {
+                model.Warnings.Add($"Akeneo family variants could not be loaded to check combination pictures: {ex.Message}");
+            }
+        }
+
         return model;
+    }
+
+    /// <summary>
+    /// A Variant products picture mapping whose attributes are all set above
+    /// the variant level gives every combination of a product the same picture.
+    /// </summary>
+    internal static IEnumerable<string> BuildCombinationPictureWarnings(
+        IEnumerable<AkeneoAssetMapping> mappings,
+        IEnumerable<AkeneoFamilyVariantDefinition> combinationFamilyVariants)
+    {
+        var variants = combinationFamilyVariants.ToList();
+        if (variants.Count == 0)
+            yield break;
+
+        foreach (var mapping in mappings.Where(mapping =>
+                     mapping.Enabled &&
+                     (AkeneoAssetDestinationType)mapping.DestinationTypeId == AkeneoAssetDestinationType.ProductPicture &&
+                     AkeneoAttributeMappingScopeHelper.NormalizeConfiguredScope(mapping.EntityScopeId)
+                         .HasFlag(AkeneoAttributeMappingEntityScope.VariantProduct)))
+        {
+            var sources = new[] { mapping.SourceAttributeCode, mapping.FallbackSourceAttributeCode }
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Select(code => code.Trim())
+                .ToList();
+            if (sources.Count == 0)
+                continue;
+
+            var affected = variants
+                .Where(variant => !sources.Any(source => variant.VariantAttributeSets.Any(set =>
+                    set.Attributes.Any(attribute => string.Equals(attribute?.Trim(), source, StringComparison.OrdinalIgnoreCase)))))
+                .Select(variant => variant.Code.Trim())
+                .ToList();
+            if (affected.Count == 0)
+                continue;
+
+            yield return
+                $"Asset mapping '{mapping.Name ?? mapping.MappingKey}' gives attribute combinations their picture, but " +
+                $"'{string.Join("' / '", sources)}' is set on the product model in family variant {string.Join(", ", affected.Select(code => $"'{code}'"))}, " +
+                "so every combination of a product gets the same picture. Use an attribute set at the variant or sub-model level.";
+        }
     }
 
     public AkeneoAssetMappingModel PrepareMappingModel(

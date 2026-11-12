@@ -12,6 +12,15 @@ public class AkeneoManagedAsset : BaseEntity
     public int AssetMappingId { get; set; }
     public string AssetMappingKey { get; set; }
     public int NopProductId { get; set; }
+
+    /// <summary>
+    /// Set when the picture belongs to an attribute combination of
+    /// <see cref="NopProductId"/> (a variant represented as a combination).
+    /// The picture is still in the parent's gallery, but only the combination
+    /// sync manages it; product-level syncs leave these rows alone.
+    /// </summary>
+    public int? NopProductAttributeCombinationId { get; set; }
+
     public int DestinationTypeId { get; set; }
 
     public int? NopPictureId { get; set; }

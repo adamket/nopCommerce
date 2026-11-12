@@ -11,7 +11,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 /// </summary>
 public class AkeneoManagedVariantCleanupService(
     IProductAttributeService productAttributeService,
-    IAkeneoManagedRelationService managedRelationService)
+    IAkeneoManagedRelationService managedRelationService,
+    IAkeneoCombinationPictureSynchronizer combinationPictureSynchronizer = null)
     : IAkeneoManagedVariantCleanupService
 {
     public async Task DeleteCombinationAndUnusedAxisValuesAsync(
@@ -26,6 +27,10 @@ public class AkeneoManagedVariantCleanupService(
 
         var selectedValueIds = GetSelectedValueIds(combination.AttributesXml);
         var productId = combination.ProductId;
+
+        // Pictures only this combination used go with it.
+        if (combinationPictureSynchronizer != null)
+            await combinationPictureSynchronizer.ReleaseCombinationAsync(combination.Id, cancellationToken);
 
         await productAttributeService.DeleteProductAttributeCombinationAsync(combination);
 

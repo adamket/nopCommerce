@@ -349,8 +349,8 @@ public partial class AkeneoProductCoreSynchronizer
             mappedKeys,
             product,
             "Published",
-            (context.Source.Enabled ?? false).ToString(),
-            "Akeneo enabled state");
+            bool.FalseString,
+            "nopCommerce creation default (no Published value from Akeneo)");
 
         return proposedProductName;
     }

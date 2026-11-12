@@ -52,7 +52,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoAttributeValueCacheTracker attributeValueCacheTracker = null,
     IAkeneoDeferredProductEvents deferredProductEvents = null,
     IAkeneoValueTemplateRenderer valueTemplateRenderer = null,
-    AkeneoAssociatedOptionReconciliationService associatedOptionReconciliation = null)
+    AkeneoAssociatedOptionReconciliationService associatedOptionReconciliation = null,
+    IAkeneoCombinationPictureSynchronizer combinationPictureSynchronizer = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -1508,6 +1509,32 @@ public class AkeneoProductBatchSyncService(
         // own entry (RelatedResults), so they no longer promote this leaf.
         ApplyVariantResult(result, variantResult, previousState);
         result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
+
+        if (variantResult.Mode ==
+                AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
+            !variantResult.CombinationUnavailable &&
+            variantResult.NopProductAttributeCombinationId is > 0 &&
+            combinationPictureSynchronizer != null)
+        {
+            // A combination is no product, so the leaf's own sections never
+            // run; its Variant products asset mappings give it its picture here.
+            try
+            {
+                if (await combinationPictureSynchronizer.SynchronizeCombinationAsync(
+                        leafContext,
+                        parentProduct,
+                        variantResult.NopProductAttributeCombinationId.Value,
+                        cancellationToken) &&
+                    result.ActionType == SyncItemActionType.Skipped)
+                {
+                    result.ActionType = SyncItemActionType.Updated;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                result.AddWarning($"The combination picture could not be applied: {ex.Message}");
+            }
+        }
 
         if (variantResult.Mode ==
             AkeneoVariantRelationshipMode.ProductAttributeCombinations)

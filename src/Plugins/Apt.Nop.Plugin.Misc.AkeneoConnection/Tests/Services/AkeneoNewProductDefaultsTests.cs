@@ -2,6 +2,7 @@ using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
@@ -77,6 +78,35 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(existing.IsShipEnabled, Is.False);
         });
         _families.Verify(s => s.GetEffectiveMappingAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [TestCase("trees")]
+    [TestCase("merchandise")]
+    public async Task A_created_product_can_be_added_to_the_cart_like_one_made_on_the_admin_form(string family)
+    {
+        await Synchronizer().SynchronizeAsync(Context(existing: null, family: family));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(_inserted!.OrderMinimumQuantity, Is.EqualTo(1));
+            Assert.That(_inserted.OrderMaximumQuantity, Is.EqualTo(10000));
+            Assert.That(_inserted.NotifyAdminForQuantityBelow, Is.EqualTo(1));
+            Assert.That(_inserted.AllowCustomerReviews, Is.True);
+        });
+    }
+
+    [Test]
+    public async Task An_existing_product_keeps_its_own_order_quantity_limits()
+    {
+        var existing = new Product { Id = 100, Sku = "SKU", Name = "Red Maple", OrderMinimumQuantity = 2, OrderMaximumQuantity = 5 };
+
+        await Synchronizer().SynchronizeAsync(Context(existing));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(existing.OrderMinimumQuantity, Is.EqualTo(2));
+            Assert.That(existing.OrderMaximumQuantity, Is.EqualTo(5));
+        });
     }
 
     [Test]
@@ -167,7 +197,46 @@ public class AkeneoNewProductDefaultsTests
         Assert.That(_inserted!.ProductTemplateId, Is.EqualTo(7));
     }
 
-    private static AkeneoProductSyncContext Context(Product? existing, string family = "trees") => new()
+    [Test]
+    public async Task A_created_product_without_a_Published_mapping_starts_unpublished_even_when_enabled_in_Akeneo()
+    {
+        await Synchronizer().SynchronizeAsync(Context(existing: null));
+
+        Assert.That(_inserted!.Published, Is.False);
+    }
+
+    [TestCase("true", true)]
+    [TestCase("false", false)]
+    public async Task A_created_product_is_published_from_its_Published_mapping(string value, bool expected)
+    {
+        var context = Context(existing: null, mapped: [PublishedMapping(value)]);
+
+        await Synchronizer().SynchronizeAsync(context);
+
+        Assert.That(_inserted!.Published, Is.EqualTo(expected));
+    }
+
+    [TestCase(AkeneoMissingValueBehavior.PreserveExisting)]
+    [TestCase(AkeneoMissingValueBehavior.ClearExisting)]
+    public async Task A_created_product_whose_Published_attribute_is_missing_starts_unpublished(AkeneoMissingValueBehavior behavior)
+    {
+        var context = Context(existing: null, mapped: [PublishedMapping(null)]);
+        context.Request.ProductFieldMissingValueBehavior = behavior;
+
+        await Synchronizer().SynchronizeAsync(context);
+
+        Assert.That(_inserted!.Published, Is.False);
+    }
+
+    private static AkeneoResolvedMappedValue PublishedMapping(string? value) => new()
+    {
+        Mapping = new AkeneoAttributeMapping { NopTargetTypeId = (int)NopTargetType.ProductField, NopTargetKey = "Published", AkeneoAttributeCode = "published" },
+        HasValue = value != null,
+        Value = value == null ? null : new AkeneoResolvedProductValue { DisplayValue = value },
+        EvaluationOutcome = AkeneoMappingEvaluationOutcome.Applied
+    };
+
+    private static AkeneoProductSyncContext Context(Product? existing, string family = "trees", AkeneoResolvedMappedValue[]? mapped = null) => new()
     {
         Source = new AkeneoProductDefinition
         {
@@ -177,7 +246,7 @@ public class AkeneoNewProductDefaultsTests
         SourceEntityType = AkeneoEntityType.Product,
         Request = new AkeneoProductImportRequest(),
         Result = new AkeneoProductImportResult(),
-        MappedValues = [],
+        MappedValues = mapped ?? [],
         SourceCode = "SKU",
         Sku = "SKU",
         ProductKey = "SKU",

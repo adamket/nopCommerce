@@ -59,7 +59,9 @@ sync_status == published OR sync_status == unpublished
 This condition allows the publication template only for those two statuses.
 For hold and future statuses, the destination property is preserved. It does not
 fall back to Akeneo's enabled flag or apply a missing-value clearing policy.
-An intentionally skipped Published mapping on a new product leaves it unpublished.
+A new product is published only by its Published mapping. When there is no Published
+mapping, the mapping is skipped, or the Akeneo value is missing, the product is created
+unpublished, whatever Akeneo's enabled flag says.
 Other mappings still run unless a profile skip rule holds the entire product.
 
 Conditions support ==, !=, AND, OR, parentheses, and quoted literals; AND takes

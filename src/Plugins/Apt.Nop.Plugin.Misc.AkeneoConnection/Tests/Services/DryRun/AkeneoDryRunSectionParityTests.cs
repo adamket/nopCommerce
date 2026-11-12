@@ -744,7 +744,8 @@ public class AkeneoDryRunSectionParityTests
             pictureService.Object,
             videoService.Object,
             productService.Object,
-            genericAttributeService.Object);
+            genericAttributeService.Object,
+            Mock.Of<IProductAttributeService>());
         var planner = synchronizer;
         var plannerContext = Context(new Product { Id = 10, Name = "Product" });
         plannerContext.Request.AssetSyncMode = AkeneoCollectionSyncMode.Merge;
@@ -837,7 +838,8 @@ public class AkeneoDryRunSectionParityTests
             pictureService.Object,
             videoService.Object,
             productService.Object,
-            genericAttributeService.Object);
+            genericAttributeService.Object,
+            Mock.Of<IProductAttributeService>());
         var planner = synchronizer;
         var plannerContext = Context(new Product { Id = 10, Name = "Product" });
         plannerContext.Request.AssetSyncMode = AkeneoCollectionSyncMode.ReplaceAll;

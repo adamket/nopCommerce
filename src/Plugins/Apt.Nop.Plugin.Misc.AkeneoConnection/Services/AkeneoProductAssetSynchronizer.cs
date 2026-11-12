@@ -18,9 +18,10 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 
 /// <summary>
 /// Synchronizes Akeneo media and Asset Manager collections after the product
-/// exists but before custom scalar properties are applied.
+/// exists but before custom scalar properties are applied. Variants represented
+/// as attribute combinations are handled in the Combinations part of this class.
 /// </summary>
-public sealed class AkeneoProductAssetSynchronizer(
+public sealed partial class AkeneoProductAssetSynchronizer(
     IAkeneoAssetMappingService assetMappingService,
     IAkeneoManagedAssetService managedAssetService,
     IAkeneoAssetResolver assetResolver,
@@ -29,9 +30,11 @@ public sealed class AkeneoProductAssetSynchronizer(
     IPictureService pictureService,
     IVideoService videoService,
     IProductService productService,
-    IGenericAttributeService genericAttributeService)
+    IGenericAttributeService genericAttributeService,
+    IProductAttributeService productAttributeService)
     : IAkeneoProductSectionSynchronizer,
-      IAkeneoSectionDryRunPlanProvider
+      IAkeneoSectionDryRunPlanProvider,
+      IAkeneoCombinationPictureSynchronizer
 {
     public int Order => 550;
 
@@ -109,6 +112,12 @@ public sealed class AkeneoProductAssetSynchronizer(
         if (context.Request.AssetSyncMode == AkeneoCollectionSyncMode.Disabled)
             return;
 
+        if (IsCombinationLeaf(context))
+        {
+            await PrepareCombinationAsync(context, cancellationToken);
+            return;
+        }
+
         var desired = await ResolveDesiredAsync(context, warningSink: null, cancellationToken: cancellationToken);
 
         foreach (var resolved in desired.ResolvedMappings)
@@ -165,6 +174,12 @@ public sealed class AkeneoProductAssetSynchronizer(
         {
             model.CoverageNotes.Add(
                 "Asset synchronization is disabled by the saved sync profile.");
+            return;
+        }
+
+        if (IsCombinationLeaf(context))
+        {
+            await PlanCombinationAsync(context, model, cancellationToken);
             return;
         }
 
@@ -640,6 +655,7 @@ public sealed class AkeneoProductAssetSynchronizer(
                     item.NopProductPictureId > 0)
                 .Select(item => item.NopProductPictureId.Value)
                 .ToHashSet();
+            keep.UnionWith(await GetCombinationProductPictureIdsAsync(context.ExistingProduct.Id));
 
             foreach (var relation in await productService
                          .GetProductPicturesByProductIdAsync(context.ExistingProduct.Id))
@@ -1038,7 +1054,7 @@ public sealed class AkeneoProductAssetSynchronizer(
         if (product == null || product.Id <= 0 || bytes is not { Length: > 0 })
             return null;
 
-        var claimed = (await managedAssetService.GetByProductAsync(product.Id))
+        var claimed = (await managedAssetService.GetAllByProductAsync(product.Id))
             .Where(item => item.NopPictureId > 0)
             .Select(item => item.NopPictureId.Value)
             .ToHashSet();
@@ -1446,6 +1462,11 @@ public sealed class AkeneoProductAssetSynchronizer(
 
     private async Task<bool> DeleteManagedDestinationAsync(AkeneoManagedAsset managed)
     {
+        // A combination can share this picture (or this one a product's); it
+        // stays until the last row that uses it goes.
+        if (await IsPictureUsedByOtherRowsAsync(managed))
+            return false;
+
         var changed = false;
         if (managed.NopProductPictureId > 0)
         {
@@ -1578,6 +1599,7 @@ public sealed class AkeneoProductAssetSynchronizer(
                     item.NopProductPictureId > 0)
                 .Select(item => item.NopProductPictureId.Value)
                 .ToHashSet();
+            keepRelations.UnionWith(await GetCombinationProductPictureIdsAsync(context.Product.Id));
 
             foreach (var relation in await productService
                          .GetProductPicturesByProductIdAsync(
