@@ -129,6 +129,15 @@ public class AkeneoVariantRelationshipService(
         }
     }
 
+    internal static ManageInventoryMethod ParentInventoryMethod(
+        AkeneoVariantRelationshipMode mode, ManageInventoryMethod current) => mode switch
+    {
+        AkeneoVariantRelationshipMode.ProductAttributeCombinations => ManageInventoryMethod.ManageStockByAttributes,
+        AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue => ManageInventoryMethod.DontManageStock,
+        _ when current == ManageInventoryMethod.ManageStockByAttributes => ManageInventoryMethod.DontManageStock,
+        _ => current
+    };
+
     private async Task<bool> EnsureParentShapeAsync(
         Product parentProduct,
         AkeneoVariantRelationshipMode mode)
@@ -155,19 +164,10 @@ public class AkeneoVariantRelationshipService(
             changed = true;
         }
 
-        if (mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
-            parentProduct.ManageInventoryMethod != ManageInventoryMethod.ManageStockByAttributes)
+        var inventoryMethod = ParentInventoryMethod(mode, parentProduct.ManageInventoryMethod);
+        if (parentProduct.ManageInventoryMethod != inventoryMethod)
         {
-            parentProduct.ManageInventoryMethod = ManageInventoryMethod.ManageStockByAttributes;
-            changed = true;
-        }
-        else if (mode != AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
-                 parentProduct.ManageInventoryMethod == ManageInventoryMethod.ManageStockByAttributes)
-        {
-            // Attribute-combination inventory is representation-specific. Do
-            // not leave the parent in an invalid stock mode after switching to
-            // grouped, associated-product, or standalone representation.
-            parentProduct.ManageInventoryMethod = ManageInventoryMethod.DontManageStock;
+            parentProduct.ManageInventoryMethod = inventoryMethod;
             changed = true;
         }
 
@@ -314,6 +314,7 @@ public class AkeneoVariantRelationshipService(
                 ProductAttributeMappingId = mappingResult.Mapping.Id,
                 AttributeValueTypeId = (int)AttributeValueType.AssociatedToProduct,
                 AssociatedProductId = childProduct.Id,
+                Quantity = 1,
                 Name = valueName,
                 DisplayOrder = values.Count + 1
             };
@@ -324,6 +325,13 @@ public class AkeneoVariantRelationshipService(
         else
         {
             var valueChanged = false;
+
+            // Older imports left the linked units per selection at zero.
+            if (existingValue.Quantity <= 0)
+            {
+                existingValue.Quantity = 1;
+                valueChanged = true;
+            }
 
             if (existingValue.AssociatedProductId != childProduct.Id)
             {

@@ -185,7 +185,7 @@ public class AkeneoConsolidatedMigrationTests
             "RelatedProductAssociationType", "SyncLogRetentionEnabled", "SyncItemLogRetentionDays", "SyncRunRecordRetentionDays",
             "CrossSellSyncModeId", "CrossSellAssociationType",
             "ParentLevelId", "AssociatedProductAttributeId", "AssociatedValueNameTemplate", "HideChildProducts",
-            "NewProductTaxCategoryId", "NewProductIsShipEnabled", "NewProductAllowCustomerReviews", "NewProductWarehouseId", "NewProductTemplateId",
+            "NewProductTaxCategoryId", "NewProductIsShipEnabled", "NewProductAllowCustomerReviews", "NewProductManageInventoryMethodId", "NewProductWarehouseId", "NewProductTemplateId",
             "CombinationAvailabilitySourceId", "VariantDisplayOrderKeys", "StandaloneProductTemplateId", "StandaloneProductNameTemplate" };
         var created = Plan(true, columns.Concat(DroppedColumns).ToArray()).OfType<CreateColumnExpression>().ToList();
         Assert.That(created.Select(x => x.Column.Name), Is.EquivalentTo(columns));

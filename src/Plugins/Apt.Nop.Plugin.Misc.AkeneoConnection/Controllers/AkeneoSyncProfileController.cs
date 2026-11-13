@@ -44,7 +44,7 @@ public class AkeneoSyncProfileController(
     public IActionResult Progress(int id)
     {
         var snapshot = AkeneoProductBatchSyncService.GetProgress(id);
-        return Json(new { progress = snapshot == null ? null : new { processed = snapshot.Processed, total = snapshot.Total } });
+        return Json(new { progress = snapshot == null ? null : new { processed = snapshot.Processed, total = snapshot.Total, step = snapshot.Step, unit = snapshot.Unit } });
     }
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]

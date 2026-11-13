@@ -64,15 +64,15 @@ public class AkeneoProductBatchSyncService(
     private const int ProductModelCodeBatchSize = 50;
 
     private static readonly TimeSpan LeaseRenewalInterval = TimeSpan.FromMinutes(5);
-    internal sealed record ProductProgress(int Processed, int Total);
+    internal sealed record ProductProgress(int Processed, int Total, string Step = null, string Unit = null);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, ProductProgress> ActiveProgress = new();
 
     internal static ProductProgress GetProgress(int profileId) => ActiveProgress.GetValueOrDefault(profileId);
 
-    private static void ReportProgress(AkeneoProductBatchImportRequest request, int processed, int total)
+    private static void ReportProgress(AkeneoProductBatchImportRequest request, string step, string unit, int processed, int total)
     {
         if (request.SyncProfileId is int profileId)
-            ActiveProgress[profileId] = new ProductProgress(processed, total);
+            ActiveProgress[profileId] = new ProductProgress(processed, total, step, unit);
     }
 
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(6);
@@ -87,6 +87,7 @@ public class AkeneoProductBatchSyncService(
         request.CategoryMappingWarnings = new AkeneoCategoryMappingWarnings();
         request.AssociationWarnings = new AkeneoAssociationWarnings();
         request.MissingTokenWarnings = new AkeneoMissingTokenWarnings();
+        request.Steps = new AkeneoSyncSteps((step, unit, done, total) => ReportProgress(request, step, unit, done, total));
         associatedOptionReconciliation?.Begin(request);
         var result = new AkeneoProductBatchImportResult
         {
@@ -290,7 +291,7 @@ public class AkeneoProductBatchSyncService(
                 }
             }
 
-            ReportProgress(request, 0, candidates.Count);
+            request.Steps.Report(AkeneoSyncSteps.Products, "products", 0, candidates.Count);
             foreach (var (source, inclusionReason) in candidates)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -357,7 +358,7 @@ public class AkeneoProductBatchSyncService(
                 await SaveBatchItemLogIfNeededAsync(request, itemResult);
                 result.AddItemWarnings(itemResult.Warnings);
 
-                ReportProgress(request, result.TotalRead, candidates.Count);
+                request.Steps.Report(AkeneoSyncSteps.Products, "products", result.TotalRead, candidates.Count);
 
                 if (!itemResult.Success && !request.ContinueOnError)
                 {
@@ -370,7 +371,7 @@ public class AkeneoProductBatchSyncService(
 
             result.CompletedAllPages = completedAllPhases && !result.WasTruncated;
 
-            await RetryRelatedProductsAsync(result, request.AssociationWarnings, cancellationToken);
+            await RetryRelatedProductsAsync(request, result, request.AssociationWarnings, cancellationToken);
 
             if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
             {
@@ -436,6 +437,9 @@ public class AkeneoProductBatchSyncService(
             $"direct {result.DirectProductChangeCount}, ancestor {result.AncestorProductModelChangeCount}, " +
             $"linked asset {result.LinkedAssetChangeCount}, linked reference entity {result.LinkedReferenceEntityChangeCount}; " +
             $"deduplicated {result.DuplicateCandidateCount} candidate(s).";
+        if (request.Steps?.BuildSummary() is { } stepTimings)
+            message += " " + stepTimings;
+        request.Steps = null;
         if (warnings.Count > 0)
             message += Environment.NewLine + "Warnings: " + string.Join(Environment.NewLine + Environment.NewLine, warnings);
 
@@ -457,16 +461,18 @@ public class AkeneoProductBatchSyncService(
     /// the run.
     /// </summary>
     private async Task RetryRelatedProductsAsync(
+        AkeneoProductBatchImportRequest request,
         AkeneoProductBatchImportResult result,
         AkeneoAssociationWarnings warnings,
         CancellationToken cancellationToken)
     {
-        await RetryAssociationsAsync(relatedProductSynchronizer, result, warnings, cancellationToken);
-        await RetryAssociationsAsync(crossSellSynchronizer, result, warnings, cancellationToken);
+        await RetryAssociationsAsync(relatedProductSynchronizer, request, result, warnings, cancellationToken);
+        await RetryAssociationsAsync(crossSellSynchronizer, request, result, warnings, cancellationToken);
     }
 
     private async Task RetryAssociationsAsync(
         AkeneoProductAssociationSynchronizer synchronizer,
+        AkeneoProductBatchImportRequest request,
         AkeneoProductBatchImportResult result,
         AkeneoAssociationWarnings warnings,
         CancellationToken cancellationToken)
@@ -476,10 +482,13 @@ public class AkeneoProductBatchSyncService(
             return;
 
         int added = 0, removed = 0, stillUnresolved = 0, failed = 0;
+        var step = $"Retrying {synchronizer.Area.ToLowerInvariant()} links";
+        var done = 0;
 
         foreach (var work in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            request.Steps?.Report(step, "products", done++, pending.Count);
 
             try
             {
@@ -503,6 +512,7 @@ public class AkeneoProductBatchSyncService(
             }
         }
 
+        request.Steps?.Report(step, "products", done, pending.Count);
         result.AddMessage(
             $"{synchronizer.Area} retried for {pending.Count} product(s) whose targets were not yet in nopCommerce: " +
             $"{added} link(s) added, {removed} removed, {stillUnresolved} target(s) still missing" +

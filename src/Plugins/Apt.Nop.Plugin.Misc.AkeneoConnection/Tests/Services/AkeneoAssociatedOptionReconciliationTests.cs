@@ -113,6 +113,23 @@ public class AkeneoAssociatedOptionReconciliationTests
         _events.Verify(service => service.Defer(_parents["arborvitae"]), Times.Once);
     }
 
+    [Test]
+    public async Task Cleanup_reports_each_grouped_product_checked_and_each_attribute_cleaned()
+    {
+        var reports = new List<string>();
+        _request.Steps = new AkeneoSyncSteps((step, unit, done, total) => reports.Add($"{step}: {done} of {total} {unit}"));
+
+        await Run();
+
+        Assert.That(reports, Is.EqualTo(new[]
+        {
+            "Checking associated options against Akeneo: 0 of 1 grouped products",
+            "Checking associated options against Akeneo: 1 of 1 grouped products",
+            "Removing obsolete associated options: 0 of 1 product attributes",
+            "Removing obsolete associated options: 1 of 1 product attributes"
+        }));
+    }
+
     [TestCase(AkeneoRunMode.Delta)]
     [TestCase(AkeneoRunMode.SingleProduct)]
     public async Task Partial_run_modes_do_not_even_fetch_an_inventory(AkeneoRunMode mode)

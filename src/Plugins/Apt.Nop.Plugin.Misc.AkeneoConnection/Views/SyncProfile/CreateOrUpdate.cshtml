@@ -202,7 +202,7 @@
             <div class="container-fluid">
                 <div v-if="syncInProgress" class="mb-3">
                     <div id="akeneo-sync-progress-label" class="mb-1">
-                        <template v-if="syncProgress">{{ syncProgress.processed }} of {{ syncProgress.total }} products processed<span v-if="syncProgress.total"> ({{ syncPercent }}%)</span><span v-if="syncProgress.processed === syncProgress.total"> · Finishing sync…</span></template>
+                        <template v-if="syncProgress">{{ syncProgress.step || 'Processing products' }}: {{ syncProgress.processed }} of {{ syncProgress.total }} {{ syncProgress.unit || 'products' }}<span v-if="syncProgress.total"> ({{ syncPercent }}%)</span><span v-if="syncProgress.processed === syncProgress.total"> · Finishing sync…</span></template>
                         <template v-else>Preparing sync…</template>
                     </div>
                     <div class="progress" role="progressbar" aria-labelledby="akeneo-sync-progress-label" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="syncProgress ? syncPercent : null">
@@ -269,7 +269,6 @@
                                 <div class="mt-1">
                                     Changed {{ resyncStatus.changedOn }} · last resync
                                     {{ resyncStatus.lastResyncOn || 'never' }}.
-                                    A delta run only revisits products changed in Akeneo, so other products keep their old output until a resync.
                                 </div>
                             </div>
                             <button type="button" class="btn btn-sm btn-warning" v-bind:disabled="!canRun" v-on:click="openResync">
@@ -1337,7 +1336,7 @@
                         var processed = snapshot.processed ?? snapshot.Processed;
                         var total = snapshot.total ?? snapshot.Total;
                         if (Number.isInteger(processed) && Number.isInteger(total) && processed >= 0 && processed <= total)
-                            this.syncProgress = { processed, total };
+                            this.syncProgress = { processed, total, step: snapshot.step || null, unit: snapshot.unit || null };
                     }).always(() => {
                         if (generation === this.progressGeneration)
                             setTimeout(() => this.pollProgress(generation), 1500);

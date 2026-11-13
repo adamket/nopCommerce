@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Core.Domain.Catalog;
 using Nop.Web.Framework.Models;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
@@ -36,6 +38,9 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public bool NewProductIsShipEnabled { get; set; } = true;
 
     public bool NewProductAllowCustomerReviews { get; set; } = true;
+
+    [EnumDataType(typeof(ManageInventoryMethod))]
+    public int NewProductManageInventoryMethodId { get; set; }
 
     public int? NewProductWarehouseId { get; set; }
 

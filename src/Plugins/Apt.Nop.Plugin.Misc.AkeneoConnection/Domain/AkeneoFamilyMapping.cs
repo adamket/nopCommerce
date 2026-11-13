@@ -41,6 +41,8 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public bool NewProductAllowCustomerReviews { get; set; } = true;
 
+    public int NewProductManageInventoryMethodId { get; set; }
+
     public int? NewProductWarehouseId { get; set; }
 
     public int? NewProductTemplateId { get; set; }

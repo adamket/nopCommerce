@@ -94,6 +94,7 @@ public class AkeneoFamilyMappingModelFactory
             model.NewProductTaxCategoryId = configuration.NewProductTaxCategoryId;
             model.NewProductIsShipEnabled = configuration.NewProductIsShipEnabled;
             model.NewProductAllowCustomerReviews = configuration.NewProductAllowCustomerReviews;
+            model.NewProductManageInventoryMethodId = configuration.NewProductManageInventoryMethodId;
             model.NewProductWarehouseId = configuration.NewProductWarehouseId;
             model.NewProductTemplateId = configuration.NewProductTemplateId;
             model.DisplayOrder = configuration.DisplayOrder;

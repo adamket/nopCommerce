@@ -39,9 +39,11 @@ public class AkeneoNewProductDefaultsTests
         {
             AkeneoFamilyCode = "trees",
             Enabled = true,
+            VariantRelationshipMode = AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue,
             NewProductTaxCategoryId = 3,
             NewProductIsShipEnabled = true,
             NewProductAllowCustomerReviews = false,
+            NewProductManageInventoryMethodId = (int)ManageInventoryMethod.ManageStock,
             NewProductWarehouseId = 2,
             NewProductTemplateId = 4
         });
@@ -61,9 +63,37 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(_inserted!.TaxCategoryId, Is.EqualTo(3));
             Assert.That(_inserted.IsShipEnabled, Is.True);
             Assert.That(_inserted.AllowCustomerReviews, Is.False);
+            Assert.That(_inserted.ManageInventoryMethod, Is.EqualTo(ManageInventoryMethod.ManageStock));
             Assert.That(_inserted.WarehouseId, Is.EqualTo(2));
             Assert.That(_inserted.ProductTemplateId, Is.EqualTo(4));
         });
+    }
+
+    [TestCase(AkeneoAttributeMappingEntityScope.ProductModel, AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue)]
+    [TestCase(AkeneoAttributeMappingEntityScope.SubModelParent, AkeneoVariantRelationshipMode.GroupedProducts)]
+    public async Task Associated_parent_starts_without_inventory_tracking(
+        AkeneoAttributeMappingEntityScope scope, AkeneoVariantRelationshipMode mode)
+    {
+        _families.Setup(s => s.GetEffectiveMappingAsync("trees", "trees_by_size")).ReturnsAsync(new AkeneoFamilyMapping
+        {
+            Enabled = true,
+            VariantRelationshipMode = mode,
+            NewProductManageInventoryMethodId = (int)ManageInventoryMethod.ManageStock
+        });
+
+        await Synchronizer().SynchronizeAsync(Context(null, sourceType: AkeneoEntityType.ProductModel, scope: scope));
+
+        Assert.That(_inserted!.ManageInventoryMethod, Is.EqualTo(ManageInventoryMethod.DontManageStock));
+    }
+
+    [TestCase(ManageInventoryMethod.ManageStock)]
+    [TestCase(ManageInventoryMethod.ManageStockByAttributes)]
+    [TestCase(ManageInventoryMethod.DontManageStock)]
+    public void Resolved_associated_relationship_disables_parent_stock_tracking(ManageInventoryMethod current)
+    {
+        Assert.That(AkeneoVariantRelationshipService.ParentInventoryMethod(
+            AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue, current),
+            Is.EqualTo(ManageInventoryMethod.DontManageStock));
     }
 
     [Test]
@@ -79,6 +109,7 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(existing.WarehouseId, Is.EqualTo(0));
             Assert.That(existing.IsShipEnabled, Is.False);
             Assert.That(existing.AllowCustomerReviews, Is.True);
+            Assert.That(existing.ManageInventoryMethod, Is.EqualTo(ManageInventoryMethod.DontManageStock));
         });
         _families.Verify(s => s.GetEffectiveMappingAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
@@ -124,6 +155,7 @@ public class AkeneoNewProductDefaultsTests
             Assert.That(_inserted!.TaxCategoryId, Is.EqualTo(0));
             Assert.That(_inserted.IsShipEnabled, Is.False);
             Assert.That(_inserted.AllowCustomerReviews, Is.True);
+            Assert.That(_inserted.ManageInventoryMethod, Is.EqualTo(ManageInventoryMethod.DontManageStock));
             Assert.That(_inserted.ProductTemplateId, Is.EqualTo(0));
         });
     }
@@ -136,7 +168,7 @@ public class AkeneoNewProductDefaultsTests
         await Synchronizer().PlanAsync(Context(existing: null), model);
 
         Assert.That(model.Operations.Where(operation => operation.Area == "New product defaults").Select(operation => operation.Target),
-            Is.EquivalentTo(new[] { "Allow customer reviews", "Shipping enabled", "Tax category", "Warehouse", "Product template" }));
+            Is.EquivalentTo(new[] { "Inventory method", "Allow customer reviews", "Shipping enabled", "Tax category", "Warehouse", "Product template" }));
         _products.Verify(s => s.InsertProductAsync(It.IsAny<Product>()), Times.Never);
     }
 
@@ -240,14 +272,16 @@ public class AkeneoNewProductDefaultsTests
         EvaluationOutcome = AkeneoMappingEvaluationOutcome.Applied
     };
 
-    private static AkeneoProductSyncContext Context(Product? existing, string family = "trees", AkeneoResolvedMappedValue[]? mapped = null) => new()
+    private static AkeneoProductSyncContext Context(Product? existing, string family = "trees", AkeneoResolvedMappedValue[]? mapped = null,
+        AkeneoEntityType sourceType = AkeneoEntityType.Product, AkeneoAttributeMappingEntityScope scope = AkeneoAttributeMappingEntityScope.VariantProduct) => new()
     {
         Source = new AkeneoProductDefinition
         {
             Identifier = "SKU", Uuid = "uuid", Family = family, Enabled = true,
             Values = JsonSerializer.SerializeToElement(new Dictionary<string, object>())
         },
-        SourceEntityType = AkeneoEntityType.Product,
+        SourceEntityType = sourceType,
+        MappingEntityScope = scope,
         Request = new AkeneoProductImportRequest(),
         Result = new AkeneoProductImportResult(),
         MappedValues = mapped ?? [],

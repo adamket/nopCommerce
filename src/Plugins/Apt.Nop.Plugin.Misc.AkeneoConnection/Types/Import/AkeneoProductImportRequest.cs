@@ -9,6 +9,7 @@ public class AkeneoProductImportRequest
     internal AkeneoCategoryMappingWarnings CategoryMappingWarnings { get; set; }
     internal AkeneoAssociationWarnings AssociationWarnings { get; set; }
     internal AkeneoMissingTokenWarnings MissingTokenWarnings { get; set; }
+    internal AkeneoSyncSteps Steps { get; set; }
 
     public bool LogSkips { get; set; }
 

@@ -101,6 +101,7 @@ public partial class AkeneoProductCoreSynchronizer
             "New product defaults", target, source, null, value, AkeneoDryRunOperationType.Create,
             "Set only when the product is created; later syncs leave it alone.");
 
+        Show("Inventory method", product.ManageInventoryMethod.ToString());
         Show("Allow customer reviews", product.AllowCustomerReviews.ToString());
         if (product.IsShipEnabled)
             Show("Shipping enabled", bool.TrueString);

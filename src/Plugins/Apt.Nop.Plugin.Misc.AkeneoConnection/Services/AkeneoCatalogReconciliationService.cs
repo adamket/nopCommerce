@@ -35,10 +35,14 @@ public class AkeneoCatalogReconciliationService(
         }
 
         var changedCount = 0;
+        const string step = "Applying the missing-product rule";
+        var total = unseen.Count();
+        var done = 0;
 
         foreach (var state in unseen)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            request.Steps?.Report(step, "products no longer in Akeneo", done++, total);
 
             try
             {
@@ -60,6 +64,7 @@ public class AkeneoCatalogReconciliationService(
             }
         }
 
+        request.Steps?.Report(step, "products no longer in Akeneo", done, total);
         result.ReconciliationCompleted = !result.Errors.Any();
 
         if (changedCount > 0)

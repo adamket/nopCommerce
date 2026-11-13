@@ -62,11 +62,15 @@ public class AkeneoAssociatedOptionReconciliationService(
         var plans = new List<RemovalPlan>();
         var candidates = _observations.Values
             .Where(item => item.Verified && item.ParentId > 0 && item.ValueId > 0)
-            .GroupBy(item => item.ParentId.Value);
+            .GroupBy(item => item.ParentId.Value)
+            .ToList();
+        const string checkStep = "Checking associated options against Akeneo";
+        var checkedCount = 0;
 
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            request.Steps?.Report(checkStep, "grouped products", checkedCount++, candidates.Count);
             var modelCodes = parentProducts.Where(pair => pair.Value?.Id == candidate.Key)
                 .Select(pair => pair.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (modelCodes.Count != 1)
@@ -110,13 +114,19 @@ public class AkeneoAssociatedOptionReconciliationService(
             }
         }
 
+        request.Steps?.Report(checkStep, "grouped products", checkedCount, candidates.Count);
+
+        const string removeStep = "Removing obsolete associated options";
         var removedCount = 0;
+        var appliedCount = 0;
         foreach (var plan in plans)
         {
+            request.Steps?.Report(removeStep, "product attributes", appliedCount++, plans.Count);
             if (renewLease != null)
                 await renewLease();
             removedCount += await ApplyAsync(request, plan, cancellationToken);
         }
+        request.Steps?.Report(removeStep, "product attributes", appliedCount, plans.Count);
         if (removedCount > 0)
             result.AddMessage($"Replace all values removed {removedCount} obsolete associated-product option(s); the simple products were preserved.");
         return removedCount;

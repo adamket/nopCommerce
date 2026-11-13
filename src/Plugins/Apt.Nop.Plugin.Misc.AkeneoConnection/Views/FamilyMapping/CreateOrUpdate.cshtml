@@ -1,5 +1,6 @@
 @model AkeneoFamilyMappingModel
 @using System.Text.Json
+@using Nop.Core.Domain.Catalog
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain
 @using Apt.Nop.Plugin.Misc.AkeneoConnection.Models
 <!script src="@Url.Content("~/Plugins/Apt.Misc.AkeneoConnection/Content/Libraries/Vue/vue.global.js")?build=20260712-1"></!script>
@@ -40,6 +41,7 @@
             newProductTaxCategoryId = Model.NewProductTaxCategoryId,
             newProductIsShipEnabled = Model.NewProductIsShipEnabled,
             newProductAllowCustomerReviews = Model.NewProductAllowCustomerReviews,
+            newProductManageInventoryMethodId = Model.NewProductManageInventoryMethodId,
             newProductWarehouseId = Model.NewProductWarehouseId,
             newProductTemplateId = Model.NewProductTemplateId,
             displayOrder = Model.DisplayOrder,
@@ -76,6 +78,11 @@
             {
                 text = x.Text,
                 value = x.Value
+            }),
+            availableInventoryMethods = Enum.GetValues<ManageInventoryMethod>().Select(method => new
+            {
+                value = (int)method,
+                label = T($"Enums.Nop.Core.Domain.Catalog.ManageInventoryMethod.{method}").Text
             }),
             availableTaxCategories = Model.AvailableTaxCategories.Select(x => new { text = x.Text, value = x.Value }),
             availableWarehouses = Model.AvailableWarehouses.Select(x => new { text = x.Text, value = x.Value }),
@@ -398,10 +405,19 @@
                         <div class="card-header"><h3 class="card-title">New product defaults</h3></div>
                         <div class="card-body">
                             <p class="form-text text-muted mt-0">
-                                Set only when the sync creates a product in this family. Later syncs never change them.
+                                Set only when the sync creates a product in this family. Variant relationship rules can adjust the inventory method for combination and standalone products.
                             </p>
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="NewProductManageInventoryMethodId">Inventory method</label>
+                                        <akeneo-search-select input-id="NewProductManageInventoryMethodId" item-name="inventory method"
+                                                              v-model="form.newProductManageInventoryMethodId"
+                                                              v-bind:options="availableInventoryMethods"></akeneo-search-select>
+                                        <input type="hidden" name="NewProductManageInventoryMethodId" v-bind:value="form.newProductManageInventoryMethodId" />
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Tax category</label>
                                         <akeneo-search-select input-id="NewProductTaxCategoryId" item-name="tax category"
@@ -411,7 +427,7 @@
                                         <input type="hidden" name="NewProductTaxCategoryId" v-bind:value="form.newProductTaxCategoryId ?? ''" />
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Warehouse</label>
                                         <akeneo-search-select input-id="NewProductWarehouseId" item-name="warehouse"
@@ -421,7 +437,7 @@
                                         <input type="hidden" name="NewProductWarehouseId" v-bind:value="form.newProductWarehouseId ?? ''" />
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Product template</label>
                                         <akeneo-search-select input-id="NewProductTemplateId" item-name="product template"
@@ -432,7 +448,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <label class="akeneo-switch mb-0">
+                            <label class="akeneo-switch mb-0" style="margin-inline-end: 1rem;">
                                 <input type="checkbox" name="NewProductIsShipEnabled" value="true" v-model="form.newProductIsShipEnabled" />
                                 <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
                                 <span class="akeneo-switch-text">Shipping enabled</span>
@@ -1030,6 +1046,7 @@
                         matchingSubModel: @((int)AkeneoSubModelParentLevel.MatchingSubModel)
                     },
                     availableProductAttributes: initialModel.availableProductAttributes,
+                    availableInventoryMethods: initialModel.availableInventoryMethods,
                     availableTaxCategories: initialModel.availableTaxCategories,
                     availableWarehouses: initialModel.availableWarehouses,
                     availableProductTemplates: initialModel.availableProductTemplates,

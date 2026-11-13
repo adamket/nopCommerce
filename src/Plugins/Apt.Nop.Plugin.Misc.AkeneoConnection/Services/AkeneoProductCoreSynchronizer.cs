@@ -102,6 +102,12 @@ public partial class AkeneoProductCoreSynchronizer
 
         product.IsShipEnabled = defaults.NewProductIsShipEnabled;
         product.AllowCustomerReviews = defaults.NewProductAllowCustomerReviews;
+        var isAssociatedParent = context.SourceEntityType == AkeneoEntityType.ProductModel &&
+            (context.MappingEntityScope == AkeneoAttributeMappingEntityScope.SubModelParent ||
+             defaults.VariantRelationshipMode == AkeneoVariantRelationshipMode.AssociatedToProductAttributeValue);
+        product.ManageInventoryMethodId = isAssociatedParent
+            ? (int)ManageInventoryMethod.DontManageStock
+            : defaults.NewProductManageInventoryMethodId;
         if (defaults.NewProductTaxCategoryId is > 0)
             product.TaxCategoryId = defaults.NewProductTaxCategoryId.Value;
         if (defaults.NewProductWarehouseId is > 0)
