@@ -14,6 +14,9 @@ public class AkeneoExecutableSectionPlan
 
     public string ImportBlockReason { get; set; }
 
+    /// <summary>Logs <see cref="ImportBlockReason"/> as a warning rather than a message.</summary>
+    public bool ImportBlockIsWarning { get; set; }
+
     public IList<AkeneoExecutableSectionOperation> Operations { get; } =
         new List<AkeneoExecutableSectionOperation>();
 

@@ -19,5 +19,6 @@ public enum SyncItemActionType
     Updated = 20,
     Skipped = 30,
     Failed = 40,
-    RunComplete = 50
+    RunComplete = 50,
+    StopRequested = 60
 }

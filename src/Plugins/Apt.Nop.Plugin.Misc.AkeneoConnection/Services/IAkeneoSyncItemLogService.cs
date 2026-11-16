@@ -4,6 +4,7 @@ using Nop.Core;
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
 public interface IAkeneoSyncItemLogService
 {
+    Task<string> GetStopRequestAsync(int runId);
     Task InsertAkeneoSyncItemLogAsync(AkeneoSyncItemLog entityMapping);
     Task UpdateAkeneoSyncItemLogAsync(AkeneoSyncItemLog entityMapping);
     Task DeleteAkeneoSyncItemLogAsync(AkeneoSyncItemLog entityMapping);

@@ -17,6 +17,8 @@ function editor(form = {}) {
     vm.runInNewContext(script, {
         document: { getElementById: () => ({ textContent: JSON.stringify(data) }) },
         window: {}, addAntiForgeryToken: data => data,
+        // Provided by Content/Scripts/akeneo-connection.admin.js on the real page.
+        AkeneoProductLog: { component: {} },
         Vue: { createApp(options) {
             app = options.data();
             for (const [key, method] of Object.entries(options.methods)) app[key] = method.bind(app);

@@ -8,6 +8,13 @@ public class AkeneoSyncItemLogService(
     IRepository<AkeneoSyncItemLog> syncItemLogRepository)
     : IAkeneoSyncItemLogService
 {
+    public Task<string> GetStopRequestAsync(int runId) =>
+        syncItemLogRepository.Table
+            .Where(item => item.SyncRunRecordId == runId && item.ActionTypeId == (int)SyncItemActionType.StopRequested)
+            .OrderBy(item => item.Id)
+            .Select(item => item.Message)
+            .FirstOrDefaultAsync();
+
     public async Task InsertAkeneoSyncItemLogAsync(AkeneoSyncItemLog syncItem)
     {
         await syncItemLogRepository.InsertAsync(syncItem);

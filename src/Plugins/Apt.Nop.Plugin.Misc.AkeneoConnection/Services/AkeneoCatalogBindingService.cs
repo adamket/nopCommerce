@@ -41,7 +41,8 @@ public class AkeneoCatalogBindingService(
     ICategoryService categoryService,
     ICategoryTemplateService categoryTemplateService,
     IUrlRecordService urlRecordService,
-    CatalogSettings catalogSettings)
+    CatalogSettings catalogSettings,
+    Microsoft.Extensions.DependencyInjection.IServiceScopeFactory stopScopes = null)
     : IAkeneoCatalogBindingService
 {
     private const int PageSize = 100;
@@ -262,10 +263,14 @@ public class AkeneoCatalogBindingService(
             WatermarkUtc = startedOnUtc
         };
 
+        AkeneoRunStopMonitor monitor = null;
         try
         {
             await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
             await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+            await using var stop = new AkeneoRunStopMonitor(stopScopes, runRecord.Id, cancellationToken);
+            monitor = stop;
+            cancellationToken = stop.Token;
 
             var plan = await BuildPlanAsync(
                 familyCodes,
@@ -319,6 +324,7 @@ public class AkeneoCatalogBindingService(
         {
             runRecord.FinishedOnUtc = DateTime.UtcNow;
             runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
+            runRecord.ErrorSummary = monitor?.Reason;
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
             throw;
         }

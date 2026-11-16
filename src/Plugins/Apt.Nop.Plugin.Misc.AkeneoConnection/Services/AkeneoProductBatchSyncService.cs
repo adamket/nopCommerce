@@ -369,10 +369,12 @@ public class AkeneoProductBatchSyncService(
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             result.CompletedAllPages = completedAllPhases && !result.WasTruncated;
 
             await RetryRelatedProductsAsync(request, result, request.AssociationWarnings, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (request.IsAuthoritativeFullRun && result.IsAuthoritative)
             {
                 result.ReconciledCount = await catalogReconciliationService
@@ -949,6 +951,20 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
+        // Incomplete products are never created. Checked before anything is
+        // written, so a new variant cannot leave behind a new, empty parent.
+        var incompleteSkipReason = await GetIncompleteCreationSkipReasonAsync(
+            source,
+            request,
+            previousState);
+
+        if (incompleteSkipReason != null)
+        {
+            result.ActionType = SyncItemActionType.Skipped;
+            result.AddWarning(incompleteSkipReason);
+            return result;
+        }
+
         // Build a read-only fingerprint of the resolved nopCommerce desired
         // state before downloading asset binaries or opening a transaction.
         // Full runs and resyncs with Repair never use this as a skip gate:
@@ -1102,6 +1118,40 @@ public class AkeneoProductBatchSyncService(
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The warning for an incomplete Akeneo product that has nothing in
+    /// nopCommerce yet (no sync state, no mapped product or combination, and no
+    /// product or combination with its SKU), or null when it is complete, its
+    /// completeness is unknown, or anything for it might already exist.
+    /// </summary>
+    private async Task<string> GetIncompleteCreationSkipReasonAsync(
+        AkeneoProductDefinition source,
+        AkeneoProductImportRequest request,
+        AkeneoProductSyncState previousState)
+    {
+        var reason = AkeneoIncompleteProductRule.GetCreationBlockReason(
+            source, request.Channel, request.Locale);
+        if (reason == null || previousState != null)
+            return null;
+
+        var uuid = source.Uuid?.Trim();
+        if (!string.IsNullOrWhiteSpace(uuid) &&
+            (await entityMappingService.GetMappedNopEntityIdByAkeneoUuidAsync(
+                 AkeneoEntityType.Product, uuid, NopEntityType.Product) is > 0 ||
+             await entityMappingService.GetMappedNopEntityIdByAkeneoUuidAsync(
+                 AkeneoEntityType.Product, uuid, NopEntityType.ProductAttributeCombination) is > 0))
+            return null;
+
+        var sku = source.Identifier?.Trim();
+        if (!string.IsNullOrWhiteSpace(sku) &&
+            (await productService.GetProductBySkuAsync(sku) != null ||
+             (productAttributeService != null &&
+              await productAttributeService.GetProductAttributeCombinationBySkuAsync(sku) != null)))
+            return null;
+
+        return reason;
     }
 
     private async Task<string> GetUpdateOnlySkipReasonAsync(

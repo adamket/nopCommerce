@@ -485,150 +485,78 @@
                     </div>
 
                     <transition name="akeneo-detail-slide">
-                        <div v-if="isCombinationMode" class="card akeneo-mapping-card">
-                            <div class="card-header">
+                        <div v-if="isCombinationMode" class="card akeneo-mapping-card akeneo-axis-card">
+                            <div class="card-header akeneo-axis-header">
                                 <h3 class="card-title">
-                                    <i class="fas fa-random"></i>
-                                    Axis mappings
+                                    <button type="button" class="akeneo-attribute-group-toggle akeneo-axis-toggle"
+                                            aria-controls="axis-mapping-list" v-bind:aria-expanded="axisMappingsOpen"
+                                            v-on:click="axisMappingsOpen = !axisMappingsOpen">
+                                        <i class="fas fa-chevron-right chevron" aria-hidden="true"></i>
+                                        Axis mappings
+                                        <span class="akeneo-group-count" v-text="form.axisMappings.length"></span>
+                                    </button>
                                 </h3>
+                                <button type="button" class="btn btn-default" v-on:click="addAxisMapping">
+                                    <i class="fas fa-plus" aria-hidden="true"></i> Add axis mapping
+                                </button>
                             </div>
-
-                            <div class="card-body">
-                                <div class="alert alert-info">
-                                    Map each Akeneo variant axis to a nopCommerce product attribute.
-                                    These mappings are used only for product attribute combination mode.
-                                </div>
-
-                                <div class="akeneo-list">
-                                    <div class="akeneo-group-row">
-                                        <a href="#"
-                                           class="akeneo-attribute-group-toggle"
-                                           v-bind:aria-expanded="axisMappingsOpen ? 'true' : 'false'"
-                                           v-on:click.prevent="axisMappingsOpen = !axisMappingsOpen">
-                                            <i class="fas fa-chevron-right chevron"></i>
-                                            Axis mappings
-                                            <span class="akeneo-group-count" v-text="form.axisMappings.length"></span>
-                                        </a>
-
-                                        <button type="button"
-                                                class="btn btn-default ml-auto"
-                                                v-on:click="addAxisMapping">
-                                            <i class="fas fa-plus-square"></i>
-                                            Add axis mapping
-                                        </button>
+                            <div v-show="axisMappingsOpen" id="axis-mapping-list" class="card-body akeneo-group-items akeneo-axis-list">
+                                <p v-if="!form.axisMappings.length" class="mb-0 text-muted">No axes mapped.</p>
+                                <div v-for="(row, index) in form.axisMappings" v-bind:key="row.uid" class="akeneo-row-shell">
+                                    <div class="akeneo-row akeneo-axis-row" v-bind:class="axisRowClass(row)">
+                                        <div>
+                                            <input type="hidden" v-bind:name="axisName(index, 'Id')" v-bind:value="row.id" />
+                                            <input type="hidden" v-bind:name="axisName(index, 'FamilyVariantImportConfigurationId')"
+                                                   v-bind:value="row.familyVariantImportConfigurationId" />
+                                            <input type="hidden" v-bind:name="axisName(index, 'AkeneoVariantAxisLevel')" v-bind:value="row.akeneoVariantAxisLevel" />
+                                            <label v-bind:for="'axis-code-' + row.uid">Akeneo attribute code</label>
+                                            <input type="text" class="form-control" v-bind:id="'axis-code-' + row.uid"
+                                                   v-bind:name="axisName(index, 'AkeneoAttributeCode')" v-model="row.akeneoAttributeCode" placeholder="color" />
+                                        </div>
+                                        <div>
+                                            <label v-bind:for="'axis-target-' + row.uid">nopCommerce product attribute</label>
+                                            <akeneo-search-select v-bind:input-id="'axis-target-' + row.uid" item-name="nopCommerce product attribute"
+                                                                  v-model="row.nopProductAttributeId" v-bind:options="comboOptions(availableProductAttributes, true)"
+                                                                  placeholder="Search product attributes"></akeneo-search-select>
+                                            <input type="hidden" v-bind:name="axisName(index, 'NopProductAttributeId')" v-bind:value="row.nopProductAttributeId ?? ''" />
+                                        </div>
+                                        <div>
+                                            <label v-bind:for="'option-name-' + row.uid">Combination option name template</label>
+                                            <input class="form-control" v-bind:id="'option-name-' + row.uid" v-bind:aria-describedby="'axis-template-help-' + row.uid"
+                                                   v-bind:name="axisName(index, 'OptionNameTemplate')" v-model="row.optionNameTemplate"
+                                                   placeholder="{coffee_weight:amount} oz · {coffee_bag_count}" />
+                                            <small class="form-text text-muted" v-bind:id="'axis-template-help-' + row.uid">Leave blank to use the axis label.</small>
+                                        </div>
+                                        <div class="akeneo-axis-controls">
+                                            <div class="akeneo-axis-order">
+                                                <label v-bind:for="'axis-order-' + row.uid">Display order</label>
+                                                <input type="number" class="form-control" v-bind:id="'axis-order-' + row.uid"
+                                                       v-bind:name="axisName(index, 'DisplayOrder')" v-model.number="row.displayOrder" />
+                                            </div>
+                                            <label class="akeneo-switch">
+                                                <input type="checkbox" v-bind:name="axisName(index, 'IsRequired')" value="true" v-model="row.isRequired" />
+                                                <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                                <span class="akeneo-switch-text">Required</span>
+                                            </label>
+                                            @* Must follow the checkbox: a bool binds from the first posted value. *@
+                                            <input type="hidden" v-bind:name="axisName(index, 'IsRequired')" value="false" />
+                                            <button type="button" class="btn btn-default akeneo-axis-remove" v-on:click="removeAxisMapping(index)"
+                                                    v-bind:aria-label="'Remove axis mapping ' + (row.akeneoAttributeCode || (index + 1))">
+                                                <i class="far fa-trash-alt" aria-hidden="true"></i> Remove
+                                            </button>
+                                        </div>
                                     </div>
-
                                     <transition name="akeneo-detail-slide">
-                                        <div v-show="axisMappingsOpen" class="akeneo-group-items">
-                                            <div v-for="(row, index) in form.axisMappings"
-                                                 v-bind:key="row.uid"
-                                                 class="akeneo-row-shell">
-                                                <div class="akeneo-row"
-                                                     v-bind:class="axisRowClass(row)">
-                                                    <div class="akeneo-col">
-                                                        <div class="form-group mb-0">
-                                                            <label>Akeneo attribute code</label>
-
-                                                            <input type="hidden"
-                                                                   v-bind:name="axisName(index, 'Id')"
-                                                                   v-bind:value="row.id" />
-
-                                                            <input type="hidden"
-                                                                   v-bind:name="axisName(index, 'FamilyVariantImportConfigurationId')"
-                                                                   v-bind:value="row.familyVariantImportConfigurationId" />
-
-                                                            <input type="hidden"
-                                                                   v-bind:name="axisName(index, 'AkeneoVariantAxisLevel')"
-                                                                   v-bind:value="row.akeneoVariantAxisLevel" />
-
-                                                            <input type="text"
-                                                                   class="form-control"
-                                                                   v-bind:name="axisName(index, 'AkeneoAttributeCode')"
-                                                                   v-model="row.akeneoAttributeCode"
-                                                                   placeholder="color" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="akeneo-col">
-                                                        <div class="form-group mb-0">
-                                                            <label>nopCommerce product attribute</label>
-                                                            <akeneo-search-select item-name="nopCommerce product attribute"
-                                                                                  v-model="row.nopProductAttributeId"
-                                                                                  v-bind:options="comboOptions(availableProductAttributes, true)"
-                                                                                  placeholder="Search product attributes"></akeneo-search-select>
-                                                            <input type="hidden"
-                                                                   v-bind:name="axisName(index, 'NopProductAttributeId')"
-                                                                   v-bind:value="row.nopProductAttributeId ?? ''" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="akeneo-col">
-                                                        <label v-bind:for="'option-name-' + row.uid">Combination option name template</label>
-                                                        <input class="form-control" v-bind:id="'option-name-' + row.uid"
-                                                               v-bind:name="axisName(index, 'OptionNameTemplate')" v-model="row.optionNameTemplate"
-                                                               placeholder="{coffee_weight:amount} oz · {coffee_bag_count}" />
-                                                        <small>Leave blank to use the axis label. Each option on a product shares one name.</small>
-                                                    </div>
-
-                                                    <div class="akeneo-col">
-                                                        <label class="akeneo-switch">
-                                                            <input type="checkbox"
-                                                                   v-bind:name="axisName(index, 'IsRequired')"
-                                                                   value="true"
-                                                                   v-model="row.isRequired" />
-                                                            <span class="akeneo-switch-track">
-                                                                <span class="akeneo-switch-thumb"></span>
-                                                            </span>
-                                                            <span class="akeneo-switch-text">
-                                                                {{ row.isRequired ? 'Required' : 'Optional' }}
-                                                            </span>
-                                                        </label>
-                                                        @* Must follow the checkbox: a bool binds from the first posted value. *@
-                                                        <input type="hidden"
-                                                               v-bind:name="axisName(index, 'IsRequired')"
-                                                               value="false" />
-                                                    </div>
-
-                                                    <div class="akeneo-col">
-                                                        <div class="form-group mb-0">
-                                                            <label>Display order</label>
-                                                            <input type="number"
-                                                                   class="form-control"
-                                                                   v-bind:name="axisName(index, 'DisplayOrder')"
-                                                                   v-model.number="row.displayOrder" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="akeneo-col akeneo-col-actions">
-                                                        <button type="button"
-                                                                class="btn btn-default"
-                                                                v-on:click="removeAxisMapping(index)">
-                                                            <i class="far fa-trash-alt"></i>
-                                                            Remove
-                                                        </button>
-                                                    </div>
+                                        <div v-if="axisRowNeedsAttention(row)" class="akeneo-mapping-detail">
+                                            <div class="akeneo-row-errors mb-0">
+                                                <i class="fas fa-exclamation-triangle akeneo-row-errors-icon"></i>
+                                                <div>
+                                                    <div class="akeneo-row-errors-title">Mapping is incomplete</div>
+                                                    <ul>
+                                                        <li v-if="!row.akeneoAttributeCode">Akeneo attribute code is required.</li>
+                                                        <li v-if="!row.nopProductAttributeId">nopCommerce product attribute is required.</li>
+                                                    </ul>
                                                 </div>
-
-                                                <transition name="akeneo-detail-slide">
-                                                    <div v-if="axisRowNeedsAttention(row)" class="akeneo-mapping-detail">
-                                                        <div class="akeneo-row-errors mb-0">
-                                                            <i class="fas fa-exclamation-triangle akeneo-row-errors-icon"></i>
-                                                            <div>
-                                                                <div class="akeneo-row-errors-title">
-                                                                    Mapping is incomplete
-                                                                </div>
-                                                                <ul>
-                                                                    <li v-if="!row.akeneoAttributeCode">
-                                                                        Akeneo attribute code is required.
-                                                                    </li>
-                                                                    <li v-if="!row.nopProductAttributeId">
-                                                                        nopCommerce product attribute is required.
-                                                                    </li>
-                                                                </ul>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </transition>
                                             </div>
                                         </div>
                                     </transition>

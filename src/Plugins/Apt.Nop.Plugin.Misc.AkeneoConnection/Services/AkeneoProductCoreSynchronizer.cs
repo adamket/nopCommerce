@@ -47,9 +47,12 @@ public partial class AkeneoProductCoreSynchronizer
             context.Product = context.ExistingProduct;
             context.StopProcessing = true;
             context.Result.NopProductId = context.ExistingProduct?.Id ?? 0;
-            context.Result.AddMessage(
-                plan.ImportBlockReason ??
-                "The saved sync profile does not allow this product write.");
+            var reason = plan.ImportBlockReason ??
+                "The saved sync profile does not allow this product write.";
+            if (plan.ImportBlockIsWarning)
+                context.Result.AddWarning(reason);
+            else
+                context.Result.AddMessage(reason);
             return;
         }
 

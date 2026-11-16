@@ -56,7 +56,8 @@ public class AkeneoCategoryContentSyncService(
     IAkeneoSyncItemLogService syncItemLogService,
     IProductService productService,
     IRepository<UrlRecord> urlRecordRepository,
-    SeoSettings seoSettings)
+    SeoSettings seoSettings,
+    Microsoft.Extensions.DependencyInjection.IServiceScopeFactory stopScopes = null)
     : IAkeneoCategoryContentSyncService
 {
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(30);
@@ -82,9 +83,10 @@ public class AkeneoCategoryContentSyncService(
         CancellationToken cancellationToken = default)
     {
         var result = new AkeneoCategoryContentRunResult();
-        var context = await LoadAsync(akeneoCategoryCode, result, cancellationToken);
+        var context = await LoadTargetsAsync(akeneoCategoryCode, result);
         if (context == null)
             return result;
+        await LoadValuesAsync(context, cancellationToken);
 
         foreach (var (code, nopCategoryId) in context.Targets)
         {
@@ -116,10 +118,11 @@ public class AkeneoCategoryContentSyncService(
         }
 
         AkeneoSyncRunRecord runRecord = null;
+        AkeneoRunStopMonitor monitor = null;
 
         try
         {
-            var context = await LoadAsync(akeneoCategoryCode, result, cancellationToken);
+            var context = await LoadTargetsAsync(akeneoCategoryCode, result);
             if (context == null)
                 return result;
 
@@ -135,7 +138,12 @@ public class AkeneoCategoryContentSyncService(
             };
             await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
             await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+            await using var stop = new AkeneoRunStopMonitor(stopScopes, runRecord.Id, cancellationToken);
+            monitor = stop;
+            cancellationToken = stop.Token;
             result.SyncRunRecordId = runRecord.Id;
+
+            await LoadValuesAsync(context, cancellationToken);
 
             foreach (var (code, nopCategoryId) in context.Targets)
             {
@@ -191,7 +199,7 @@ public class AkeneoCategoryContentSyncService(
             if (runRecord != null)
             {
                 runRecord.SyncStatusId = (int)(ex is OperationCanceledException ? SyncStatus.Cancelled : SyncStatus.Failed);
-                runRecord.ErrorSummary = CommonHelper.EnsureMaximumLength(ex.Message, 4000);
+                runRecord.ErrorSummary = CommonHelper.EnsureMaximumLength(monitor?.Reason ?? ex.Message, 4000);
                 Finish(runRecord, result);
                 await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
             }
@@ -215,21 +223,20 @@ public class AkeneoCategoryContentSyncService(
     {
         public IList<AkeneoCategoryContentMapping> Mappings { get; init; }
 
-        public IDictionary<int, string> LanguageNames { get; init; }
+        public IDictionary<int, string> LanguageNames { get; set; }
 
         /// <summary>Translation locales that have a nopCommerce language with the matching culture.</summary>
-        public IList<(string Locale, int LanguageId)> Translations { get; init; }
+        public IList<(string Locale, int LanguageId)> Translations { get; set; }
 
-        public IDictionary<string, AkeneoCategoryDefinition> AkeneoCategories { get; init; }
+        public IDictionary<string, AkeneoCategoryDefinition> AkeneoCategories { get; set; }
 
         public IList<(string Code, int NopCategoryId)> Targets { get; init; }
     }
 
-    /// <summary>Reads mappings, mapped categories and Akeneo; null (with a message) when there is nothing to do.</summary>
-    private async Task<RunContext> LoadAsync(
+    /// <summary>Reads configured mappings and their destination categories; null (with a message) when there is nothing to do.</summary>
+    private async Task<RunContext> LoadTargetsAsync(
         string akeneoCategoryCode,
-        AkeneoCategoryContentRunResult result,
-        CancellationToken cancellationToken)
+        AkeneoCategoryContentRunResult result)
     {
         var mappings = await contentMappingService.GetAllMappingsAsync();
         if (mappings.Count == 0)
@@ -258,13 +265,18 @@ public class AkeneoCategoryContentSyncService(
             return null;
         }
 
-        var akeneoCategories = (await apiClient.GetCategoriesWithValuesAsync(cancellationToken: cancellationToken))
+        return new RunContext { Mappings = mappings, Targets = targets };
+    }
+
+    private async Task LoadValuesAsync(RunContext context, CancellationToken cancellationToken)
+    {
+        context.AkeneoCategories = (await apiClient.GetCategoriesWithValuesAsync(cancellationToken: cancellationToken))
             .Where(category => !string.IsNullOrWhiteSpace(category.Code))
             .GroupBy(category => category.Code.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         var languages = await languageService.GetAllLanguagesAsync(showHidden: true);
-        var languageNames = languages.ToDictionary(language => language.Id, language => language.Name);
+        context.LanguageNames = languages.ToDictionary(language => language.Id, language => language.Name);
 
         // A locale with no nopCommerce language of that culture is skipped, as for products.
         var translations = new List<(string Locale, int LanguageId)>();
@@ -276,14 +288,7 @@ public class AkeneoCategoryContentSyncService(
                 translations.Add((locale, language.Id));
         }
 
-        return new RunContext
-        {
-            Mappings = mappings,
-            LanguageNames = languageNames,
-            Translations = translations,
-            AkeneoCategories = akeneoCategories,
-            Targets = targets
-        };
+        context.Translations = translations;
     }
 
     #endregion

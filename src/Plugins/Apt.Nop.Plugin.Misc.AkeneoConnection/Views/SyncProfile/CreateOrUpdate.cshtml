@@ -118,6 +118,7 @@
             list = Url.Action("List", "AkeneoSyncProfile"),
             progress = Url.Action("Progress", "AkeneoSyncProfile"),
             lockStatus = Url.Action("LockStatus", "AkeneoSyncProfile"),
+            stopSync = Url.Action("StopCurrentSync", "AkeneoSyncProfile"),
             releaseLock = Url.Action("ReleaseLock", "AkeneoSyncProfile"),
             edit = isEdit ? Url.Action("Edit", "AkeneoSyncProfile", new { id = Model.Id }) : null,
             delete = isEdit ? Url.Action("Delete", "AkeneoSyncProfile", new { id = Model.Id }) : null,
@@ -233,7 +234,8 @@
                                     <span v-if="lock.runStatus">{{ lock.runStatus }} · </span>
                                     started {{ lock.acquired }} · last check-in {{ lock.heartbeatMinutesAgo }} min ago ({{ lock.lastHeartbeat }}) · expires {{ lock.expires }}
                                 </div>
-                                <div class="mt-1" v-if="lockLooksAbandoned">
+                                <div class="mt-1" v-if="lock.stopping" role="status">A stop was requested. The worker holds the lock until cleanup finishes.</div>
+                                <div class="mt-1" v-else-if="lockLooksAbandoned">
                                     Release the lock to run a sync now instead of waiting for it to expire.
                                 </div>
                                 <div class="mt-1" v-else>
@@ -242,6 +244,11 @@
                                 <div class="mt-1 akeneo-dim">The lock is shared by every sync profile and Catalog Binding.</div>
                             </div>
                             <div class="akeneo-lock-alert-actions">
+                                <button v-if="lock.canStop" type="button" class="btn btn-sm btn-danger"
+                                        v-bind:disabled="stopBusy || lock.stopping" v-on:click="confirmStop">
+                                    <i class="fas fa-stop" aria-hidden="true"></i>
+                                    {{ lock.stopping ? 'Stopping…' : 'Stop current sync' }}
+                                </button>
                                 <button type="button"
                                         class="btn btn-sm btn-default"
                                         v-bind:disabled="lockBusy"
@@ -997,6 +1004,8 @@
                     progressGeneration: 0,
                     lock: null,
                     lockBusy: false,
+                    stopBusy: false,
+                    lockTimer: null,
                     toasts: [],
                     leaving: false,
                     confirm: { visible: false, title: '', message: '', buttonText: '', buttonClass: '', icon: '', action: null },
@@ -1132,11 +1141,12 @@
                     if (active) this.pollProgress(generation);
                 }
             },
-            beforeUnmount: function () { this.progressGeneration++; },
+            beforeUnmount: function () { this.progressGeneration++; clearInterval(this.lockTimer); },
             mounted: function () {
                 var self = this;
 
                 this.loadLock();
+                this.lockTimer = setInterval(() => { if (!document.hidden && !this.lockBusy && !this.stopBusy) this.loadLock(); }, 5000);
 
                 window.addEventListener('beforeunload', function (event) {
                     if (self.isDirty && !self.leaving) {
@@ -1343,8 +1353,8 @@
                     });
                 },
                 loadLock: function () {
+                    if (this.lockBusy) return;
                     var self = this;
-
                     this.lockBusy = true;
 
                     $.ajax({
@@ -1356,6 +1366,31 @@
                         self.lock = status;
                     }).always(function () {
                         self.lockBusy = false;
+                    });
+                },
+                confirmStop: function () {
+                    const runId = this.lock.runRecordId;
+                    this.openConfirm({
+                        title: 'Stop current sync',
+                        message: 'Stop run ' + runId + '? Completed changes are kept. The worker releases the lock after it stops.',
+                        buttonText: 'Stop current sync',
+                        buttonClass: 'btn-danger',
+                        icon: 'fas fa-stop',
+                        action: () => this.stopSync(runId)
+                    });
+                },
+                stopSync: function (runId) {
+                    this.stopBusy = true;
+                    $.ajax({
+                        type: 'POST',
+                        url: appData.urls.stopSync,
+                        dataType: 'json',
+                        data: addAntiForgeryToken({ runRecordId: runId })
+                    }).fail(xhr => {
+                        this.saveError = xhr.responseJSON?.message || 'Could not request a stop. Refresh the lock status and try again.';
+                    }).always(() => {
+                        this.stopBusy = false;
+                        this.loadLock();
                     });
                 },
                 confirmReleaseLock: function () {

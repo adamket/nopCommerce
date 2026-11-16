@@ -3230,3 +3230,89 @@
 @media (prefers-reduced-motion: reduce) {
   .akeneo-connection .akeneo-sync-progress-fill { transition: none; }
 }
+
+/* Family mapping editor */
+.akeneo-connection .akeneo-axis-card {
+  container-type: inline-size;
+  container-name: axis-mappings;
+  --ak-row-edge-width: 4px;
+}
+
+.akeneo-connection .akeneo-axis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+
+.akeneo-connection .akeneo-axis-header::after {
+  display: none;
+}
+
+.akeneo-connection .akeneo-axis-toggle {
+  background: transparent;
+  border: 0;
+  padding: .25rem 0;
+  font: inherit;
+}
+
+.akeneo-connection .akeneo-axis-list {
+  padding: 1rem;
+}
+
+.akeneo-connection .akeneo-axis-list > .akeneo-row-shell,
+.akeneo-connection .akeneo-axis-list .akeneo-mapping-detail,
+.akeneo-connection .akeneo-axis-row > div {
+  min-width: 0;
+}
+
+.akeneo-connection .akeneo-row.akeneo-axis-row {
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.akeneo-connection .akeneo-axis-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+
+.akeneo-connection .akeneo-axis-order {
+  width: 7rem;
+}
+
+.akeneo-connection .akeneo-axis-order label {
+  white-space: nowrap;
+}
+
+.akeneo-connection .akeneo-axis-controls .akeneo-switch {
+  min-height: 2.375rem;
+  margin: 0;
+}
+
+@container axis-mappings (max-width: 70rem) {
+  .akeneo-connection .akeneo-row.akeneo-axis-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container axis-mappings (max-width: 43rem) {
+  .akeneo-connection .akeneo-row.akeneo-axis-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .akeneo-connection .akeneo-axis-controls {
+    padding-top: .75rem;
+    border-top: 1px solid var(--ak-line);
+  }
+
+  .akeneo-connection .akeneo-axis-remove {
+    margin-left: auto;
+  }
+}

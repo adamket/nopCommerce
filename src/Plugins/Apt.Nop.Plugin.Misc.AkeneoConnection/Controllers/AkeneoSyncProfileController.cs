@@ -26,7 +26,9 @@ public class AkeneoSyncProfileController(
     IDateTimeHelper dateTimeHelper,
     IAkeneoSyncLeaseService syncLeaseService,
     IAkeneoCombinationAvailabilityService combinationAvailabilityService,
-    IAkeneoMappingChangeTracker mappingChangeTracker)
+    IAkeneoMappingChangeTracker mappingChangeTracker,
+    IAkeneoSyncItemLogService itemLogs,
+    global::Nop.Core.IWorkContext workContext)
     : BaseAdminController
 {
     // A live run renews its lease every 5 minutes, and the longest step between
@@ -55,6 +57,33 @@ public class AkeneoSyncProfileController(
             AkeneoConnectionConstants.CatalogWriterLockKey);
 
         return Json(await BuildLockStatusAsync(lease));
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpPost]
+    public async Task<IActionResult> StopCurrentSync(int runRecordId)
+    {
+        var lease = await syncLeaseService.GetLeaseAsync(AkeneoConnectionConstants.CatalogWriterLockKey);
+        if (runRecordId <= 0 || lease?.SyncRunRecordId != runRecordId)
+            return Conflict(new { message = "That run no longer holds the catalog lock." });
+
+        var run = await syncRunRecordService.GetAkeneoSyncRunRecordByIdAsync(runRecordId);
+        if (run?.SyncStatusId != (int)SyncStatus.Started)
+            return Conflict(new { message = "That run has already finished." });
+
+        if (await itemLogs.GetStopRequestAsync(runRecordId) == null)
+        {
+            var customer = workContext.OriginalCustomerIfImpersonated ?? await workContext.GetCurrentCustomerAsync();
+            await itemLogs.InsertAkeneoSyncItemLogAsync(new AkeneoSyncItemLog
+            {
+                SyncRunRecordId = runRecordId,
+                ActionTypeId = (int)SyncItemActionType.StopRequested,
+                AkeneoIdentifier = "Stop requested",
+                Message = $"Stop requested by administrator (customer ID {customer.Id}).",
+                CreatedOnUtc = DateTime.UtcNow
+            });
+        }
+        return Json(new { success = true });
     }
 
     /// <summary>
@@ -145,6 +174,8 @@ public class AkeneoSyncProfileController(
         return new
         {
             held = true,
+            canStop = runRecord?.SyncStatusId == (int)SyncStatus.Started,
+            stopping = runRecord != null && await itemLogs.GetStopRequestAsync(runRecord.Id) != null,
             expired = lease.ExpiresOnUtc <= now,
             stale = now - lease.HeartbeatOnUtc > StaleHeartbeatAge,
             heartbeatMinutesAgo = (int)Math.Max(0, (now - lease.HeartbeatOnUtc).TotalMinutes),

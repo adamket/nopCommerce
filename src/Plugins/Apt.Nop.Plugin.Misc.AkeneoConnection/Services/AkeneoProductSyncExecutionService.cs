@@ -14,7 +14,8 @@ public class AkeneoProductSyncExecutionService(
     IAkeneoProductBatchImportRequestFactory requestFactory,
     IAkeneoSyncProfileService syncProfileService,
     IAkeneoSyncLeaseService syncLeaseService,
-    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null)
+    IAkeneoCombinationAvailabilityService combinationAvailabilityService = null,
+    Microsoft.Extensions.DependencyInjection.IServiceScopeFactory stopScopes = null)
     : IAkeneoProductSyncExecutionService
 {
     private async Task<string> BuildScopeHashAsync(AkeneoSyncProfile profile, AkeneoRunMode mode)
@@ -165,6 +166,8 @@ public class AkeneoProductSyncExecutionService(
 
             await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
             await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+            await using var stop = new AkeneoRunStopMonitor(stopScopes, runRecord.Id, cancellationToken);
+            cancellationToken = stop.Token;
 
             var request = requestFactory.CreateFromProfile(
                 profile,
@@ -182,7 +185,8 @@ public class AkeneoProductSyncExecutionService(
                 request,
                 runRecord,
                 profile.Id,
-                cancellationToken);
+                cancellationToken,
+                stop);
         }
         finally
         {
@@ -236,6 +240,8 @@ public class AkeneoProductSyncExecutionService(
 
             await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
             await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+            await using var stop = new AkeneoRunStopMonitor(stopScopes, runRecord.Id, cancellationToken);
+            cancellationToken = stop.Token;
 
             var request = requestFactory.CreateFromProfile(
                 profile,
@@ -284,7 +290,7 @@ public class AkeneoProductSyncExecutionService(
             {
                 runRecord.FinishedOnUtc = DateTime.UtcNow;
                 runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-                runRecord.ErrorSummary = "Product synchronization was canceled.";
+                runRecord.ErrorSummary = stop.Reason ?? "Product synchronization was canceled.";
                 await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
                 return new AkeneoProductSyncExecutionResult
@@ -294,7 +300,7 @@ public class AkeneoProductSyncExecutionService(
                     ProfileId = profile.Id,
                     SyncRunRecordId = runRecord.Id,
                     SyncStatus = SyncStatus.Cancelled,
-                    Message = "Akeneo product synchronization was canceled."
+                    Message = stop.Reason ?? "Akeneo product synchronization was canceled."
                 };
             }
             catch (Exception ex)
@@ -367,6 +373,8 @@ public class AkeneoProductSyncExecutionService(
 
             await syncRunRecordService.InsertAkeneoSyncRunRecordAsync(runRecord);
             await syncLeaseService.SetRunRecordAsync(lease, runRecord.Id);
+            await using var stop = new AkeneoRunStopMonitor(stopScopes, runRecord.Id, cancellationToken);
+            cancellationToken = stop.Token;
 
             var request = requestFactory.CreateFromProfile(
                 profile,
@@ -414,7 +422,7 @@ public class AkeneoProductSyncExecutionService(
             {
                 runRecord.FinishedOnUtc = DateTime.UtcNow;
                 runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-                runRecord.ErrorSummary = "Product model synchronization was canceled.";
+                runRecord.ErrorSummary = stop.Reason ?? "Product model synchronization was canceled.";
                 await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
                 return new AkeneoProductSyncExecutionResult
@@ -424,7 +432,7 @@ public class AkeneoProductSyncExecutionService(
                     ProfileId = profile.Id,
                     SyncRunRecordId = runRecord.Id,
                     SyncStatus = SyncStatus.Cancelled,
-                    Message = "Akeneo product model synchronization was canceled."
+                    Message = stop.Reason ?? "Akeneo product model synchronization was canceled."
                 };
             }
             catch (Exception ex)
@@ -455,7 +463,8 @@ public class AkeneoProductSyncExecutionService(
         AkeneoProductBatchImportRequest request,
         AkeneoSyncRunRecord runRecord,
         int? profileId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AkeneoRunStopMonitor stop)
     {
         try
         {
@@ -463,6 +472,8 @@ public class AkeneoProductSyncExecutionService(
                 request,
                 cancellationToken);
 
+            if (result.Canceled && stop.Reason != null)
+                result.Errors.Insert(0, stop.Reason);
             ApplyResultToRunRecord(runRecord, result);
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
@@ -472,7 +483,7 @@ public class AkeneoProductSyncExecutionService(
         {
             runRecord.FinishedOnUtc = DateTime.UtcNow;
             runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-            runRecord.ErrorSummary = "Product synchronization was canceled.";
+            runRecord.ErrorSummary = stop.Reason ?? "Product synchronization was canceled.";
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return new AkeneoProductSyncExecutionResult
@@ -482,7 +493,7 @@ public class AkeneoProductSyncExecutionService(
                 ProfileId = profileId,
                 SyncRunRecordId = runRecord.Id,
                 SyncStatus = SyncStatus.Cancelled,
-                Message = "Akeneo product synchronization was canceled."
+                Message = stop.Reason ?? "Akeneo product synchronization was canceled."
             };
         }
         catch (Exception ex)

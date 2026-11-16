@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Models;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services.Planning;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Sync;
@@ -59,6 +60,17 @@ public partial class AkeneoProductCoreSynchronizer
             plan.ImportAllowedByProfile = false;
             plan.ImportBlockReason =
                 "The saved sync profile is configured for updates only, so this missing nopCommerce product would be skipped.";
+            return;
+        }
+
+        if (isNew &&
+            context.SourceEntityType == AkeneoEntityType.Product &&
+            AkeneoIncompleteProductRule.GetCreationBlockReason(
+                context.Source, context.Request.Channel, context.Request.Locale) is { } incompleteReason)
+        {
+            plan.ImportAllowedByProfile = false;
+            plan.ImportBlockReason = incompleteReason;
+            plan.ImportBlockIsWarning = true;
             return;
         }
 

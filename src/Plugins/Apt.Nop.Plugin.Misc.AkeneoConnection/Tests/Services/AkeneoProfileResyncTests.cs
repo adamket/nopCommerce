@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Linq.Expressions;
 using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
@@ -128,6 +129,42 @@ public class AkeneoProfileResyncTests
         _batch.Setup(s => s.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>()))
             .Callback<AkeneoProductBatchImportRequest, CancellationToken>((request, _) => _sentRequest = request)
             .ReturnsAsync(new AkeneoProductBatchImportResult { CompletedAllPages = true });
+    }
+
+    [TestCase(SyncType.DeltaSync)]
+    [TestCase(SyncType.ManualProfileSync)]
+    public async Task Stop_cancels_the_named_run_and_retains_the_lease_until_the_worker_returns(SyncType type)
+    {
+        const string reason = "Stop requested by administrator (customer ID 7).";
+        var logs = new Mock<IAkeneoSyncItemLogService>();
+        logs.Setup(x => x.GetStopRequestAsync(41)).ReturnsAsync(reason);
+        using var services = new ServiceCollection().AddSingleton(logs.Object).BuildServiceProvider();
+        var workerStopping = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCleanup = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _batch.Setup(x => x.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(async (AkeneoProductBatchImportRequest _, CancellationToken token) =>
+            {
+                using var registration = token.Register(() => workerStopping.TrySetResult(true));
+                await finishCleanup.Task;
+                token.ThrowIfCancellationRequested();
+                return new AkeneoProductBatchImportResult();
+            });
+        var execution = new AkeneoProductSyncExecutionService(_batch.Object, _runs.Object, _factory, _profiles.Object,
+            _leases.Object, stopScopes: services.GetRequiredService<IServiceScopeFactory>());
+        var run = execution.ImportProductsByProfileAsync(_profile.Id, type);
+        try
+        {
+            await workerStopping.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            _leases.Verify(x => x.ReleaseAsync(It.IsAny<AkeneoSyncLease>()), Times.Never);
+        }
+        finally
+        {
+            finishCleanup.TrySetResult(true);
+        }
+        var result = await run;
+        Assert.That(result.SyncStatus, Is.EqualTo(SyncStatus.Cancelled));
+        Assert.That(_insertedRun!.ErrorSummary, Does.Contain(reason));
+        _leases.Verify(x => x.ReleaseAsync(It.Is<AkeneoSyncLease>(l => l.Id == 3)), Times.Once);
     }
 
     private AkeneoProductSyncExecutionService Execution() =>
