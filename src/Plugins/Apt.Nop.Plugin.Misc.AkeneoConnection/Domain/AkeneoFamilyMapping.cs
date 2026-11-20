@@ -1,6 +1,7 @@
 ﻿using Nop.Core;
 
 namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
+
 public class AkeneoFamilyMapping : BaseEntity
 {
     public string AkeneoFamilyCode { get; set; }
@@ -13,7 +14,8 @@ public class AkeneoFamilyMapping : BaseEntity
 
     // What decides a managed combination's availability; only read when
     // ManageVariantsByEnabledStatus is on (it has kept its name since it was the only source).
-    public int CombinationAvailabilitySourceId { get; set; } = (int)AkeneoCombinationAvailabilitySource.PublishedRule;
+    public int CombinationAvailabilitySourceId { get; set; } =
+        (int)AkeneoCombinationAvailabilitySource.PublishedRule;
 
     public int VariantRelationshipModeId { get; set; }
 
@@ -29,6 +31,8 @@ public class AkeneoFamilyMapping : BaseEntity
     // that set the display order of variant values; empty leaves values in the order
     // they were first created.
     public string VariantDisplayOrderKeys { get; set; }
+
+    public bool AutomaticallyPreselectVariant { get; set; } = true;
 
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
 
@@ -72,8 +76,6 @@ public class AkeneoFamilyMapping : BaseEntity
     }
 }
 
-
-
 /// <summary>What decides whether a managed attribute combination exists.</summary>
 public enum AkeneoCombinationAvailabilitySource
 {
@@ -84,7 +86,7 @@ public enum AkeneoCombinationAvailabilitySource
     /// The variant's computed Published mapping (Variant product role): false removes the
     /// combination, true creates it, a held (skipped) mapping leaves it as it is.
     /// </summary>
-    PublishedRule = 10
+    PublishedRule = 10,
 }
 
 public enum AkeneoVariantRelationshipMode
@@ -95,7 +97,7 @@ public enum AkeneoVariantRelationshipMode
 
     AssociatedToProductAttributeValue = 20,
 
-    GroupedProducts = 30
+    GroupedProducts = 30,
 }
 
 /// <summary>
@@ -113,12 +115,12 @@ public enum AkeneoProductModelHierarchyMode
     /// Walk to the root product model. Intermediate submodels contribute
     /// inherited values and variant axes, but are not imported as products.
     /// </summary>
-    RootProductModel = 10
+    RootProductModel = 10,
 }
 
 public enum AkeneoVariantRelationshipSource
 {
     ExistingNopParent = 10,
 
-    AkeneoFamilyConfiguration = 20
+    AkeneoFamilyConfiguration = 20,
 }

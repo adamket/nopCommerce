@@ -15,7 +15,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public bool ManageVariantsByEnabledStatus { get; set; } = true;
 
-    public int CombinationAvailabilitySourceId { get; set; } = (int)Domain.AkeneoCombinationAvailabilitySource.PublishedRule;
+    public int CombinationAvailabilitySourceId { get; set; } =
+        (int)Domain.AkeneoCombinationAvailabilitySource.PublishedRule;
 
     public int VariantRelationshipModeId { get; set; }
 
@@ -28,6 +29,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
     public string VariantDisplayOrderKeys { get; set; }
+
+    public bool AutomaticallyPreselectVariant { get; set; } = true;
 
     public bool HideChildProductsWhenRepresentedByParent { get; set; } = true;
 
@@ -51,8 +54,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
     public IList<AkeneoFamilyVariantAxisMappingModel> AxisMappings { get; set; } =
         new List<AkeneoFamilyVariantAxisMappingModel>();
 
-
-    public IList<AkeneoFamilySubModelRuleModel> SubModelRules { get; set; } = new List<AkeneoFamilySubModelRuleModel>();
+    public IList<AkeneoFamilySubModelRuleModel> SubModelRules { get; set; } =
+        new List<AkeneoFamilySubModelRuleModel>();
 
     public IList<SelectListItem> AvailableVariantRelationshipModes { get; set; } =
         new List<SelectListItem>();
@@ -67,10 +70,10 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public IList<SelectListItem> AvailableWarehouses { get; set; } = new List<SelectListItem>();
 
-    public IList<SelectListItem> AvailableProductTemplates { get; set; } = new List<SelectListItem>();
-
-    public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } =
+    public IList<SelectListItem> AvailableProductTemplates { get; set; } =
         new List<SelectListItem>();
+
+    public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } = new List<SelectListItem>();
 
     /// <summary>
     /// Set when the selected Akeneo family is missing or could not be loaded.

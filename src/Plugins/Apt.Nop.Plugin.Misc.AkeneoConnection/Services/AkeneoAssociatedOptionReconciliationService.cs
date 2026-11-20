@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Transactions;
 using System.Xml.Linq;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
@@ -79,7 +78,8 @@ public class AkeneoAssociatedOptionReconciliationService(
                 continue;
             }
 
-            var sourceKeys = await GetBranchInventoryAsync(modelCodes[0], cancellationToken, renewLease);
+            var branch = await new AkeneoVariantBranchReader(apiClient).ReadAsync(modelCodes[0], cancellationToken, renewLease);
+            var sourceKeys = branch.Select(AkeneoVariantBranchReader.SourceKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (sourceKeys.Count == 0 || sourceKeys.Any(key =>
                     !_observations.TryGetValue(key, out var observation) || observation.ProductId <= 0))
             {
@@ -132,62 +132,6 @@ public class AkeneoAssociatedOptionReconciliationService(
         return removedCount;
     }
 
-    private async Task<HashSet<string>> GetBranchInventoryAsync(string rootCode,
-        CancellationToken cancellationToken, Func<Task> renewLease)
-    {
-        var sourceKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var modelCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootCode };
-        var pendingModels = new Queue<string>();
-        pendingModels.Enqueue(rootCode);
-        while (pendingModels.TryDequeue(out var modelCode))
-        {
-            var search = JsonSerializer.Serialize(new
-            {
-                parent = new[] { new { @operator = "IN", value = new[] { modelCode } } }
-            });
-            foreach (var model in await ReadAllPagesAsync(search, true, cancellationToken, renewLease))
-            {
-                if (string.IsNullOrWhiteSpace(model.Code) || !modelCodes.Add(model.Code) ||
-                    !string.Equals(model.Parent, modelCode, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Associated-option cleanup received an invalid or repeated product-model branch.");
-                pendingModels.Enqueue(model.Code);
-            }
-            foreach (var source in await ReadAllPagesAsync(search, false, cancellationToken, renewLease))
-            {
-                if (!string.Equals(source.Parent, modelCode, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Associated-option cleanup received a product outside the requested branch.");
-                var key = SourceKey(source) ?? throw new InvalidOperationException(
-                    "Associated-option cleanup received a product without a source identity.");
-                sourceKeys.Add(key);
-            }
-        }
-        return sourceKeys;
-    }
-
-    private async Task<List<AkeneoProductDefinition>> ReadAllPagesAsync(string search, bool models,
-        CancellationToken cancellationToken, Func<Task> renewLease)
-    {
-        var products = new List<AkeneoProductDefinition>();
-        var cursors = new HashSet<string>(StringComparer.Ordinal);
-        string cursor = null;
-        do
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (renewLease != null)
-                await renewLease();
-            AkeneoProductPageResult page = models
-                ? await apiClient.GetProductModelsPageAsync(100, cursor, search, cancellationToken)
-                : await apiClient.GetProductsPageAsync(100, cursor, search, cancellationToken);
-            if (page?.Items == null || (page.Items.Count == 0 && page.HasNextPage))
-                throw new InvalidOperationException("Associated-option cleanup could not read a complete Akeneo inventory.");
-            products.AddRange(page.Items);
-            cursor = page.SearchAfter;
-            if (!string.IsNullOrWhiteSpace(cursor) && !cursors.Add(cursor))
-                throw new InvalidOperationException("Associated-option cleanup received a repeated paging cursor.");
-        } while (!string.IsNullOrWhiteSpace(cursor));
-        return products;
-    }
-
     private async Task<int> ApplyAsync(AkeneoProductBatchImportRequest request, RemovalPlan plan,
         CancellationToken cancellationToken)
     {
@@ -227,8 +171,6 @@ public class AkeneoAssociatedOptionReconciliationService(
                         Message = $"Replace all values removed obsolete option '{option.Name}' (value {option.Id}); associated product {option.AssociatedProductId} was preserved."
                     });
                 }
-                if (removed.Count > 0)
-                    await AkeneoAttributeValuePreselection.ApplyAsync(attributeService, plan.MappingId);
                 transaction.Complete();
             }
         }

@@ -90,6 +90,7 @@ public class AkeneoFamilyMappingModelFactory
             model.AssociatedProductAttributeId = configuration.AssociatedProductAttributeId;
             model.AssociatedValueNameTemplate = configuration.AssociatedValueNameTemplate;
             model.VariantDisplayOrderKeys = configuration.VariantDisplayOrderKeys;
+            model.AutomaticallyPreselectVariant = configuration.AutomaticallyPreselectVariant;
             model.HideChildProductsWhenRepresentedByParent = configuration.HideChildProductsWhenRepresentedByParent;
             model.NewProductTaxCategoryId = configuration.NewProductTaxCategoryId;
             model.NewProductIsShipEnabled = configuration.NewProductIsShipEnabled;

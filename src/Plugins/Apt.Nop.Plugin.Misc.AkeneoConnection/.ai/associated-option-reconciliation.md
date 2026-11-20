@@ -17,7 +17,7 @@ After all remote inventories have completed, obsolete associated options, includ
 legacy/manual options, are removed in per-mapping transactions. Simple products and
 ordinary attribute values are not deleted. Values referenced by combinations and
 deleted parent products are preserved. Deletions are logged, managed relation records
-are removed, and remaining values receive a default selection if necessary. Attribute
+are removed. Attribute
 caches and parent product events are handled after commit.
 
 Delta, single-item, resumed-cursor, failed, canceled, truncated, and incomplete runs
@@ -25,5 +25,22 @@ never perform this cleanup. Merge and Replace managed retain their existing beha
 Parents with no verified associated option in the run are outside this cleanup's scope;
 the existing tracked missing-product lifecycle policy remains separate.
 
+The family variant setting **Automatically preselect the first variant** defaults to
+enabled on installation and upgrade. After the batch and cleanup finish successfully,
+it selects the lowest final display order for new or existing parents with no selection.
+Disabling it preserves saved selections and prevents automatic variant preselection.
+Combination products select all values of one existing combination, ordered by the
+family's variant sort keys and then axis display order, with combination ID breaking ties.
+Associated options use display order and then value ID.
+
+Preselection checks every leaf in the parent's Akeneo branch, including all pages and
+submodels. Delta runs may use live bindings from earlier successful syncs for siblings
+outside the current run. Missing bindings, missing destinations, failed or incomplete
+runs, resumed cursors, and single-item imports defer selection. It respects the profile's
+existing-product write policy, preserves partial selections, and logs each changed parent.
+
 Deploy the updated plugin, restart nopCommerce, and run Resync with Replace all values.
+Include the updated `plugin.json` in deployment. Schema releases must increment its
+version as well as the migration timestamp, because nopCommerce skips plugin upgrade
+migrations when the installed and deployed plugin versions match.
 Repair is not required. Review removal entries and preservation warnings in the sync log.

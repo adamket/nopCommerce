@@ -74,6 +74,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncLeaseService, AkeneoSyncLeaseService>();
         services.AddScoped<IAkeneoCatalogReconciliationService, AkeneoCatalogReconciliationService>();
         services.AddScoped<AkeneoAssociatedOptionReconciliationService>();
+        services.AddScoped<AkeneoVariantPreselectionService>();
         services.AddScoped<IAkeneoCatalogBindingService, AkeneoCatalogBindingService>();
         services.AddScoped<IAkeneoWritePolicyGate, AkeneoWritePolicyGate>();
         services.AddScoped<IAkeneoVariantRepresentationCleanupService, AkeneoVariantRepresentationCleanupService>();

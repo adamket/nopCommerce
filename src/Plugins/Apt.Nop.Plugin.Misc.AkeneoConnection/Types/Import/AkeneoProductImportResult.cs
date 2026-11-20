@@ -19,6 +19,10 @@ public class AkeneoProductImportResult
     // A profile/write-policy skip must not authorize collection cleanup.
     internal bool AssociatedOptionsVerified { get; set; }
 
+    internal int? VariantFamilyMappingId { get; set; }
+
+    internal string VariantParentModelCode { get; set; }
+
     public AkeneoProductDestinationKind DestinationKind { get; set; } =
         AkeneoProductDestinationKind.NopProduct;
 

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
 
@@ -47,12 +48,19 @@ public static class AkeneoSubModelRuleMatcher
             rule.VariantTriggerValue);
     }
 
-    private static bool ValueMatches(string actual, string trigger) =>
-        !string.IsNullOrWhiteSpace(actual) &&
-        string.Equals(
-            actual.Trim(),
-            trigger?.Trim(),
-            StringComparison.OrdinalIgnoreCase);
+    private static bool ValueMatches(string actual, string trigger)
+    {
+        if (string.IsNullOrWhiteSpace(actual))
+            return false;
+
+        if (string.Equals(actual.Trim(), trigger?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Number attributes: Akeneo can return "10", 10 or "10.0000" for the value typed as 10.
+        return decimal.TryParse(actual.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var actualNumber) &&
+               decimal.TryParse(trigger?.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var triggerNumber) &&
+               actualNumber == triggerNumber;
+    }
 
     private static string GetAttributeValue(
         AkeneoProductDefinition item,

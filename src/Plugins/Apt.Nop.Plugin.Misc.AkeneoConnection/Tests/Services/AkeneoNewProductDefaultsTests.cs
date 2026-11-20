@@ -86,6 +86,15 @@ public class AkeneoNewProductDefaultsTests
         Assert.That(_inserted!.ManageInventoryMethod, Is.EqualTo(ManageInventoryMethod.DontManageStock));
     }
 
+    [TestCase(ManageInventoryMethod.DontManageStock)]
+    [TestCase(ManageInventoryMethod.ManageStock)]
+    [TestCase(ManageInventoryMethod.ManageStockByAttributes)]
+    public void Combination_parent_keeps_its_inventory_method(ManageInventoryMethod current)
+    {
+        Assert.That(AkeneoVariantRelationshipService.ParentInventoryMethod(
+            AkeneoVariantRelationshipMode.ProductAttributeCombinations, current), Is.EqualTo(current));
+    }
+
     [TestCase(ManageInventoryMethod.ManageStock)]
     [TestCase(ManageInventoryMethod.ManageStockByAttributes)]
     [TestCase(ManageInventoryMethod.DontManageStock)]

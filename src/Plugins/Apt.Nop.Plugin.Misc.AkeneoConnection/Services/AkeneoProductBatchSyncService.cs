@@ -53,7 +53,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoDeferredProductEvents deferredProductEvents = null,
     IAkeneoValueTemplateRenderer valueTemplateRenderer = null,
     AkeneoAssociatedOptionReconciliationService associatedOptionReconciliation = null,
-    IAkeneoCombinationPictureSynchronizer combinationPictureSynchronizer = null)
+    IAkeneoCombinationPictureSynchronizer combinationPictureSynchronizer = null,
+    AkeneoVariantPreselectionService variantPreselection = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -89,6 +90,7 @@ public class AkeneoProductBatchSyncService(
         request.MissingTokenWarnings = new AkeneoMissingTokenWarnings();
         request.Steps = new AkeneoSyncSteps((step, unit, done, total) => ReportProgress(request, step, unit, done, total));
         associatedOptionReconciliation?.Begin(request);
+        variantPreselection?.Begin();
         var result = new AkeneoProductBatchImportResult
         {
             SyncRunRecordId = request.SyncRunRecordId
@@ -341,6 +343,7 @@ public class AkeneoProductBatchSyncService(
                 }
 
                 associatedOptionReconciliation?.Observe(source, itemResult);
+                variantPreselection?.Observe(source, itemResult);
 
                 var committed = itemResult.Success && itemResult.ActionType != SyncItemActionType.Failed;
                 request.MissingTokenWarnings.Collect(itemResult, committed);
@@ -384,6 +387,11 @@ public class AkeneoProductBatchSyncService(
             if (associatedOptionReconciliation != null)
                 result.ReconciledCount += await associatedOptionReconciliation.ReconcileAsync(
                     request, result, parentProductCache, cancellationToken,
+                    async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
+
+            if (variantPreselection != null)
+                result.ReconciledCount += await variantPreselection.ApplyAsync(
+                    request, result, cancellationToken,
                     async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
 
             return result;
@@ -1504,6 +1512,8 @@ public class AkeneoProductBatchSyncService(
         {
             ApplyPreviousStateBinding(result, previousState);
             result.Sku = leafContext.Sku;
+            result.VariantFamilyMappingId = familyConfiguration?.Id;
+            result.VariantParentModelCode = hierarchy.EffectiveParentProductModel?.Code;
             result.ActionType = SyncItemActionType.Skipped;
             result.AddMessage(
                 "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this item.");
@@ -1568,6 +1578,8 @@ public class AkeneoProductBatchSyncService(
         // Parent product-model changes are logged and counted on the parent's
         // own entry (RelatedResults), so they no longer promote this leaf.
         ApplyVariantResult(result, variantResult, previousState);
+        result.VariantFamilyMappingId = familyConfiguration?.Id;
+        result.VariantParentModelCode = hierarchy.EffectiveParentProductModel?.Code;
         result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
 
         if (variantResult.Mode ==

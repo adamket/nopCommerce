@@ -37,6 +37,7 @@
             associatedProductAttributeId = Model.AssociatedProductAttributeId,
             associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
             variantDisplayOrderKeys = Model.VariantDisplayOrderKeys ?? string.Empty,
+            automaticallyPreselectVariant = Model.AutomaticallyPreselectVariant,
             hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
             newProductTaxCategoryId = Model.NewProductTaxCategoryId,
             newProductIsShipEnabled = Model.NewProductIsShipEnabled,
@@ -371,6 +372,19 @@
                                     </div>
                                 </transition>
 
+                                <div class="form-group">
+                                    <label class="akeneo-switch">
+                                        <input asp-for="AutomaticallyPreselectVariant" type="checkbox"
+                                               v-model="form.automaticallyPreselectVariant" />
+                                        <span class="akeneo-switch-track"><span class="akeneo-switch-thumb"></span></span>
+                                        <span class="akeneo-switch-text">Automatically preselect the first variant</span>
+                                    </label>
+                                    <div class="form-text">
+                                        After all variants have synced, select the lowest display order when the parent has no preselection.
+                                        Applies to new and existing parents using associated options or attribute combinations. Existing selections are preserved.
+                                    </div>
+                                </div>
+
                                 <transition name="akeneo-detail-slide">
                                     <div v-if="usesChildProducts" class="row">
                                         <div class="col-md-12">
@@ -682,14 +696,25 @@
                                                     <div class="form-group mb-0">
                                                         <label>Variant value</label>
 
-                                                        <akeneo-search-select item-name="Variant value"
-                                                                              v-model="row.variantTriggerValue"
-                                                                              v-bind:options="valueOptions(row.variantOptions, row.variantOptionsLoading)"
-                                                                              v-bind:disabled="!row.variantAxisAttributeCode || row.variantOptionsLoading"
-                                                                              placeholder="Search values"></akeneo-search-select>
-                                                        <input type="hidden"
+                                                        <template v-if="row.variantSupportsOptions">
+                                                            <akeneo-search-select item-name="Variant value"
+                                                                                  v-model="row.variantTriggerValue"
+                                                                                  v-bind:options="valueOptions(row.variantOptions, row.variantOptionsLoading)"
+                                                                                  v-bind:disabled="!row.variantAxisAttributeCode || row.variantOptionsLoading"
+                                                                                  placeholder="Search values"></akeneo-search-select>
+                                                            <input type="hidden"
+                                                                   v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
+                                                                   v-bind:value="row.variantTriggerValue ?? ''" />
+                                                        </template>
+
+                                                        @* Number attributes have no options: the value is typed and compared as a number. *@
+                                                        <input v-else
+                                                               type="text"
+                                                               class="form-control"
                                                                v-bind:name="subModelRuleName(index, 'VariantTriggerValue')"
-                                                               v-bind:value="row.variantTriggerValue ?? ''" />
+                                                               v-model.trim="row.variantTriggerValue"
+                                                               v-bind:disabled="!row.variantAxisAttributeCode"
+                                                               placeholder="Value to match" />
 
                                                        @*  <div class="form-text">
                                                             The Akeneo option code is saved, while the translated label is displayed.
@@ -1028,7 +1053,8 @@
                             subModelOptionsLoading: false,
                             subModelSupportsOptions: false,
                             variantOptions: [],
-                            variantOptionsLoading: false
+                            variantOptionsLoading: false,
+                            variantSupportsOptions: true
                         }))
                     }
                 };
@@ -1342,6 +1368,20 @@
                     return attribute?.supportsOptions === true;
                 },
 
+                // Select attributes pick an option code; number attributes take a typed value.
+                // An attribute the list doesn't describe keeps the option picker.
+                variantAttributeSupportsOptions(attributeCode) {
+                    if (!attributeCode)
+                        return true;
+
+                    const attribute =
+                        this.availableVariantAttributes.find(option =>
+                            String(option.value).toLowerCase() ===
+                            String(attributeCode).toLowerCase());
+
+                    return attribute?.supportsOptions !== false;
+                },
+
                 async fetchAttributeOptions(attributeCode) {
                     const separator =
                         initialModel.attributeOptionsUrl.includes('?')
@@ -1375,9 +1415,15 @@
                         row.variantTriggerValue = '';
 
                     row.variantOptions = [];
+                    row.variantSupportsOptions =
+                        this.variantAttributeSupportsOptions(
+                            row.variantAxisAttributeCode);
 
-                    if (!row.variantAxisAttributeCode)
+                    if (!row.variantAxisAttributeCode ||
+                        !row.variantSupportsOptions) {
+                        row.variantOptionsLoading = false;
                         return;
+                    }
 
                     row.variantOptionsLoading = true;
 
@@ -1513,7 +1559,8 @@
                         subModelOptionsLoading: false,
                         subModelSupportsOptions: false,
                         variantOptions: [],
-                        variantOptionsLoading: false
+                        variantOptionsLoading: false,
+                        variantSupportsOptions: true
                     });
 
                     this.subModelRulesOpen = true;

@@ -35,10 +35,12 @@ public class AkeneoConsolidatedMigrationTests
             Singleton<DataConfig>.Instance = new DataConfig { DataProvider = DataProviderType.MySql };
             var finder = new Mock<ITypeFinder>();
             finder.Setup(x => x.FindClassesOfType(typeof(global::Nop.Data.Mapping.Builders.IEntityBuilder), true))
-                .Returns(new[] { typeof(AkeneoSyncProfileBuilder) });
+                .Returns(new[] { typeof(AkeneoSyncProfileBuilder), typeof(AkeneoFamilyVariantImportConfigurationBuilder) });
             Singleton<ITypeFinder>.Instance = finder.Object;
             var engine = new Mock<IEngine>();
             engine.Setup(x => x.ResolveUnregistered(typeof(AkeneoSyncProfileBuilder))).Returns(new AkeneoSyncProfileBuilder());
+            engine.Setup(x => x.ResolveUnregistered(typeof(AkeneoFamilyVariantImportConfigurationBuilder)))
+                .Returns(new AkeneoFamilyVariantImportConfigurationBuilder());
             Singleton<IEngine>.Instance = engine.Object;
             var schema = new Mock<IQuerySchema>();
             schema.Setup(x => x.TableExists(It.IsAny<string>(), It.IsAny<string>())).Returns(tablesExist);
@@ -64,6 +66,20 @@ public class AkeneoConsolidatedMigrationTests
 
     // Dropped by the migration; an up-to-date schema no longer has them.
     private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
+
+    [Test]
+    public void Variant_preselection_upgrade_preserves_automatic_behavior_and_saved_choices()
+    {
+        var column = Plan(true, nameof(AkeneoFamilyMapping.AutomaticallyPreselectVariant))
+            .OfType<CreateColumnExpression>().Single().Column;
+        Assert.That(column.DefaultValue, Is.EqualTo(true));
+        Assert.That(column.IsNullable, Is.False);
+        var installed = Plan(false).OfType<CreateTableExpression>()
+            .Single(table => table.TableName.EndsWith(nameof(AkeneoFamilyMapping)));
+        Assert.That(installed.Columns.Single(item => item.Name == nameof(AkeneoFamilyMapping.AutomaticallyPreselectVariant)).DefaultValue,
+            Is.EqualTo(true));
+        Assert.That(Plan(true).OfType<CreateColumnExpression>(), Is.Empty);
+    }
 
     [Test]
     public void Axis_option_name_upgrade_adds_a_nullable_column_once()

@@ -106,6 +106,8 @@ public class AkeneoAssociatedOptionReconciliationTests
         Begin();
         Assert.That(await Run(), Is.EqualTo(1));
         Assert.That(_options.Select(option => option.Id), Is.EquivalentTo(new[] { 1956, 999 }));
+        Assert.That(_options.Any(option => option.IsPreSelected), Is.False,
+            "Variant preselection runs after cleanup and respects the family setting.");
         _products.Verify(service => service.DeleteProductAsync(It.IsAny<Product>()), Times.Never);
         _products.Verify(service => service.UpdateProductAsync(It.IsAny<Product>()), Times.Never);
         _relations.Verify(service => service.DeleteByRelationEntityAsync(AkeneoManagedRelationType.AssociatedProductAttributeValue, 1165), Times.Once);

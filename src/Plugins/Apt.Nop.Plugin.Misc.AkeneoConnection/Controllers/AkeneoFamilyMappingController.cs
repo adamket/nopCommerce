@@ -130,15 +130,18 @@ public class AkeneoFamilyMappingController(
                 group => group.First(),
                 StringComparer.OrdinalIgnoreCase);
 
+        // Select attributes match an option code; number attributes (a pack_count axis, say)
+        // match a typed value, compared as a number.
         var optionBackedAttributes = attributes
             .Where(attribute =>
                 familyAttributeCodes.Contains(attribute.Code) &&
-                SupportsAttributeOptions(attribute.Type))
+                (SupportsAttributeOptions(attribute.Type) || IsNumberAttribute(attribute.Type)))
             .OrderBy(attribute => attribute.GetLabel())
             .Select(attribute => new
             {
                 text = attribute.GetDisplayName(),
-                value = attribute.Code
+                value = attribute.Code,
+                supportsOptions = SupportsAttributeOptions(attribute.Type)
             });
 
         return Json(new
@@ -265,6 +268,7 @@ public class AkeneoFamilyMappingController(
             AssociatedProductAttributeId = model.AssociatedProductAttributeId,
             AssociatedValueNameTemplate = model.AssociatedValueNameTemplate,
             VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys),
+            AutomaticallyPreselectVariant = model.AutomaticallyPreselectVariant,
             HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent,
             NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId),
             NewProductIsShipEnabled = model.NewProductIsShipEnabled,
@@ -341,6 +345,7 @@ public class AkeneoFamilyMappingController(
         configuration.AssociatedProductAttributeId = model.AssociatedProductAttributeId;
         configuration.AssociatedValueNameTemplate = model.AssociatedValueNameTemplate;
         configuration.VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys);
+        configuration.AutomaticallyPreselectVariant = model.AutomaticallyPreselectVariant;
         configuration.HideChildProductsWhenRepresentedByParent = model.HideChildProductsWhenRepresentedByParent;
         configuration.NewProductTaxCategoryId = PositiveOrNull(model.NewProductTaxCategoryId);
         configuration.NewProductIsShipEnabled = model.NewProductIsShipEnabled;
@@ -579,6 +584,9 @@ public class AkeneoFamilyMappingController(
             }
         }
     }
+
+    private static bool IsNumberAttribute(string attributeType) =>
+        string.Equals(attributeType, "pim_catalog_number", StringComparison.OrdinalIgnoreCase);
 
     private static bool SupportsAttributeOptions(string attributeType)
     {

@@ -234,34 +234,33 @@
                                     <span v-if="lock.runStatus">{{ lock.runStatus }} · </span>
                                     started {{ lock.acquired }} · last check-in {{ lock.heartbeatMinutesAgo }} min ago ({{ lock.lastHeartbeat }}) · expires {{ lock.expires }}
                                 </div>
-                                <div class="mt-1" v-if="lock.stopping" role="status">A stop was requested. The worker holds the lock until cleanup finishes.</div>
-                                <div class="mt-1" v-else-if="lockLooksAbandoned">
-                                    Release the lock to run a sync now instead of waiting for it to expire.
+                                <div class="mt-1" v-if="lockLooksAbandoned">
+                                    This sync has stopped checking in, so it can no longer be stopped. Release the lock to run a sync now instead of waiting for it to expire.
                                 </div>
+                                <div class="mt-1" v-else-if="lock.stopping" role="status">A stop was requested. The worker holds the lock until cleanup finishes.</div>
                                 <div class="mt-1" v-else>
-                                    You can release the lock after 30 minutes without a check-in.
+                                    If this sync stops checking in for 30 minutes, you can release the lock instead.
                                 </div>
                                 <div class="mt-1 akeneo-dim">The lock is shared by every sync profile and Catalog Binding.</div>
                             </div>
                             <div class="akeneo-lock-alert-actions">
-                                <button v-if="lock.canStop" type="button" class="btn btn-sm btn-danger"
+                                <button v-if="lock.canStop && !lockLooksAbandoned" type="button" class="btn btn-sm btn-danger"
                                         v-bind:disabled="stopBusy || lock.stopping" v-on:click="confirmStop">
                                     <i class="fas fa-stop" aria-hidden="true"></i>
                                     {{ lock.stopping ? 'Stopping…' : 'Stop current sync' }}
                                 </button>
                                 <button type="button"
                                         class="btn btn-sm btn-default"
-                                        v-bind:disabled="lockBusy"
+                                        v-bind:disabled="releaseBusy"
                                         v-on:click="loadLock">
                                     <i class="fas fa-redo"></i>
                                     Refresh
                                 </button>
-                                <button type="button"
+                                <button v-if="lockLooksAbandoned" type="button"
                                         class="btn btn-sm btn-danger"
-                                        v-bind:disabled="lockBusy || !!busy || !lockLooksAbandoned"
-                                        v-bind:title="lockLooksAbandoned ? '' : 'The run holding the lock is still checking in.'"
+                                        v-bind:disabled="releaseBusy || !!busy"
                                         v-on:click="confirmReleaseLock">
-                                    <span v-if="lockBusy" class="akeneo-button-spinner" aria-hidden="true"></span>
+                                    <span v-if="releaseBusy" class="akeneo-button-spinner" aria-hidden="true"></span>
                                     <i v-else class="fas fa-unlock"></i>
                                     Release lock
                                 </button>
@@ -1004,6 +1003,7 @@
                     progressGeneration: 0,
                     lock: null,
                     lockBusy: false,
+                    releaseBusy: false,
                     stopBusy: false,
                     lockTimer: null,
                     toasts: [],
@@ -1146,7 +1146,7 @@
                 var self = this;
 
                 this.loadLock();
-                this.lockTimer = setInterval(() => { if (!document.hidden && !this.lockBusy && !this.stopBusy) this.loadLock(); }, 5000);
+                this.lockTimer = setInterval(() => { if (!document.hidden && !this.lockBusy && !this.stopBusy && !this.releaseBusy) this.loadLock(); }, 5000);
 
                 window.addEventListener('beforeunload', function (event) {
                     if (self.isDirty && !self.leaving) {
@@ -1353,7 +1353,7 @@
                     });
                 },
                 loadLock: function () {
-                    if (this.lockBusy) return;
+                    if (this.lockBusy || this.releaseBusy) return;
                     var self = this;
                     this.lockBusy = true;
 
@@ -1408,7 +1408,7 @@
                 releaseLock: function () {
                     var self = this;
 
-                    this.lockBusy = true;
+                    this.releaseBusy = true;
 
                     $.ajax({
                         type: 'POST',
@@ -1424,7 +1424,7 @@
                     }).fail(function (xhr) {
                         self.saveError = 'The sync lock could not be released (HTTP ' + (xhr ? xhr.status : '?') + ').';
                     }).always(function () {
-                        self.lockBusy = false;
+                        self.releaseBusy = false;
                     });
                 },
                 confirmDelete: function () {
