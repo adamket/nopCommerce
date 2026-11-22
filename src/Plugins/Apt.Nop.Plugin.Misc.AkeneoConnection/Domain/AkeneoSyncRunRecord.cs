@@ -38,6 +38,12 @@ public class AkeneoSyncRunRecord : BaseEntity
 
     public bool WasTruncated { get; set; }
 
+    /// <summary>
+    /// True only for a successful, complete whole-profile resync using the
+    /// profile's write policy. Older resyncs default to false and are not reused.
+    /// </summary>
+    public bool ResyncCheckpointEligible { get; set; }
+
     public bool ReconciliationCompleted { get; set; }
 
     public string ScopeHash { get; set; }
@@ -76,7 +82,8 @@ public enum AkeneoRunMode
 
     /// <summary>
     /// Reads every product in scope without the updated-date filter, but never
-    /// applies missing-product rules and never moves the delta watermark.
+    /// applies missing-product rules. A safe whole-profile resync can establish
+    /// the delta watermark.
     /// </summary>
     Resync = 50
 }

@@ -15,7 +15,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Tests.Services;
 
 /// <summary>
 /// A resync reads the whole profile scope like a full run, but never removes
-/// products, never moves the delta watermark and, without Repair, still skips
+/// products and, without Repair, still skips
 /// products whose output is unchanged.
 /// </summary>
 [TestFixture]
@@ -171,7 +171,7 @@ public class AkeneoProfileResyncTests
         new(_batch.Object, _runs.Object, _factory, _profiles.Object, _leases.Object);
 
     [Test]
-    public async Task A_whole_profile_resync_is_recorded_as_a_resync_and_skips_the_watermark()
+    public async Task A_whole_profile_resync_is_recorded_as_a_resync_and_establishes_a_checkpoint()
     {
         var result = await Execution().ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions());
 
@@ -179,6 +179,7 @@ public class AkeneoProfileResyncTests
         {
             Assert.That(_insertedRun!.SyncTypeId, Is.EqualTo((int)SyncType.ManualResync));
             Assert.That(_insertedRun.RunModeId, Is.EqualTo((int)AkeneoRunMode.Resync));
+            Assert.That(_insertedRun.ResyncCheckpointEligible, Is.True);
             Assert.That(_sentRequest!.RunMode, Is.EqualTo(AkeneoRunMode.Resync));
             Assert.That(_sentRequest.AkeneoFamilyCodes, Is.EqualTo(new[] { "coffee", "tops" }));
             Assert.That(result.Messages.First(), Does.StartWith("Resync of the whole profile"));
@@ -230,7 +231,7 @@ public class AkeneoProfileResyncTests
     }
 
     [Test]
-    public async Task A_completed_resync_never_becomes_the_delta_watermark()
+    public async Task A_legacy_resync_without_explicit_eligibility_never_becomes_the_delta_watermark()
     {
         var resync = new AkeneoSyncRunRecord
         {
@@ -251,6 +252,97 @@ public class AkeneoProfileResyncTests
     }
 
     #endregion
+
+    [TestCase(false, false, false, true)]
+    [TestCase(true, false, false, false)]
+    [TestCase(false, true, false, false)]
+    [TestCase(false, false, true, true)]
+    public async Task Only_whole_profile_resyncs_without_write_overrides_are_eligible(
+        bool narrowFamilies, bool existingOnly, bool repair, bool expected)
+    {
+        await Execution().ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions
+        {
+            FamilyCodes = narrowFamilies ? new List<string> { "coffee" } : new List<string>(),
+            UpdateExistingOnly = existingOnly,
+            RepairDestination = repair
+        });
+        Assert.That(_insertedRun!.ResyncCheckpointEligible, Is.EqualTo(expected));
+    }
+
+    [TestCase("failed")]
+    [TestCase("error")]
+    [TestCase("canceled")]
+    [TestCase("truncated")]
+    [TestCase("incomplete")]
+    [TestCase("exception")]
+    public async Task Unsuccessful_or_incomplete_resyncs_never_establish_a_checkpoint(string failure)
+    {
+        var batch = new AkeneoProductBatchImportResult
+        {
+            CompletedAllPages = failure != "incomplete",
+            WasTruncated = failure == "truncated",
+            Canceled = failure == "canceled",
+            FailedCount = failure == "failed" ? 1 : 0
+        };
+        if (failure == "error") batch.Errors.Add("Source page failed");
+        var setup = _batch.Setup(service => service.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>()));
+        if (failure == "exception") setup.ThrowsAsync(new InvalidOperationException("Connection lost"));
+        else setup.ReturnsAsync(batch);
+
+        await Execution().ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions());
+
+        Assert.That(_insertedRun!.ResyncCheckpointEligible, Is.False);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    public async Task Expanded_profile_resync_becomes_next_delta_start_with_overlap(int warnings)
+    {
+        var oldScope = AkeneoSyncScopeHasher.Build(_profile, AkeneoRunMode.Delta);
+        _profile.AkeneoFamilyCodes += ",trees";
+        _batch.Setup(service => service.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AkeneoProductBatchImportRequest, CancellationToken>((request, _) => _sentRequest = request)
+            .ReturnsAsync(new AkeneoProductBatchImportResult { CompletedAllPages = true, WarningCount = warnings });
+        await Execution().ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions());
+        var resync = _insertedRun!;
+        var repository = new Mock<IRepository<AkeneoSyncRunRecord>>();
+        repository.Setup(repo => repo.Table).Returns(new[] { resync }.AsQueryable());
+        var records = new AkeneoSyncRunRecordService(repository.Object);
+        _runs.Setup(service => service.GetLastSuccessfulRunAsync(_profile.Id, It.IsAny<string>()))
+            .Returns((int id, string scope) => records.GetLastSuccessfulRunAsync(id, scope));
+
+        await Execution().ImportProductsByProfileAsync(_profile.Id, SyncType.DeltaSync);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resync.ResyncCheckpointEligible, Is.True);
+            Assert.That(resync.ScopeHash, Is.Not.EqualTo(oldScope));
+            Assert.That(resync.WatermarkUtc, Is.EqualTo(resync.StartedOnUtc));
+            Assert.That(_sentRequest!.UpdatedAfterUtc, Is.EqualTo(resync.StartedOnUtc.AddMinutes(-2)));
+        });
+        Assert.That(await records.GetLastSuccessfulRunAsync(_profile.Id, oldScope), Is.Null);
+    }
+
+    [TestCase(SyncStatus.Failed, true, false, true, SyncType.ManualResync, 0)]
+    [TestCase(SyncStatus.Cancelled, true, false, true, SyncType.ManualResync, 0)]
+    [TestCase(SyncStatus.CompletedWithErrors, true, false, true, SyncType.ManualResync, 1)]
+    [TestCase(SyncStatus.Completed, false, false, true, SyncType.ManualResync, 0)]
+    [TestCase(SyncStatus.Completed, true, true, true, SyncType.ManualResync, 0)]
+    [TestCase(SyncStatus.Completed, true, false, false, SyncType.ManualResync, 0)]
+    [TestCase(SyncStatus.Completed, true, false, true, SyncType.ManualFamilyResync, 0)]
+    [TestCase(SyncStatus.Completed, true, false, true, SyncType.ManualResync, 1)]
+    public async Task Unsafe_resync_records_are_excluded_from_checkpoint_selection(
+        SyncStatus status, bool allPages, bool truncated, bool eligible, SyncType type, int failures)
+    {
+        var repository = new Mock<IRepository<AkeneoSyncRunRecord>>();
+        repository.Setup(repo => repo.Table).Returns(new[] { new AkeneoSyncRunRecord
+        {
+            Id = 1, SyncProfileId = 7, ScopeHash = "scope", RunModeId = (int)AkeneoRunMode.Resync,
+            SyncTypeId = (int)type, SyncStatusId = (int)status, CompletedAllPages = allPages,
+            WasTruncated = truncated, ResyncCheckpointEligible = eligible, FailedCount = failures
+        } }.AsQueryable());
+        Assert.That(await new AkeneoSyncRunRecordService(repository.Object).GetLastSuccessfulRunAsync(7, "scope"), Is.Null);
+    }
 
     #region Mappings changed
 

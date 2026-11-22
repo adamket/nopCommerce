@@ -56,9 +56,18 @@ public class AkeneoSyncScopeHasherTests
         var first = CreateProfile();
         var second = CreateProfile();
         second.CategorySyncModeId = (int)AkeneoCollectionSyncMode.ReplaceAll;
-        second.ProductWriteModeId = (int)AkeneoProductWriteMode.CreateOnly;
 
         Assert.That(AkeneoSyncScopeHasher.Build(second), Is.EqualTo(AkeneoSyncScopeHasher.Build(first)));
+    }
+
+    [Test]
+    public void Changing_write_mode_requires_a_new_checkpoint()
+    {
+        var profile = CreateProfile();
+        profile.ProductWriteModeId = (int)AkeneoProductWriteMode.UpdateOnly;
+        var before = AkeneoSyncScopeHasher.Build(profile);
+        profile.ProductWriteModeId = (int)AkeneoProductWriteMode.CreateAndUpdate;
+        Assert.That(AkeneoSyncScopeHasher.Build(profile), Is.Not.EqualTo(before));
     }
 
     private static AkeneoSyncProfile CreateProfile() => new()

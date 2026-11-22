@@ -69,7 +69,7 @@ public class AkeneoAssociatedOptionReconciliationService(
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            request.Steps?.Report(checkStep, "grouped products", checkedCount++, candidates.Count);
+            request.Steps?.Report(checkStep, "parent products", checkedCount++, candidates.Count);
             var modelCodes = parentProducts.Where(pair => pair.Value?.Id == candidate.Key)
                 .Select(pair => pair.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (modelCodes.Count != 1)
@@ -114,7 +114,7 @@ public class AkeneoAssociatedOptionReconciliationService(
             }
         }
 
-        request.Steps?.Report(checkStep, "grouped products", checkedCount, candidates.Count);
+        request.Steps?.Report(checkStep, "parent products", checkedCount, candidates.Count);
 
         const string removeStep = "Removing obsolete associated options";
         var removedCount = 0;

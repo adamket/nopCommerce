@@ -41,7 +41,11 @@ public class AkeneoSyncRunRecordService(
             (record.SyncStatusId == (int)SyncStatus.Completed ||
              record.SyncStatusId == (int)SyncStatus.CompletedWithWarnings) &&
             (record.RunModeId == (int)AkeneoRunMode.Full ||
-             record.RunModeId == (int)AkeneoRunMode.Delta) &&
+             record.RunModeId == (int)AkeneoRunMode.Delta ||
+             (record.RunModeId == (int)AkeneoRunMode.Resync &&
+              record.SyncTypeId == (int)SyncType.ManualResync &&
+              record.ResyncCheckpointEligible)) &&
+            record.FailedCount == 0 &&
             record.CompletedAllPages &&
             !record.WasTruncated);
 

@@ -829,7 +829,7 @@
                     <div class="modal-body">
                         <p>
                             Reads every product in this profile's scope, ignoring the updated-date filter, and applies the current mappings.
-                            A resync never disables or deletes products and does not move the delta watermark.
+                            A resync never disables or deletes products. A successful whole-profile resync establishes the delta checkpoint only when every page completes and Update existing products only is off.
                         </p>
 
                         <div class="form-group">

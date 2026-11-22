@@ -1,3 +1,5 @@
+using System.Transactions;
+using Nop.Core.Events;
 using System.Text.Json;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Services;
@@ -109,6 +111,67 @@ public class AkeneoAssetPictureReuseTests
             ExistingProduct = product,
             Product = product
         };
+    }
+
+    [TestCase("metadata", true)]
+    [TestCase("reorder", true)]
+    [TestCase("remove", true)]
+    [TestCase("unchanged", true)]
+    [TestCase("metadata", false)]
+    [TestCase("reorder", false)]
+    [TestCase("remove", false)]
+    [TestCase("unchanged", false)]
+    public async Task Asset_only_changes_invalidate_product_after_commit_but_not_after_rollback(
+        string change, bool commit)
+    {
+        _original.SeoFilename = "spruce";
+        var relation = new ProductPicture { Id = 736, ProductId = 10, PictureId = 739, DisplayOrder = 0 };
+        _products.Setup(service => service.GetProductPictureByIdAsync(736)).ReturnsAsync(relation);
+        _managed.Setup(service => service.GetByProductAndMappingAsync(10, "images"))
+            .ReturnsAsync([new AkeneoManagedAsset
+            {
+                Id = 1, NopProductId = 10, AssetMappingKey = "images",
+                SourceIdentityHash = "asset-1", SourceFingerprint = "fingerprint-1",
+                NopPictureId = 739, NopProductPictureId = 736,
+                DestinationTypeId = (int)AkeneoAssetDestinationType.ProductPicture
+            }]);
+        if (change == "metadata")
+            _original.AltAttribute = "Old image description";
+        if (change == "reorder")
+            relation.DisplayOrder = 5;
+        if (change == "remove")
+        {
+            _context.Request.AssetSyncMode = AkeneoCollectionSyncMode.ReplaceManaged;
+            _managed.Setup(service => service.GetByProductAsync(10)).ReturnsAsync([new AkeneoManagedAsset
+            {
+                Id = 2, NopProductId = 10, AssetMappingKey = "removed_mapping",
+                NopProductPictureId = 800,
+                DestinationTypeId = (int)AkeneoAssetDestinationType.ProductPicture
+            }]);
+            _products.Setup(service => service.GetProductPictureByIdAsync(800))
+                .ReturnsAsync(new ProductPicture { Id = 800, ProductId = 10, PictureId = 900 });
+        }
+
+        var publisher = new Mock<IEventPublisher>();
+        var queue = new AkeneoDeferredProductEvents(publisher.Object);
+        var pipeline = new AkeneoProductSyncPipeline([_synchronizer], publisher.Object, queue);
+        using (var transaction = new TransactionScope(TransactionScopeOption.Required, TransactionScopeAsyncFlowOption.Enabled))
+        {
+            await pipeline.SynchronizeAsync(_context);
+            publisher.Verify(service => service.PublishAsync(It.IsAny<EntityUpdatedEvent<Product>>()), Times.Never);
+            if (commit)
+                transaction.Complete();
+        }
+        if (!commit)
+            queue.Discard();
+        await queue.PublishAsync();
+        await queue.PublishAsync();
+
+        Assert.That(_context.HasChanges, Is.EqualTo(change != "unchanged"));
+        publisher.Verify(service => service.PublishAsync(
+                It.Is<EntityUpdatedEvent<Product>>(updated => updated.Entity.Id == 10)),
+            commit && change != "unchanged" ? Times.Once() : Times.Never());
+        _products.Verify(service => service.UpdateProductAsync(It.IsAny<Product>()), Times.Never);
     }
 
     private int Calls(string method) => _pictures.Invocations.Count(call => call.Method.Name == method);

@@ -13,8 +13,8 @@ public interface IAkeneoProductSyncExecutionService
     /// <summary>
     /// Reads every product in the profile's scope (optionally narrowed to some
     /// of its families) and writes the ones whose output changed, or all of
-    /// them with Repair. Never disables or deletes products and never moves
-    /// the delta watermark.
+    /// them with Repair. Never disables or deletes products. A complete successful
+    /// whole-profile run without write overrides can establish the delta watermark.
     /// </summary>
     Task<AkeneoProductSyncExecutionResult> ResyncProfileAsync(
         int profileId,

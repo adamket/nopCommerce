@@ -195,6 +195,17 @@ public class AkeneoConsolidatedMigrationTests
     }
 
     [Test]
+    public void Resync_checkpoint_column_defaults_old_runs_to_ineligible()
+    {
+        var columns = Plan(true, nameof(AkeneoSyncRunRecord.ResyncCheckpointEligible))
+            .OfType<CreateColumnExpression>().ToList();
+        var column = columns.Single().Column;
+        Assert.That(column.Name, Is.EqualTo(nameof(AkeneoSyncRunRecord.ResyncCheckpointEligible)));
+        Assert.That(column.DefaultValue, Is.EqualTo(false));
+        Assert.That(column.IsNullable, Is.False);
+    }
+
+    [Test]
     public void Older_schema_gets_every_consolidated_column_with_original_defaults()
     {
         var columns = new[] { "ApplyWhen", "SkipRulesJson", "ManageVariantsByEnabledStatus", "TagSyncModeId", "RelatedProductSyncModeId",

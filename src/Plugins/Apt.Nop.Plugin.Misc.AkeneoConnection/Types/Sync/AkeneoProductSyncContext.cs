@@ -101,7 +101,7 @@ public sealed class AkeneoProductSyncContext
     }
 
     /// <summary>
-    /// Set when a section saved the product row without publishing an entity
+    /// Set when a section changed the product or its assets without publishing a product
     /// event. The pipeline publishes a single product update event once every
     /// section for this product has run, so caches are cleared once per product.
     /// </summary>

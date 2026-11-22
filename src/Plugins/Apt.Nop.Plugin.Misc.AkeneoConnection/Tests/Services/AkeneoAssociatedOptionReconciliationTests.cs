@@ -125,8 +125,8 @@ public class AkeneoAssociatedOptionReconciliationTests
 
         Assert.That(reports, Is.EqualTo(new[]
         {
-            "Checking associated options against Akeneo: 0 of 1 grouped products",
-            "Checking associated options against Akeneo: 1 of 1 grouped products",
+            "Checking associated options against Akeneo: 0 of 1 parent products",
+            "Checking associated options against Akeneo: 1 of 1 parent products",
             "Removing obsolete associated options: 0 of 1 product attributes",
             "Removing obsolete associated options: 1 of 1 product attributes"
         }));

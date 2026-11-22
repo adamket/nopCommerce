@@ -29,6 +29,9 @@ public static class AkeneoSyncScopeHasher
             Groups = Normalize(profile.AkeneoProductGroupCodes.SplitCsv()),
             profile.CategoryFilterModeId,
             profile.ProductEnabledFilterId,
+            // A checkpoint from a create-only/update-only scope must not hide
+            // work when the profile later enables the other write operation.
+            profile.ProductWriteModeId,
             CompletenessFilterId = effectiveCompletenessFilterId,
             profile.ProductParentFilterModeId,
             profile.IncludeLinkedAssetUpdates,

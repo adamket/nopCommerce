@@ -40,7 +40,7 @@ public class AkeneoProductSyncPipeline(
         }
         finally
         {
-            // Sections save the product row without an event; raise one here, even
+            // Sections save product or asset changes; raise one product event here, even
             // when a later section failed, so the product's caches are cleared once
             // rather than once per section. Inside a sync unit's transaction it is
             // queued and published once the transaction has finished.

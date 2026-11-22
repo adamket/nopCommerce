@@ -2,7 +2,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Import;
 
 /// <summary>
 /// Choices for a manual resync, which reads every product in the profile's
-/// scope but never removes products or moves the delta watermark.
+/// scope but never removes products. Safe whole-profile runs can establish
+/// the delta watermark.
 /// </summary>
 public class AkeneoResyncOptions
 {

@@ -186,7 +186,11 @@ public class AkeneoProductSyncExecutionService(
                 runRecord,
                 profile.Id,
                 cancellationToken,
-                stop);
+                stop,
+                resyncCheckpointEligible: runMode == AkeneoRunMode.Resync &&
+                    syncType == SyncType.ManualResync &&
+                    resyncOptions?.UpdateExistingOnly != true &&
+                    resyncOptions?.FamilyCodes?.Any() != true);
         }
         finally
         {
@@ -464,7 +468,8 @@ public class AkeneoProductSyncExecutionService(
         AkeneoSyncRunRecord runRecord,
         int? profileId,
         CancellationToken cancellationToken,
-        AkeneoRunStopMonitor stop)
+        AkeneoRunStopMonitor stop,
+        bool resyncCheckpointEligible = false)
     {
         try
         {
@@ -475,6 +480,7 @@ public class AkeneoProductSyncExecutionService(
             if (result.Canceled && stop.Reason != null)
                 result.Errors.Insert(0, stop.Reason);
             ApplyResultToRunRecord(runRecord, result);
+            runRecord.ResyncCheckpointEligible = resyncCheckpointEligible && result.IsAuthoritative;
             await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return BuildExecutionResult(runRecord, result, profileId);
@@ -678,7 +684,7 @@ public class AkeneoProductSyncExecutionService(
             : "products whose output is unchanged are skipped";
         var creation = options.UpdateExistingOnly ? " Existing products only; nothing is created." : string.Empty;
 
-        return $"Resync of {scope}: {writes}.{creation} A resync never disables or deletes products and does not move the delta watermark.";
+        return $"Resync of {scope}: {writes}.{creation} A resync never disables or deletes products. A successful whole-profile resync establishes the delta checkpoint only when every page completes and Update existing products only is off.";
     }
 
     private static AkeneoRunMode ResolveRunMode(SyncType syncType) => syncType switch

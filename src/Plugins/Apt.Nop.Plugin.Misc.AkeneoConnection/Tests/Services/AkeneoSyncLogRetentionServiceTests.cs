@@ -90,6 +90,22 @@ public class AkeneoSyncLogRetentionServiceTests
     }
 
     [Test]
+    public async Task Keeps_eligible_resync_checkpoints_but_not_unsafe_resyncs()
+    {
+        AddProfile(1);
+        AddRun(1, 1, 200, SyncStatus.Completed, scopeHash: "a");
+        var safe = AddRun(2, 1, 150, SyncStatus.CompletedWithWarnings, scopeHash: "a", runMode: AkeneoRunMode.Resync);
+        safe.SyncTypeId = (int)SyncType.ManualResync;
+        safe.ResyncCheckpointEligible = true;
+        var unsafeRun = AddRun(3, 1, 120, SyncStatus.Completed, scopeHash: "a", runMode: AkeneoRunMode.Resync);
+        unsafeRun.SyncTypeId = (int)SyncType.ManualResync;
+
+        await _service.TrimAsync(Now);
+
+        Assert.That(_runs.Select(run => run.Id), Is.EquivalentTo(new[] { 2 }));
+    }
+
+    [Test]
     public async Task Keeps_unfinished_and_leased_runs()
     {
         AddProfile(1);

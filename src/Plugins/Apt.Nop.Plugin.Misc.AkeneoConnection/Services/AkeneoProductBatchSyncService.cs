@@ -1596,10 +1596,13 @@ public class AkeneoProductBatchSyncService(
                         leafContext,
                         parentProduct,
                         variantResult.NopProductAttributeCombinationId.Value,
-                        cancellationToken) &&
-                    result.ActionType == SyncItemActionType.Skipped)
+                        cancellationToken))
                 {
-                    result.ActionType = SyncItemActionType.Updated;
+                    // Combination assets belong to the parent, whose pipeline has
+                    // already run. Clear its caches after this unit commits too.
+                    deferredProductEvents?.Defer(parentProduct);
+                    if (result.ActionType == SyncItemActionType.Skipped)
+                        result.ActionType = SyncItemActionType.Updated;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

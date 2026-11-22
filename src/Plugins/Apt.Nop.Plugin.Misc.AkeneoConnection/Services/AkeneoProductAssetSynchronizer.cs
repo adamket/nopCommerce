@@ -963,7 +963,10 @@ public sealed partial class AkeneoProductAssetSynchronizer(
         }
 
         if (changed)
+        {
             context.MarkChanged();
+            context.ProductUpdateEventPending = true;
+        }
 
         return complete;
     }
@@ -1547,6 +1550,7 @@ public sealed partial class AkeneoProductAssetSynchronizer(
         if (changed)
         {
             context.MarkChanged();
+            context.ProductUpdateEventPending = true;
             context.Result.AddMessage("Removed stale assets from deleted or disabled asset mappings.");
         }
     }
@@ -1701,6 +1705,7 @@ public sealed partial class AkeneoProductAssetSynchronizer(
         if (changed)
         {
             context.MarkChanged();
+            context.ProductUpdateEventPending = true;
             context.Result.AddMessage(
                 "Completed authoritative asset replacement after all desired assets were synchronized successfully.");
         }

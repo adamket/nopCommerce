@@ -43,11 +43,11 @@ public class AkeneoSyncStepsTests
     {
         var steps = Steps();
         steps.Report(AkeneoSyncSteps.Products, "products", 5, 5);
-        steps.Report("Checking associated options against Akeneo", "grouped products", 0, 3);
-        steps.Report("Checking associated options against Akeneo", "grouped products", 3, 3);
+        steps.Report("Checking associated options against Akeneo", "parent products", 0, 3);
+        steps.Report("Checking associated options against Akeneo", "parent products", 3, 3);
 
         Assert.That(steps.BuildSummary(), Does.Match(
-            @"^Step timings: Processing products \d+\.\ds \(5 products\); Checking associated options against Akeneo \d+\.\ds \(3 grouped products\)\.$"));
+            @"^Step timings: Processing products \d+\.\ds \(5 products\); Checking associated options against Akeneo \d+\.\ds \(3 parent products\)\.$"));
     }
 
     [TestCase(0.24, "0.2s")]
