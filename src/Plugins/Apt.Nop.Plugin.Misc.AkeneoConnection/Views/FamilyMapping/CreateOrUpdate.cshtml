@@ -539,7 +539,7 @@
                                             <input class="form-control" v-bind:id="'option-name-' + row.uid" v-bind:aria-describedby="'axis-template-help-' + row.uid"
                                                    v-bind:name="axisName(index, 'OptionNameTemplate')" v-model="row.optionNameTemplate"
                                                    placeholder="{coffee_weight:amount} oz · {coffee_bag_count}" />
-                                            <small class="form-text text-muted" v-bind:id="'axis-template-help-' + row.uid">Leave blank to use the axis label.</small>
+                                            <small class="form-text text-muted" v-bind:id="'axis-template-help-' + row.uid">Leave blank to use the axis label. Separate alternatives with ||; the first with a nonempty value wins (e.g. {variant_name} || {flag_size:label}).</small>
                                         </div>
                                         <div class="akeneo-axis-controls">
                                             <div class="akeneo-axis-order">

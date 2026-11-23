@@ -480,8 +480,20 @@ public class AkeneoFamilyMappingController(
         model.AxisMappings ??= new List<AkeneoFamilyVariantAxisMappingModel>();
         foreach (var axis in model.AxisMappings.Where(axis => !string.IsNullOrWhiteSpace(axis.OptionNameTemplate)))
         {
-            foreach (var error in valueTemplateRenderer.Validate(axis.OptionNameTemplate).Errors)
-                ModelState.AddModelError(nameof(model.AxisMappings), $"{axis.AkeneoAttributeCode} option name: {error}");
+            foreach (var alternative in AkeneoAssociatedValueNameTemplate.SplitAlternatives(axis.OptionNameTemplate))
+            {
+                if (string.IsNullOrWhiteSpace(alternative))
+                {
+                    ModelState.AddModelError(nameof(model.AxisMappings), $"{axis.AkeneoAttributeCode} option name: each || alternative must have content.");
+                    continue;
+                }
+
+                if (AkeneoAssociatedValueNameTemplate.TryGetLiteral(alternative, out _))
+                    continue;
+
+                foreach (var error in valueTemplateRenderer.Validate(alternative).Errors)
+                    ModelState.AddModelError(nameof(model.AxisMappings), $"{axis.AkeneoAttributeCode} option name: {error}");
+            }
         }
         model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
 

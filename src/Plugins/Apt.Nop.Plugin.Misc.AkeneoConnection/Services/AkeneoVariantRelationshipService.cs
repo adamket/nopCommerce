@@ -849,11 +849,26 @@ public class AkeneoVariantRelationshipService(
         if (string.IsNullOrWhiteSpace(axis.OptionNameTemplate))
             return value.DisplayName;
 
-        var result = await renderer.RenderAsync(axis.OptionNameTemplate, CreateTemplateContext(context));
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Value))
-            throw new NopException($"Could not render the {axis.AkeneoAttributeCode} option name for SKU {context.Sku}: {string.Join(", ", result.Errors.Concat(result.MissingTokens))}");
+        var errors = new List<string>();
+        var templateContext = CreateTemplateContext(context);
+        foreach (var alternative in AkeneoAssociatedValueNameTemplate.SplitAlternatives(axis.OptionNameTemplate))
+        {
+            if (AkeneoAssociatedValueNameTemplate.TryGetLiteral(alternative, out var literal))
+            {
+                if (!string.IsNullOrWhiteSpace(literal))
+                    return literal.Trim();
 
-        return result.Value.Trim();
+                continue;
+            }
+
+            var result = await renderer.RenderAsync(alternative, templateContext);
+            if (result.Success && !string.IsNullOrWhiteSpace(result.Value))
+                return result.Value.Trim();
+
+            errors.AddRange(result.Errors.Concat(result.MissingTokens));
+        }
+
+        throw new NopException($"Could not render the {axis.AkeneoAttributeCode} option name for SKU {context.Sku}: no alternative produced a name. {string.Join(", ", errors.Distinct())}");
     }
 
     private static AkeneoValueTemplateContext CreateTemplateContext(AkeneoVariantImportContext context) => new()
