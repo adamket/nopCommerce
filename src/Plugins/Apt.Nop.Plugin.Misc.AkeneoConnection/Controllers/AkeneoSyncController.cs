@@ -19,7 +19,7 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Controllers;
 [AutoValidateAntiforgeryToken]
 public class AkeneoSyncController(
     AkeneoConnectionSettings akeneoConnectionSettings,
-    IAkeneoProductSyncExecutionService productSyncExecutionService,
+    AkeneoManualSyncWorker manualSyncWorker,
     IAkeneoProductMappingFactory productMappingFactory,
     IAkeneoProductBatchSyncService productImportService,
     IAkeneoSyncRunRecordService syncRunRecordService, IAkeneoProductBatchImportRequestFactory productBatchImportRequestFactory, IAkeneoSyncProfileService syncProfileService) : BasePluginController
@@ -103,9 +103,8 @@ public class AkeneoSyncController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
-    public async Task<IActionResult> ImportProduct(
-        AkeneoProductImportModel input,
-        CancellationToken cancellationToken)
+    public IActionResult ImportProduct(
+        AkeneoProductImportModel input)
     {
         var sourceEntityType = input?.AkeneoEntityTypeId ==
             (int)AkeneoEntityType.ProductModel
@@ -132,16 +131,14 @@ public class AkeneoSyncController(
         }
 
         var profileId = akeneoConnectionSettings.DefaultSyncProfileId ?? 0;
-        var execution = sourceEntityType == AkeneoEntityType.ProductModel
-            ? await productSyncExecutionService.SyncProductModelByCodeAsync(
-                profileId,
-                sourceKey.Trim(),
-                cancellationToken)
-            : await productSyncExecutionService.SyncProductByUuidAsync(
-                profileId,
-                sourceKey.Trim(),
-                cancellationToken);
+        return QueueManualSync(new AkeneoManualSyncRequest(profileId,
+            sourceEntityType == AkeneoEntityType.ProductModel
+                ? AkeneoManualSyncKind.ProductModel : AkeneoManualSyncKind.Product,
+            SourceKey: sourceKey.Trim()));
+    }
 
+    private IActionResult ProductRunResponse(AkeneoProductSyncExecutionResult execution, AkeneoEntityType sourceEntityType)
+    {
         if (execution.ProfileNotFound)
         {
             return Json(new
@@ -164,7 +161,8 @@ public class AkeneoSyncController(
                 ? execution.AkeneoIdentifier
                 : null,
             akeneoIdentifier = execution.AkeneoIdentifier,
-            messages = execution.Messages,
+            message = execution.Message,
+            messages = execution.Messages.Concat(new[] { execution.Message }).Where(message => !string.IsNullOrWhiteSpace(message)),
             warnings = execution.Warnings,
             errors = execution.Errors
         });
@@ -172,45 +170,68 @@ public class AkeneoSyncController(
 
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
-    public async Task<IActionResult> ImportProductsByProfile(
-        int id,
-        bool fullSync,
-        CancellationToken cancellationToken)
+    public IActionResult ImportProductsByProfile(int id, bool fullSync)
     {
-        var result = await productSyncExecutionService.ImportProductsByProfileAsync(
-            id,
-            fullSync
-                ? SyncType.ManualFullProfileSync
-                : SyncType.ManualProfileSync,
-            cancellationToken);
-
-        return ProfileRunResponse(result);
+        return QueueManualSync(new AkeneoManualSyncRequest(id, AkeneoManualSyncKind.Profile, FullSync: fullSync));
     }
 
-    /// <summary>
-    /// Re-reads the profile's scope without the updated-date filter. Never
-    /// disables or deletes products and never moves the delta watermark.
-    /// </summary>
+    /// <summary>Re-reads the saved profile scope without moving the delta watermark.</summary>
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     [HttpPost]
-    public async Task<IActionResult> ResyncProfile(
-        int id,
-        bool repairDestination,
-        bool updateExistingOnly,
-        string[] familyCodes,
-        CancellationToken cancellationToken)
+    public IActionResult ResyncProfile(int id, bool repairDestination, bool updateExistingOnly, string[] familyCodes)
     {
-        var result = await productSyncExecutionService.ResyncProfileAsync(
-            id,
-            new AkeneoResyncOptions
-            {
-                RepairDestination = repairDestination,
-                UpdateExistingOnly = updateExistingOnly,
-                FamilyCodes = familyCodes?.ToList() ?? new List<string>()
-            },
-            cancellationToken);
+        return QueueManualSync(new AkeneoManualSyncRequest(id, AkeneoManualSyncKind.Resync,
+            RepairDestination: repairDestination, UpdateExistingOnly: updateExistingOnly, FamilyCodes: familyCodes));
+    }
 
-        return ProfileRunResponse(result);
+    private IActionResult QueueManualSync(AkeneoManualSyncRequest request)
+    {
+        var job = manualSyncWorker.TryEnqueue(request);
+        if (job == null)
+            return Conflict(new { success = false, message = "A manual sync is already queued or running, or the application is shutting down. Check sync history before trying again." });
+
+        return StatusCode(StatusCodes.Status202Accepted, new
+        {
+            queued = true,
+            jobId = job.Id,
+            statusUrl = Url.Action(nameof(ManualSyncStatus), new { id = job.Id }),
+            message = "Sync queued in the background. You can leave this page; the result will be recorded in sync history."
+        });
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult LatestProfileSync(int id)
+    {
+        var job = manualSyncWorker.GetLatestProfileJob(id);
+        return job == null ? Json(new { idle = true }) : ManualSyncStatus(job.Id);
+    }
+
+    [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult ManualSyncStatus(Guid id)
+    {
+        var job = manualSyncWorker.GetJob(id);
+        if (job == null)
+            return NotFound(new { success = false, message = "This background job is no longer available on this application instance. Check sync history for its result." });
+        if (job.Result == null)
+            return Json(new
+            {
+                pending = true,
+                statusUrl = Url.Action(nameof(ManualSyncStatus), new { id = job.Id }),
+                message = job.Running
+                    ? "Sync is running in the background. You can leave this page and check sync history later."
+                    : "Sync is queued in the background. You can leave this page and check sync history later."
+            });
+
+        return job.Request.Kind switch
+        {
+            AkeneoManualSyncKind.Product => ProductRunResponse(job.Result, AkeneoEntityType.Product),
+            AkeneoManualSyncKind.ProductModel => ProductRunResponse(job.Result, AkeneoEntityType.ProductModel),
+            _ => ProfileRunResponse(job.Result)
+        };
     }
 
     private IActionResult ProfileRunResponse(AkeneoProductSyncExecutionResult result)

@@ -26,6 +26,8 @@ public record AkeneoFamilyMappingModel : BaseNopEntityModel
 
     public int? AssociatedProductAttributeId { get; set; }
 
+    public string CombinationRoutingJson { get; set; }
+
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
     public string VariantDisplayOrderKeys { get; set; }

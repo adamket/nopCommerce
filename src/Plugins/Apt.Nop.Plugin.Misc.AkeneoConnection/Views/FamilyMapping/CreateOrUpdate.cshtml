@@ -9,6 +9,8 @@
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-combobox.js");
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    // Inline so the page stays hidden until Vue mounts, even before the plugin stylesheet applies.
+    NopHtml.AddHeadCustomParts("<style>[v-cloak]{display:none!important}</style>");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.FamilyMappings");
 
     Layout = "_AdminLayout";
@@ -36,6 +38,7 @@
             preserveExistingNopVariantStructure = Model.PreserveExistingNopVariantStructure,
             associatedProductAttributeId = Model.AssociatedProductAttributeId,
             associatedValueNameTemplate = Model.AssociatedValueNameTemplate,
+            combinationRoutingJson = Model.CombinationRoutingJson ?? string.Empty,
             variantDisplayOrderKeys = Model.VariantDisplayOrderKeys ?? string.Empty,
             automaticallyPreselectVariant = Model.AutomaticallyPreselectVariant,
             hideChildProductsWhenRepresentedByParent = Model.HideChildProductsWhenRepresentedByParent,
@@ -314,6 +317,54 @@
                                     </div>
                                 </div>
 
+                                <div v-if="isCombinationMode" class="row">
+                                    <div class="col-md-12">
+                                        <div class="form-group">
+                                            <label>Combination routing</label>
+                                            <div>
+                                                <label class="akeneo-switch">
+                                                    <input type="checkbox" v-model="combinationRoutingOpen"
+                                                           aria-controls="combination-routing-configuration"
+                                                           v-bind:aria-expanded="combinationRoutingOpen" />
+                                                    <span class="akeneo-switch-track">
+                                                        <span class="akeneo-switch-thumb"></span>
+                                                    </span>
+                                                    <span class="akeneo-switch-text">Show routing configuration</span>
+                                                </label>
+                                            </div>
+                                            <div class="form-text">
+                                                Optional. Map one variant to several Program and Year combinations on an existing product.
+                                                Leave the configuration blank to use the axis mappings.
+                                            </div>
+                                            <transition name="akeneo-detail-slide">
+                                                <div v-show="combinationRoutingOpen" id="combination-routing-configuration" class="mt-3">
+                                                    <label for="combination-routing">Routing configuration (JSON)</label>
+                                                    <textarea id="combination-routing" name="CombinationRoutingJson"
+                                                              v-model="form.combinationRoutingJson" rows="10"
+                                                              class="form-control text-monospace" spellcheck="false"></textarea>
+                                                    <div class="form-text">
+                                                        Every matching route applies. Hiding this editor keeps the configuration.
+                                                    </div>
+                                                    <details class="mt-2">
+                                                        <summary class="form-text">Configuration fields</summary>
+                                                        <div class="form-text mt-2">
+                                                            Requires ProductModelCode, ParentProductId and Routes. Each route has Key,
+                                                            WhenAttribute, WhenValue, optional MembershipAttribute/MembershipValue,
+                                                            SelectorAttributeId, SelectorValue, AxisAttribute and YearAttributeId.
+                                                            Use attribute IDs, not product mapping IDs. Selector values must already exist.
+                                                            AdoptExistingCombinations permits adopting exact SKU and selection matches.
+                                                            ReconcileManagedCombinations removes obsolete owned combinations while keeping selectors.
+                                                        </div>
+                                                    </details>
+                                                </div>
+                                            </transition>
+                                            <div v-if="hasCombinationRouting" class="form-text">
+                                                Combination routing replaces ordinary axis mappings. No axis mappings are required.
+                                            </div>
+                                            <span asp-validation-for="CombinationRoutingJson"></span>
+                                        </div>
+                                    </div>
+                                </div>
                                 <transition name="akeneo-detail-slide">
                                     <div v-if="isAssociatedMode" class="row">
                                         <div class="col-md-6">
@@ -499,7 +550,7 @@
                     </div>
 
                     <transition name="akeneo-detail-slide">
-                        <div v-if="isCombinationMode" class="card akeneo-mapping-card akeneo-axis-card">
+                        <div v-if="isCombinationMode" v-show="!hasCombinationRouting" class="card akeneo-mapping-card akeneo-axis-card">
                             <div class="card-header akeneo-axis-header">
                                 <h3 class="card-title">
                                     <button type="button" class="akeneo-attribute-group-toggle akeneo-axis-toggle"
@@ -986,6 +1037,7 @@
             data() {
                 return {
                     showDeleteModal: false,
+                    combinationRoutingOpen: Boolean((initialModel.combinationRoutingJson || '').trim()),
                     axisMappingsOpen: true,
                     subModelRulesOpen: true,
                     modes: {
@@ -1061,6 +1113,9 @@
             },
 
             computed: {
+                hasCombinationRouting() {
+                    return Boolean((this.form.combinationRoutingJson || '').trim());
+                },
                 // Off, Akeneo enabled status, or the Published rule: the switch plus its source.
                 availabilityChoice: {
                     get() {
@@ -1153,7 +1208,7 @@
             },
 
             async mounted() {
-                if (this.form.axisMappings.length === 0)
+                if (!this.hasCombinationRouting && this.form.axisMappings.length === 0)
                     this.addAxisMapping();
 
                 // The server already reported a missing family; its variant and
@@ -1620,7 +1675,7 @@
                 },
 
                 axisRowNeedsAttention(row) {
-                    return !row.akeneoAttributeCode || !row.nopProductAttributeId;
+                    return !this.hasCombinationRouting && (!row.akeneoAttributeCode || !row.nopProductAttributeId);
                 },
 
                 axisRowClass(row) {

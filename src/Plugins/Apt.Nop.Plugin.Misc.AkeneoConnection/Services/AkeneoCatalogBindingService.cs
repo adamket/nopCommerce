@@ -1,3 +1,4 @@
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
 using System.Text.Json;
 using System.Transactions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
@@ -847,10 +848,22 @@ public class AkeneoCatalogBindingService(
                 target[parentId] = target.GetValueOrDefault(parentId) + 1;
         }
 
+        await LoadProductsByIdAsync(plan, plan.Leaves.Where(leaf => !string.IsNullOrWhiteSpace(leaf.FamilyConfiguration?.CombinationRoutingJson))
+            .Select(leaf => AkeneoCombinationRouting.Parse(leaf.FamilyConfiguration.CombinationRoutingJson).ParentProductId), cancellationToken);
         await FindSlugCandidatesAsync(plan, existingModelParents, cancellationToken);
 
         foreach (var model in plan.Models.Values)
         {
+            var routedParent = model.Leaves.Where(leaf => !string.IsNullOrWhiteSpace(leaf.FamilyConfiguration?.CombinationRoutingJson))
+                .Select(leaf => AkeneoCombinationRouting.Parse(leaf.FamilyConfiguration.CombinationRoutingJson))
+                .Where(routing => routing.ProductModelCode == model.Code).Select(routing => routing.ParentProductId).Distinct().ToList();
+            if (routedParent.Count == 1 && IsLiveProduct(plan, routedParent[0]) && !existingModelParents.ContainsKey(model.Code))
+            {
+                model.ParentProductId = routedParent[0];
+                model.Status = AkeneoBindingStatus.Matched;
+                foreach (var routedLeaf in model.Leaves) ResolveModelLeaf(plan, model, routedLeaf);
+                continue;
+            }
             if (existingModelParents.TryGetValue(model.Code, out var boundParentId) &&
                 IsLiveProduct(plan, boundParentId))
             {
@@ -951,6 +964,17 @@ public class AkeneoCatalogBindingService(
             .Where(candidate => candidate.ParentProductId == model.ParentProductId)
             .ToList();
 
+        var routing = AkeneoCombinationRouting.Parse(leaf.FamilyConfiguration?.CombinationRoutingJson);
+        if (routing != null && (routing.ProductModelCode != model.Code || routing.ParentProductId != model.ParentProductId))
+        {
+            leaf.Status = AkeneoBindingStatus.Issue;
+            plan.AddIssue("Variant", leaf.Identifier, leaf.FamilyCode, "Combination routing conflicts with this product-model binding.");
+            return;
+        }
+        // A primary binding remains for legacy state/logging. Routing adopts and tracks ALL exact selections during sync.
+        if (selected.Count > 1 && routing != null && selected.All(candidate => candidate.Kind == LeafKind.Combination))
+            selected = selected.OrderBy(candidate => candidate.TargetId).Take(1).ToList();
+
         if (selected.Count == 1)
         {
             leaf.Selected = selected[0];
@@ -979,6 +1003,7 @@ public class AkeneoCatalogBindingService(
             .Where(leaf =>
                 leaf.Selected?.Kind == LeafKind.Combination &&
                 leaf.FamilyConfiguration != null &&
+                string.IsNullOrWhiteSpace(leaf.FamilyConfiguration.CombinationRoutingJson) &&
                 leaf.BindingModelCode != null &&
                 plan.Models[leaf.BindingModelCode].ParentProductId.HasValue)
             .ToList();

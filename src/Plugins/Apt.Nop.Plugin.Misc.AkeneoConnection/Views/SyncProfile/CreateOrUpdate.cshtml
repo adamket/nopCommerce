@@ -9,7 +9,10 @@
 
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-combobox.js");
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-manual-sync.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    // Inline so the page stays hidden until Vue mounts, even before the plugin stylesheet applies.
+    NopHtml.AddHeadCustomParts("<style>[v-cloak]{display:none!important}</style>");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncProfiles");
 
     object Options(IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> items) =>
@@ -118,6 +121,7 @@
             list = Url.Action("List", "AkeneoSyncProfile"),
             progress = Url.Action("Progress", "AkeneoSyncProfile"),
             lockStatus = Url.Action("LockStatus", "AkeneoSyncProfile"),
+            latestSync = isEdit ? Url.Action("LatestProfileSync", "AkeneoSync", new { id = Model.Id }) : null,
             stopSync = Url.Action("StopCurrentSync", "AkeneoSyncProfile"),
             releaseLock = Url.Action("ReleaseLock", "AkeneoSyncProfile"),
             edit = isEdit ? Url.Action("Edit", "AkeneoSyncProfile", new { id = Model.Id }) : null,
@@ -1001,6 +1005,7 @@
                     runResult: null,
                     syncProgress: null,
                     progressGeneration: 0,
+                    checkingForSync: false,
                     lock: null,
                     lockBusy: false,
                     releaseBusy: false,
@@ -1020,7 +1025,7 @@
                         { key: 'relatedProductSyncModeId', name: 'RelatedProductSyncModeId', label: 'Related product sync mode', options: 'relatedProductSyncModes', help: 'From an Akeneo association type, on product models and standalone products. Unsynced targets are retried at the end of the run.' },
                         { key: 'crossSellSyncModeId', name: 'CrossSellSyncModeId', label: 'Cross-sell sync mode', options: 'crossSellSyncModes', help: 'Like related products, from an Akeneo association type. Unsynced targets are retried at the end of the run.' },
                         { key: 'specificationAttributeSyncModeId', name: 'SpecificationAttributeSyncModeId', label: 'Specification sync mode', options: 'specificationAttributeSyncModes', help: 'Missing specification values are handled per attribute mapping.' },
-                        { key: 'productAttributeSyncModeId', name: 'ProductAttributeSyncModeId', label: 'Product attribute sync mode', options: 'productAttributeSyncModes', help: 'Replace all values also removes obsolete associated-product options after a complete, successful Full run or Resync. Linked simple products are kept. Cleanup is skipped for branches with filtered-out variants or skipped variants without an existing binding.' },
+                        { key: 'productAttributeSyncModeId', name: 'ProductAttributeSyncModeId', label: 'Product attribute sync mode', options: 'productAttributeSyncModes', help: 'Replace all values also removes obsolete associated-product options, variant combinations, and unused combination-axis values after a complete, successful Full run or Resync. Linked simple products and unrelated attributes are kept. Combination cleanup requires every variant in the branch to be verified; filtered, held, or unbound variants preserve the branch.' },
                         { key: 'assetSyncModeId', name: 'AssetSyncModeId', label: 'Asset sync mode', options: 'assetSyncModes', help: 'Replace managed is recommended: it reconciles only pictures, videos, and asset references owned by this plugin.' },
                         { key: 'missingProductBehaviorId', name: 'MissingProductBehaviorId', label: 'Missing product behavior', options: 'missingProductBehaviors', help: 'Applied only after a complete, successful full run. Delta, canceled, failed, and MaxProducts-limited runs never reconcile missing products.' }
                     ]
@@ -1032,7 +1037,7 @@
                     return Math.min(100, Math.floor(100 * this.syncProgress.processed / this.syncProgress.total));
                 },
                 syncInProgress: function () {
-                    return this.busy === 'run' || this.busy === 'resync';
+                    return (this.busy === 'run' || this.busy === 'resync') && !this.checkingForSync;
                 },
                 isEdit: function () {
                     return this.id > 0;
@@ -1147,6 +1152,7 @@
 
                 this.loadLock();
                 this.lockTimer = setInterval(() => { if (!document.hidden && !this.lockBusy && !this.stopBusy && !this.releaseBusy) this.loadLock(); }, 5000);
+                this.reconnectSync();
 
                 window.addEventListener('beforeunload', function (event) {
                     if (self.isDirty && !self.leaving) {
@@ -1297,19 +1303,34 @@
                 run: function () {
                     this.post('run', this.urls.run, {});
                 },
+                reconnectSync: function () {
+                    if (!this.urls.latestSync)
+                        return;
+                    this.busy = 'run';
+                    this.checkingForSync = true;
+                    this.observeSync(AkeneoManualSync.watch(this.urls.latestSync, this.showSyncProgress.bind(this)));
+                },
+                showSyncProgress: function (message) {
+                    this.checkingForSync = false;
+                    this.runResult = { cls: 'alert-info', message: message, counts: null, warnings: [], errors: [] };
+                },
                 post: function (busy, url, data, onDone) {
-                    var self = this;
-
                     this.busy = busy;
                     this.runResult = null;
 
-                    $.ajax({
+                    this.observeSync(AkeneoManualSync.post({
                         type: 'POST',
                         url: url,
                         dataType: 'json',
                         traditional: true,
                         data: addAntiForgeryToken(data)
-                    }).done(function (response) {
+                    }, this.showSyncProgress.bind(this)), onDone);
+                },
+                observeSync: function (completion, onDone) {
+                    var self = this;
+                    completion.done(function (response) {
+                        if (response.idle)
+                            return;
                         if (onDone)
                             onDone(response);
                         self.runResult = {
@@ -1333,6 +1354,7 @@
                         };
                     }).always(function () {
                         self.busy = false;
+                        self.checkingForSync = false;
                         // A run that was refused ("already running") or just
                         // finished changes the lock state.
                         self.loadLock();

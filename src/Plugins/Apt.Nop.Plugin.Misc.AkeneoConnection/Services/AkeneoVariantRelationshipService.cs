@@ -18,7 +18,8 @@ public class AkeneoVariantRelationshipService(
     IAkeneoValueTemplateRenderer valueTemplateRenderer,
     IAkeneoCombinationAvailabilityService combinationAvailabilityService,
     IGenericAttributeService genericAttributeService = null,
-    IAkeneoAttributeValueCacheTracker cacheTracker = null)
+    IAkeneoAttributeValueCacheTracker cacheTracker = null,
+    AkeneoCombinationRoutingService combinationRouting = null)
     : IAkeneoVariantRelationshipService
 {
     // Each synced value's sort key, kept with the value so siblings can be ranked together.
@@ -52,6 +53,15 @@ public class AkeneoVariantRelationshipService(
         };
         context.Options.Mode = effectiveMode;
         ApplySubModelParentRule(context, resolution.Source);
+
+        var routing = AkeneoCombinationRouting.Parse(context.Options.CombinationRoutingJson);
+        if (routing != null)
+        {
+            if (effectiveMode != AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+                throw new NopException("Combination routing requires an attribute-combination parent.");
+            if (combinationRouting == null) throw new NopException("Combination routing service is unavailable.");
+            return await combinationRouting.ApplyAsync(parentProduct, context, resolution.Source, routing);
+        }
 
         if (effectiveMode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
             !await combinationAvailabilityService.IsAvailableAsync(context))

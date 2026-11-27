@@ -68,6 +68,19 @@ public class AkeneoConsolidatedMigrationTests
     private static readonly string[] DroppedColumns = ["RawPayloadSnapshot", "SaveRawPayloadSnapshot"];
 
     [Test]
+    public void Attribute_value_picture_upgrade_adds_selection_and_ownership_without_adopting_existing_links()
+    {
+        var columns = Plan(true, "TargetProductAttributeId", "AttributeValueKeyTemplate", "AdoptExistingValuePictures", "NopProductAttributeValueId", "OwnsAttributeValuePicture")
+            .OfType<CreateColumnExpression>().Select(expression => expression.Column).ToList();
+        Assert.That(columns, Has.Count.EqualTo(5));
+        Assert.That(columns.Where(column => column.Name is "AdoptExistingValuePictures" or "OwnsAttributeValuePicture")
+            .All(column => Equals(column.DefaultValue, false)), Is.True);
+        Assert.That(columns.Where(column => column.Name is "TargetProductAttributeId" or "NopProductAttributeValueId" or "AttributeValueKeyTemplate")
+            .All(column => column.IsNullable == true), Is.True);
+        Assert.That(Plan(true).OfType<CreateColumnExpression>(), Is.Empty);
+    }
+
+    [Test]
     public void Variant_preselection_upgrade_preserves_automatic_behavior_and_saved_choices()
     {
         var column = Plan(true, nameof(AkeneoFamilyMapping.AutomaticallyPreselectVariant))

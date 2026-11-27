@@ -57,6 +57,12 @@ public sealed class AkeneoCombinationAvailabilityService(
     {
         foreach (var mapping in await GetApplicableMappingsAsync(familyCodes))
         {
+            if (mapping.Enabled && !string.IsNullOrWhiteSpace(mapping.CombinationRoutingJson))
+            {
+                AkeneoCombinationRouting.Parse(mapping.CombinationRoutingJson);
+                if (!allowUpdates || mapping.VariantRelationshipMode != AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+                    throw new ArgumentException("Combination routing requires combination mode and a profile that allows updates.");
+            }
             try { ValidateConfiguration(ManagesEnabledStatus(mapping), enabledFilter, allowUpdates); }
             catch (ArgumentException ex) { throw new ArgumentException($"Family mapping '{mapping.AkeneoFamilyCode}/{mapping.AkeneoFamilyVariantCode}': {ex.Message}", ex); }
         }
@@ -65,10 +71,16 @@ public sealed class AkeneoCombinationAvailabilityService(
     public async Task<string> GetConfigurationFingerprintAsync(IEnumerable<string> familyCodes) =>
         System.Text.Json.JsonSerializer.Serialize((await GetApplicableMappingsAsync(familyCodes))
             .OrderBy(m => m.AkeneoFamilyCode, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.AkeneoFamilyVariantCode, StringComparer.OrdinalIgnoreCase)
-            .Select(m => new { m.AkeneoFamilyCode, m.AkeneoFamilyVariantCode, m.Enabled, m.VariantRelationshipModeId, 
-                // Unchanged JSON for the enabled-status source, so existing scope fingerprints keep.
-                ManageVariantsByEnabledStatus = GetAvailabilitySource(m) == AkeneoCombinationAvailabilitySource.PublishedRule
-                    ? (object)"published-rule" : ManagesEnabledStatus(m) }));
+            .Select(ConfigurationFingerprint));
+
+    private static object ConfigurationFingerprint(AkeneoFamilyMapping mapping)
+    {
+        var original = new { mapping.AkeneoFamilyCode, mapping.AkeneoFamilyVariantCode, mapping.Enabled, mapping.VariantRelationshipModeId,
+            ManageVariantsByEnabledStatus = GetAvailabilitySource(mapping) == AkeneoCombinationAvailabilitySource.PublishedRule
+                ? (object)"published-rule" : ManagesEnabledStatus(mapping) };
+        return string.IsNullOrWhiteSpace(mapping.CombinationRoutingJson) ? original
+            : new { Mapping = original, Routing = mapping.CombinationRoutingJson };
+    }
 
     public static void ValidateConfiguration(bool manageEnabledStatus, AkeneoProductEnabledFilter enabledFilter, bool allowUpdates = true)
     {
@@ -107,6 +119,8 @@ public sealed class AkeneoCombinationAvailabilityService(
         // Only enabled status is known before mappings are resolved; the Published rule is
         // decided with the variant, in AkeneoVariantRelationshipService.
         if (await GetAvailabilitySourceAsync(source, cancellationToken) != AkeneoCombinationAvailabilitySource.EnabledStatus) return null;
+        if ((await GetMappingsAsync()).Any(mapping => mapping.Enabled && mapping.AkeneoFamilyCode == source.Family &&
+                !string.IsNullOrWhiteSpace(mapping.CombinationRoutingJson))) return null;
         const bool manageEnabledStatus = true;
         var state = await syncStateService.GetBySourceAsync(request.SyncProfileId.Value,
             AkeneoEntityType.Product, source.Identifier, source.Uuid);

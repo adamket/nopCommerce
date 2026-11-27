@@ -5,6 +5,7 @@
 @{
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Akeneo product dry run";
+    NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-manual-sync.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.DryRun");
 
@@ -514,7 +515,7 @@
 
         function showResult(success, html) {
             $result
-                .removeClass('d-none alert-success alert-danger')
+                .removeClass('d-none alert-success alert-danger alert-info')
                 .addClass(success ? 'alert-success' : 'alert-danger')
                 .html(html);
         }
@@ -557,7 +558,7 @@
                 .removeClass('alert-success alert-danger')
                 .empty();
 
-            $.ajax({
+            AkeneoManualSync.post({
                 type: 'POST',
                 url: $button.data('import-url'),
                 data: addAntiForgeryToken({
@@ -568,6 +569,8 @@
                     channel: $button.data('channel'),
                     currency: $button.data('currency')
                 })
+            }, function (message) {
+                $result.removeClass('d-none alert-success alert-danger alert-info').addClass('alert-info').text(message);
             })
             .done(function (response) {
                 var success = response && response.success === true;
@@ -612,6 +615,8 @@
 
                 if (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.length) {
                     message = xhr.responseJSON.errors.join(' ');
+                } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
                 } else if (xhr.responseText) {
                     message = xhr.responseText;
                 }

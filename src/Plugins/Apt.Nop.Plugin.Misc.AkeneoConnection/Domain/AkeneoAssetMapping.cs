@@ -26,6 +26,10 @@ public class AkeneoAssetMapping : BaseEntity
     public string AssetMediaAttributeCode { get; set; }
     public string AssetMediaType { get; set; }
 
+    public int? TargetProductAttributeId { get; set; }
+    public string AttributeValueKeyTemplate { get; set; }
+    public bool AdoptExistingValuePictures { get; set; }
+
     public int DestinationTypeId { get; set; }
     public int StorageModeId { get; set; }
     public int EntityScopeId { get; set; }
@@ -54,6 +58,7 @@ public enum AkeneoAssetSourceType
 
 public enum AkeneoAssetDestinationType
 {
+    ProductAttributeValuePictures = 40,
     ProductPicture = 10,
     ProductVideo = 20,
     CustomProperty = 30

@@ -67,6 +67,9 @@
     <None Update="Content\Scripts\akeneo-combobox.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Content\Scripts\akeneo-manual-sync.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Content\Stylesheets\akeneo-connection.admin.css">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

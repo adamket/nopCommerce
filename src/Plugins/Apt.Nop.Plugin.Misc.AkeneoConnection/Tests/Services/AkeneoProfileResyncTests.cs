@@ -388,6 +388,72 @@ public class AkeneoProfileResyncTests
 
     #endregion
 
+    [TestCase("profile")]
+    [TestCase("product")]
+    [TestCase("model")]
+    public async Task Cancellations_keep_exception_details_and_release_the_lease(string kind)
+    {
+        var exception = new TaskCanceledException("Akeneo request exceeded its timeout", new TimeoutException("inner timeout details"));
+        _batch.Setup(service => service.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>())).ThrowsAsync(exception);
+        _batch.Setup(service => service.SyncProductByUuidAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>())).ThrowsAsync(exception);
+        _batch.Setup(service => service.SyncProductModelByCodeAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>())).ThrowsAsync(exception);
+        var logger = new Mock<global::Nop.Services.Logging.ILogger>();
+        var execution = new AkeneoProductSyncExecutionService(_batch.Object, _runs.Object, _factory, _profiles.Object, _leases.Object, logger: logger.Object);
+        var result = kind switch
+        {
+            "product" => await execution.SyncProductByUuidAsync(_profile.Id, "uuid"),
+            "model" => await execution.SyncProductModelByCodeAsync(_profile.Id, "parent"),
+            _ => await execution.ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions())
+        };
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Canceled, Is.True);
+            Assert.That(result.Message, Does.Contain("token was not signaled").And.Contain("TaskCanceledException"));
+            Assert.That(_insertedRun!.ErrorSummary, Does.Contain("inner timeout details").And.Contain("Akeneo request exceeded"));
+            Assert.That(_insertedRun.CompletedAllPages, Is.False);
+            Assert.That(_insertedRun.SyncStatusId, Is.EqualTo((int)SyncStatus.Cancelled));
+        });
+        logger.Verify(service => service.WarningAsync(It.Is<string>(message => message.Contains("41")), exception, null), Times.Once);
+        _leases.Verify(service => service.ReleaseAsync(It.IsAny<AkeneoSyncLease>()), Times.Once);
+    }
+
+    [Test]
+    public async Task A_canceled_batch_keeps_counts_and_the_original_exception_in_run_history()
+    {
+        var exception = new AkeneoSyncLeaseLostException();
+        var batch = new AkeneoProductBatchImportResult
+        {
+            Canceled = true, CancellationException = exception, TotalRead = 13, UpdatedCount = 17
+        };
+        batch.AddError("Earlier product error");
+        _batch.Setup(service => service.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(batch);
+        var result = await Execution().ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions());
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Canceled, Is.True);
+            Assert.That(result.Message, Does.Contain("catalog writer lock was lost").And.Contain("AkeneoSyncLeaseLostException"));
+            Assert.That(result.Errors, Does.Contain("Earlier product error"));
+            Assert.That(_insertedRun!.TotalRead, Is.EqualTo(13));
+            Assert.That(_insertedRun.UpdatedCount, Is.EqualTo(17));
+            Assert.That(_insertedRun.ErrorSummary, Does.Contain(exception.Message));
+        });
+    }
+
+    [Test]
+    public async Task Host_shutdown_is_identified_in_the_saved_cancellation_reason()
+    {
+        using var shutdown = new CancellationTokenSource();
+        shutdown.Cancel();
+        var lifetime = new Mock<Microsoft.Extensions.Hosting.IHostApplicationLifetime>();
+        lifetime.SetupGet(host => host.ApplicationStopping).Returns(shutdown.Token);
+        _batch.Setup(service => service.SyncProductsAsync(It.IsAny<AkeneoProductBatchImportRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(shutdown.Token));
+        var execution = new AkeneoProductSyncExecutionService(_batch.Object, _runs.Object, _factory, _profiles.Object, _leases.Object, applicationLifetime: lifetime.Object);
+        var result = await execution.ResyncProfileAsync(_profile.Id, new AkeneoResyncOptions(), shutdown.Token);
+        Assert.That(result.Message, Does.Contain("application is shutting down"));
+        Assert.That(_insertedRun!.ErrorSummary, Does.Contain("application is shutting down"));
+    }
+
     private static AkeneoSyncProfile Profile() => new()
     {
         Id = 7,

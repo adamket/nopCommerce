@@ -15,6 +15,8 @@ public class AkeneoProductSyncExecutionService(
     IAkeneoSyncProfileService syncProfileService,
     IAkeneoSyncLeaseService syncLeaseService,
     IAkeneoCombinationAvailabilityService combinationAvailabilityService = null,
+    global::Nop.Services.Logging.ILogger logger = null,
+    Microsoft.Extensions.Hosting.IHostApplicationLifetime applicationLifetime = null,
     Microsoft.Extensions.DependencyInjection.IServiceScopeFactory stopScopes = null)
     : IAkeneoProductSyncExecutionService
 {
@@ -290,22 +292,9 @@ public class AkeneoProductSyncExecutionService(
                     Messages = itemResult.Messages.ToList()
                 };
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                runRecord.FinishedOnUtc = DateTime.UtcNow;
-                runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-                runRecord.ErrorSummary = stop.Reason ?? "Product synchronization was canceled.";
-                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
-
-                return new AkeneoProductSyncExecutionResult
-                {
-                    Success = false,
-                    Canceled = true,
-                    ProfileId = profile.Id,
-                    SyncRunRecordId = runRecord.Id,
-                    SyncStatus = SyncStatus.Cancelled,
-                    Message = stop.Reason ?? "Akeneo product synchronization was canceled."
-                };
+                return await RecordCancellationAsync(runRecord, ex, cancellationToken, stop.Reason);
             }
             catch (Exception ex)
             {
@@ -422,22 +411,9 @@ public class AkeneoProductSyncExecutionService(
                     Messages = itemResult.Messages.ToList()
                 };
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                runRecord.FinishedOnUtc = DateTime.UtcNow;
-                runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-                runRecord.ErrorSummary = stop.Reason ?? "Product model synchronization was canceled.";
-                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
-
-                return new AkeneoProductSyncExecutionResult
-                {
-                    Success = false,
-                    Canceled = true,
-                    ProfileId = profile.Id,
-                    SyncRunRecordId = runRecord.Id,
-                    SyncStatus = SyncStatus.Cancelled,
-                    Message = stop.Reason ?? "Akeneo product model synchronization was canceled."
-                };
+                return await RecordCancellationAsync(runRecord, ex, cancellationToken, stop.Reason);
             }
             catch (Exception ex)
             {
@@ -477,30 +453,22 @@ public class AkeneoProductSyncExecutionService(
                 request,
                 cancellationToken);
 
-            if (result.Canceled && stop.Reason != null)
-                result.Errors.Insert(0, stop.Reason);
             ApplyResultToRunRecord(runRecord, result);
             runRecord.ResyncCheckpointEligible = resyncCheckpointEligible && result.IsAuthoritative;
-            await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+            if (result.CancellationException != null)
+            {
+                var details = await SaveCancellationAsync(runRecord, result.CancellationException, cancellationToken, stop.Reason);
+                // Keep the batch's counts and warnings, while putting the cancellation reason first.
+                result.Errors.Insert(0, details);
+            }
+            else
+                await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
 
             return BuildExecutionResult(runRecord, result, profileId);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            runRecord.FinishedOnUtc = DateTime.UtcNow;
-            runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
-            runRecord.ErrorSummary = stop.Reason ?? "Product synchronization was canceled.";
-            await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
-
-            return new AkeneoProductSyncExecutionResult
-            {
-                Success = false,
-                Canceled = true,
-                ProfileId = profileId,
-                SyncRunRecordId = runRecord.Id,
-                SyncStatus = SyncStatus.Cancelled,
-                Message = stop.Reason ?? "Akeneo product synchronization was canceled."
-            };
+            return await RecordCancellationAsync(runRecord, ex, cancellationToken, stop.Reason);
         }
         catch (Exception ex)
         {
@@ -519,6 +487,42 @@ public class AkeneoProductSyncExecutionService(
                 Errors = new List<string> { ex.Message }
             };
         }
+    }
+
+    private async Task<string> SaveCancellationAsync(
+        AkeneoSyncRunRecord runRecord,
+        OperationCanceledException exception,
+        CancellationToken cancellationToken,
+        string stopReason)
+    {
+        var details = stopReason ?? AkeneoCancellationDetails.Describe(exception, cancellationToken,
+            applicationLifetime?.ApplicationStopping.IsCancellationRequested == true);
+        runRecord.FinishedOnUtc = DateTime.UtcNow;
+        runRecord.SyncStatusId = (int)SyncStatus.Cancelled;
+        runRecord.CompletedAllPages = false;
+        runRecord.ErrorSummary = ($"{details}{Environment.NewLine}{exception}").Truncate(4000);
+        await syncRunRecordService.UpdateAkeneoSyncRunRecordAsync(runRecord);
+        if (logger != null)
+            await logger.WarningAsync($"Akeneo sync run {runRecord.Id}: {details}", exception);
+        return details;
+    }
+
+    private async Task<AkeneoProductSyncExecutionResult> RecordCancellationAsync(
+        AkeneoSyncRunRecord runRecord,
+        OperationCanceledException exception,
+        CancellationToken cancellationToken,
+        string stopReason)
+    {
+        var details = await SaveCancellationAsync(runRecord, exception, cancellationToken, stopReason);
+        return new AkeneoProductSyncExecutionResult
+        {
+            Canceled = true,
+            ProfileId = runRecord.SyncProfileId,
+            SyncRunRecordId = runRecord.Id,
+            SyncStatus = SyncStatus.Cancelled,
+            Message = details,
+            Errors = new List<string> { details }
+        };
     }
 
     private async Task<(AkeneoSyncProfile Profile, AkeneoProductSyncExecutionResult Result)>
@@ -657,7 +661,7 @@ public class AkeneoProductSyncExecutionService(
     private static string BuildSyncMessage(AkeneoProductBatchImportResult result)
     {
         if (result.Canceled)
-            return "Akeneo product synchronization was canceled.";
+            return result.Errors.FirstOrDefault() ?? "Akeneo product synchronization was canceled.";
 
         var message =
             $"Akeneo product synchronization completed. Read: {result.TotalRead}, " +

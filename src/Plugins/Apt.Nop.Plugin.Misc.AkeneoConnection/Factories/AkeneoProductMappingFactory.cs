@@ -761,6 +761,15 @@ public sealed class AkeneoProductMappingFactory(
 
         model.HierarchyDecision =
             $"{model.HierarchyDecision} Leaf representation: {representation} ({decisionSource}).";
+        var routing = AkeneoCombinationRouting.Parse(familyMapping?.CombinationRoutingJson);
+        if (routing != null)
+        {
+            model.ParentNopProductId = routing.ParentProductId;
+            model.ParentProductDecision = $"Combination routing targets existing parent #{routing.ParentProductId} for model '{routing.ProductModelCode}'.";
+            model.HierarchyDecision += $" All matching routing rules apply ({routing.Routes.Count} configured); one SKU may have several conditional combinations.";
+            model.HierarchyRequiresReview = true;
+            model.Warnings.Add("Routing uses exact SKU plus selector/year selections for adoption. Destination selectors and every matching route are validated during sync; this preview does not simulate individual routed combination changes.");
+        }
 
         if (parentResult.Errors.Any())
         {

@@ -24,6 +24,9 @@ public class NopStartup : INopStartup
     /// <param name="configuration">Configuration of the application</param>
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddSingleton<AkeneoManualSyncWorker>();
+        services.AddHostedService(provider => provider.GetRequiredService<AkeneoManualSyncWorker>());
+
         //override services
         services.AddScoped<IAkeneoApiClient, AkeneoApiClient>();
         services.AddScoped<IAkeneoConfigurationExportService, AkeneoConfigurationExportService>();
@@ -74,6 +77,8 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoSyncLeaseService, AkeneoSyncLeaseService>();
         services.AddScoped<IAkeneoCatalogReconciliationService, AkeneoCatalogReconciliationService>();
         services.AddScoped<AkeneoAssociatedOptionReconciliationService>();
+        services.AddScoped<AkeneoCombinationReconciliationService>();
+        services.AddScoped<AkeneoCombinationRoutingService>();
         services.AddScoped<AkeneoVariantPreselectionService>();
         services.AddScoped<IAkeneoCatalogBindingService, AkeneoCatalogBindingService>();
         services.AddScoped<IAkeneoWritePolicyGate, AkeneoWritePolicyGate>();
@@ -138,6 +143,7 @@ public class NopStartup : INopStartup
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductAttributeSynchronizer>());
 
+        services.AddScoped<IAkeneoAttributeValuePictureStore, AkeneoAttributeValuePictureStore>();
         services.AddScoped<AkeneoProductAssetSynchronizer>();
         services.AddScoped<IAkeneoProductSectionSynchronizer>(provider =>
             provider.GetRequiredService<AkeneoProductAssetSynchronizer>());

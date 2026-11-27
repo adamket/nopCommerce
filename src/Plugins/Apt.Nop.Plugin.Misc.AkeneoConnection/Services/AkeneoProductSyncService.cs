@@ -25,7 +25,8 @@ public class AkeneoProductSyncService(
     IAkeneoProductSyncPipeline syncPipeline,
     IAkeneoProfileRuleEvaluator profileRuleEvaluator,
     IAkeneoApiClient akeneoApiClient,
-    ILanguageService languageService = null)
+    ILanguageService languageService = null,
+    IAkeneoFamilyMappingService familyMappingService = null)
     : IAkeneoProductSyncService
 {
     // One fresh catalog per import request/run, shared by all products in it.
@@ -375,6 +376,23 @@ public class AkeneoProductSyncService(
                 intent.Request,
                 result,
                 knownState);
+        }
+
+        if (result.Success && intent.SourceEntityType == AkeneoEntityType.ProductModel && familyMappingService != null)
+        {
+            var family = await familyMappingService.GetEffectiveMappingAsync(intent.MappingFamilyCode, intent.MappingFamilyVariantCode);
+            var routing = AkeneoCombinationRouting.Parse(family?.CombinationRoutingJson);
+            if (routing != null)
+            {
+                if (intent.SourceCode != routing.ProductModelCode)
+                    throw new global::Nop.Core.NopException("Combination routing is restricted to its configured product model.");
+                var target = await productService.GetProductByIdAsync(routing.ParentProductId);
+                if (target == null || target.Deleted || target.ProductType != ProductType.SimpleProduct)
+                    throw new global::Nop.Core.NopException("The configured routing parent must be an existing simple product.");
+                if (existingProduct != null && existingProduct.Id != target.Id)
+                    throw new global::Nop.Core.NopException("The product model already resolves to a different product than its routing parent.");
+                existingProduct = target;
+            }
         }
 
         return new AkeneoProductSyncContext

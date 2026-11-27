@@ -1,3 +1,5 @@
+using Apt.Nop.Plugin.Misc.AkeneoConnection.Types;
+using Nop.Services.Catalog;
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Types.Api.Dto;
@@ -21,7 +23,8 @@ public sealed class AkeneoAssetMappingController(
     IAkeneoAssetMappingModelFactory modelFactory,
     IAkeneoAssetMappingService mappingService,
     IAkeneoApiClient apiClient,
-    IAkeneoValueTemplateRenderer templateRenderer)
+    IAkeneoValueTemplateRenderer templateRenderer,
+    IProductAttributeService productAttributeService = null)
     : BasePluginController
 {
 
@@ -154,6 +157,9 @@ public sealed class AkeneoAssetMappingController(
         mapping.AssetFamilyCode = model.AssetFamilyCode.TrimOrNull();
         mapping.AssetMediaAttributeCode = model.AssetMediaAttributeCode.TrimOrNull();
         mapping.AssetMediaType = model.AssetMediaType.TrimOrNull();
+        mapping.TargetProductAttributeId = model.TargetProductAttributeId;
+        mapping.AttributeValueKeyTemplate = model.AttributeValueKeyTemplate.TrimOrNull();
+        mapping.AdoptExistingValuePictures = model.AdoptExistingValuePictures;
         mapping.DestinationTypeId = model.DestinationTypeId;
         mapping.StorageModeId = model.StorageModeId;
         mapping.EntityScopeId = AkeneoAttributeMappingScopeHelper
@@ -246,8 +252,8 @@ public sealed class AkeneoAssetMappingController(
             // implementation: pictures own a nopCommerce binary, while videos
             // and custom-property payloads retain external/source references.
             model.StorageModeId =
-                (AkeneoAssetDestinationType)model.DestinationTypeId ==
-                    AkeneoAssetDestinationType.ProductPicture
+                (AkeneoAssetDestinationType)model.DestinationTypeId is
+                    AkeneoAssetDestinationType.ProductPicture or AkeneoAssetDestinationType.ProductAttributeValuePictures
                     ? (int)AkeneoAssetStorageMode.ImportIntoNopCommerce
                     : (int)AkeneoAssetStorageMode.ExternalReference;
         }
@@ -357,6 +363,21 @@ public sealed class AkeneoAssetMappingController(
             string.IsNullOrWhiteSpace(model.CustomPropertyKey))
         {
             errors.Add("Custom property key is required for a Custom Property destination.");
+        }
+
+        if (model.DestinationTypeId == (int)AkeneoAssetDestinationType.ProductAttributeValuePictures)
+        {
+            if (model.TargetProductAttributeId is not > 0 || productAttributeService == null ||
+                await productAttributeService.GetProductAttributeByIdAsync(model.TargetProductAttributeId.Value) == null)
+                errors.Add("Select an existing nopCommerce product attribute for the picture destination.");
+            if (!AkeneoAssociatedValueNameTemplate.TryGetLiteral(model.AttributeValueKeyTemplate, out _))
+                ValidateTemplate(model.AttributeValueKeyTemplate, "Attribute value key", errors);
+        }
+        else
+        {
+            model.TargetProductAttributeId = null;
+            model.AttributeValueKeyTemplate = null;
+            model.AdoptExistingValuePictures = false;
         }
 
         ValidateTemplate(model.AltTextTemplate, "Alt text", errors);

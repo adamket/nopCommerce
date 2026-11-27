@@ -41,6 +41,8 @@ public sealed partial class AkeneoProductAssetSynchronizer
         var changed = await ReleaseDeletedCombinationsAsync(parentProduct.Id, cancellationToken);
 
         var desired = await ResolveDesiredAsync(leafContext, leafContext.Result.AddWarning, cancellationToken);
+        foreach (var valueMapping in desired.ActiveMappings.Where(IsValuePictureMapping))
+            leafContext.Result.AddWarning($"Asset mapping '{valueMapping.Name}' targets attribute value pictures, which require a variant represented by its own product.");
         if (desired.AuthoritativeResolutionFailed)
         {
             leafContext.Result.AddWarning(
@@ -441,6 +443,9 @@ public sealed partial class AkeneoProductAssetSynchronizer
         int productId,
         int? releasedCombinationId = null)
     {
+        if (attributeValuePictures != null && await attributeValuePictures.IsReferencedAsync(pictureId, productId))
+            return false;
+
         if ((await managedAssetService.GetByPictureAsync(pictureId)).Count > 0)
             return false;
 

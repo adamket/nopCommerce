@@ -266,6 +266,7 @@ public class AkeneoFamilyMappingController(
             ProductModelHierarchyModeId = model.ProductModelHierarchyModeId,
             PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure,
             AssociatedProductAttributeId = model.AssociatedProductAttributeId,
+            CombinationRoutingJson = model.CombinationRoutingJson,
             AssociatedValueNameTemplate = model.AssociatedValueNameTemplate,
             VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys),
             AutomaticallyPreselectVariant = model.AutomaticallyPreselectVariant,
@@ -343,6 +344,7 @@ public class AkeneoFamilyMappingController(
         configuration.ProductModelHierarchyModeId = model.ProductModelHierarchyModeId;
         configuration.PreserveExistingNopVariantStructure = model.PreserveExistingNopVariantStructure;
         configuration.AssociatedProductAttributeId = model.AssociatedProductAttributeId;
+        configuration.CombinationRoutingJson = model.CombinationRoutingJson;
         configuration.AssociatedValueNameTemplate = model.AssociatedValueNameTemplate;
         configuration.VariantDisplayOrderKeys = NormalizeDisplayOrderKeys(model.VariantDisplayOrderKeys);
         configuration.AutomaticallyPreselectVariant = model.AutomaticallyPreselectVariant;
@@ -427,6 +429,13 @@ public class AkeneoFamilyMappingController(
 
 
         var mode = (AkeneoVariantRelationshipMode)model.VariantRelationshipModeId;
+        try
+        {
+            var routing = AkeneoCombinationRouting.Parse(model.CombinationRoutingJson);
+            if (routing != null && mode != AkeneoVariantRelationshipMode.ProductAttributeCombinations)
+                ModelState.AddModelError(nameof(model.CombinationRoutingJson), "Combination routing requires product attribute combination mode.");
+        }
+        catch (global::Nop.Core.NopException ex) { ModelState.AddModelError(nameof(model.CombinationRoutingJson), ex.Message); }
 
         if (!Enum.IsDefined(
                 typeof(AkeneoProductModelHierarchyMode),
@@ -498,6 +507,7 @@ public class AkeneoFamilyMappingController(
         model.SubModelRules ??= new List<AkeneoFamilySubModelRuleModel>();
 
         if (mode == AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
+            string.IsNullOrWhiteSpace(model.CombinationRoutingJson) &&
             !model.AxisMappings.Any(x =>
                 !string.IsNullOrWhiteSpace(x.AkeneoAttributeCode) &&
                 x.NopProductAttributeId > 0))

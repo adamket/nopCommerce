@@ -10,6 +10,10 @@ public class AkeneoFamilyVariantImportConfigurationBuilder : NopEntityBuilder<Ak
     {
         table.WithColumn(nameof(AkeneoFamilyMapping.AkeneoFamilyCode)).AsString(100);
         table
+            .WithColumn(nameof(AkeneoFamilyMapping.CombinationRoutingJson))
+            .AsString(int.MaxValue)
+            .Nullable();
+        table
             .WithColumn(nameof(AkeneoFamilyMapping.AutomaticallyPreselectVariant))
             .AsBoolean()
             .NotNullable()

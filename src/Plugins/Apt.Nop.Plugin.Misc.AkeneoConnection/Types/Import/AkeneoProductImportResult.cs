@@ -9,6 +9,10 @@ public class AkeneoProductImportResult
 
     public int? NopParentProductId { get; set; }
 
+    public bool CombinationRoutingApplied { get; set; }
+
+    public IList<int> NopProductAttributeCombinationIds { get; set; } = new List<int>();
+
     public int? NopProductAttributeCombinationId { get; set; }
 
     public bool CombinationUnavailable { get; set; }
@@ -18,6 +22,9 @@ public class AkeneoProductImportResult
     // Set only after the association was verified, including the unchanged-hash path.
     // A profile/write-policy skip must not authorize collection cleanup.
     internal bool AssociatedOptionsVerified { get; set; }
+
+    // Only successful relationship reconciliation or a verified unchanged hash permits axis cleanup.
+    internal bool CombinationOptionsVerified { get; set; }
 
     internal int? VariantFamilyMappingId { get; set; }
 

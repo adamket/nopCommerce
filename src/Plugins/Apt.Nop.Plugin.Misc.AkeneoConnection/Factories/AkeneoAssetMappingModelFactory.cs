@@ -1,3 +1,4 @@
+using Nop.Services.Catalog;
 ﻿using Apt.Nop.Plugin.Misc.AkeneoConnection.Domain;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Extensions;
 using Apt.Nop.Plugin.Misc.AkeneoConnection.Helpers;
@@ -11,7 +12,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Factories;
 public sealed class AkeneoAssetMappingModelFactory(
     IAkeneoApiClient apiClient,
     IAkeneoAssetMappingService assetMappingService,
-    IAkeneoFamilyMappingService familyMappingService = null)
+    IAkeneoFamilyMappingService familyMappingService = null,
+    IProductAttributeService productAttributeService = null)
     : IAkeneoAssetMappingModelFactory
 {
     public async Task<AkeneoAssetMappingListModel> PrepareListModelAsync(
@@ -71,6 +73,10 @@ public sealed class AkeneoAssetMappingModelFactory(
                 .Where(mapping => string.IsNullOrWhiteSpace(mapping.AkeneoFamilyCode))
                 .ToList()
             : await assetMappingService.GetEffectiveMappingsAsync(familyCode);
+
+        if (productAttributeService != null)
+            model.AvailableProductAttributes = (await productAttributeService.GetAllProductAttributesAsync())
+                .Select(attribute => new SelectListItem { Value = attribute.Id.ToString(), Text = attribute.Name }).ToList();
 
         model.Mappings = mappings
             .Select(mapping => PrepareMappingModel(mapping, familyCode))
@@ -163,6 +169,9 @@ public sealed class AkeneoAssetMappingModelFactory(
             AssetFamilyCode = mapping.AssetFamilyCode,
             AssetMediaAttributeCode = mapping.AssetMediaAttributeCode,
             AssetMediaType = mapping.AssetMediaType,
+            TargetProductAttributeId = mapping.TargetProductAttributeId,
+            AttributeValueKeyTemplate = mapping.AttributeValueKeyTemplate,
+            AdoptExistingValuePictures = mapping.AdoptExistingValuePictures,
             DestinationTypeId = mapping.DestinationTypeId,
             StorageModeId = mapping.StorageModeId,
             EntityScopeId = mapping.EntityScopeId,

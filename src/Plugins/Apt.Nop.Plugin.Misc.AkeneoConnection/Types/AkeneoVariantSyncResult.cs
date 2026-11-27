@@ -14,6 +14,10 @@ public class AkeneoVariantSyncResult
 
     public int? NopParentProductId { get; set; }
 
+    public bool CombinationRoutingApplied { get; set; }
+
+    public IList<int> NopProductAttributeCombinationIds { get; set; } = new List<int>();
+
     public int? NopProductAttributeCombinationId { get; set; }
 
     public bool CombinationUnavailable { get; set; }

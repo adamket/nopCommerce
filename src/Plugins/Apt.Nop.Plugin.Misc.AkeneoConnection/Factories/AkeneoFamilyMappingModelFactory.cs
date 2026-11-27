@@ -88,6 +88,7 @@ public class AkeneoFamilyMappingModelFactory
             model.ProductModelHierarchyModeId = configuration.ProductModelHierarchyModeId;
             model.PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure;
             model.AssociatedProductAttributeId = configuration.AssociatedProductAttributeId;
+            model.CombinationRoutingJson = configuration.CombinationRoutingJson;
             model.AssociatedValueNameTemplate = configuration.AssociatedValueNameTemplate;
             model.VariantDisplayOrderKeys = configuration.VariantDisplayOrderKeys;
             model.AutomaticallyPreselectVariant = configuration.AutomaticallyPreselectVariant;

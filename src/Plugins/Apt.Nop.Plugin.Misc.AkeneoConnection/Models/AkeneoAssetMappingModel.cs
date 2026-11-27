@@ -18,6 +18,10 @@ public record AkeneoAssetMappingModel : BaseNopEntityModel
     public string AssetMediaAttributeCode { get; set; }
     public string AssetMediaType { get; set; }
 
+    public int? TargetProductAttributeId { get; set; }
+    public string AttributeValueKeyTemplate { get; set; }
+    public bool AdoptExistingValuePictures { get; set; }
+
     public int DestinationTypeId { get; set; }
     public int StorageModeId { get; set; }
     public int EntityScopeId { get; set; }
@@ -39,6 +43,7 @@ public record AkeneoAssetMappingListModel : BaseNopModel
     public IList<SelectListItem> AvailableAkeneoFamilies { get; set; } = new List<SelectListItem>();
     public IList<AkeneoAssetSourceOptionModel> AvailableSources { get; set; } = new List<AkeneoAssetSourceOptionModel>();
     public IList<AkeneoAssetMappingModel> Mappings { get; set; } = new List<AkeneoAssetMappingModel>();
+    public IList<SelectListItem> AvailableProductAttributes { get; set; } = new List<SelectListItem>();
     public IList<string> Warnings { get; set; } = new List<string>();
 }
 

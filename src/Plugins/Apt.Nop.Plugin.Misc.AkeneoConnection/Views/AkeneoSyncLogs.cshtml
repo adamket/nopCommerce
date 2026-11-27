@@ -7,6 +7,8 @@
     NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Scripts/akeneo-connection.admin.js");
    // NopHtml.AddScriptParts(ResourceLocation.Footer, $"{AkeneoConnectionConstants.PathToPlugin}/Content/Libraries/Vue/vue.global.js");
     NopHtml.AddCssFileParts($"{AkeneoConnectionConstants.PathToPlugin}/Content/Stylesheets/akeneo-connection.admin.css");
+    // Inline so the page stays hidden until Vue mounts, even before the plugin stylesheet applies.
+    NopHtml.AddHeadCustomParts("<style>[v-cloak]{display:none!important}</style>");
     NopHtml.SetActiveMenuItemSystemName("AkeneoIntegration.SyncLogs");
 
     var appModel = new

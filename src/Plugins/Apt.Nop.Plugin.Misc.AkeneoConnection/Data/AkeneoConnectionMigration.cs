@@ -16,8 +16,8 @@ namespace Apt.Nop.Plugin.Misc.AkeneoConnection.Data;
 // only while its index is missing, since SQL Server rejects altering an indexed
 // column on such a rerun.
 [NopMigration(
-    "2026-11-21 12:00:00",
-    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template, profile skip logging, combination option name templates, combination pictures, allow customer reviews and inventory method defaults)",
+    "2026-11-27 18:00:00",
+    "AkeneoConnection: Consolidated schema (mappings, profile rules, family availability, assets, sync state, category content, sub-model parents, new-product defaults, combination availability source, variant display order, specification show on product page and display order, standalone rule product template and name template, profile skip logging, combination option name templates, combination pictures, allow customer reviews and inventory method defaults, combination routing)",
     MigrationProcessType.NoMatter)]
 public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migration
 {
@@ -36,10 +36,12 @@ public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migrati
         EnsureAttributeMappingColumns();
         EnsureAttributeMappingFallbackSourceSchema();
         EnsureFamilyMappingColumns();
+        EnsureNullableStringColumn(GetTableName<AkeneoFamilyMapping>(), nameof(AkeneoFamilyMapping.CombinationRoutingJson), int.MaxValue);
         EnsureNullableStringColumn(GetTableName<AkeneoFamilyVariantAxisMapping>(), nameof(AkeneoFamilyVariantAxisMapping.OptionNameTemplate), int.MaxValue);
         EnsureSubModelRuleColumns();
         EnsureAssetMappingSchema();
         EnsureManagedAssetSchema();
+        EnsureAttributeValuePictureSchema();
         EnsureSyncProfileColumns();
         EnsureAdditionalSyncProfileColumns();
         EnsureFamilyCombinationAvailabilitySchema();
@@ -500,6 +502,21 @@ public sealed class AkeneoConnectionMigration(IVersionLoader versions) : Migrati
     #endregion
 
     #region Asset mappings
+
+    private void EnsureAttributeValuePictureSchema()
+    {
+        var mapping = GetTableName<AkeneoAssetMapping>();
+        if (!ColumnExists(mapping, nameof(AkeneoAssetMapping.TargetProductAttributeId)))
+            Create.Column(nameof(AkeneoAssetMapping.TargetProductAttributeId)).OnTable(mapping).AsInt32().Nullable();
+        EnsureNullableStringColumn(mapping, nameof(AkeneoAssetMapping.AttributeValueKeyTemplate), 2000);
+        if (!ColumnExists(mapping, nameof(AkeneoAssetMapping.AdoptExistingValuePictures)))
+            Create.Column(nameof(AkeneoAssetMapping.AdoptExistingValuePictures)).OnTable(mapping).AsBoolean().NotNullable().WithDefaultValue(false);
+        var managed = GetTableName<AkeneoManagedAsset>();
+        if (!ColumnExists(managed, nameof(AkeneoManagedAsset.NopProductAttributeValueId)))
+            Create.Column(nameof(AkeneoManagedAsset.NopProductAttributeValueId)).OnTable(managed).AsInt32().Nullable();
+        if (!ColumnExists(managed, nameof(AkeneoManagedAsset.OwnsAttributeValuePicture)))
+            Create.Column(nameof(AkeneoManagedAsset.OwnsAttributeValuePicture)).OnTable(managed).AsBoolean().NotNullable().WithDefaultValue(false);
+    }
 
     private void EnsureAssetMappingSchema()
     {

@@ -54,7 +54,8 @@ public class AkeneoProductBatchSyncService(
     IAkeneoValueTemplateRenderer valueTemplateRenderer = null,
     AkeneoAssociatedOptionReconciliationService associatedOptionReconciliation = null,
     IAkeneoCombinationPictureSynchronizer combinationPictureSynchronizer = null,
-    AkeneoVariantPreselectionService variantPreselection = null)
+    AkeneoVariantPreselectionService variantPreselection = null,
+    AkeneoCombinationReconciliationService combinationReconciliation = null)
     : IAkeneoProductBatchSyncService
 {
     private static readonly JsonSerializerOptions HashSerializerOptions = new()
@@ -90,6 +91,7 @@ public class AkeneoProductBatchSyncService(
         request.MissingTokenWarnings = new AkeneoMissingTokenWarnings();
         request.Steps = new AkeneoSyncSteps((step, unit, done, total) => ReportProgress(request, step, unit, done, total));
         associatedOptionReconciliation?.Begin(request);
+        combinationReconciliation?.Begin(request);
         variantPreselection?.Begin();
         var result = new AkeneoProductBatchImportResult
         {
@@ -343,6 +345,7 @@ public class AkeneoProductBatchSyncService(
                 }
 
                 associatedOptionReconciliation?.Observe(source, itemResult);
+                combinationReconciliation?.Observe(source, itemResult);
                 variantPreselection?.Observe(source, itemResult);
 
                 var committed = itemResult.Success && itemResult.ActionType != SyncItemActionType.Failed;
@@ -389,6 +392,11 @@ public class AkeneoProductBatchSyncService(
                     request, result, parentProductCache, cancellationToken,
                     async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
 
+            if (combinationReconciliation != null)
+                result.ReconciledCount += await combinationReconciliation.ReconcileAsync(
+                    request, result, cancellationToken,
+                    async () => { lastLeaseRenewalUtc = await RenewLeaseIfDueAsync(request, lastLeaseRenewalUtc); });
+
             if (variantPreselection != null)
                 result.ReconciledCount += await variantPreselection.ApplyAsync(
                     request, result, cancellationToken,
@@ -400,9 +408,8 @@ public class AkeneoProductBatchSyncService(
         {
             result.Canceled = true;
             result.CompletedAllPages = false;
-            result.AddError(ex is AkeneoSyncLeaseLostException
-                ? ex.Message
-                : "Product synchronization was canceled.");
+            result.CancellationException = ex;
+            result.AddError(AkeneoCancellationDetails.Describe(ex, cancellationToken));
             return result;
         }
         catch (Exception ex)
@@ -1298,6 +1305,9 @@ public class AkeneoProductBatchSyncService(
         var familyConfiguration = await familyMappingService
             .GetEffectiveMappingAsync(familyCode, familyVariantCode);
 
+        // Routed leaves verify every managed destination, even when their primary state/hash is unchanged.
+        if (!string.IsNullOrWhiteSpace(familyConfiguration?.CombinationRoutingJson)) skipLeafWrite = false;
+
         var hierarchyMode = familyConfiguration is { Enabled: true }
             ? familyConfiguration.ProductModelHierarchyMode
             : AkeneoProductModelHierarchyMode.ImmediateParentProductModel;
@@ -1479,6 +1489,24 @@ public class AkeneoProductBatchSyncService(
             return result;
         }
 
+        var routing = AkeneoCombinationRouting.Parse(familyConfiguration?.CombinationRoutingJson);
+        if (routing != null)
+        {
+            if (hierarchy.EffectiveParentProductModel?.Code != routing.ProductModelCode || source.Parent != routing.ProductModelCode)
+                throw new NopException("Combination routing requires its configured product model and a single variant level.");
+            var targetParent = await productService.GetProductByIdAsync(routing.ParentProductId);
+            if (targetParent == null || targetParent.Deleted || targetParent.ProductType != ProductType.SimpleProduct)
+                throw new NopException("Combination routing requires an existing, non-deleted simple parent product.");
+            var boundParent = await entityMappingService.GetMappedNopEntityIdByAkeneoCodeAsync(
+                AkeneoEntityType.ProductModel, routing.ProductModelCode, NopEntityType.Product);
+            if (boundParent.HasValue && boundParent != targetParent.Id)
+                throw new NopException("The routed product model is already bound to a different product. Correct the binding before syncing.");
+            if (!request.UpdateExistingProducts)
+                throw new NopException("Combination routing requires a profile that allows updates.");
+            await entityMappingService.UpsertAkeneoNopEntityMappingAsync(AkeneoEntityType.ProductModel,
+                routing.ProductModelCode, null, NopEntityType.Product, targetParent.Id);
+        }
+
         var parentSync = await ResolveOrCreateParentProductAsync(
             hierarchy.EffectiveParentProductModel,
             familyCode,
@@ -1518,6 +1546,7 @@ public class AkeneoProductBatchSyncService(
             result.AddMessage(
                 "Skipped leaf reconciliation because the resolved desired-state hash is unchanged. The parent product model was still verified for this item.");
             result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
+            result.CombinationOptionsVerified = CanReconcileCombinationOptions(result, familyConfiguration, leafContext.MappedValues);
             return result;
         }
 
@@ -1581,10 +1610,12 @@ public class AkeneoProductBatchSyncService(
         result.VariantFamilyMappingId = familyConfiguration?.Id;
         result.VariantParentModelCode = hierarchy.EffectiveParentProductModel?.Code;
         result.AssociatedOptionsVerified = result.DestinationKind == AkeneoProductDestinationKind.AssociatedProduct;
+        result.CombinationOptionsVerified = CanReconcileCombinationOptions(result, familyConfiguration, leafContext.MappedValues);
 
         if (variantResult.Mode ==
                 AkeneoVariantRelationshipMode.ProductAttributeCombinations &&
             !variantResult.CombinationUnavailable &&
+            !(variantResult.CombinationRoutingApplied && variantContext.PublishedRuleHeld) &&
             variantResult.NopProductAttributeCombinationId is > 0 &&
             combinationPictureSynchronizer != null)
         {
@@ -1592,10 +1623,13 @@ public class AkeneoProductBatchSyncService(
             // run; its Variant products asset mappings give it its picture here.
             try
             {
+                foreach (var combinationId in variantResult.NopProductAttributeCombinationIds.Count > 0
+                    ? variantResult.NopProductAttributeCombinationIds
+                    : new[] { variantResult.NopProductAttributeCombinationId.Value })
                 if (await combinationPictureSynchronizer.SynchronizeCombinationAsync(
                         leafContext,
                         parentProduct,
-                        variantResult.NopProductAttributeCombinationId.Value,
+                        combinationId,
                         cancellationToken))
                 {
                     // Combination assets belong to the parent, whose pipeline has
@@ -1643,6 +1677,8 @@ public class AkeneoProductBatchSyncService(
         AkeneoVariantSyncResult variantResult,
         AkeneoProductSyncState previousState)
     {
+        result.CombinationRoutingApplied = variantResult.CombinationRoutingApplied;
+        result.NopProductAttributeCombinationIds = variantResult.NopProductAttributeCombinationIds;
         result.CombinationUnavailable = variantResult.CombinationUnavailable;
         if (variantResult.CombinationUnavailable)
             result.AddMessage("The combination is unavailable (the Akeneo SKU is disabled, the Published rule is false, or it is held and not yet created), so none is kept. The parent is retained.");
@@ -1683,6 +1719,17 @@ public class AkeneoProductBatchSyncService(
         }
     }
 
+    internal static bool CanReconcileCombinationOptions(AkeneoProductImportResult result,
+        AkeneoFamilyMapping family, IEnumerable<AkeneoResolvedMappedValue> values)
+    {
+        if (result.DestinationKind != AkeneoProductDestinationKind.ProductAttributeCombination)
+            return false;
+        if (AkeneoCombinationAvailabilityService.GetAvailabilitySource(family) != AkeneoCombinationAvailabilitySource.PublishedRule)
+            return true;
+        var context = new AkeneoVariantImportContext();
+        AkeneoCombinationAvailabilityService.ApplyPublishedRule(context, values);
+        return !context.PublishedRuleHeld && context.PublishedRuleProblem == null;
+    }
     private async Task<AkeneoVariantImportContext> BuildVariantImportContextAsync(
         AkeneoProductDefinition source,
         string familyCode,
@@ -2775,7 +2822,7 @@ public class AkeneoProductBatchSyncService(
                     valueTemplateRenderer, variantContext, axis, value);
         }
 
-        return new
+        var representation = new
         {
             Path = "variant",
             AssociatedValueName = associatedValueName,
@@ -2825,6 +2872,10 @@ public class AkeneoProductBatchSyncService(
             variantContext.Price,
             variantContext.StockQuantity
         };
+        // Preserve the existing hash shape for families without routing.
+        return string.IsNullOrWhiteSpace(familyConfiguration?.CombinationRoutingJson)
+            ? representation
+            : new { Representation = representation, Routing = familyConfiguration.CombinationRoutingJson, Values = variantContext.SourceProduct.Values };
     }
 
     internal async Task<string> BuildResolvedContextHashAsync(
@@ -3008,6 +3059,9 @@ public class AkeneoProductBatchSyncService(
                     mapping.AssetFamilyCode,
                     mapping.AssetMediaAttributeCode,
                     mapping.AssetMediaType,
+                    mapping.TargetProductAttributeId,
+                    mapping.AttributeValueKeyTemplate,
+                    mapping.AdoptExistingValuePictures,
                     mapping.DestinationTypeId,
                     mapping.StorageModeId,
                     mapping.EntityScopeId,

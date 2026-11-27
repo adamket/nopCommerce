@@ -138,6 +138,7 @@ public class AkeneoFamilyMappingService(
             PreserveExistingNopVariantStructure = configuration.PreserveExistingNopVariantStructure,
             Mode = configuration.VariantRelationshipMode,
             ProductModelHierarchyMode = configuration.ProductModelHierarchyMode,
+            CombinationRoutingJson = configuration.CombinationRoutingJson,
             AssociatedProductAttributeId = configuration.AssociatedProductAttributeId,
             AssociatedValueNameTemplate = string.IsNullOrWhiteSpace(configuration.AssociatedValueNameTemplate)
                 ? "{axes}"

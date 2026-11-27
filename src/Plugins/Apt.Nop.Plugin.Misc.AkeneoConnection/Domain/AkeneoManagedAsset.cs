@@ -21,6 +21,9 @@ public class AkeneoManagedAsset : BaseEntity
     /// </summary>
     public int? NopProductAttributeCombinationId { get; set; }
 
+    public int? NopProductAttributeValueId { get; set; }
+    public bool OwnsAttributeValuePicture { get; set; }
+
     public int DestinationTypeId { get; set; }
 
     public int? NopPictureId { get; set; }

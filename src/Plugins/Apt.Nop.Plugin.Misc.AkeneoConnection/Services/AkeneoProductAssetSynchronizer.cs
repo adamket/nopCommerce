@@ -31,7 +31,9 @@ public sealed partial class AkeneoProductAssetSynchronizer(
     IVideoService videoService,
     IProductService productService,
     IGenericAttributeService genericAttributeService,
-    IProductAttributeService productAttributeService)
+    IProductAttributeService productAttributeService,
+    IAkeneoAttributeValuePictureStore attributeValuePictures = null,
+    IAkeneoValueTemplateRenderer valuePictureTemplateRenderer = null)
     : IAkeneoProductSectionSynchronizer,
       IAkeneoSectionDryRunPlanProvider,
       IAkeneoCombinationPictureSynchronizer
@@ -122,7 +124,7 @@ public sealed partial class AkeneoProductAssetSynchronizer(
 
         foreach (var resolved in desired.ResolvedMappings)
         {
-            if ((AkeneoAssetDestinationType)resolved.Mapping.DestinationTypeId != AkeneoAssetDestinationType.ProductPicture)
+            if ((AkeneoAssetDestinationType)resolved.Mapping.DestinationTypeId != AkeneoAssetDestinationType.ProductPicture && !IsValuePictureMapping(resolved.Mapping))
                 continue; // videos are URL references, no binary
             if ((AkeneoAssetStorageMode)resolved.Mapping.StorageModeId != AkeneoAssetStorageMode.ImportIntoNopCommerce)
                 continue;
@@ -189,7 +191,11 @@ public sealed partial class AkeneoProductAssetSynchronizer(
             cancellationToken);
 
         if (desired.ActiveMappings.Count == 0)
+        {
+            if (context.ExistingProduct is { Id: > 0 } && context.Request.AssetSyncMode != AkeneoCollectionSyncMode.Merge)
+                await PlanOrphanedMappingCleanupAsync(context, model, desired.ActiveMappings, cancellationToken);
             return;
+        }
 
         var resolvedById = desired.ResolvedMappings.ToDictionary(
             item => item.Mapping.Id);
@@ -267,6 +273,11 @@ public sealed partial class AkeneoProductAssetSynchronizer(
         CancellationToken cancellationToken)
     {
         var mapping = resolved.Mapping;
+        if (IsValuePictureMapping(mapping))
+        {
+            await PlanValuePicturesAsync(context, model, resolved, cancellationToken);
+            return;
+        }
         var product = context.ExistingProduct;
         var existing = product is { Id: > 0 }
             ? (await managedAssetService.GetByProductAndMappingAsync(
@@ -656,6 +667,8 @@ public sealed partial class AkeneoProductAssetSynchronizer(
                 .Select(item => item.NopProductPictureId.Value)
                 .ToHashSet();
             keep.UnionWith(await GetCombinationProductPictureIdsAsync(context.ExistingProduct.Id));
+            if (attributeValuePictures != null)
+                keep.UnionWith(await attributeValuePictures.GetProductPictureIdsAsync(context.ExistingProduct.Id));
 
             foreach (var relation in await productService
                          .GetProductPicturesByProductIdAsync(context.ExistingProduct.Id))
@@ -901,6 +914,8 @@ public sealed partial class AkeneoProductAssetSynchronizer(
         IReadOnlyList<AkeneoResolvedAsset> desired,
         CancellationToken cancellationToken)
     {
+        if (IsValuePictureMapping(mapping))
+            return await ApplyValuePicturesAsync(context, mapping, desired, cancellationToken);
         var profileId = context.Request.SyncProfileId.GetValueOrDefault();
         var existing = await managedAssetService.GetByProductAndMappingAsync(
             context.Product.Id,
@@ -1465,6 +1480,11 @@ public sealed partial class AkeneoProductAssetSynchronizer(
 
     private async Task<bool> DeleteManagedDestinationAsync(AkeneoManagedAsset managed)
     {
+        if (managed.DestinationTypeId == (int)AkeneoAssetDestinationType.ProductAttributeValuePictures)
+            return await ReleaseValuePictureAsync(managed);
+        if (managed.NopPictureId > 0 && attributeValuePictures != null &&
+            await attributeValuePictures.IsReferencedAsync(managed.NopPictureId.Value, managed.NopProductId))
+            return false;
         // A combination can share this picture (or this one a product's); it
         // stays until the last row that uses it goes.
         if (await IsPictureUsedByOtherRowsAsync(managed))
@@ -1604,6 +1624,8 @@ public sealed partial class AkeneoProductAssetSynchronizer(
                 .Select(item => item.NopProductPictureId.Value)
                 .ToHashSet();
             keepRelations.UnionWith(await GetCombinationProductPictureIdsAsync(context.Product.Id));
+            if (attributeValuePictures != null)
+                keepRelations.UnionWith(await attributeValuePictures.GetProductPictureIdsAsync(context.Product.Id));
 
             foreach (var relation in await productService
                          .GetProductPicturesByProductIdAsync(
@@ -1616,7 +1638,8 @@ public sealed partial class AkeneoProductAssetSynchronizer(
                 var picture = await pictureService.GetPictureByIdAsync(
                     relation.PictureId);
                 await productService.DeleteProductPictureAsync(relation);
-                if (picture != null)
+                if (picture != null && (attributeValuePictures == null ||
+                    !await attributeValuePictures.IsReferencedAsync(picture.Id)))
                     await pictureService.DeletePictureAsync(picture);
                 changed = true;
             }

@@ -38,6 +38,10 @@ public class AkeneoProductBatchImportResult
 
     public bool Canceled { get; set; }
 
+    // Retain the original exception until the execution service persists diagnostics.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public OperationCanceledException CancellationException { get; set; }
+
     public bool CompletedAllPages { get; set; }
 
     public bool WasTruncated { get; set; }

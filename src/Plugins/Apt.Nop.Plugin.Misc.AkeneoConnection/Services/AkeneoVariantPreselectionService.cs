@@ -92,7 +92,8 @@ public class AkeneoVariantPreselectionService(
             if (familyIds.Count != 1 || modelCodes.Count != 1)
                 continue;
             var family = await families.GetByIdAsync(familyIds[0]);
-            if (family is not { Enabled: true, AutomaticallyPreselectVariant: true })
+            if (family is not { Enabled: true, AutomaticallyPreselectVariant: true } ||
+                !string.IsNullOrWhiteSpace(family.CombinationRoutingJson))
                 continue;
 
             // Avoid an Akeneo inventory when the parent already has a selection.

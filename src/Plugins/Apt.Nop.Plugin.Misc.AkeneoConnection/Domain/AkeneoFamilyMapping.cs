@@ -25,6 +25,8 @@ public class AkeneoFamilyMapping : BaseEntity
 
     public int? AssociatedProductAttributeId { get; set; }
 
+    public string CombinationRoutingJson { get; set; }
+
     public string AssociatedValueNameTemplate { get; set; } = "{axes}";
 
     // Comma-separated sort keys ("root_type.display_order, container_size, pack_quantity")
